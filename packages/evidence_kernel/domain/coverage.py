@@ -365,7 +365,7 @@ class CoverageEvaluator:
         if not isinstance(expected, CoverageManifest) or not isinstance(policy, CoveragePolicy):
             raise CoverageError("typed manifest and policy required")
         current = self.manifests.current(tenant_scope, expected.case_id)
-        if current is not expected:
+        if current != expected:
             return self._blocked(expected, CoverageReason.STALE_MANIFEST, expected.case_id)
         if current.policy_version != policy.version:
             return self._blocked(expected, CoverageReason.POLICY_MISMATCH, expected.case_id)
@@ -403,6 +403,8 @@ class CoverageEvaluator:
         source_index = {src.source_id: src for src in current.sources}
         for issue in current.issues:
             issue_reasons: set[CoverageReason] = set()
+            if any(source_id not in processed for source_id in issue.source_ids):
+                issue_reasons.add(CoverageReason.SOURCE_UNACCOUNTED)
             relations: list[SemanticRelation] = []
             if not issue.relied_on_links:
                 issue_reasons.add(CoverageReason.ISSUE_UNSUPPORTED)
@@ -466,7 +468,7 @@ class CoverageEvaluator:
             ))
 
         # Second optimistic read rejects linked assessments/coverage revised mid-evaluation.
-        if self.manifests.current(tenant_scope, expected.case_id) is not current:
+        if self.manifests.current(tenant_scope, expected.case_id) != current:
             return self._blocked(expected, CoverageReason.STALE_MANIFEST, expected.case_id)
         for link_id, (finding_id, finding_rev, assessment_rev) in pinned.items():
             try:
