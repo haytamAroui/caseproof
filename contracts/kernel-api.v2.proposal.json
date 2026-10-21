@@ -1,0 +1,248 @@
+{
+  "status": "proposal_not_implemented",
+  "version": "2.0-draft",
+  "title": "ExceptionDesk / CaseProof — Evidence, Coverage and Promotion Contract",
+  "contract_kind": "informative_design_outline_not_OpenAPI_or_JSON_Schema",
+  "compatibility": "v1 remains unchanged; no v2 endpoint may be enabled before typed schema, authorization, and contract tests pass",
+  "security": {
+    "trusted_context": [
+      "tenant_id",
+      "actor_id",
+      "effective_permissions",
+      "effective_policy_version"
+    ],
+    "untrusted_request_fields_must_not_convey": [
+      "tenant_id",
+      "actor_id",
+      "role",
+      "approval_authority"
+    ],
+    "rule": "Resolve tenant ownership and reviewer authorization in application boundary on every read/write. Requests may carry expected version selectors as preconditions; server validates against the effective policy.",
+    "cross_tenant": "Deny access without leaking evidence, identifiers, errors, or metadata across tenants"
+  },
+  "schemas": {
+    "SourceVersion": {
+      "required": [
+        "document_id",
+        "version_id",
+        "sha256_hex"
+      ],
+      "identity": "Immutable tenant-scoped source bytes. Digest verifies captured bytes, not provenance authenticity.",
+      "derived_representation": {
+        "required": [
+          "representation_id",
+          "representation_sha256_hex",
+          "parent_document_id",
+          "parent_version_id",
+          "transform_name",
+          "transform_version",
+          "transform_config_digest",
+          "coordinate_convention"
+        ],
+        "semantics": "New OCR/parser/normalizer output receives new ID; old representations remain immutable while retained. No silent anchor remapping."
+      }
+    },
+    "EvidenceAnchor": {
+      "required": [
+        "anchor_id",
+        "document_id",
+        "version_id",
+        "representation_id",
+        "anchor_type",
+        "locator"
+      ],
+      "anchor_types": [
+        "text_span",
+        "pdf_region",
+        "structured_field",
+        "spreadsheet_range"
+      ],
+      "locator_contracts": {
+        "text_span": "{start:int,end:int} zero-based half-open Unicode code-point offsets in the identified immutable text representation; end > start and <= representation length",
+        "pdf_region": "{page_index:int>=0,bbox:[x0,y0,x1,y1],page_width:number,page_height:number,units:string,origin:string,rotation_degrees:number} in identified PDF representation; reject ambiguous geometry",
+        "structured_field": "{schema_id:string,field_path:string} referencing a stable key in a versioned representation",
+        "spreadsheet_range": "{sheet_id:string,a1_range:string} within identified versioned workbook representation"
+      },
+      "invalidation": "Stale, missing, cross-tenant or unresolved anchors fail closed. Re-OCR/reparse requires a new anchor and support assessment; no fuzzy fallback resolution."
+    },
+    "FindingCandidate": {
+      "required": [
+        "finding_id",
+        "statement",
+        "statement_revision",
+        "lifecycle_status"
+      ],
+      "status_enum": [
+        "candidate",
+        "evidence_grounded",
+        "review_ready",
+        "approved_conclusion"
+      ],
+      "notes": "Candidates may be unanchored only in quarantine; lifecycle status cannot be set directly by a client."
+    },
+    "FindingEvidenceLink": {
+      "required": [
+        "finding_id",
+        "statement_revision",
+        "anchor_id",
+        "assessment_revision",
+        "citation_resolution",
+        "content_fidelity",
+        "semantic_relation",
+        "sufficiency"
+      ],
+      "citation_resolution": [
+        "resolved",
+        "unresolved",
+        "stale",
+        "invalid"
+      ],
+      "content_fidelity": [
+        "matched",
+        "mismatched",
+        "indeterminate"
+      ],
+      "semantic_relation": [
+        "supports",
+        "contradicts",
+        "qualifies",
+        "inconclusive",
+        "not_assessed"
+      ],
+      "sufficiency": [
+        "sufficient",
+        "insufficient",
+        "not_assessed"
+      ],
+      "provenance_fields": [
+        "assessor_kind",
+        "assessor_id_from_trusted_context_if_human",
+        "assessment_method_version",
+        "rationale",
+        "input_snapshot_digest"
+      ],
+      "note": "Each assessment addresses this exact statement revision. Link-level sufficiency differs from aggregated policy-level sufficiency; faithful quotation never establishes truth."
+    },
+    "CoverageManifest": {
+      "required": [
+        "case_id",
+        "scope_version",
+        "manifest_revision",
+        "policy_version",
+        "required_issues",
+        "expected_sources",
+        "issue_source_links",
+        "exclusions",
+        "unresolved_gaps"
+      ],
+      "required_issue_fields": [
+        "issue_id",
+        "acceptance_policy",
+        "status",
+        "relied_on_link_revisions",
+        "unresolved_conflicts"
+      ],
+      "issue_status": [
+        "open",
+        "supported",
+        "qualified",
+        "contradicted",
+        "unresolved",
+        "excluded"
+      ],
+      "expected_source_fields": [
+        "document_id",
+        "expected_version_id_or_unknown",
+        "inventory_state",
+        "issue_ids",
+        "attempt_revisions"
+      ],
+      "inventory_state": [
+        "expected_unknown",
+        "missing",
+        "pending",
+        "processed",
+        "failed",
+        "excluded"
+      ],
+      "exclusions_required": [
+        "target_ref",
+        "issue_ids",
+        "reason",
+        "authorized_actor_from_trusted_context",
+        "policy_permission",
+        "audit_event_id"
+      ],
+      "completion": "Computed for frozen scope/manifest/policy; processed alone is never complete. Missing required evidence, unresolved contradictions and unauthorized exclusions fail ordinary completion."
+    },
+    "PromotionRequest": {
+      "request_required": [
+        "case_id",
+        "target_state",
+        "expected_case_revision",
+        "expected_manifest_revision",
+        "expected_policy_version",
+        "idempotency_key",
+        "decision_rationale"
+      ],
+      "request_forbidden": [
+        "actor_id",
+        "tenant_id",
+        "role",
+        "authorized",
+        "approval_authority"
+      ],
+      "server_derived": [
+        "actor_id",
+        "tenant_id",
+        "permissions",
+        "effective_policy_version"
+      ],
+      "allowed_targets": [
+        "evidence_grounded",
+        "review_ready",
+        "approved_conclusion"
+      ],
+      "behavior": "Optimistic revision comparison, trusted policy, evidence and coverage aggregation, reviewer authorization and immutable audit. Every approval freezes statement/source/representation/assessment/manifest/policy revisions.",
+      "idempotency": "Same key and identical fingerprint returns prior response; same key and different fingerprint conflicts."
+    },
+    "BusinessExceptionDisposition": {
+      "request_required": [
+        "case_id",
+        "expected_case_revision",
+        "expected_manifest_revision",
+        "idempotency_key",
+        "reason",
+        "affected_issue_ids"
+      ],
+      "disposition": "BUSINESS_EXCEPTION_ACCEPTED",
+      "rule": "Policy-authorized operational risk acceptance; separate from finding verification or approved conclusion. Underlying contradiction, insufficiency and unresolved gaps stay visible."
+    }
+  },
+  "promotion_policy_default": {
+    "candidate_to_evidence_grounded": "At least one tenant-authorized resolved anchor with matched fidelity and recorded semantic assessment against statement revision; does not imply factual truth.",
+    "evidence_grounded_to_review_ready": "All relied-on links resolvable and fidelity acceptable; coverage packet frozen with explicit unresolved or qualified issues disclosed.",
+    "review_ready_to_approved_conclusion": "Explicit authorized human approval, complete ordinary coverage, support + policy-level sufficiency for each material finding, no unresolved material contradiction/qualification/unknown; all revisions frozen.",
+    "conflicting_evidence": "Do not majority-vote away contradictions. Revise/qualify statement and reassess, or keep unresolved; business exception does not approve conclusion."
+  },
+  "proposed_routes": {
+    "POST /v2/evidence-anchors": "Resolve/record typed anchor (tenant derived; reject unsupported locator).",
+    "POST /v2/findings": "Register quarantined candidate.",
+    "POST /v2/findings/{id}/evidence": "Record versioned finding-anchor relationship/assessment.",
+    "GET /v2/cases/{id}/coverage": "Return issue-to-source manifest and policy outcome.",
+    "POST /v2/cases/{id}/promotion": "Evaluate guarded transition and record human decision/audit.",
+    "POST /v2/cases/{id}/exception-dispositions": "Record policy-authorized business risk acceptance separately."
+  },
+  "errors": {
+    "401": "missing authentication",
+    "403": "authenticated actor lacks authorization",
+    "404": "missing or access-masked resource",
+    "409": "stale optimistic revision, idempotency-key conflict, invalid transition, incomplete coverage or unresolved evidence gate",
+    "422": "malformed input or unsupported typed locator"
+  },
+  "stage_gates": {
+    "stage1": "In-memory domain invariants and adversarial tests; no claim of durable multi-tenant persistence.",
+    "stage2": "Actual tenant authorization, atomic durable state+audit, recovery and replay tests.",
+    "krn109": "Generate/enforce formal OpenAPI/JSON Schemas and payload, error, authorization, transition compatibility tests before enabling v2."
+  }
+}

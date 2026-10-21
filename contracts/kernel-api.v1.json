@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "title": "Evidence Kernel Reference API",
+  "routes": {
+    "/health": ["get"],
+    "/v1/sources": ["post"],
+    "/v1/evidence-claims": ["post"],
+    "/v1/evidence-claims/{claim_id}": ["get"],
+    "/v1/evidence-claims/{claim_id}/verify": ["post"],
+    "/v1/evidence-claims/{claim_id}/assess": ["post"],
+    "/v1/evidence-claims/{claim_id}/review": ["post"]
+  },
+  "request_schemas": {
+    "SourceInput": ["document_id", "version_id", "sha256_hex", "text"],
+    "ClaimInput": ["claim_id", "statement", "document_id", "version_id", "document_sha256", "quote"],
+    "AssessmentInput": ["status", "rationale"],
+    "ReviewInput": ["reviewer_id", "disposition", "rationale"]
+  }
+}

@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+# Stage 0 independent checks; no uv.lock or GitHub Actions required.
+python scripts/check_architecture.py
+python -m pytest -q

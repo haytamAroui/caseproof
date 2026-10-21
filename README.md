@@ -1,20 +1,27 @@
-# CaseProof — Engineering Foundation
+# ExceptionDesk — Evidence-backed financial exception resolution
 
-A planning and engineering-governance repository for **CaseProof**, a source-anchored B2B commercial-dispute dossier workflow.
+**Status:** initial runnable Python domain slice; not production-ready. Existing GitHub repository remains `caseproof` until a separately approved rename.
 
-**Status:** architecture and implementation specification only. This branch does not contain a runnable product and makes no production-readiness claim.
+ExceptionDesk is one Belgian-first B2B finance operations product with two connected workflows:
+1. **Finance (first):** supplier invoice versus purchase order discrepancies, reviewer resolution and evidence-backed records.
+2. **Disputes (later):** CaseProof factual chronology and professional dispute dossiers, reusing the same evidence references.
 
-## Start here
-1. [Engineering constitution](CONSTITUTION.md) — invariant authority.
-2. [Agent instructions](AGENTS.md) and [Claude Code instructions](CLAUDE.md).
-3. [Implementation roadmap](docs/ROADMAP.md), [coding standards](docs/ENGINEERING_STANDARDS.md), [orchestration](docs/AGENT_ORCHESTRATION.md).
-4. [Architecture ADRs](docs/adr/) and [quality gates](docs/quality/).
-5. [AZComply reuse and architecture reference summaries](docs/reference/).
+The reusable **evidence kernel** owns provenance, source verification, immutable claims and review records. Finance owns amounts, matching, VAT treatment, tolerances and financial findings. Disputes owns chronology and dossier policy. A source quote is **not** proof of real-world truth.
 
-The original longer 2026-10-21 design blueprints were supplied as downloadable archives in the planning conversation. The two documents in `docs/reference/` are **condensed repository summaries**, not byte-for-byte copies of the original long reports.
+## First runnable slice
+Requires Python 3.11+. No database, cloud account, LLM or customer data is required for the deterministic first tests.
 
-## Technical baseline
-Hexagonal DDD-informed modular monolith; FastAPI; dedicated Postgres/Supabase instance; private storage; durable worker; grounded structured extraction; deterministic reconciliation and approved conditional rules; exceptional human review.
+```sh
+python -m unittest discover -s tests -v
+```
 
-## Founder and agent rules
-Protect sensitive client evidence, tenant boundaries, source provenance, approval authority and audit completeness. Start with real buyer/pilot validation and a secure end-to-end vertical slice before speculative SaaS features.
+See [the architecture](docs/architecture/EXCEPTIONDESK_HEXAGONAL.md), [execution roadmap](docs/ROADMAP.md), and [first task](docs/tasks/EXD-001.md). This is an **initial finance reconciliation kernel**, not an upload-to-PDF MVP.
+
+## Directory ownership
+- `packages/evidence_kernel/`: source/evidence primitives and ports; no finance or dispute imports.
+- `domains/finance/`: money and invoice-to-PO reconciliation.
+- `domains/disputes/`: reserved for the later CaseProof workflow.
+- `apps/api/`, `apps/web/`: planned FastAPI and Next.js adapters; not yet implemented.
+- `tests/`: executable contract and domain tests.
+
+AZComply remains an independent product and database. Only port domain-neutral algorithms after review and regression tests. No automatic collection, legal filing or unsupported compliance claim.

@@ -1,0 +1,23 @@
+name: Kernel boundary
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.11'
+      - name: Verify architecture boundaries
+        run: uv run --locked python scripts/check_architecture.py
+      - name: Run unit tests
+        run: uv run --locked pytest -q
+      - name: Ruff check
+        run: uv run --locked ruff check .
+      - name: Mypy check
+        run: uv run --locked mypy packages/evidence_kernel
+      - name: Python compilation
+        run: uv run --locked python -m compileall -q packages domains apps

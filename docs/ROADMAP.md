@@ -1,70 +1,38 @@
-# CaseProof execution roadmap — vertical slices and explicit gates
+# ExceptionDesk — execution roadmap (finance first)
 
-**Planning:** Solo founder + coding agents; time estimates are relative. Every completed task requires implementation, tests, evidence, and decision-record updates.
+**Product:** one Belgium-first B2B finance operations platform. **Launch workflow:** supplier invoice versus purchase order mismatch. **Second workflow:** CaseProof dispute dossiers after finance validation. Historical CaseProof-only roadmap is superseded by this file; historical ADRs remain reference.
 
-## Gate 0 — Commercial, legal, and privacy validation
-| ID | Implementation | Acceptance |
-|---|---|---|
-| G0-01 | Interview 8–12 Belgian accountants, recovery professionals and commercial lawyers | At least five anonymized workflows mapped |
-| G0-02 | Specify v1: factual B2B disputed-invoice dossier, excluding automated procedural decisions | Reviewed product boundaries and exclusion matrix |
-| G0-03 | Get Belgian legal review for IOS, debt rules, interests, terminology | Source-backed legal assumptions, unresolved questions listed |
-| G0-04 | DPA, processor inventory, retention policy and threat model | Approval for pilot data handling |
-| G0-05 | Create 20–30 synthetic or de-identified gold cases | Adjudicated expected outcomes, adversarial counterexamples |
+| ID | Priority | Work | Acceptance |
+|---|---|---|---|
+| EXD-001 | P0 | Kernel immutable source claims, provenance and finance reconciliation | Pure Python tests pass; no sector imports in kernel; mismatch is a review finding |
+| EXD-002 | P0 | Secure tenant-scoped upload, hash, version, source offsets and PDF/UBL intake | Cross-tenant denial; source references resolve; malformed/oversized files fail safely |
+| EXD-003 | P0 | Structured invoice/PO extraction and deterministic source-quote verification | Unsupported quotes rejected; field schema and prompt versions stored; AI output cannot approve |
+| EXD-004 | P0 | Review UI/API, idempotent audit events, approved resolution and export | User traces findings to sources and approves/rejects; retry does not duplicate decisions |
+| EXD-005 | P1 | CaseProof factual dispute dossier module | Reuses original evidence and review history; verified chronology; human-approved export |
+| EXD-006 | P1 | ERP/Peppol/UBL import and exception inbox | Pilot integration tested with real-world sanitized formats |
+| EXD-007 | P1 | Security/privacy/tenancy hardening and paid pilot | DPA, threat model, retention, tenant tests, measured customer outcome |
+| EXD-008 | P2 | Independent kernel packaging and other sector packs | Only after two proven domain consumers and stable contracts |
 
-## Phase 1 — Repository, architecture and CI
-- P1-01: Configure Python lint/type/test tools, lockfile, CI, security scanning, pre-commit. **Done:** clean checkout passes a single `make check` command.
-- P1-02: Create hexagonal bounded modules with import-lint enforcement. **Done:** domain layer cannot import FastAPI, Supabase, model SDKs.
-- P1-03: Dedicated EU-hosted database and private object storage after vendor review. **Done:** dev/prod isolation, safe secrets, tenant tests.
-- P1-04: Approve ADRs for tenancy, queue, evidence verification, model routing and money precision.
+## Customer validation in parallel
+Interview 8–12 Belgian accounts-payable/finance operations buyers. Determine invoice volumes, existing ERP exception workflows, investigation time, repeated cases and actual willingness to pay. Do not assume per-pack price or Gulf expansion.
 
-## Phase 2 — Secure intake and immutable sources
-- P2-01: Tenant and actor capabilities, strict repository authorization and database RLS. **Done:** cross-tenant read/write/upload/download denied.
-- P2-02: Case intake, file quarantine, type sniffing, caps, malware controls, immutable SHA-256. **Done:** malicious/oversized/replayed input tests.
-- P2-03: Immutable document versions and parse lineage with source offsets and page anchors. **Done:** reproduce source references from frozen bytes.
-- P2-04: PDF, DOCX and text parsers. **Done:** fixtures for scans, rotations, dates, tables, encoding and parser errors.
+## Definition of done
+Executable tests and reproducible results, source traceability, tenant isolation before production, human decisions audited, no fabricated legal/financial conclusions, no autonomous external actions.
 
-## Phase 3 — Evidence extraction and verification
-- P3-01: Reuse minimal source-block, offset and quote-verification algorithms from AZComply; isolate AI Act types. **Done:** cross-product regression fixtures pass.
-- P3-02: Provider-neutral EvidenceExtractor port, structured output, schema/version metadata, cost caps. **Done:** model timeouts, malformed JSON, injection, fake-source tests.
-- P3-03: Verify quotations independently of factual truth. **Done:** fabricated quote can never become verified.
-- P3-04: Benchmark whole-context and segmented extraction on gold data. **Done:** record critical recall, objection omissions, unsupported quotes, latency and costs.
+## Stage gates — v3 trust-contract amendment (proposed; finance-first remains authoritative)
+- **Stage 0 — Foundation:** reference implementation exists, but merge authorization is blocked until a genuine CI run passes, the deliberately forbidden-import negative-control PR fails for the intended reason, and owner-controlled merge protection is enabled (CONSTITUTION C25). Verification debt is not merge permission.
+- **Stage 1 — Evidence integrity:** KRN-101 immutable passage/version model; KRN-102 typed anchors; KRN-103 citation resolution vs quote/value fidelity; KRN-104 finding-to-evidence support links; KRN-105 promotion gate; KRN-106 issue/source coverage ledger; KRN-107 provenance integration; KRN-108 adversarial tests; KRN-109 versioned API contracts. Stage 1 reference implementation is in-memory, not durable.
+- **Stage 2 — Durable infrastructure:** tenant-scoped persistence, atomic state+audit, object storage, idempotency, crash recovery and authorization.
+- **Stage 3 — Sellable invoice/PO exception workflow:** PDF/UBL intake, typed extraction, deterministic Decimal reconciliation, source viewer, contradiction queue, human review and export. Deliver a usable deterministic pilot without agents.
+- **Stage 4 — Optional bounded orchestration:** one-level planner/worker execution, explicit coverage, checkpoints, budgets and escalation; only after benchmark evidence of value.
+- **Stage 5 — Evaluation and paid pilot:** independent kernel invariant suite, finance golden corpus, agent comparative benchmark if adopted, security and customer outcome gates. Invariant tests begin in Stage 1, not Stage 5.
+- **Stage 6 — Conditional expansion:** dispute dossiers and sector packs after validated customer demand; independent kernel packaging after two consumers.
 
-## Phase 4 — Reconciliation and finance
-- P4-01: Match parties, invoices, purchase orders, delivery, payments, contracts. **Done:** similar-party and duplicate adversarial tests.
-- P4-02: Evidence/assertion relations support, contradict, qualify, uncertain. **Done:** conflicting source claims preserved, not overwritten.
-- P4-03: Decimal finance reconciliation, VAT, credits, partial payment, rounding. **Done:** property-based and golden calculations.
-- P4-04: Missing-information and exception detection. **Done:** NOT_PROVIDED never means DOES_NOT_EXIST.
+### Updated EXD acceptance
+EXD-001 splits sector-neutral kernel tasks from finance reconciliation. EXD-002 requires versioned typed anchors and tenant-scoped citation resolution. EXD-003 checks extracted fields, fidelity, contradiction and source support separately. EXD-004 enforces authorization, promotion policies, idempotent review and immutable audit. EXD-005 requires reproducible dossier evidence manifests and unresolved-coverage disclosure. EXD-006 retains ERP/Peppol/UBL lineage. EXD-007 adds adversarial source, recovery and privacy tests. EXD-008 remains conditional. **EXD-009:** bounded orchestration only if measured benefit. **EXD-010:** independent rubric and deterministic evaluation harness.
 
-## Phase 5 — Conditional legal rule packs
-- P5-01: Versioned `RulePack` interface with jurisdiction, applicability, effective date, normative reference, review/approval. **Done:** missing legal predicate yields indeterminate.
-- P5-02: Conditional interest/fee calculation using approved source tables; no hard-coded universal rates, no blanket 60-day conclusions. **Done:** boundary-date, rate-change and contested-term tests.
-- P5-03: Write-ahead audit with linked provenance and reviewer authority. **Done:** failure of required audit persistence blocks governed completion.
-
-## Phase 6 — Durable workflow, review and dossier
-- P6-01: Transactional Postgres jobs, leases, heartbeats, checkpoints, retry and dead-letter. **Done:** worker-kill/retry creates no duplicated charge or dossier.
-- P6-02: Typed factual dossier: chronology, documentary support and conflicts, reconciliation, gaps and caveats. **Done:** every material statement has source/version provenance.
-- P6-03: Deterministic ReportLab PDF rendering and verified source index. **Done:** stable golden outputs and reproducible snapshots.
-- P6-04: Exception-based approval queue with actor capability, reason, freshness and transaction boundaries. **Done:** stale/unauthorized approvals denied.
-
-## Phase 7 — Paid pilot
-- P7-01: Minimal internal intake and review UI. **Done:** five cases processed with review timings and corrections logged.
-- P7-02: Test 5–10 permitted real-world cases with professional users. **Done:** recorded outcomes, repeated-use intent, serious error review.
-- P7-03: Measure cost, critical missed objections, reviewer minutes and liability. **Done:** explicit go/no-go memo.
-
-## Phase 8 — Conditional SaaS productization
-- P8-01: Accessible case dashboard, source viewer, exception queue, reviewer history.
-- P8-02: Organization invitations, role-based permissions, billing ledger, retention and export.
-- P8-03: SLOs, logging, alerting, restore drills and incident runbooks.
-- P8-04: Public API/MCP or other integrations **only** on proven partner demand.
-
-## Phase 9 — Expansion
-Add jurisdiction packs only with local legal review. Enable retrieval indexing only after measurements show direct-source reading does not meet case-size requirements. Extract services only when scaling and ownership data support doing so.
-
-## Quality and stop/go rules
-- Zero known cross-tenant disclosures, unsupported source citations in approved dossiers or unapproved legal actions.
-- Record objection detection and critical assertion recall by scenario, not one confidence percentage.
-- Track end-to-end processing time and human review time separately.
-- Never claim production-readiness from passing happy-path tests alone.
-
-## Definition of Done
-Each issue requires: intent, ADR impact, code, success/failure/security tests, tenant review, observability, documentation, test commands/output, independent review for consequential changes, and explicit acceptance.
+### Stage 1 exit criteria
+- Invalid/stale/cross-tenant anchors fail closed; matching quote never implies semantic truth.
+- No unsupported or unreviewed candidate becomes an approved conclusion; exception disposition cannot change support status.
+- Required source/issue coverage and exclusions are explicit; missing coverage blocks ordinary completion.
+- Tests for the above must be executed and documented before **Stage 1 implementation PRs** merge. The documentation-only PR #8 defines proposed contracts, not passing implementation or contract tests. It requires independent design review and must separately satisfy C25 before merge; the draft JSON proposal is not covered by C25's Markdown-only commit exception. Stage 2 owns durable transactional guarantees.
