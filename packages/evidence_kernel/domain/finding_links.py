@@ -182,8 +182,10 @@ def _expected_digest(expected: Expectation) -> str:
             raw = b"json-bool-v1\x00" + (b"true" if scalar else b"false")
         elif type(scalar) is int:
             raw = b"json-int-v1\x00" + str(scalar).encode("ascii")
-        else:
+        elif isinstance(scalar, str):
             raw = b"json-string-v1\x00" + scalar.encode("utf-8")
+        else:
+            raise FindingLinkError("unsupported JSON scalar type")
     else:
         raise FindingLinkError("expected exact quote or typed JSON scalar required")
     return sha256(raw).hexdigest()
