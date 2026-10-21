@@ -1,6 +1,7 @@
 """Sector-neutral in-memory evidence repository; replace via adapter in production."""
 from dataclasses import dataclass, field
 from threading import RLock
+
 from packages.evidence_kernel.domain.evidence import ExtractedClaim
 
 
