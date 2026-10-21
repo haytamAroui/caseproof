@@ -22,7 +22,6 @@ from apps.api.access_control import (
     CaseAction,
     IdentityServiceUnavailable,
     InvalidBearer,
-    UnavailableBearerVerifier,
 )
 from apps.api.supabase_auth_verifier import (
     HttpsSupabaseUserLookup,
