@@ -43,7 +43,6 @@ from packages.evidence_kernel.domain.grounding import GroundingGate, GroundingPo
 from packages.evidence_kernel.domain.provenance import InMemoryProvenanceLedger, ProvenanceIntegrityError
 from packages.evidence_kernel.domain.provenance_binding import (
     BindingConflict,
-    BindingNotFound,
     BindingStale,
     InMemoryProvenanceBridge,
     ObservationAction,
@@ -51,7 +50,6 @@ from packages.evidence_kernel.domain.provenance_binding import (
 from packages.evidence_kernel.domain.source_versions import (
     DerivedRepresentation,
     InMemorySourceRegistry,
-    SourceRecordNotFound,
     SourceVersion,
 )
 
