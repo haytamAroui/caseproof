@@ -1,6 +1,7 @@
 import unittest
 from decimal import Decimal
-from domains.finance.reconciliation import Money, DocumentAmount, compare_invoice_to_po
+
+from domains.finance.reconciliation import DocumentAmount, Money, compare_invoice_to_po
 
 
 class FinanceTests(unittest.TestCase):
