@@ -71,12 +71,10 @@ def _identifier(value: object, label: str) -> None:
 
 
 def _utc(value: object, label: str) -> None:
-    if (
-        not isinstance(value, datetime)
-        or value.tzinfo is None
-        or value.utcoffset() is None
-        or value.utcoffset().total_seconds() != 0
-    ):
+    if not isinstance(value, datetime) or value.tzinfo is None:
+        raise ValueError(f"{label} must be UTC")
+    offset = value.utcoffset()
+    if offset is None or offset.total_seconds() != 0:
         raise ValueError(f"{label} must be UTC")
 
 
