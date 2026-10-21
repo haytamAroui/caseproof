@@ -148,7 +148,7 @@ def test_missing_or_invalid_bearer_is_401_before_case_lookup(bearer: str | None)
     service, verifier, store = rig()
     failure(service, bearer, "case-a", CaseAction.READ_CASE,
             AccessFailure.AUTHENTICATION_REQUIRED)
-    assert store.calls == ()
+    assert store.calls == []
     if bearer is None or not bearer.strip():
         assert verifier.calls == []
 
@@ -158,7 +158,7 @@ def test_unconfigured_verifier_never_claims_to_authenticate() -> None:
     service = CaseAccessService(UnavailableBearerVerifier(), store, "https://auth.example.test", "caseproof-api", lambda: NOW)
     failure(service, "any-token", "case-a", CaseAction.READ_CASE,
             AccessFailure.SERVICE_UNAVAILABLE)
-    assert store.calls == ()
+    assert store.calls == []
 
 
 def test_verifier_service_outage_is_503_and_never_grants_access() -> None:
@@ -166,7 +166,7 @@ def test_verifier_service_outage_is_503_and_never_grants_access() -> None:
     verifier.unavailable = True
     failure(service, "alice-token", "case-a", CaseAction.READ_CASE,
             AccessFailure.SERVICE_UNAVAILABLE)
-    assert store.calls == ()
+    assert store.calls == []
 
 
 @pytest.mark.parametrize("issued_at,expires", [
@@ -183,7 +183,7 @@ def test_expired_or_not_yet_verified_token_denied_even_if_provider_bugs(
     )
     failure(service, "alice-token", "case-a", CaseAction.READ_CASE,
             AccessFailure.AUTHENTICATION_REQUIRED)
-    assert store.calls == ()
+    assert store.calls == []
 
 
 def test_cross_tenant_case_access_is_404_not_permission_metadata_leak() -> None:
@@ -302,7 +302,7 @@ def test_invalid_actions_and_empty_resource_ids_do_not_trigger_storage() -> None
         service.authorize("alice-token", "case-a", "case:read")  # type: ignore[arg-type]
     with pytest.raises(ValueError):
         service.authorize("alice-token", "", CaseAction.READ_CASE)
-    assert store.calls == ()
+    assert store.calls == []
 
 
 @pytest.mark.parametrize("invalid", [
@@ -360,7 +360,7 @@ def test_wrong_issuer_or_audience_never_authorizes(
     verifier.subjects["alice-token"] = replace(identity("alice"), **change)
     failure(service, "alice-token", "case-a", CaseAction.READ_CASE,
             AccessFailure.AUTHENTICATION_REQUIRED)
-    assert store.calls == (), label
+    assert store.calls == [], label
 
 
 def test_empty_configured_identity_trust_values_are_rejected() -> None:
