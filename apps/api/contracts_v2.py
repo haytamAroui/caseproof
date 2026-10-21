@@ -337,3 +337,63 @@ def promotion_preflight(
     if not facts.audit_write_available:
         return PreflightResult(PreflightCode.AUDIT_UNAVAILABLE, 409)
     return PreflightResult(PreflightCode.APPLICATION_REVIEW_REQUIRED, None)
+
+
+def draft_openapi() -> dict[str, object]:
+    """Generate formal OpenAPI 3.1 request/response schemas for DESIGN review.
+
+    This is not served by the running FastAPI v1 app. No v2 implementation
+    should be inferred from these operation descriptions.
+    """
+    routes: dict[str, dict[str, object]] = {}
+    for signature, model in ROUTE_MODELS.items():
+        method, path = signature.split(" ", 1)
+        request_body: dict[str, object] = {}
+        if model is not None:
+            request_body = {
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {"schema": model.model_json_schema()}
+                    },
+                },
+            }
+        response_schema = (
+            CoverageResponse.model_json_schema() if method == "GET"
+            else {"type": "object", "description": "Not implemented in Stage 1"}
+        )
+        routes.setdefault(path, {})[method.lower()] = {
+            "summary": "Contract proposal only; endpoint is not enabled",
+            "operationId": (
+                method.lower() + "_"
+                + path.strip("/").replace("/", "_").replace("{", "").replace("}", "")
+            ),
+            **request_body,
+            "responses": {
+                "200": {
+                    "description": "Proposed response shape; no live endpoint",
+                    "content": {"application/json": {"schema": response_schema}},
+                },
+                **{
+                    str(code): {
+                        "description": "Failure response",
+                        "content": {
+                            "application/json": {"schema": ApiError.model_json_schema()}
+                        },
+                    }
+                    for code in (401, 403, 404, 409, 422)
+                },
+            },
+        }
+    return {
+        "openapi": "3.1.0",
+        "info": {
+            "title": "CaseProof Evidence API (non-deployed contract draft)",
+            "version": SCHEMA_VERSION,
+            "description": (
+                "Schema only. No v2 routes are registered, no authorization "
+                "or durable audit implemented."
+            ),
+        },
+        "paths": routes,
+    }
