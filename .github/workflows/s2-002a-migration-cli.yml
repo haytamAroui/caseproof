@@ -1,13 +1,18 @@
-name: S2-002A generate canonical migration via official CLI
+name: S2-002A canonical migration integrity
 on:
   pull_request:
     paths:
+      - 'supabase/migrations/**'
       - '.github/workflows/s2-002a-migration-cli.yml'
+      - '.github/workflows/kernel-boundary.yml'
       - 'db/proposals/S2-002_tenant_foundation.sql'
+      - 'scripts/verify_s2_002_database.py'
       - 'docs/tasks/S2-002A.md'
+  push:
+    branches: [main]
   workflow_dispatch:
 jobs:
-  generate:
+  canonical-migration:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -15,16 +20,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Discover Supabase CLI migration syntax
-        run: |
-          npx --yes supabase@latest --version
-          npx --yes supabase@latest migration --help
-          npx --yes supabase@latest migration new --help
-      - name: Generate canonical migration from reviewed proposal
+      - name: Verify canonical migration against reviewed proposal
         run: |
           set -euo pipefail
-          npx --yes supabase@latest migration new caseproof_tenant_foundation < db/proposals/S2-002_tenant_foundation.sql
-          echo "GENERATED_FILE=$(find supabase/migrations -maxdepth 1 -name '*_caseproof_tenant_foundation.sql' -type f -print -quit)"
-          sha256sum db/proposals/S2-002_tenant_foundation.sql supabase/migrations/*_caseproof_tenant_foundation.sql
-          cmp db/proposals/S2-002_tenant_foundation.sql supabase/migrations/*_caseproof_tenant_foundation.sql
-          echo 'S2-002A_CLI_GENERATION_VERIFIED'
+          file='supabase/migrations/20261021232955_caseproof_tenant_foundation.sql'
+          test -f "$file"
+          cmp "$file" db/proposals/S2-002_tenant_foundation.sql
+          sha256sum "$file" db/proposals/S2-002_tenant_foundation.sql
+          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 1
+      - name: Cross-check with pinned official Supabase CLI
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.121.0 --version
+          npx --yes supabase@2.121.0 migration new --help >/dev/null
+          scratch="$(mktemp -d)"
+          cp db/proposals/S2-002_tenant_foundation.sql "$scratch/source.sql"
+          (
+            cd "$scratch"
+            npx --yes supabase@2.121.0 migration new caseproof_tenant_foundation < source.sql
+            cmp source.sql supabase/migrations/*_caseproof_tenant_foundation.sql
+          )
+          echo 'S2-002A_CANONICAL_MIGRATION_VERIFIED'
