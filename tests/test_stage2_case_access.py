@@ -55,17 +55,19 @@ class FakeServerRepository:
     calls: list[tuple[str, ...]] = field(default_factory=list)
     unavailable: bool = False
 
-    def find_case(self, case_id: str) -> StoredCase | None:
-        self.calls.append(("case", case_id))
+    def lookup_case_membership(
+        self, subject_id: str, case_id: str
+    ) -> tuple[StoredCase, StoredMembership] | None:
+        self.calls.append(("lookup", subject_id, case_id))
         if self.unavailable:
             raise AccessStoreUnavailable("offline")
-        return self.cases.get(case_id)
-
-    def find_membership(self, subject_id: str, org_id: str) -> StoredMembership | None:
-        self.calls.append(("membership", subject_id, org_id))
-        if self.unavailable:
-            raise AccessStoreUnavailable("offline")
-        return self.memberships.get((subject_id, org_id))
+        resource = self.cases.get(case_id)
+        if resource is None:
+            return None
+        membership = self.memberships.get((subject_id, resource.owner_org_id))
+        if membership is None:
+            return None
+        return resource, membership
 
 
 def identity(
@@ -192,7 +194,7 @@ def test_cross_tenant_case_access_is_404_not_permission_metadata_leak() -> None:
             AccessFailure.RESOURCE_MASKED)
     failure(service, "alice-token", "unknown-case", CaseAction.READ_CASE,
             AccessFailure.RESOURCE_MASKED)
-    assert store.calls[-1] == ("case", "unknown-case")
+    assert store.calls[-1] == ("lookup", "alice", "unknown-case")
     assert "org-b" not in str(store.calls[-1])
     assert service.authorize("bob-token", "case-b", CaseAction.READ_CASE).org_id == "org-b"
 
@@ -368,3 +370,28 @@ def test_empty_configured_identity_trust_values_are_rejected() -> None:
     for iss, aud in (("", "caseproof-api"), ("https://auth.example.test", "")):
         with pytest.raises(ValueError):
             CaseAccessService(verifier, store, iss, aud, lambda: NOW)
+
+
+def test_foreign_and_unknown_case_have_same_response_on_membership_store_outage() -> None:
+    service, _, repository = rig()
+    repository.unavailable = True
+    failure(service, "alice-token", "case-b", CaseAction.READ_CASE,
+            AccessFailure.SERVICE_UNAVAILABLE)
+    failure(service, "alice-token", "unknown-case", CaseAction.READ_CASE,
+            AccessFailure.SERVICE_UNAVAILABLE)
+    assert repository.calls == [
+        ("lookup", "alice", "case-b"),
+        ("lookup", "alice", "unknown-case"),
+    ]
+
+
+def test_foreign_and_unknown_case_have_identical_masked_response_without_outage() -> None:
+    service, _, repository = rig()
+    failure(service, "alice-token", "case-b", CaseAction.READ_CASE,
+            AccessFailure.RESOURCE_MASKED)
+    failure(service, "alice-token", "unknown-case", CaseAction.READ_CASE,
+            AccessFailure.RESOURCE_MASKED)
+    assert repository.calls == [
+        ("lookup", "alice", "case-b"),
+        ("lookup", "alice", "unknown-case"),
+    ]
