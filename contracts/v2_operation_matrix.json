@@ -1,0 +1,117 @@
+{
+  "schema_version": "2.0.0-draft",
+  "status": "typed_contract_only_no_v2_routes_enabled",
+  "source": "contracts/kernel-api.v2.proposal.json",
+  "operations": [
+    {
+      "method": "POST",
+      "path": "/v2/evidence-anchors",
+      "request": "EvidenceAnchorInput",
+      "permissions": [
+        "evidence:write"
+      ],
+      "errors": [
+        401,
+        403,
+        404,
+        409,
+        422
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/findings",
+      "request": "CandidateRequest",
+      "permissions": [
+        "finding:write"
+      ],
+      "errors": [
+        401,
+        403,
+        404,
+        409,
+        422
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/findings/{id}/evidence",
+      "request": "EvidenceLinkRequest",
+      "permissions": [
+        "evidence:write"
+      ],
+      "errors": [
+        401,
+        403,
+        404,
+        409,
+        422
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v2/cases/{id}/coverage",
+      "request": null,
+      "response": "CoverageResponse",
+      "permissions": [
+        "case:read"
+      ],
+      "errors": [
+        401,
+        403,
+        404,
+        409,
+        422
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/cases/{id}/promotion",
+      "request": "PromotionRequest",
+      "permissions": [
+        "finding:promote",
+        "conclusion:approve"
+      ],
+      "errors": [
+        401,
+        403,
+        404,
+        409,
+        422
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/cases/{id}/exception-dispositions",
+      "request": "BusinessExceptionRequest",
+      "permissions": [
+        "exception:accept"
+      ],
+      "errors": [
+        401,
+        403,
+        404,
+        409,
+        422
+      ]
+    }
+  ],
+  "failure_precedence": [
+    "authentication_required:401",
+    "cross_tenant_masked:404",
+    "permission_denied:403",
+    "idempotency_conflict:409",
+    "stale_revision:409",
+    "invalid_transition:409",
+    "gate_blocked:409",
+    "audit_unavailable:409",
+    "malformed_or_forbidden_input:422"
+  ],
+  "security_assertions": [
+    "tenant_id actor_id role authorized approval_authority are never client-controlled request fields",
+    "effective policy is supplied by trusted server state not HTTP body",
+    "preflight never produces an approval or committed state transition",
+    "business risk acceptance cannot change evidence fidelity or legal approval",
+    "v2 endpoints are disabled until Stage 2 authentication, persistence, atomic audit and RLS are in place"
+  ]
+}
