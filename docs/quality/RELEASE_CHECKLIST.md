@@ -1,0 +1,13 @@
+# Release gate
+- [ ] Constitution and ADR adherence reviewed
+- [ ] Scope, tenant permissions, capability and cross-tenant denial tested
+- [ ] All material claims have verified document pointers and provenance
+- [ ] Domain rules versioned and effective dates reviewed
+- [ ] Source immutability, attachment security, retention and privacy verified
+- [ ] Audit success/failure, idempotency and workflow recovery exercised
+- [ ] Schema migrations tested on existing data; backup/rollback documented
+- [ ] Python/static/API/UI/PDF tests green; exact evidence attached
+- [ ] No credentials, production documents or raw evidence in telemetry
+- [ ] Clear limits: factual dossier versus legally approved action
+- [ ] Human/professional approval gate tested for consequential exports
+- [ ] Founder/release owner signs off; unresolved risks recorded
