@@ -1,7 +1,7 @@
 """KRN-107 — evidence provenance bridge: reconciliation, retry, tamper, scope."""
 
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from hashlib import sha256
 
 import pytest
@@ -402,7 +402,7 @@ def test_policy_mismatch_never_captures_a_success_packet() -> None:
         {"actor_reference_claim": ""},
         {"action": "approved"},
         {"occurred_at": datetime(2026, 10, 21)},
-        {"occurred_at": STAMP.astimezone(timedelta(hours=1))},
+        {"occurred_at": STAMP.astimezone(timezone(timedelta(hours=1)))},
     ],
 )
 def test_invalid_observation_fields_fail_closed(invalid: dict[str, object]) -> None:
