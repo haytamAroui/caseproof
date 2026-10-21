@@ -20,7 +20,7 @@ Interview 8–12 Belgian accounts-payable/finance operations buyers. Determine i
 Executable tests and reproducible results, source traceability, tenant isolation before production, human decisions audited, no fabricated legal/financial conclusions, no autonomous external actions.
 
 ## Stage gates — v3 trust-contract amendment (proposed; finance-first remains authoritative)
-- **Stage 0 — Foundation:** merged reference implementation; outstanding test/contract verification remains merge debt.
+- **Stage 0 — Foundation:** reference implementation exists, but merge authorization is blocked until a genuine CI run passes, the deliberately forbidden-import negative-control PR fails for the intended reason, and owner-controlled merge protection is enabled (CONSTITUTION C25). Verification debt is not merge permission.
 - **Stage 1 — Evidence integrity:** KRN-101 immutable passage/version model; KRN-102 typed anchors; KRN-103 citation resolution vs quote/value fidelity; KRN-104 finding-to-evidence support links; KRN-105 promotion gate; KRN-106 issue/source coverage ledger; KRN-107 provenance integration; KRN-108 adversarial tests; KRN-109 versioned API contracts. Stage 1 reference implementation is in-memory, not durable.
 - **Stage 2 — Durable infrastructure:** tenant-scoped persistence, atomic state+audit, object storage, idempotency, crash recovery and authorization.
 - **Stage 3 — Sellable invoice/PO exception workflow:** PDF/UBL intake, typed extraction, deterministic Decimal reconciliation, source viewer, contradiction queue, human review and export. Deliver a usable deterministic pilot without agents.
@@ -35,4 +35,4 @@ EXD-001 splits sector-neutral kernel tasks from finance reconciliation. EXD-002 
 - Invalid/stale/cross-tenant anchors fail closed; matching quote never implies semantic truth.
 - No unsupported or unreviewed candidate becomes an approved conclusion; exception disposition cannot change support status.
 - Required source/issue coverage and exclusions are explicit; missing coverage blocks ordinary completion.
-- Tests for the above are executed and documented before merge. Stage 2 owns durable transactional guarantees.
+- Tests for the above must be executed and documented before **Stage 1 implementation PRs** merge. The documentation-only PR #8 defines proposed contracts, not passing implementation or contract tests. It requires independent design review and must separately satisfy C25 before merge; the draft JSON proposal is not covered by C25's Markdown-only commit exception. Stage 2 owns durable transactional guarantees.
