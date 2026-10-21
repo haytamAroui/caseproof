@@ -1,0 +1,106 @@
+{
+  "status": "proposal_not_implemented",
+  "version": "2.0-draft",
+  "title": "CaseProof Evidence and Coverage Contract",
+  "compatibility": "Do not replace v1 until implementation and contract tests agree",
+  "schemas": {
+    "SourceVersion": {
+      "required": [
+        "document_id",
+        "version_id",
+        "sha256_hex"
+      ],
+      "notes": "Tenant scope from trusted auth; parse derivatives carry provenance"
+    },
+    "EvidenceAnchor": {
+      "required": [
+        "anchor_id",
+        "document_id",
+        "version_id",
+        "anchor_type",
+        "locator"
+      ],
+      "anchor_types": [
+        "text_span",
+        "pdf_region",
+        "structured_field",
+        "spreadsheet_range"
+      ],
+      "notes": "Resolver verifies locator against immutable version"
+    },
+    "FindingCandidate": {
+      "required": [
+        "finding_id",
+        "statement",
+        "lifecycle_status"
+      ],
+      "notes": "Unanchored candidates quarantined; cannot be promoted"
+    },
+    "FindingEvidenceLink": {
+      "required": [
+        "finding_id",
+        "anchor_id",
+        "citation_resolution",
+        "content_fidelity",
+        "semantic_relation",
+        "sufficiency"
+      ],
+      "citation_resolution": [
+        "resolved",
+        "unresolved",
+        "stale",
+        "invalid"
+      ],
+      "content_fidelity": [
+        "matched",
+        "mismatched",
+        "indeterminate"
+      ],
+      "semantic_relation": [
+        "supports",
+        "contradicts",
+        "qualifies",
+        "inconclusive",
+        "not_assessed"
+      ],
+      "sufficiency": [
+        "sufficient",
+        "insufficient",
+        "not_assessed"
+      ]
+    },
+    "CoverageManifest": {
+      "required": [
+        "case_id",
+        "scope_version",
+        "required_issues",
+        "document_versions",
+        "exclusions",
+        "unresolved_gaps"
+      ],
+      "notes": "Processing alone cannot imply completion"
+    },
+    "PromotionRequest": {
+      "required": [
+        "case_id",
+        "target_state",
+        "actor_id",
+        "policy_version"
+      ],
+      "notes": "Actor derived and authorized server-side; exception disposition requires explicit policy and audited rationale"
+    }
+  },
+  "proposed_routes": {
+    "POST /v2/evidence-anchors": "resolve and record typed source anchor",
+    "POST /v2/findings": "register candidate",
+    "POST /v2/findings/{id}/evidence": "record source-to-finding relationship",
+    "GET /v2/cases/{id}/coverage": "return policy-aware coverage",
+    "POST /v2/cases/{id}/promotion": "enforce authorization, coverage, support and review gate"
+  },
+  "errors": {
+    "403": "not authorized",
+    "409": "invalid state transition, missing coverage or unresolved gate",
+    "422": "malformed input"
+  },
+  "security": "Never accept tenant identity or actor authority from untrusted request fields; trusted application context required"
+}
