@@ -22,3 +22,13 @@ Before any database-related task (SQL, ORM, migrations, repository adapters, RLS
 **Run now:** `python -m unittest discover -s tests -v` (Python 3.11+). No infrastructure is required for the initial domain tests.
 
 Existing `CLAUDE.md` and specialist instructions are subordinate to this current product definition where they refer to the old CaseProof-only MVP.
+
+## Stage 1 trust contracts (mandatory design rules)
+- A finding promoted beyond candidate must bind to an immutable versioned, resolvable typed evidence anchor. Citation resolution, content fidelity, semantic support and sufficiency are separate checks. Never equate exact quote matching with truth.
+- Coverage must track scoped requirements, source inventory, processing/exclusion, unresolved issues and completion policy. A PROCESSED flag alone is not proof of complete investigation.
+- Approved conclusions require an authorized decision and passing policy gates. A documented exception disposition may accept business risk but MUST NOT relabel contradictory or insufficient evidence as verified.
+- Persisted evidence/decision changes must atomically record their audit event; in-memory Stage 1 prototypes have no durability guarantee. See ADRs 0008 and 0009.
+- Pydantic belongs at I/O boundaries; keep the domain framework-independent. No autonomous promotion, no model confidence as an approval criterion.
+
+## PR #8 contract review and merge boundary
+The v2 JSON file is a non-executable **proposal**, but it is not Markdown; C25's Markdown-only exception does not waive CI and security/contract review for this pull request. Do not change branch protection, disable a workflow, downgrade checks, or assert merge readiness to work around missing runners. See ADR 0008, ADR 0009 and the issue/decision revision rules in `contracts/kernel-api.v2.proposal.json`. Hold all merges while C25's positive CI, negative-control import check, independent review and owner-enabled merge protection are unverified.

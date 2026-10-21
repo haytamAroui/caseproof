@@ -32,3 +32,18 @@
 ## Git and agent execution
 - One bounded task per branch and PR. Small diffs, conventional commits, checklist and test evidence. Never push secrets or real customer documents.
 - Agents must inspect repository state, read CONSTITUTION, state assumptions, plan changes, implement tests first for safety-sensitive logic, run checks, review diff and report exact results. No unsubstantiated DONE claims.
+
+## Stage 1 normative trust contracts
+1. **Finding:** Candidate findings may be ungrounded only in quarantine. Promotion requires typed evidence anchors tied to immutable source versions. Citation resolution, content fidelity, semantic support and sufficiency are independent statuses. A quote matching source text is not proof that a finding is true. Model confidence is metadata, never approval authority. Pydantic validates I/O; domain models remain framework-independent.
+2. **Coverage:** Record scoped questions, document/version inventory, processed/failed/excluded status, reviewer-authorized exclusions, missing evidence, contradictions and completion policy. `PROCESSED` is not sufficient for completion. A JSONB snapshot may be a projection, not the sole authoritative audit history.
+3. **Promotion:** An approved conclusion requires prescribed evidence checks and authorized human decision. Contradicted or insufficient evidence remains visibly so even when an authorized, policy-permitted exception disposition is recorded. Missing authority returns forbidden; invalid transitions return structured conflicts.
+4. **Atomic provenance:** Production state transitions and corresponding audit events commit atomically with idempotency and recovery tests. Stage 1 in-memory ledger is not durable, tamper-proof or sufficient for production.
+5. **Evaluation:** Deterministic invariant tests are merge gates, not guarantees of factual truth. Keep kernel fixtures distinct from finance reconciliation and later agent benchmarks. Test wrong passage, wrong version, genuine quote with false claim, contradiction, omission, cross-tenant access and unauthorized overrides.
+
+Reference ADRs: `docs/adr/0008-evidence-anchors.md` and `docs/adr/0009-coverage-promotion.md`. Breaking HTTP changes require a new versioned contract; do not silently rewrite `contracts/kernel-api.v1.json`.
+
+## Stage 1 contract implementation handoff
+- `docs/adr/0008-evidence-anchors.md` specifies source-version/representation identity and typed locator coordinate bases; never silently remap anchors after OCR/parser changes.
+- `docs/adr/0009-coverage-promotion.md` defines issue-to-source closure policy, conflict aggregation, optimistic revision/idempotency semantics and a separate BUSINESS_EXCEPTION_ACCEPTED operational disposition.
+- `contracts/kernel-api.v2.proposal.json` is an **informative design outline**, not runnable OpenAPI/JSON Schema. KRN-109 must add implementable schemas, examples, validators and negative contract tests before exposing v2.
+- Treat JSON contract drafts as contract/configuration artifacts for C25 verification. The Markdown-only documentation commit exception does **not** exempt PR #8 from required CI and merge protection. Missing runner/failed workflow is a blocker, not a failed architecture test result. Human sign-off and independent review remain mandatory.
