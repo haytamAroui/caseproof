@@ -90,3 +90,24 @@ def test_real_database_script_covers_roles_revocation_and_rollback_is_required()
     assert "BEGIN;" not in SQL
     assert "COMMIT;" not in SQL
     assert "ROLLBACK;" not in NEGATIVE_SQL
+
+
+def test_disposable_ci_database_job_runs_real_concurrent_and_audit_negative_cases() -> None:
+    root = Path(__file__).resolve().parents[1]
+    harness = (root / "scripts/verify_s2_002_database.py").read_text(encoding="utf-8")
+    workflow = (root / ".github/workflows/kernel-boundary.yml").read_text(encoding="utf-8")
+    assert "CASEPROOF_DISPOSABLE_DB" in harness
+    assert 'not in {"127.0.0.1", "localhost"}' in harness
+    assert 'caseproof_s2_ci' in harness
+    assert "subprocess.Popen(" in harness
+    assert "LOCK_ACQUIRED_BY_A" in harness
+    assert "case_revision=1" in harness
+    assert "if second != \"0\":" in harness
+    assert "insert into caseproof.audit_events" in harness
+    assert "when check_violation then" in harness
+    assert "AUDIT_FAILURE_ROLLBACK_PASSED" in harness
+    assert "S2-002_DISPOSABLE_POSTGRES_NEGATIVE_TESTS_PASSED" in harness
+    assert "database-security:" in workflow
+    assert "image: postgres:17" in workflow
+    assert "CASEPROOF_DISPOSABLE_DB: \"YES\"" in workflow
+    assert "uv run --locked python scripts/verify_s2_002_database.py" in workflow
