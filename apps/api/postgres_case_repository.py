@@ -9,7 +9,7 @@ a foreign or unknown case both produce None. No writes or v2 HTTP routes.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol, Self
 from uuid import UUID
