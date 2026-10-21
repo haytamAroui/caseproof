@@ -128,3 +128,21 @@ def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> Non
     )
     assert "PROPOSAL = MIGRATION.read_text" in integration
     assert "MIGRATION.read_bytes() != PROPOSAL_PATH.read_bytes()" in integration
+
+
+
+def test_human_audit_actor_is_bound_to_event_tenant() -> None:
+    root = Path(__file__).resolve().parents[1]
+    sql = (root / "supabase/migrations/20261021232955_caseproof_tenant_foundation.sql").read_text(
+        encoding="utf-8"
+    )
+    assert "foreign key (org_id, actor_user_id)" in sql
+    assert "references caseproof.organization_members(org_id, user_id)" in sql
+    assert "(actor_type = 'service' and actor_user_id is null)" in sql
+    negative = (root / "db/proposals/S2-002_rls_rollback_test.sql").read_text(
+        encoding="utf-8"
+    )
+    assert "cross-tenant audit actor unexpectedly accepted" in negative
+    assert "service audit event with human actor unexpectedly accepted" in negative
+    assert "valid-tenant-actor" in negative
+    assert "valid-service-actor" in negative
