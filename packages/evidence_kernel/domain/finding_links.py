@@ -235,6 +235,15 @@ class InMemoryFindingEvidenceLedger:
                 raise FindingLinkNotFound("finding version unavailable")
             return result
 
+    def latest_statement(self, tenant_scope: str, finding_id: str) -> FindingStatement:
+        """Return registered current revision without trusting a caller's selector."""
+        tenant = self._scope(tenant_scope)
+        with self._lock:
+            revision = self._latest.get((tenant, finding_id))
+            if revision is None:
+                raise FindingLinkNotFound("finding unavailable")
+            return self._statements[(tenant, finding_id, revision)]
+
     def append_assessment(
         self,
         tenant_scope: str,
