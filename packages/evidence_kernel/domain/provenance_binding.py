@@ -15,6 +15,7 @@ from hashlib import sha256
 from threading import RLock
 
 from packages.evidence_kernel.domain.coverage import (
+    AttemptState,
     CoverageEvaluator,
     CoverageManifest,
     CoveragePolicy,
@@ -171,8 +172,17 @@ class InMemoryProvenanceBridge:
                     tenant, source.document_id, source.version_id
                 )
                 source_hash = original.sha256_hex
-                if source.attempts:
-                    for rep_id in source.attempts[-1].representation_ids:
+                # A failed/pending retry is not permission to erase the
+                # prior successful parser/OCR representation's lineage.
+                succeeded = next(
+                    (
+                        attempt for attempt in reversed(source.attempts)
+                        if attempt.state is AttemptState.SUCCEEDED
+                    ),
+                    None,
+                )
+                if succeeded is not None:
+                    for rep_id in succeeded.representation_ids:
                         try:
                             rep = self.coverage.findings.evaluator.resolver.sources.get_representation_for_source(
                                 tenant, source.document_id, source.version_id, rep_id
@@ -320,6 +330,20 @@ class InMemoryProvenanceBridge:
                 if not self.verify_record(tenant_scope, idempotency_key):
                     raise ProvenanceIntegrityError("previous observation no longer verifies")
                 return prior
+
+            # Existing v1 hash chains permit a truncated prefix to verify in
+            # isolation. Reconcile *all* locally retained tenant receipts before
+            # adding an observation with a NEW idempotency key.
+            if not self.events.verify(tenant_scope):
+                raise ProvenanceIntegrityError("existing observation chain corrupted")
+            for (receipt_tenant, receipt_key) in self._receipts:
+                if (
+                    receipt_tenant == tenant_scope
+                    and not self.verify_record(tenant_scope, receipt_key)
+                ):
+                    raise ProvenanceIntegrityError(
+                        "previous observation missing or modified in chain"
+                    )
 
             current = self.capture(tenant_scope, expected.case_id, CoveragePolicy(expected.policy_version))
             if current != expected:
