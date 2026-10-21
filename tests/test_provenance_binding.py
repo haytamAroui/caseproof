@@ -13,6 +13,8 @@ from packages.evidence_kernel.domain.coverage import (
     CoverageManifest,
     CoveragePolicy,
     ExpectedSource,
+    ProcessingAttempt,
+    AttemptState,
     InMemoryCoverageLedger,
     LinkUse,
     ProcessingAttempt,
@@ -466,3 +468,63 @@ def test_legacy_provenance_and_evidence_interfaces_unchanged() -> None:
     bridge, _, _, _ = setup()
     assert bridge.events.verify("tenant-a")
     assert SourceReference("d", sha(ORIGINAL), "quote").document_id == "d"
+
+
+def test_new_idempotency_key_blocked_after_chain_truncation_with_retained_receipt() -> None:
+    bridge, _, _, _ = setup()
+    first = record(bridge)
+    bridge.events._events["tenant-a"] = ()
+    assert bridge.events.verify("tenant-a") is True  # v1 alone misses truncation
+    with pytest.raises(ProvenanceIntegrityError, match="previous observation"):
+        record(bridge, event="event-2", key="fresh-key")
+    assert bridge.events.history("tenant-a") == ()
+    assert bridge._receipts[("tenant-a", "idempotency-1")] == first
+    assert ("tenant-a", "fresh-key") not in bridge._receipts
+
+
+def test_truncated_prefix_cannot_be_extended_even_with_a_fresh_key() -> None:
+    bridge, _, _, _ = setup()
+    first = record(bridge)
+    second = record(bridge, event="event-2", key="key-2")
+    chain = bridge.events.history("tenant-a")
+    assert second.sequence == 2
+    bridge.events._events["tenant-a"] = (chain[0],)
+    assert bridge.verify_record("tenant-a", first.idempotency_key)
+    assert not bridge.verify_record("tenant-a", second.idempotency_key)
+    with pytest.raises(ProvenanceIntegrityError, match="previous observation"):
+        record(bridge, event="event-3", key="key-3")
+    assert len(bridge.events.history("tenant-a")) == 1
+
+
+@pytest.mark.parametrize(
+    ("state", "last_attempt"),
+    [
+        (
+            SourceState.FAILED,
+            ProcessingAttempt("retry-failed", AttemptState.FAILED, reason_code="OCR_TIMEOUT"),
+        ),
+        (SourceState.PENDING, ProcessingAttempt("retry-pending", AttemptState.PENDING)),
+    ],
+)
+def test_last_successful_ocr_lineage_survives_failed_or_pending_retry(
+    state: SourceState, last_attempt: ProcessingAttempt
+) -> None:
+    bridge, manifest, _, anchor = setup()
+    source = ExpectedSource(
+        "source", "doc", "v1", state,
+        (
+            ProcessingAttempt("attempt-1", AttemptState.SUCCEEDED, ("ocr1",)),
+            last_attempt,
+        ),
+    )
+    newer = replace(manifest, manifest_revision=2, sources=(source,))
+    bridge.coverage.manifests.register("tenant-a", newer)
+    snapshot = bridge.capture(
+        "tenant-a", "case", CoveragePolicy("coverage-policy-v1")
+    )
+    assert snapshot.sources[0].state == state.value
+    assert snapshot.sources[0].latest_attempt_id == last_attempt.attempt_id
+    assert snapshot.sources[0].representation_digests == (
+        ("ocr1", anchor.representation_sha256_hex),
+    )
+    assert snapshot.ordinary_complete is False  # retry hasn't satisfied coverage
