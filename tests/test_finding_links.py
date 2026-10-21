@@ -1,7 +1,7 @@
 """KRN-104: append-only evidence edges, semantic proposals, and adversarial revisions."""
 
 from dataclasses import FrozenInstanceError, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from hashlib import sha256
 
 import pytest
@@ -328,7 +328,7 @@ def test_semantic_proposal_cannot_mutate_and_keeps_rationale_out_of_repr() -> No
         {"assessment_method_version": " "},
         {"rationale": ""},
         {"assessed_at": datetime(2026, 10, 21)},
-        {"assessed_at": STAMP + timedelta(hours=2)},
+        {"assessed_at": STAMP.astimezone(timezone(timedelta(hours=2)))},
     ],
 )
 def test_invalid_proposal_provenance_or_untyped_states_fail_closed(
