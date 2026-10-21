@@ -1,11 +1,13 @@
 """Stage 1 provenance invariants, including negative controls."""
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from packages.evidence_kernel.domain.provenance import (
-    InMemoryProvenanceLedger, ProvenanceConflict, ProvenanceIntegrityError,
+    InMemoryProvenanceLedger,
+    ProvenanceConflict,
+    ProvenanceIntegrityError,
 )
 
 
@@ -17,7 +19,7 @@ def add(store, tenant="a", event="evt-1", subject="claim-1"):
     return store.append(
         tenant, event, "claim.extracted", subject, "agent-1",
         {"quote": "Hello", "source_version": "v1"},
-        occurred_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 
