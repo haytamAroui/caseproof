@@ -4,7 +4,10 @@ from hashlib import sha256
 from threading import RLock
 
 from packages.evidence_kernel.domain.evidence import (
-    CorroborationStatus, ExtractedClaim, ReviewDecision, SourceStatus,
+    CorroborationStatus,
+    ExtractedClaim,
+    ReviewDecision,
+    SourceStatus,
 )
 
 
@@ -104,9 +107,10 @@ class EvidenceWorkflow:
     def verify_quote(self, scope: str, claim_id: str) -> SourceCheck:
         scope = self._scope(scope)
         with self._lock:
-            claim, version_id = self._claims.get((scope, claim_id), (None, None))
-            if claim is None:
+            claim_record = self._claims.get((scope, claim_id))
+            if claim_record is None:
                 raise ClaimNotFound("claim missing")
+            claim, version_id = claim_record
             source = self._documents[(scope, claim.source.document_id, version_id)]
             present = claim.source.quote in source.text
             result = SourceCheck(
