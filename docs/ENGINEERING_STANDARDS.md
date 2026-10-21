@@ -41,3 +41,9 @@
 5. **Evaluation:** Deterministic invariant tests are merge gates, not guarantees of factual truth. Keep kernel fixtures distinct from finance reconciliation and later agent benchmarks. Test wrong passage, wrong version, genuine quote with false claim, contradiction, omission, cross-tenant access and unauthorized overrides.
 
 Reference ADRs: `docs/adr/0008-evidence-anchors.md` and `docs/adr/0009-coverage-promotion.md`. Breaking HTTP changes require a new versioned contract; do not silently rewrite `contracts/kernel-api.v1.json`.
+
+## Stage 1 contract implementation handoff
+- `docs/adr/0008-evidence-anchors.md` specifies source-version/representation identity and typed locator coordinate bases; never silently remap anchors after OCR/parser changes.
+- `docs/adr/0009-coverage-promotion.md` defines issue-to-source closure policy, conflict aggregation, optimistic revision/idempotency semantics and a separate BUSINESS_EXCEPTION_ACCEPTED operational disposition.
+- `contracts/kernel-api.v2.proposal.json` is an **informative design outline**, not runnable OpenAPI/JSON Schema. KRN-109 must add implementable schemas, examples, validators and negative contract tests before exposing v2.
+- Treat JSON contract drafts as contract/configuration artifacts for C25 verification. The Markdown-only documentation commit exception does **not** exempt PR #8 from required CI and merge protection. Missing runner/failed workflow is a blocker, not a failed architecture test result. Human sign-off and independent review remain mandatory.
