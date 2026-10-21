@@ -5,11 +5,12 @@ Reference in-memory implementation only. No durable audit guarantee.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
 from json import dumps
 from threading import RLock
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 
 class ProvenanceConflict(ValueError):
@@ -67,7 +68,7 @@ class InMemoryProvenanceLedger:
             tenant_id, event_id, kind, subject_id, actor_id,
         )):
             raise ValueError("nonempty tenant, event, kind, subject and actor IDs required")
-        timestamp = occurred_at or datetime.now(timezone.utc)
+        timestamp = occurred_at or datetime.now(UTC)
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
             raise ValueError("timestamp must be timezone aware")
         payload_json = _canonical(payload)
