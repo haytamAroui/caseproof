@@ -30,6 +30,15 @@ Preserve immutable source bytes, SHA-256 hash, ingestion time, parser/OCR versio
 ## C09 — Architecture boundaries
 `domain` imports only standard library and domain-level types; `application` imports domain and ports; adapters import inward. HTTP routes, Supabase clients, Redis, SDKs, provider-specific prompts and PDF rendering never enter domain code. Cross-module interaction uses typed application interfaces or explicit domain events. No circular imports or god-services.
 
+### C09-A — Evidence kernel sovereignty (non-negotiable)
+- `packages/evidence_kernel/**` MUST NOT import `domains/**`, `apps/**`, or infrastructure/provider SDKs, directly or through re-exports. It MUST NOT contain invoice, purchase-order, dispute, insurance or legal-sector rules, schemas, terminology or constants.
+- `domains/**` MAY import public `packages.evidence_kernel` contracts. Domain modules MUST NOT be imported by the kernel. Cross-domain orchestration belongs in application composition, not the kernel.
+- Kernel `domain/` is pure Python; kernel `application/` may depend on kernel `domain/` and `ports/`; adapters implement ports and depend inward. Infrastructure and provider selection occur at composition roots.
+- Any new sector must implement its own schema, matching policy, workflow and output adapter without modifying kernel primitives unless a genuinely cross-sector capability is demonstrated and independently tested.
+- Changes to kernel public contracts, evidence authority, provenance, verification or review state semantics require a focused ADR, compatibility tests and human review before merge. Agents MUST NOT bypass this via dynamic imports, string-based imports, generated code, or dependency injection that reverses the boundary.
+- CI MUST enforce the boundary by static import checks and unit tests. A failing architecture check is a merge blocker; never disable or weaken it to make a PR pass.
+
+
 ## C10 — Safe evolution
 Start with a modular monolith, one API and one durable worker, not microservices. RAG, graph DB, distributed orchestration and agents require an approved ADR supported by benchmark or operational need. Reuse AZComply through an adapter first; extract a versioned shared package only after compatibility tests and a second consumer exist.
 
