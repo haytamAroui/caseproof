@@ -275,3 +275,39 @@ def test_adapter_is_not_registered_with_live_v2_or_legacy_auth() -> None:
     assert "/v1/claims" in paths
     assert HttpsSupabaseUserLookup.__name__ not in json.dumps(paths)
     assert isinstance(UUID(USER), UUID)
+
+
+def test_expired_temporary_ban_does_not_permanently_block_identity() -> None:
+    fake = FakeAuthUserLookup(user={
+        "id": USER,
+        "deleted_at": None,
+        "banned_until": (NOW - timedelta(days=2)).isoformat(),
+        "is_anonymous": False,
+    })
+    result = SupabaseAuthUserVerifier(REF, fake, lambda: NOW).verify_bearer(jwt())
+    assert result.subject_id == USER
+    assert result.human_authenticated is False
+    assert len(fake.tokens_seen) == 1
+
+
+@pytest.mark.parametrize("invalid_ban", [
+    "not-a-timestamp", "2027-01-01T00:00:00", 1700000000,
+])
+def test_malformed_or_timezone_naive_ban_status_fails_closed(
+    invalid_ban: object,
+) -> None:
+    fake = FakeAuthUserLookup(user={
+        "id": USER, "deleted_at": None, "banned_until": invalid_ban,
+        "is_anonymous": False,
+    })
+    with pytest.raises(IdentityServiceUnavailable):
+        SupabaseAuthUserVerifier(REF, fake, lambda: NOW).verify_bearer(jwt())
+
+
+def test_current_ban_is_still_rejected_even_with_200_auth_response() -> None:
+    fake = FakeAuthUserLookup(user={
+        "id": USER, "deleted_at": None, "banned_until": (NOW + timedelta(seconds=1)).isoformat(),
+        "is_anonymous": False,
+    })
+    with pytest.raises(InvalidBearer):
+        SupabaseAuthUserVerifier(REF, fake, lambda: NOW).verify_bearer(jwt())
