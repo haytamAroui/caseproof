@@ -1,42 +1,50 @@
-# Stage 0: Evidence Kernel engineering baseline
+# Stage 0 — Engineering foundation (independent execution)
 
-Status: implementation in progress. CI runner, locked dependencies, and complete branch checks remain unverified.
+Status: **foundation delivered; full-branch verification outstanding**.
+Owner direction (2026-10-21): defer GitHub Actions and uv.lock work. Neither is a prerequisite for continuing Stage 0 implementation. This is not an exemption from tests, security review or merge gates.
 
-## Scope
+## Delivered
 
-- Python 3.11+ with pyproject.toml and uv dependency locking.
-- Pure Python evidence domain, independent of sectors, HTTP, databases and SDKs.
-- Source verification, corroboration and reviewer decisions are independent states.
-- Authenticated tenant scope belongs to application adapters; untrusted tenant headers are not authorization.
-- No database schema, migrations, production release or external customer actions in this stage.
+- Binding constitution and architecture rules; sector-neutral kernel boundary.
+- Python project and dependency declarations in pyproject.toml.
+- Architecture checker and positive/negative regression tests.
+- Independent verification entrypoint: `python scripts/verify_stage0.py`.
+- Source/claim, persistence and API boundary ADRs (0006 and 0007).
+- Test matrix, cloud fallback policy, database standards and scoped agent instructions.
+- Feature-branch development only. No migrations, production tenant auth, customer documents, merge or deployment.
 
-## Verification commands
+## Run without GitHub Actions or uv.lock
 
-Run from the repository root in an internet-enabled isolated cloud workspace:
+From the exact branch checkout with Python 3.11+ and declared development dependencies already installed:
 
 ```sh
-uv lock --python 3.11
-uv sync --locked --group dev --python 3.11
-uv run --locked python scripts/check_architecture.py
-uv run --locked python -m compileall -q packages apps domains
-uv run --locked pytest -q
-uv run --locked ruff check .
-uv run --locked mypy packages/evidence_kernel
+python scripts/verify_stage0.py
 ```
 
-The architecture script uses only the standard library and can be run independently when dependencies are unavailable. Such a check does not substitute for locked tests.
+The script runs the architecture guard, compilation, full pytest, Ruff and mypy; it reports missing tools as **BLOCKED** and exits nonzero. It does not pretend that dependency locking has succeeded.
 
-## Acceptance criteria
+To run individual checks:
 
-1. A committed uv.lock is reproducible in an isolated cloud runner.
-2. Architecture checks and a negative-control forbidden-import test pass.
-3. Full branch unit, security and API contract tests pass.
-4. Ruff and mypy pass or any explicitly approved exceptions are documented.
-5. Human review and protected branch settings are verified before merge.
-6. The verification report includes source commit, environment, commands and exit statuses.
+```sh
+python scripts/check_architecture.py
+python -m compileall -q packages domains apps
+python -m pytest -q
+python -m ruff check .
+python -m mypy packages/evidence_kernel
+```
 
-## Current blockers
+## Evidence collected (2026-10-21)
 
-GitHub Actions is failing before executing job steps. A complete branch test run and lockfile have not been obtained. Therefore Stage 0 is not yet operationally complete and no merge readiness is claimed.
+In a separate cloud workspace, the *previously prepared Stage 0–3 review ZIP* (not a checkout of the latest GitHub branch) ran four test files with **17 passed in 0.39 seconds**, exit 0. Python compilation of `packages` and `apps` exited 0. This is patch-level evidence only. Ruff and mypy were not available there. No claim is made that the latest branch passed.
 
-See docs/quality/CLOUD_FALLBACK_VERIFICATION.md and docs/CLOUD_DEPENDENCY_BOOTSTRAP.md.
+## Deferred / merge-blocking items
+
+- `uv.lock` and reproducible locked installation: deferred at owner request.
+- GitHub Actions runner availability: deferred at owner request.
+- Full checkout `python scripts/verify_stage0.py` run: outstanding.
+- Ruff, mypy, API contract snapshots, negative-control execution and tenant security checks: outstanding until independently run.
+- Required branch protection and human review: unverified.
+
+**Stage 0 implementation may continue and Stage 1 can be developed in parallel. No merge or release is authorized until all applicable gates pass.**
+
+See `docs/quality/CLOUD_FALLBACK_VERIFICATION.md`, `docs/adr/0006-kernel-api-contracts.md` and `docs/adr/0007-kernel-persistence-boundary.md`.
