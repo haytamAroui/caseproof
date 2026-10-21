@@ -29,3 +29,6 @@ Existing `CLAUDE.md` and specialist instructions are subordinate to this current
 - Approved conclusions require an authorized decision and passing policy gates. A documented exception disposition may accept business risk but MUST NOT relabel contradictory or insufficient evidence as verified.
 - Persisted evidence/decision changes must atomically record their audit event; in-memory Stage 1 prototypes have no durability guarantee. See ADRs 0008 and 0009.
 - Pydantic belongs at I/O boundaries; keep the domain framework-independent. No autonomous promotion, no model confidence as an approval criterion.
+
+## PR #8 contract review and merge boundary
+The v2 JSON file is a non-executable **proposal**, but it is not Markdown; C25's Markdown-only exception does not waive CI and security/contract review for this pull request. Do not change branch protection, disable a workflow, downgrade checks, or assert merge readiness to work around missing runners. See ADR 0008, ADR 0009 and the issue/decision revision rules in `contracts/kernel-api.v2.proposal.json`. Hold all merges while C25's positive CI, negative-control import check, independent review and owner-enabled merge protection are unverified.
