@@ -1,0 +1,79 @@
+{
+  "status": "proposal-not-implemented",
+  "version": "2.0-draft",
+  "compatibility": "Do not replace kernel-api.v1.json or claim deployed OpenAPI; review against generated FastAPI OpenAPI before implementation.",
+  "models": {
+    "EvidenceAnchor": {
+      "required": [
+        "anchor_id",
+        "source_document_id",
+        "source_version_id",
+        "source_digest",
+        "kind",
+        "locator"
+      ],
+      "kinds": [
+        "text_span",
+        "pdf_region",
+        "structured_field",
+        "spreadsheet_range"
+      ],
+      "note": "Typed locator shape varies by kind; canonical coordinates, representation and parser provenance required."
+    },
+    "FindingCandidate": {
+      "required": [
+        "finding_id",
+        "statement",
+        "evidence_anchor_ids",
+        "support_assessments"
+      ],
+      "note": "Empty evidence anchors allowed only in candidate/quarantined state; confidence optional and non-authoritative."
+    },
+    "VerificationResult": {
+      "required": [
+        "anchor_id",
+        "integrity",
+        "resolution",
+        "fidelity",
+        "support",
+        "sufficiency"
+      ],
+      "note": "Independent statuses; semantic support is not inferred from quote match."
+    },
+    "CoverageManifest": {
+      "required": [
+        "scope_version",
+        "required_questions",
+        "expected_source_versions",
+        "processing_records",
+        "gaps",
+        "exclusions"
+      ],
+      "note": "Projection of audited events; PROCESSED does not imply sufficient coverage."
+    },
+    "PromotionRequest": {
+      "required": [
+        "finding_ids",
+        "requested_disposition",
+        "actor_context"
+      ],
+      "optional": [
+        "exception_rationale",
+        "exception_policy_id"
+      ],
+      "note": "Actor context must be trusted server-resolved; never accept client-supplied authority."
+    }
+  },
+  "proposed_routes": [
+    "POST /v2/investigations",
+    "GET /v2/investigations/{id}/coverage",
+    "POST /v2/findings",
+    "POST /v2/findings/{id}/verify",
+    "POST /v2/investigations/{id}/decisions"
+  ],
+  "errors": {
+    "403": "Unauthorized actor",
+    "409": "Evidence or coverage state conflict",
+    "422": "Invalid payload"
+  }
+}
