@@ -174,16 +174,20 @@ class RequiredIssue:
     acceptance_policy: str
     source_ids: tuple[str, ...]
     relied_on_links: tuple[LinkUse, ...] = ()
+    finding_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _required(self.issue_id, "issue_id")
         _required(self.acceptance_policy, "issue acceptance policy")
         _unique(self.source_ids, "required source IDs")
+        _unique(self.finding_ids, "required finding IDs")
         if not isinstance(self.relied_on_links, tuple):
             raise CoverageError("relied-on links must be immutable tuple")
         keys = tuple(link.link_id for link in self.relied_on_links)
         if tuple(sorted(set(keys))) != keys:
             raise CoverageError("relied-on links must be sorted with unique IDs")
+        if any(link.finding_id not in self.finding_ids for link in self.relied_on_links):
+            raise CoverageError("issue evidence link must reference a declared required finding")
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,7 +252,7 @@ class CoverageManifest:
         """Immutable content that cannot shrink within one scope version."""
         return (
             tuple(
-                (issue.issue_id, issue.acceptance_policy, issue.source_ids)
+                (issue.issue_id, issue.acceptance_policy, issue.source_ids, issue.finding_ids)
                 for issue in self.issues
             ),
             tuple(
@@ -406,6 +410,7 @@ class CoverageEvaluator:
             if any(source_id not in processed for source_id in issue.source_ids):
                 issue_reasons.add(CoverageReason.SOURCE_UNACCOUNTED)
             relations: list[SemanticRelation] = []
+            observed_findings: set[str] = set()
             if not issue.relied_on_links:
                 issue_reasons.add(CoverageReason.ISSUE_UNSUPPORTED)
             for relied in issue.relied_on_links:
@@ -427,6 +432,7 @@ class CoverageEvaluator:
                 pinned[relied.link_id] = (
                     relied.finding_id, relied.statement_revision, relied.assessment_revision
                 )
+                observed_findings.add(relied.finding_id)
                 if not self._anchor_within_issue_sources(item, issue, source_index, processed):
                     issue_reasons.add(CoverageReason.LINK_SOURCE_OUT_OF_SCOPE)
                 if (
@@ -448,6 +454,8 @@ class CoverageEvaluator:
                 if item.semantic.sufficiency is not LinkSufficiency.SUFFICIENT:
                     issue_reasons.add(CoverageReason.LINK_SUFFICIENCY_UNASSESSED)
                 relations.append(item.semantic.relation)
+            if set(issue.finding_ids) - observed_findings:
+                issue_reasons.add(CoverageReason.ISSUE_UNSUPPORTED)
             if not relations:
                 status = IssueStatus.OPEN
             elif SemanticRelation.CONTRADICTS in relations:
