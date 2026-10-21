@@ -377,7 +377,7 @@ class InMemoryProvenanceBridge:
             payload = json.loads(event.payload_json)
         except (ValueError, TypeError):
             return False
-        return payload == {
+        return bool(payload == {
             "schema": SCHEMA, "case_id": receipt.packet.case_id,
             "scope_version": receipt.packet.scope_version,
             "manifest_revision": receipt.packet.manifest_revision,
@@ -385,4 +385,4 @@ class InMemoryProvenanceBridge:
             "packet_sha256": receipt.packet.fingerprint,
             "input_sha256": receipt.input_fingerprint,
             "action": receipt.action.value, "note_sha256": receipt.note_sha256_hex,
-        }
+        })
