@@ -14,7 +14,12 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PROPOSAL = (ROOT / "db/proposals/S2-002_tenant_foundation.sql").read_text(encoding="utf-8")
+MIGRATION = ROOT / "supabase/migrations/20261021232955_caseproof_tenant_foundation.sql"
+PROPOSAL_PATH = ROOT / "db/proposals/S2-002_tenant_foundation.sql"
+PROPOSAL = MIGRATION.read_text(encoding="utf-8")
+# The final applied contract must match the already rollback-tested proposal.
+if MIGRATION.read_bytes() != PROPOSAL_PATH.read_bytes():
+    raise RuntimeError("Canonical Supabase migration diverges from approved SQL proposal")
 TESTS = (ROOT / "db/proposals/S2-002_rls_rollback_test.sql").read_text(encoding="utf-8")
 CASE = "aaaaaaaa-1111-4111-8111-111111111111"
 SCHEMA_BOOTSTRAP = """
