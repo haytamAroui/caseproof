@@ -146,11 +146,18 @@ class BearerIdentityVerifier(Protocol):
 
 
 class CaseAccessRepository(Protocol):
-    def find_case(self, case_id: str) -> StoredCase | None:
-        """Trusted lookup; globally unique case IDs, no cross-tenant metadata leaks."""
+    def lookup_case_membership(
+        self, subject_id: str, case_id: str
+    ) -> tuple[StoredCase, StoredMembership] | None:
+        """One trusted, atomic, joined read of case and CURRENT membership.
 
-    def find_membership(self, subject_id: str, org_id: str) -> StoredMembership | None:
-        """Read CURRENT authorization from server storage, not token claims."""
+        Unknown and foreign cases MUST return the same None, including on
+        partial membership-store failure. A SQL adapter must execute one
+        scoped query, never read case existence before checking membership.
+        On ANY query failure raise AccessStoreUnavailable, for both known
+        and unknown case IDs. The check is still not a durable authorization
+        or state-changing transaction.
+        """
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,19 +220,19 @@ class CaseAccessService:
             raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED)
 
         try:
-            resource = self.repository.find_case(case_id)
-            if resource is None:
-                raise AccessRejected(AccessFailure.RESOURCE_MASKED)
-            membership = self.repository.find_membership(
-                verified.subject_id, resource.owner_org_id
+            case_membership = self.repository.lookup_case_membership(
+                verified.subject_id, case_id
             )
         except AccessStoreUnavailable:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if case_membership is None:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        resource, membership = case_membership
 
-        # A guessed case ID from an organization that is not a CURRENT membership
-        # must be indistinguishable from an unknown case.
+        # The repository is trusted but we still verify its returned values.
         if (
-            membership is None
+            resource.case_id != case_id
+            or membership is None
             or membership.subject_id != verified.subject_id
             or membership.org_id != resource.owner_org_id
             or not membership.active
