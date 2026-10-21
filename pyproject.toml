@@ -1,14 +1,13 @@
 [project]
 name = "exceptiondesk"
 version = "0.1.0"
-description = "Finance-first evidence-driven exception resolution"
+description = "Evidence kernel and adapters"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
 
 [dependency-groups]
-dev = ["pytest==8.3.5"]
+dev = ["pytest>=8,<10", "httpx>=0.27,<1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-ra"
