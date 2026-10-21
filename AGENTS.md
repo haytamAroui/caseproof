@@ -8,18 +8,16 @@ Read `CONSTITUTION.md`, `README.md`, `docs/ROADMAP.md`, and `docs/architecture/E
 
 **Working procedure:** choose one vertical slice, write deterministic tests, report exact tests run and limitations. For substantial changes create `docs/tasks/<ID>.md`. No claims of tests passing without executing them. Do not merge/deploy/change production or contact customers without explicit approval. Preserve privacy, tenancy and evidence immutability invariants.
 
-## Temporary mandatory local gate — CI unavailable
+## Cloud-first verification (binding C25)
 
-Until GitHub Actions runs are independently verified and branch protection is enforced, EVERY coding agent and subagent MUST run these commands from the repository root **before every commit and push**:
+- **Markdown-only changes:** Review file scope, Markdown content and links; commit to feature branches without Python tests. Do not claim merge readiness.
+- **Code, configuration, dependencies or migrations:** Require actual cloud-runner results (GitHub Actions or isolated cloud runner) for locked pytest, architecture checks, and affected Ruff, mypy, contract and security tests. Pushing a feature branch to trigger CI is allowed; missing or failing checks block merging.
+- **CI unavailable:** Do not bypass implementation verification; report the blocker and prepare a patch or use an alternative verified cloud runner.
+- **No autonomous merge/deploy.** Preserve all requirements of CONSTITUTION.md, including C12–C16, C21, C24 and C25.
 
-```bash
-uv run --locked pytest -q
-uv run --locked python scripts/check_architecture.py
-```
+## Mandatory database standard
 
-If either command fails, cannot start, is skipped, or cannot be observed to finish successfully: **STOP. Do not commit or push.** Fix the issue and rerun both. Do not substitute mocked results, skip flags, or a verbal assurance. Report commands, exit codes, and test totals.
-
-For initial setup without an existing lockfile, a human must explicitly approve creation of the lockfile; do not silently drop `--locked`. The required tests are also wired into a pre-commit Git hook, but hooks are not security boundaries and can be bypassed. CI and branch protection remain mandatory for merge authorization.
+Before any database-related task (SQL, ORM, migrations, repository adapters, RLS, Supabase membership/storage metadata, indexes or data-access API), **read `docs/standards/database-v1.md`** and relevant ADRs. If absent, stop and request the standard. Stage 0 is design-only: do not implement database schemas or migrations without separate approval.
 
 **Run now:** `python -m unittest discover -s tests -v` (Python 3.11+). No infrastructure is required for the initial domain tests.
 
