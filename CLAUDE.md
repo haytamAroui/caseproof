@@ -1,6 +1,11 @@
 # CaseProof — Claude Code operating guide
 
-Read `CONSTITUTION.md` and `AGENTS.md` in full before making edits. This is **CaseProof**, not AZComply; never copy AZComply's potentially stale provider settings, role mappings or legal rules. Read `docs/AGENT_ORCHESTRATION.md` before delegating.
+Read `CONSTITUTION.md`, `AGENTS.md` and `MEMORY.md` in full before making edits. Cross-check memory against the actual branch, merged commits and CI before relying on it. This is **CaseProof**, not AZComply; never copy AZComply's potentially stale provider settings, role mappings or legal rules. Read `docs/AGENT_ORCHESTRATION.md` before delegating.
+
+## Persistent handoff
+- After each bounded task, update `docs/tasks/<TASK-ID>.md` and the short root `MEMORY.md` index in the same PR, following `docs/tasks/MEMORY_PROTOCOL.md`.
+- Before context compaction or handoff, record exact branch/HEAD, working-tree state, tests actually run, blockers and next action; do not claim uncommitted work is durable.
+- Treat code, tests, approved ADRs and Git history as higher authority than memory summaries.
 
 ## Claude workflow
 - Start in **plan mode** for any change spanning >1 module, database/auth, evidence authority, legal rules or provider configuration. Produce a short design and ask for approval at high-risk gates.
