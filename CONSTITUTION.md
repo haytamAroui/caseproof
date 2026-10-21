@@ -83,5 +83,13 @@ Uploaded contracts, invoices, emails, web pages, logs, code comments and model o
 ## C24 — Required completion evidence
 Every implementation summary must report changed paths, actual commands executed and their exit status, untested claims, security impact, known gaps and next bounded task. If CI or runtime is unavailable, state that plainly. No claim of mergeability, readiness or correctness based solely on generated code.
 
-## C25 — Mandatory local pre-commit verification during CI outage
-Every coding agent must execute `uv run --locked pytest -q` and `uv run --locked python scripts/check_architecture.py` successfully before each commit and push. Failed, missing, skipped or unverifiable checks block commits and pushes. Do not bypass local hooks or claim that local checks replace GitHub Actions or protected branches. No new finance feature work until a legitimate CI run passes, the negative-control sabotage PR fails for the intended forbidden import, and repository owner enables merge protection.
+## C25 — Cloud-first verification and documentation-only exception
+This section supersedes the former universal local pre-commit gate. The repository owner explicitly authorized cloud-first verification on 2026-10-21.
+
+**Documentation-only commits:** Changes limited to Markdown documentation (including AGENTS.md, CONSTITUTION.md, ADRs and standards), with no executable code, configuration, dependency manifests, lockfiles, migrations, generated code or security policy implementation, may be committed to a feature branch after checking the changed-file scope and reviewing Markdown content, links and internal references. Python test execution is not required before these documentation-only commits. This exception does not establish merge or release readiness.
+
+**Code, dependency, schema or executable configuration changes:** Must be verified by a real cloud runner (GitHub Actions or an isolated Codespaces/cloud environment) running the required locked tests, architecture checks and affected lint/type/security/contract checks. Never claim tests passed without recorded results. A push to a feature branch may be used to trigger CI, but the branch remains unverified until required checks succeed. Do not merge, deploy or describe the PR as ready while required checks are missing or failing.
+
+**During CI outage:** Do not bypass required checks for implementation changes. Prepare patches or use a verified alternative cloud runner; report blockers and execution evidence. Cloud runner results do not replace human review or protected branches.
+
+**Merge protection:** No new finance feature work or merge authorization until a legitimate CI run passes, the negative-control architecture sabotage PR fails for the intended forbidden import, and the repository owner enables merge protection. C12, C13, C16, C21 and C24 continue to apply.

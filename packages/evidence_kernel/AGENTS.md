@@ -9,4 +9,4 @@ This file applies to ALL changes inside `packages/evidence_kernel/`.
 5. Tests and `python scripts/check_architecture.py` must pass. Do not suppress, skip, weaken or remove the check.
 6. If a feature needs a sector import, STOP and implement the behavior in `domains/<sector>/` or a composition-root adapter.
 
-Before every commit or push, run `uv run --locked pytest -q` and `uv run --locked python scripts/check_architecture.py`. Stop on any failure. Do not bypass hooks.
+For feature-branch development while GitHub Actions and uv.lock are deferred, use `python scripts/verify_stage0.py` in an isolated cloud workspace with installed development dependencies. Record exact commands, results and unavailable checks. Unverified changes may be committed to a feature branch but must not be merged or released. Once a lockfile and runner exist, the mandatory locked checks resume. Never weaken architecture tests or bypass protected-branch gates.

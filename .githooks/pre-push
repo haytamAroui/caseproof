@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
 set -eu
-uv run --locked pytest -q
-uv run --locked python scripts/check_architecture.py
+# Stage 0 independent checks; no uv.lock or GitHub Actions required.
+python scripts/check_architecture.py
+python -m pytest -q
