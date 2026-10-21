@@ -4,12 +4,12 @@ Reference in-memory implementation only. No durable audit guarantee.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
 from json import dumps
 from threading import RLock
-from collections.abc import Mapping
 from typing import Any
 
 
