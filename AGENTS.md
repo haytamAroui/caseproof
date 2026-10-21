@@ -22,3 +22,11 @@ Before any database-related task (SQL, ORM, migrations, repository adapters, RLS
 **Run now:** `python -m unittest discover -s tests -v` (Python 3.11+). No infrastructure is required for the initial domain tests.
 
 Existing `CLAUDE.md` and specialist instructions are subordinate to this current product definition where they refer to the old CaseProof-only MVP.
+
+## Stage 1 trust contracts (proposed ADRs 0008–0010)
+- Finding: candidates may be ungrounded only while quarantined; promoted findings require version-bound typed evidence anchors. Citation resolution, content fidelity, semantic support, sufficiency and source integrity are independent statuses. Exact quote presence never proves a claim true.
+- Coverage: investigations must record expected sources, required issues, processed/excluded inputs, gaps and reviewer-authorized waivers. A processed file does not establish complete investigation.
+- Promotion: approval requires trusted reviewer authority, required evidence checks, sufficient coverage and append-only decision rationale. A documented business exception cannot change evidence status or conceal contradictions.
+- Provenance: durable evidence and decision changes must be atomic with audit events at the persistence boundary; the current in-memory ledger is not production audit storage.
+- Evaluation: deterministic invariant tests and versioned adversarial fixtures are required. Agent rubric scores never certify legal or financial truth. Keep execution harness and Pydantic outside the pure Python kernel.
+- Proposed v2 API schema is documentation only. Preserve v1 until actual generated OpenAPI, backward compatibility and authorization are reviewed.
