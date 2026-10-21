@@ -4,7 +4,10 @@ from hashlib import sha256
 from threading import RLock
 
 from packages.evidence_kernel.domain.evidence import (
-    CorroborationStatus, ExtractedClaim, ReviewDecision, SourceStatus,
+    CorroborationStatus,
+    ExtractedClaim,
+    ReviewDecision,
+    SourceStatus,
 )
 
 
