@@ -1,0 +1,59 @@
+name: Bootstrap Python dependencies
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/kernel-fastapi-foundation
+    paths:
+      - pyproject.toml
+      - .github/workflows/bootstrap-dependencies.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kernel-bootstrap-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lock-and-verify:
+    if: github.repository == 'haytamAroui/caseproof'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.0"
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Resolve and lock dependencies
+        run: uv lock --python 3.11
+      - name: Install exact locked dependencies
+        run: uv sync --locked --group dev --python 3.11
+      - name: Architecture boundary
+        run: uv run --locked python scripts/check_architecture.py
+      - name: Kernel tests
+        run: uv run --locked pytest -q
+      - name: Python compilation
+        run: uv run --locked python -m compileall -q packages apps
+      - name: Commit resolved lockfile
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          if git diff --quiet -- uv.lock && git ls-files --error-unmatch uv.lock >/dev/null 2>&1; then
+            echo "Lockfile unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "build: commit resolved uv dependency lock"
+          git push origin "HEAD:${{ github.ref_name }}"
+      - name: Ruff check (merge gate)
+        run: uv run --locked ruff check .
+      - name: Mypy check (merge gate)
+        run: uv run --locked mypy packages/evidence_kernel
