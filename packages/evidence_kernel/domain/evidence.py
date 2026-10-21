@@ -3,20 +3,20 @@ from dataclasses import dataclass
 from enum import Enum
 
 
-class SourceStatus(str, Enum):
+class SourceStatus(str, Enum):  # noqa: UP042 — preserve v1 str(Enum) behavior
     UNVERIFIED = "unverified"
     VERIFIED = "verified"
     INVALID = "invalid"
 
 
-class CorroborationStatus(str, Enum):
+class CorroborationStatus(str, Enum):  # noqa: UP042 — preserve v1 str(Enum) behavior
     NOT_ASSESSED = "not_assessed"
     CORROBORATED = "corroborated"
     CONTRADICTED = "contradicted"
     INSUFFICIENT = "insufficient"
 
 
-class ReviewStatus(str, Enum):
+class ReviewStatus(str, Enum):  # noqa: UP042 — preserve v1 str(Enum) behavior
     PENDING = "pending"
     CONFIRMED = "confirmed"
     REJECTED = "rejected"
