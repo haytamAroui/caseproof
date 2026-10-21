@@ -1,0 +1,110 @@
+{
+  "schema": "krn108-adversarial-v1",
+  "description": "Independent, hand-labelled expected outcomes. Scope completeness does not mean factual truth or permission.",
+  "cases": [
+    {
+      "id": "baseline",
+      "mutation": "none",
+      "grounded": true,
+      "complete": true
+    },
+    {
+      "id": "false-quote",
+      "mutation": "quote_mismatch",
+      "grounded": false,
+      "complete": false,
+      "reason": "link_fidelity_not_matched"
+    },
+    {
+      "id": "wrong-utf8-offset",
+      "mutation": "wrong_offset",
+      "grounded": false,
+      "complete": false,
+      "reason": "link_fidelity_not_matched"
+    },
+    {
+      "id": "old-representation-digest",
+      "mutation": "stale_anchor",
+      "grounded": false,
+      "complete": false,
+      "reason": "link_fidelity_not_matched"
+    },
+    {
+      "id": "unassessed-relation",
+      "mutation": "unassessed",
+      "grounded": false,
+      "complete": false,
+      "reason": "semantic_unresolved"
+    },
+    {
+      "id": "contradictory-evidence",
+      "mutation": "contradicts",
+      "grounded": true,
+      "complete": false,
+      "reason": "contradiction_present"
+    },
+    {
+      "id": "qualified-evidence",
+      "mutation": "qualifies",
+      "grounded": true,
+      "complete": false,
+      "reason": "issue_unsupported"
+    },
+    {
+      "id": "inconclusive-evidence",
+      "mutation": "inconclusive",
+      "grounded": true,
+      "complete": false,
+      "reason": "semantic_unresolved"
+    },
+    {
+      "id": "insufficient-evidence",
+      "mutation": "insufficient",
+      "grounded": true,
+      "complete": false,
+      "reason": "link_sufficiency_unassessed"
+    },
+    {
+      "id": "model-claimed-assessment",
+      "mutation": "model_assessor",
+      "grounded": false,
+      "complete": true,
+      "reason": null
+    },
+    {
+      "id": "expected-document-missing",
+      "mutation": "missing",
+      "grounded": true,
+      "complete": false,
+      "reason": "source_unaccounted"
+    },
+    {
+      "id": "processor-retry-failed",
+      "mutation": "failed_retry",
+      "grounded": true,
+      "complete": false,
+      "reason": "source_unaccounted"
+    },
+    {
+      "id": "unlisted-conflicting-link",
+      "mutation": "hidden_conflict",
+      "grounded": true,
+      "complete": false,
+      "reason": "link_inventory_incomplete"
+    },
+    {
+      "id": "no-current-link-in-manifest",
+      "mutation": "omitted_link",
+      "grounded": true,
+      "complete": false,
+      "reason": "link_inventory_incomplete"
+    },
+    {
+      "id": "superseded-statement",
+      "mutation": "new_statement",
+      "grounded": false,
+      "complete": false,
+      "reason": "link_unavailable_or_stale"
+    }
+  ]
+}
