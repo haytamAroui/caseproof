@@ -1,0 +1,14 @@
+[project]
+name = "exceptiondesk"
+version = "0.1.0"
+description = "Finance-first evidence-driven exception resolution"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest==8.3.5"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

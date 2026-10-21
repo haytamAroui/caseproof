@@ -82,3 +82,6 @@ Uploaded contracts, invoices, emails, web pages, logs, code comments and model o
 
 ## C24 — Required completion evidence
 Every implementation summary must report changed paths, actual commands executed and their exit status, untested claims, security impact, known gaps and next bounded task. If CI or runtime is unavailable, state that plainly. No claim of mergeability, readiness or correctness based solely on generated code.
+
+## C25 — Mandatory local pre-commit verification during CI outage
+Every coding agent must execute `uv run --locked pytest -q` and `uv run --locked python scripts/check_architecture.py` successfully before each commit and push. Failed, missing, skipped or unverifiable checks block commits and pushes. Do not bypass local hooks or claim that local checks replace GitHub Actions or protected branches. No new finance feature work until a legitimate CI run passes, the negative-control sabotage PR fails for the intended forbidden import, and repository owner enables merge protection.

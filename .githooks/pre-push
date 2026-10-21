@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+uv run --locked pytest -q
+uv run --locked python scripts/check_architecture.py

@@ -8,3 +8,5 @@ This file applies to ALL changes inside `packages/evidence_kernel/`.
 4. Do not alter public kernel contracts, provenance or authority semantics without an ADR, backward compatibility tests and human review.
 5. Tests and `python scripts/check_architecture.py` must pass. Do not suppress, skip, weaken or remove the check.
 6. If a feature needs a sector import, STOP and implement the behavior in `domains/<sector>/` or a composition-root adapter.
+
+Before every commit or push, run `uv run --locked pytest -q` and `uv run --locked python scripts/check_architecture.py`. Stop on any failure. Do not bypass hooks.
