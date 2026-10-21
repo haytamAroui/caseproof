@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: caseproof-memory
+        name: CaseProof memory gate
+        entry: python scripts/check_memory.py --mode staged
+        language: system
+        pass_filenames: false
+        always_run: true
