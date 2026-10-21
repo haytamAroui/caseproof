@@ -61,6 +61,7 @@ def issue(*, links: tuple[LinkUse, ...] | None = None) -> RequiredIssue:
     return RequiredIssue(
         "question", "issue-rule-v1", ("src",),
         (LinkUse("link", 1, "finding", 1),) if links is None else links,
+        finding_ids=("finding",),
     )
 
 
@@ -317,7 +318,7 @@ def test_revisions_are_append_only_and_cannot_omit_issue_or_source_in_same_scope
     with pytest.raises(CoverageConflict, match="scope"):
         ledger.register("tenant", manifest(
             revision=2,
-            issues=(RequiredIssue("new-issue", "rule", ("src",)),),
+            issues=(RequiredIssue("new-issue", "rule", ("src",), finding_ids=("finding",)),),
         ))
     assert len(ledger.history("tenant", "case-1")) == 1
 
@@ -326,7 +327,7 @@ def test_explicit_new_scope_revision_preserves_old_history_without_authorizing_o
     ledger, _, evaluator, previous, _ = fixture()
     next_scope = manifest(
         revision=2, scope=2, reason="review-required scope amendment",
-        issues=(RequiredIssue("different-issue", "new-rule", ("src",)),),
+        issues=(RequiredIssue("different-issue", "new-rule", ("src",), finding_ids=("finding",)),),
     )
     ledger.register("tenant", next_scope)
     assert ledger.history("tenant", "case-1") == (previous, next_scope)
@@ -393,7 +394,7 @@ def test_omitted_source_or_missing_issue_rejected_before_ledger_registration() -
     with pytest.raises(CoverageError):
         manifest(sources=())
     with pytest.raises(CoverageError, match="unknown"):
-        manifest(issues=(RequiredIssue("question", "policy", ("missing-src",)),))
+        manifest(issues=(RequiredIssue("question", "policy", ("missing-src",), finding_ids=("finding",)),))
     with pytest.raises(CoverageError, match="associated"):
         manifest(
             sources=(processed_source(), ExpectedSource("src2", "d2", "v1", SourceState.MISSING))
@@ -449,3 +450,39 @@ def test_existing_v1_and_krn105_interfaces_remain_unchanged() -> None:
     assert SourceReference("doc", digest(ORIGINAL), "quote").document_id == "doc"
     assert DocumentVersion("doc", "v1", digest(b"old"), "old").version_id == "v1"
     assert GroundingPolicy("grounding-v1").version == "grounding-v1"
+
+
+def test_unrelated_finding_link_cannot_be_used_to_close_an_issue() -> None:
+    with pytest.raises(CoverageError, match="required finding"):
+        RequiredIssue(
+            "question", "policy", ("src",),
+            (LinkUse("link", 1, "finding", 1),), finding_ids=("other-finding",),
+        )
+
+
+def test_required_finding_without_its_own_link_blocks_completion() -> None:
+    ledger, _, evaluator, _, _ = fixture()
+    required = RequiredIssue(
+        "question", "policy", ("src",),
+        (LinkUse("link", 1, "finding", 1),), finding_ids=("another-finding", "finding"),
+    )
+    changed = manifest(issues=(required,), revision=2, scope=2,
+                       reason="New material finding added to scope")
+    ledger.register("tenant", changed)
+    result = evaluator.evaluate("tenant", changed, CoveragePolicy("coverage-v1"))
+    assert not result.ordinary_complete
+    assert CoverageReason.ISSUE_UNSUPPORTED in errors(result)
+
+
+def test_mapping_to_different_required_finding_requires_scope_revision() -> None:
+    ledger, _, _, _, _ = fixture()
+    changed = manifest(
+        revision=2,
+        issues=(RequiredIssue(
+            "question", "issue-rule-v1", ("src",),
+            (LinkUse("another-link", 1, "alternative", 1),),
+            finding_ids=("alternative",),
+        ),),
+    )
+    with pytest.raises(CoverageConflict, match="scope"):
+        ledger.register("tenant", changed)
