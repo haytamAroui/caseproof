@@ -167,10 +167,25 @@ class SupabaseAuthUserVerifier:
         if (
             user.get("id") != subject
             or user.get("deleted_at")
-            or user.get("banned_until")
             or user.get("is_anonymous") is True
         ):
             raise InvalidBearer("Auth user mismatch or unavailable")
+
+        # Supabase retains the timestamp of expired temporary bans.
+        # Reject only an *active* ban; reject malformed timestamps rather
+        # than assuming that unparseable server data has no security effect.
+        banned_until = user.get("banned_until")
+        if banned_until is not None and banned_until != "":
+            if not isinstance(banned_until, str):
+                raise IdentityServiceUnavailable("Invalid Auth ban timestamp")
+            try:
+                ban_end = datetime.fromisoformat(banned_until.replace("Z", "+00:00"))
+            except ValueError:
+                raise IdentityServiceUnavailable("Invalid Auth ban timestamp") from None
+            if ban_end.tzinfo is None or ban_end.utcoffset() is None:
+                raise IdentityServiceUnavailable("Auth ban timestamp lacks timezone")
+            if ban_end > now:
+                raise InvalidBearer("Auth user is currently banned")
 
         return VerifiedSubject(
             subject_id=subject,
