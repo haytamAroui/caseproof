@@ -75,7 +75,7 @@ def anchor(kind: str = "text_span") -> dict[str, object]:
 
 def candidate() -> dict[str, object]:
     return {
-        "case_id": "case-1", "finding_id": "f1", "statement": "Source says "paid".",
+        "case_id": "case-1", "finding_id": "f1", "statement": 'Source says "paid".',
         "expected_case_revision": 1, "idempotency_key": "same-key",
     }
 
