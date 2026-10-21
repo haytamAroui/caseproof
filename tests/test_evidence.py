@@ -1,8 +1,13 @@
 import unittest
 from dataclasses import FrozenInstanceError
+
 from packages.evidence_kernel.domain.evidence import (
-    SourceReference, ExtractedClaim, ReviewDecision, ReviewStatus,
-    SourceStatus, CorroborationStatus,
+    CorroborationStatus,
+    ExtractedClaim,
+    ReviewDecision,
+    ReviewStatus,
+    SourceReference,
+    SourceStatus,
 )
 
 
