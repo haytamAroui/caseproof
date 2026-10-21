@@ -102,7 +102,7 @@ class PdfRegion:
     page_width: Decimal
     page_height: Decimal
     rotation: int
-    coordinate_system: Literal["pdf_points_unrotated_bottom_left"] = PDF_BASIS
+    coordinate_system: Literal["pdf_points_unrotated_bottom_left"] = "pdf_points_unrotated_bottom_left"
 
     def __post_init__(self) -> None:
         _nonnegative(self.page_index, "physical page index")
