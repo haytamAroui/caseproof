@@ -4,12 +4,21 @@ from hashlib import sha256
 import pytest
 
 from packages.evidence_kernel.domain.evidence import (
-    CorroborationStatus, ExtractedClaim, ReviewDecision, ReviewStatus, SourceReference,
+    CorroborationStatus,
+    ExtractedClaim,
+    ReviewDecision,
+    ReviewStatus,
+    SourceReference,
     SourceStatus,
 )
 from packages.evidence_kernel.domain.workflow import (
-    ClaimNotFound, CorroborationAssessment, DocumentVersion, EvidenceConflict,
-    EvidenceWorkflow, EvidenceWorkflowError, SourceNotFound,
+    ClaimNotFound,
+    CorroborationAssessment,
+    DocumentVersion,
+    EvidenceConflict,
+    EvidenceWorkflow,
+    EvidenceWorkflowError,
+    SourceNotFound,
 )
 
 
