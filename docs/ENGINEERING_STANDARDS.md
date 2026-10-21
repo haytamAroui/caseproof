@@ -32,3 +32,12 @@
 ## Git and agent execution
 - One bounded task per branch and PR. Small diffs, conventional commits, checklist and test evidence. Never push secrets or real customer documents.
 - Agents must inspect repository state, read CONSTITUTION, state assumptions, plan changes, implement tests first for safety-sensitive logic, run checks, review diff and report exact results. No unsubstantiated DONE claims.
+
+## Stage 1 normative trust contracts (pending ADR approval)
+1. **Finding contract.** An evidence-backed finding refers to immutable document versions through typed, resolvable anchors. Ungrounded candidates may be retained only in a non-promotable state. Integrity, citation resolution, quote/value fidelity, semantic support and sufficiency are independently represented. Optional model confidence is never proof. Domain value objects are pure Python; Pydantic belongs at I/O.
+2. **Coverage contract.** Version the investigation scope, required issues and expected inputs. Record processing attempts, exclusions, unresolved questions, contradiction and explicit waivers. Completion depends on policy satisfaction, not a mere PROCESSED marker. A JSONB manifest may be a projection, not the sole audit source.
+3. **Promotion gate.** Authorized reviewers may approve supported conclusions or explicitly authorized exception dispositions. Exception rationale and policy must be audited. Contradicted/insufficient evidence stays labeled as such; no override may silently convert it to verified. Reject invalid transitions and unauthorized actors separately.
+4. **Provenance.** Stage 1 defines immutable events and ports; Stage 2 must atomically persist domain changes and audit events, with idempotency, tenant isolation and crash recovery. Hash chains without external anchoring are not tamper-proof.
+5. **Evaluation.** Separate deterministic kernel tests, finance reconciliation golden fixtures and agent harness benchmarks. Use known versioned ground truth, negative controls and private holdouts. Do not claim that tests mathematically guarantee truth.
+
+Reference: proposed ADRs 0008, 0009, 0010 and `contracts/kernel-api.v2.proposal.json`. These are not yet implemented API routes or an approved schema migration.
