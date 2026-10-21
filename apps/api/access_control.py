@@ -177,7 +177,13 @@ class UnavailableBearerVerifier:
 class CaseAccessService:
     verifier: BearerIdentityVerifier
     repository: CaseAccessRepository
+    trusted_issuer: str
+    trusted_audience: str
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        _identifier(self.trusted_issuer, "trusted issuer")
+        _identifier(self.trusted_audience, "trusted audience")
 
     def authorize(
         self, bearer_token: str | None, case_id: str, action: CaseAction
@@ -200,6 +206,8 @@ class CaseAccessService:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         if not isinstance(verified, VerifiedSubject):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if verified.issuer != self.trusted_issuer or verified.audience != self.trusted_audience:
+            raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED)
         now = self.clock()
         _utc(now, "server clock")
         if verified.verified_at > now or verified.expires_at <= now:
