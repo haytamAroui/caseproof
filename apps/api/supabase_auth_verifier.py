@@ -14,6 +14,7 @@ a normal Auth user is NOT automatically a trusted human reviewer.
 from __future__ import annotations
 
 import base64
+import binascii
 import http.client
 import json
 import re
@@ -106,7 +107,7 @@ def _untrusted_claims(token: str) -> tuple[Mapping[str, object], Mapping[str, ob
             if not isinstance(value, dict):
                 raise InvalidBearer("Invalid JWT JSON object")
             decoded.append(value)
-    except (ValueError, UnicodeError, base64.binascii.Error):
+    except (ValueError, UnicodeError, binascii.Error):
         raise InvalidBearer("Malformed JWT") from None
     return decoded[0], decoded[1]
 
