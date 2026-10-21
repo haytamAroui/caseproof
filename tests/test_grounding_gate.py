@@ -354,3 +354,72 @@ def test_v1_workflow_contract_untouched() -> None:
     assert gate.snapshot("tenant", "f1").link_revisions == ()
     assert SourceReference("doc", sha(ORIGINAL), "quote").document_id == "doc"
     assert DocumentVersion("doc", "v1", sha(b"legacy"), "legacy").version_id == "v1"
+
+
+def test_review_race_append_during_evaluation_returns_stale_links(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: never return eligible for revision 2 while pinning revision 1."""
+    gate, ledger, finding, anchor = setup()
+    link(ledger, finding, anchor, quote="Rejected", relation=SemanticRelation.SUPPORTS)
+    stale_snapshot = gate.snapshot("tenant", "f1")
+    original = GroundingGate._still_resolves
+    injected = False
+
+    def mutate_between_reads(
+        self: GroundingGate, tenant: str, record: object
+    ) -> bool:
+        nonlocal injected
+        if not injected:
+            injected = True
+            link(ledger, finding, anchor, revision=2,
+                 quote="Approved", relation=SemanticRelation.SUPPORTS)
+        return original(self, tenant, record)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(GroundingGate, "_still_resolves", mutate_between_reads)
+    result = gate.evaluate("tenant", stale_snapshot, GroundingPolicy("p1"))
+    assert result.eligible is False
+    assert result.reason_codes == (GroundingReason.STALE_LINKS,)
+    assert result.snapshot.link_revisions == (("l1", 1),)
+    assert gate.snapshot("tenant", "f1").link_revisions == (("l1", 2),)
+
+
+def test_review_race_statement_rewrite_during_evaluation_is_stale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate, ledger, finding, anchor = setup()
+    link(ledger, finding, anchor, relation=SemanticRelation.SUPPORTS)
+    stale_snapshot = gate.snapshot("tenant", "f1")
+    original = GroundingGate._still_resolves
+    injected = False
+
+    def mutate_statement(
+        self: GroundingGate, tenant: str, record: object
+    ) -> bool:
+        nonlocal injected
+        if not injected:
+            injected = True
+            ledger.register_statement("tenant", FindingStatement("f1", 2, "New statement."))
+        return original(self, tenant, record)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(GroundingGate, "_still_resolves", mutate_statement)
+    result = gate.evaluate("tenant", stale_snapshot, GroundingPolicy("p1"))
+    assert result.eligible is False
+    assert result.reason_codes == (GroundingReason.STALE_STATEMENT,)
+
+
+def test_current_statement_and_links_capture_complete_revision_inventory() -> None:
+    gate, ledger, finding, anchor = setup()
+    link(ledger, finding, anchor, link_id="l1")
+    first_statement, first_links = ledger.current_statement_and_links("tenant", "f1")
+    assert first_statement is finding
+    assert tuple((x.link_id, x.assessment_revision) for x in first_links) == (("l1", 1),)
+    link(ledger, finding, anchor, link_id="l1", revision=2)
+    link(ledger, finding, replace(anchor, anchor_id="a2"), link_id="l2")
+    next_statement, next_links = ledger.current_statement_and_links("tenant", "f1")
+    assert next_statement is finding
+    assert tuple((x.link_id, x.assessment_revision) for x in next_links) == (
+        ("l1", 2), ("l2", 1)
+    )
+    # Captured immutable packet isn't silently updated by later appends.
+    assert first_links[0].assessment_revision == 1
