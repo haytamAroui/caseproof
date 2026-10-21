@@ -22,7 +22,6 @@ from typing import Any, Literal
 from packages.evidence_kernel.domain.source_versions import (
     InMemorySourceRegistry,
     SourceRecordConflict,
-    SourceRecordNotFound,
 )
 
 TEXT_BASIS = "unicode_codepoint_zero_based_half_open"
