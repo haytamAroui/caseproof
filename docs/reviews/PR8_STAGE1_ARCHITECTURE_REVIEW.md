@@ -36,3 +36,10 @@ C01, C03, C05, C07–C09-A, C12–C13, C16, C20–C25 are affected design/integr
 5. KRN-109 implementation will later require enforceable field-typed OpenAPI/JSON Schemas, compatibility tests and HTTP error examples. Do not treat this draft contract as implemented.
 
 Do not merge on absent evidence, and do not bypass or weaken CI. Recheck current GitHub status after any new pushes. All Stage 1 implementation and durability claims remain out of scope for this PR.
+
+## Follow-up after contract corrections (2026-10-21)
+
+- All five design review findings were addressed as **proposals** in ADR 0008, ADR 0009, the v2 outline, roadmap and AGENTS/standards. This does not constitute implementation verification or independent approval.
+- On updated PR head `d01617f1342e25816f867de15ff980b971c87069`, GitHub Actions run `39633065435` also concluded **failure** with no job steps; the retrieved normalized job was `119336137011`. This is not an executed architecture test and does not satisfy C25.
+- Negative-control PR [#4](https://github.com/haytamAroui/caseproof/pull/4) exists and remains open, unmerged. Its workflow run `39555343328` likewise had zero executed steps and `runner_id: 0`; this cannot count as a demonstrated rejection of its forbidden import. Never merge PR #4.
+- A fresh push after this record will produce another commit and may trigger another workflow; check the **final head** and its actual step logs before any merge decision.
