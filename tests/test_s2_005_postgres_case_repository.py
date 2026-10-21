@@ -39,7 +39,7 @@ def match_row(*, member: str = USER_A, org: str = ORG_A,
 
 
 @dataclass
-class TestCursor:
+class FakeCursor:
     rows: list[tuple[object, ...]]
     statements: list[tuple[str, tuple[str, str]]]
     broken: bool = False
@@ -60,8 +60,8 @@ class TestCursor:
 
 
 @dataclass
-class TestConnection:
-    cursor_instance: TestCursor
+class FakeConnection:
+    cursor_instance: FakeCursor
     closed: bool = False
 
     def __enter__(self) -> Self:
@@ -70,7 +70,7 @@ class TestConnection:
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.closed = True
 
-    def cursor(self) -> TestCursor:
+    def cursor(self) -> FakeCursor:
         return self.cursor_instance
 
 
@@ -79,10 +79,10 @@ class DBRig:
     records: list[tuple[object, ...]]
     broken: bool = False
     statements: list[tuple[str, tuple[str, str]]] = field(default_factory=list)
-    connections: list[TestConnection] = field(default_factory=list)
+    connections: list[FakeConnection] = field(default_factory=list)
 
-    def open(self) -> TestConnection:
-        c = TestConnection(TestCursor(self.records, self.statements, self.broken))
+    def open(self) -> FakeConnection:
+        c = FakeConnection(FakeCursor(self.records, self.statements, self.broken))
         self.connections.append(c)
         return c
 
@@ -149,7 +149,8 @@ def test_untrusted_resource_ids_are_never_interpolated_or_queried(
 @pytest.mark.parametrize("rows", [
     [match_row(), match_row()],
     [match_row(member=USER_B)],
-    [match_row(org=ORG_B)],
+    [(UUID(CASE_A), UUID(ORG_A), 4, UUID(USER_B), UUID(USER_A),
+      UUID(ORG_B), True, ["case:read"])],
     [match_row(case=CASE_B)],
     [match_row(actions=["case:read", "case:read"])],
     [match_row(actions=["case:read", "permission:superuser"])],
@@ -178,7 +179,7 @@ def test_internal_sql_errors_fail_503_without_foreign_case_existence_or_db_detai
 
 
 @dataclass
-class TestVerifiedBearer:
+class FakeVerifiedBearer:
     def verify_bearer(self, token: str) -> VerifiedSubject:
         if token != "verified-token":
             raise ValueError("use fixture token only")
@@ -191,7 +192,7 @@ class TestVerifiedBearer:
 def test_authorization_service_uses_same_joined_adapter_and_enforces_rights() -> None:
     rig = DBRig([match_row()])
     service = CaseAccessService(
-        TestVerifiedBearer(), PostgresCaseAccessRepository(rig.open),
+        FakeVerifiedBearer(), PostgresCaseAccessRepository(rig.open),
         "https://auth.example.test", "authenticated", lambda: NOW,
     )
     authorized = service.authorize("verified-token", CASE_A, CaseAction.READ_CASE)
@@ -205,7 +206,7 @@ def test_authorization_service_uses_same_joined_adapter_and_enforces_rights() ->
 def test_authorization_service_fails_closed_on_database_error_without_case_leak() -> None:
     rig = DBRig([], broken=True)
     service = CaseAccessService(
-        TestVerifiedBearer(), PostgresCaseAccessRepository(rig.open),
+        FakeVerifiedBearer(), PostgresCaseAccessRepository(rig.open),
         "https://auth.example.test", "authenticated", lambda: NOW,
     )
     for case in (CASE_A, CASE_B):
