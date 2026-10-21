@@ -106,7 +106,7 @@ def rig() -> tuple[CaseAccessService, FakeVerifiedTokenProvider, FakeServerRepos
             ),
         },
     )
-    return CaseAccessService(verifier, repository, lambda: NOW), verifier, repository
+    return CaseAccessService(verifier, repository, "https://auth.example.test", "caseproof-api", lambda: NOW), verifier, repository
 
 
 def failure(
@@ -155,7 +155,7 @@ def test_missing_or_invalid_bearer_is_401_before_case_lookup(bearer: str | None)
 
 def test_unconfigured_verifier_never_claims_to_authenticate() -> None:
     _, _, store = rig()
-    service = CaseAccessService(UnavailableBearerVerifier(), store, lambda: NOW)
+    service = CaseAccessService(UnavailableBearerVerifier(), store, "https://auth.example.test", "caseproof-api", lambda: NOW)
     failure(service, "any-token", "case-a", CaseAction.READ_CASE,
             AccessFailure.SERVICE_UNAVAILABLE)
     assert store.calls == ()
@@ -344,3 +344,27 @@ def test_failed_authentication_is_not_a_v2_http_route() -> None:
     assert client.get("/v2/cases/case-a/coverage", headers={
         "X-Tenant-Id": "org-a", "X-Role": "owner", "Authorization": "Bearer forged"
     }).status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("change", "label"),
+    [
+        ({"issuer": "https://other-issuer.test"}, "issuer"),
+        ({"audience": "unrelated-service"}, "audience"),
+    ],
+)
+def test_wrong_issuer_or_audience_never_authorizes(
+    change: dict[str, object], label: str
+) -> None:
+    service, verifier, store = rig()
+    verifier.subjects["alice-token"] = replace(identity("alice"), **change)
+    failure(service, "alice-token", "case-a", CaseAction.READ_CASE,
+            AccessFailure.AUTHENTICATION_REQUIRED)
+    assert store.calls == (), label
+
+
+def test_empty_configured_identity_trust_values_are_rejected() -> None:
+    _, verifier, store = rig()
+    for iss, aud in (("", "caseproof-api"), ("https://auth.example.test", "")):
+        with pytest.raises(ValueError):
+            CaseAccessService(verifier, store, iss, aud, lambda: NOW)
