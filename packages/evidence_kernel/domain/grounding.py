@@ -146,10 +146,7 @@ class GroundingGate:
     ledger: InMemoryFindingEvidenceLedger
 
     def snapshot(self, tenant_scope: str, finding_id: str) -> GroundingSnapshot:
-        statement = self.ledger.latest_statement(tenant_scope, finding_id)
-        links = self.ledger.links_for_statement(
-            tenant_scope, finding_id, statement.revision
-        )
+        statement, links = self.ledger.current_statement_and_links(tenant_scope, finding_id)
         return GroundingSnapshot(
             statement.finding_id, statement.revision,
             statement.statement_sha256_hex,
@@ -163,7 +160,14 @@ class GroundingGate:
             raise FindingLinkError("typed grounding snapshot required")
         if not isinstance(policy, GroundingPolicy):
             raise FindingLinkError("versioned grounding policy required")
-        current = self.snapshot(tenant_scope, expected.finding_id)
+        statement, records = self.ledger.current_statement_and_links(
+            tenant_scope, expected.finding_id
+        )
+        current = GroundingSnapshot(
+            statement.finding_id, statement.revision,
+            statement.statement_sha256_hex,
+            tuple((link.link_id, link.assessment_revision) for link in records),
+        )
         if (
             current.statement_revision != expected.statement_revision
             or current.statement_sha256_hex != expected.statement_sha256_hex
@@ -172,11 +176,11 @@ class GroundingGate:
         if current.link_revisions != expected.link_revisions:
             return self._decision(expected, policy, [GroundingReason.STALE_LINKS], ())
 
-        records = self.ledger.links_for_statement(
-            tenant_scope, current.finding_id, current.statement_revision
-        )
         if not records:
-            return self._decision(expected, policy, [GroundingReason.NO_LINKS], ())
+            stale = self._check_later_revisions(tenant_scope, expected, policy)
+            return stale if stale is not None else self._decision(
+                expected, policy, [GroundingReason.NO_LINKS], ()
+            )
 
         problems: set[GroundingReason] = set()
         assessed_ids: list[str] = []
@@ -192,7 +196,8 @@ class GroundingGate:
             if record.semantic.relation is SemanticRelation.CONTRADICTS:
                 current_conflicts.append(record.link_id)
 
-            if not self._still_resolves(tenant_scope, record):
+            still_resolves = self._still_resolves(tenant_scope, record)
+            if not still_resolves:
                 problems.add(GroundingReason.CITATION_UNAVAILABLE)
             if (
                 record.fidelity.citation_resolution is not CitationResolution.RESOLVED
@@ -205,7 +210,7 @@ class GroundingGate:
                 problems.add(GroundingReason.UNTRUSTED_ASSESSOR)
 
             if (
-                self._still_resolves(tenant_scope, record)
+                still_resolves
                 and record.location_and_fidelity_eligible
                 and record.semantic.relation is not SemanticRelation.NOT_ASSESSED
                 and record.semantic.assessor_kind in policy.allowed_assessors
@@ -214,6 +219,9 @@ class GroundingGate:
 
         if len(assessed_ids) < policy.min_assessed_links:
             problems.add(GroundingReason.INSUFFICIENT_LINKS)
+        stale = self._check_later_revisions(tenant_scope, expected, policy)
+        if stale is not None:
+            return stale
         return GroundingEvaluation(
             snapshot=expected,
             policy_version=policy.version,
@@ -223,6 +231,24 @@ class GroundingGate:
             historical_contradiction_ids=tuple(history_conflicts),
             current_contradiction_ids=tuple(current_conflicts),
         )
+
+    def _check_later_revisions(
+        self, tenant_scope: str, expected: GroundingSnapshot, policy: GroundingPolicy
+    ) -> GroundingEvaluation | None:
+        """Reject optimistic reads superseded during the evaluation itself.
+
+        This closes the observed read/read race; the later Stage 2 commit
+        must still revalidate everything atomically under durable locking.
+        """
+        latest = self.snapshot(tenant_scope, expected.finding_id)
+        if (
+            latest.statement_revision != expected.statement_revision
+            or latest.statement_sha256_hex != expected.statement_sha256_hex
+        ):
+            return self._decision(expected, policy, [GroundingReason.STALE_STATEMENT], ())
+        if latest.link_revisions != expected.link_revisions:
+            return self._decision(expected, policy, [GroundingReason.STALE_LINKS], ())
+        return None
 
     def _still_resolves(self, tenant_scope: str, record: FindingEvidenceLinkRevision) -> bool:
         """Recheck immutable locator against current tenant-visible source.
