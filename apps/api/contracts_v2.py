@@ -152,7 +152,11 @@ class LifecycleState(StrEnum):
 
 class PromotionRequest(StrictContract):
     case_id: Identifier
-    target_state: LifecycleState
+    target_state: Literal[
+        LifecycleState.EVIDENCE_GROUNDED,
+        LifecycleState.REVIEW_READY,
+        LifecycleState.APPROVED_CONCLUSION,
+    ]
     expected_case_revision: PositiveRevision
     expected_manifest_revision: PositiveRevision
     expected_policy_version: Identifier
