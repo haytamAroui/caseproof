@@ -93,9 +93,11 @@ def main() -> None:
     # compare-and-swap predicate must match ZERO rows after A commits.
     transaction_a = (
         "begin; set local lock_timeout='10s'; "
-        f"update caseproof.cases set case_revision=case_revision+1 "
-        f"where id='{CASE}' and case_revision=1 returning case_revision; "
-        "select 'LOCK_ACQUIRED_BY_A'; select pg_sleep(2.5); commit;"
+        "with updated as ("
+        "update caseproof.cases set case_revision=case_revision+1 "
+        f"where id='{CASE}' and case_revision=1 returning case_revision"
+        ") select 'LOCK_ACQUIRED_BY_A:' || case_revision from updated; "
+        "select pg_sleep(2.5); commit;"
     )
     tx_a = subprocess.Popen(
         _cmd(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -109,12 +111,8 @@ def main() -> None:
         if not ready:
             raise AssertionError("Concurrent writer A did not acquire row lock")
         output = tx_a.stdout.readline().strip()
-        # UPDATE RETURNING row; the marker is on the next stdout line.
-        if output != "2":
-            raise AssertionError(f"Writer A failed to change initial revision: {output!r}")
-        ready, _, _ = select.select([tx_a.stdout], [], [], 12.0)
-        if not ready or tx_a.stdout.readline().strip() != "LOCK_ACQUIRED_BY_A":
-            raise AssertionError("Writer A lock marker not received")
+        if output != "LOCK_ACQUIRED_BY_A:2":
+            raise AssertionError(f"Writer A lock marker not received: {output!r}")
 
         transaction_b = (
             "begin; set local lock_timeout='10s'; "
