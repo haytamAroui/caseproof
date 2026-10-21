@@ -17,3 +17,5 @@
 ## Quick commands (target, create in P0)
 `make lint` · `make typecheck` · `make test` · `make test-security` · `make test-contract` · `make check`.
 No command is assumed to exist until the scaffold PR implements it.
+## Rolling-memory requirement
+At the start of **every** task or new agent session, read `MEMORY.md` and verify Git/CI. After **every** bounded task, append an event to `docs/memory/tasks.jsonl`, update `docs/tasks/<TASK-ID>.md`, and compact `MEMORY.md` to the latest task and next action. Checkpoint before handoff or context compaction. Follow `docs/tasks/MEMORY_PROTOCOL.md`.
