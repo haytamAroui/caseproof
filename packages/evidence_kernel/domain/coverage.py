@@ -66,6 +66,7 @@ class CoverageReason(StrEnum):
     REPRESENTATION_NOT_REGISTERED = "representation_not_registered"
     ISSUE_UNSUPPORTED = "issue_unsupported"
     LINK_UNAVAILABLE_OR_STALE = "link_unavailable_or_stale"
+    LINK_INVENTORY_INCOMPLETE = "link_inventory_incomplete"
     LINK_SOURCE_OUT_OF_SCOPE = "link_source_out_of_scope"
     LINK_FIDELITY_NOT_MATCHED = "link_fidelity_not_matched"
     SEMANTIC_UNRESOLVED = "semantic_unresolved"
@@ -227,8 +228,12 @@ class CoverageManifest:
         _positive(self.scope_version, "scope_version")
         _positive(self.manifest_revision, "manifest_revision")
         _required(self.policy_version, "policy_version")
-        if not isinstance(self.issues, tuple) or not isinstance(self.sources, tuple):
-            raise CoverageError("immutable required issue/source inventory required")
+        if (
+            not isinstance(self.issues, tuple)
+            or not isinstance(self.sources, tuple)
+            or not isinstance(self.exclusions, tuple)
+        ):
+            raise CoverageError("immutable required issue/source/exclusion inventory required")
         _unique(tuple(item.issue_id for item in self.issues), "issue IDs")
         _unique(tuple(item.source_id for item in self.sources), "source IDs")
         _unique_or_empty(tuple(x.source_id for x in self.exclusions), "exclusion source IDs")
@@ -404,6 +409,7 @@ class CoverageEvaluator:
 
         statuses: list[IssueCoverage] = []
         pinned: dict[str, tuple[str, int, int]] = {}
+        all_link_snapshots: dict[str, tuple[int, tuple[tuple[str, int], ...]]] = {}
         source_index = {src.source_id: src for src in current.sources}
         for issue in current.issues:
             issue_reasons: set[CoverageReason] = set()
@@ -454,6 +460,45 @@ class CoverageEvaluator:
                 if item.semantic.sufficiency is not LinkSufficiency.SUFFICIENT:
                     issue_reasons.add(CoverageReason.LINK_SUFFICIENCY_UNASSESSED)
                 relations.append(item.semantic.relation)
+
+            # The submitted manifest is not allowed to cherry-pick a supporting
+            # subset while hiding other current links for a required finding.
+            # The statement and complete link list are read under one ledger lock.
+            for finding_id in issue.finding_ids:
+                try:
+                    statement, current_links = self.findings.current_statement_and_links(
+                        tenant_scope, finding_id
+                    )
+                except FindingLinkNotFound:
+                    issue_reasons.add(CoverageReason.LINK_UNAVAILABLE_OR_STALE)
+                    continue
+                inventory = tuple(
+                    (link.link_id, link.assessment_revision) for link in current_links
+                )
+                all_link_snapshots[finding_id] = (statement.revision, inventory)
+                declared = tuple(
+                    (ref.link_id, ref.assessment_revision)
+                    for ref in issue.relied_on_links if ref.finding_id == finding_id
+                )
+                if inventory != declared:
+                    issue_reasons.add(CoverageReason.LINK_INVENTORY_INCOMPLETE)
+                for current_link in current_links:
+                    if current_link.semantic.relation is SemanticRelation.CONTRADICTS:
+                        issue_reasons.add(CoverageReason.CONTRADICTION_PRESENT)
+                        relations.append(SemanticRelation.CONTRADICTS)
+                    elif current_link.semantic.relation is SemanticRelation.QUALIFIES:
+                        issue_reasons.add(CoverageReason.ISSUE_UNSUPPORTED)
+                        relations.append(SemanticRelation.QUALIFIES)
+                    if (
+                        current_link.semantic.relation is not SemanticRelation.CONTRADICTS
+                        and any(
+                            rev.semantic.relation is SemanticRelation.CONTRADICTS
+                            for rev in self.findings.link_history(
+                                tenant_scope, current_link.link_id
+                            )
+                        )
+                    ):
+                        issue_reasons.add(CoverageReason.HISTORICAL_CONTRADICTION)
             if set(issue.finding_ids) - observed_findings:
                 issue_reasons.add(CoverageReason.ISSUE_UNSUPPORTED)
             if not relations:
@@ -489,6 +534,25 @@ class CoverageEvaluator:
                     return self._blocked(expected, CoverageReason.LINK_UNAVAILABLE_OR_STALE, link_id)
             except FindingLinkNotFound:
                 return self._blocked(expected, CoverageReason.LINK_UNAVAILABLE_OR_STALE, link_id)
+
+        # Detect links added or reassessed while we were evaluating, including
+        # links deliberately omitted from the manifest and not in `pinned`.
+        for finding_id, (finding_rev, inventory) in all_link_snapshots.items():
+            try:
+                statement, links = self.findings.current_statement_and_links(
+                    tenant_scope, finding_id
+                )
+            except FindingLinkNotFound:
+                return self._blocked(
+                    expected, CoverageReason.LINK_UNAVAILABLE_OR_STALE, finding_id
+                )
+            if (
+                statement.revision != finding_rev
+                or tuple((x.link_id, x.assessment_revision) for x in links) != inventory
+            ):
+                return self._blocked(
+                    expected, CoverageReason.LINK_UNAVAILABLE_OR_STALE, finding_id
+                )
 
         sorted_blockers = tuple(
             CoverageBlocker(reason, target)
