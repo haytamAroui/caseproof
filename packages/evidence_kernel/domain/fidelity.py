@@ -10,7 +10,7 @@ no content fidelity can be determined without a separate trusted extraction.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
@@ -56,7 +56,7 @@ class FindingRevision:
 class ExactQuote:
     """Byte-preserving text comparison after the anchor's declared decoding."""
 
-    text: str
+    text: str = field(repr=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.text, str) or not self.text:
@@ -70,7 +70,7 @@ JsonScalar = str | int | bool | None
 class ExactJsonScalar:
     """Supported exact JSON scalar, excluding lossy floating-point comparison."""
 
-    value: JsonScalar
+    value: JsonScalar = field(repr=False)
 
     def __post_init__(self) -> None:
         if type(self.value) not in (str, int, bool, type(None)):
@@ -96,6 +96,35 @@ class FidelityAssessment:
     semantic_relation: Literal["not_assessed"] = "not_assessed"
     sufficiency: Literal["not_assessed"] = "not_assessed"
     method_version: Literal["krn103-exact-v1"] = "krn103-exact-v1"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.finding, FindingRevision) or not isinstance(
+            self.anchor, EvidenceAnchor
+        ):
+            raise ValueError("finding revision and evidence anchor required")
+        if (
+            not isinstance(self.citation_resolution, CitationResolution)
+            or not isinstance(self.content_fidelity, ContentFidelity)
+        ):
+            raise ValueError("typed citation and fidelity statuses required")
+        if not isinstance(self.reason_code, str) or not self.reason_code.strip():
+            raise ValueError("stable nonempty assessment reason code required")
+        if (
+            self.semantic_relation != "not_assessed"
+            or self.sufficiency != "not_assessed"
+            or self.method_version != METHOD_VERSION
+        ):
+            raise ValueError("fidelity cannot assert semantic support or approval")
+        if (
+            self.citation_resolution is not CitationResolution.RESOLVED
+            and self.content_fidelity is not ContentFidelity.INDETERMINATE
+        ):
+            raise ValueError("unresolved citations cannot have determined fidelity")
+        if (
+            self.content_fidelity is not ContentFidelity.INDETERMINATE
+            and not isinstance(self.anchor.locator, (TextSpan, StructuredField))
+        ):
+            raise ValueError("location-only citations cannot assert content fidelity")
 
 
 @dataclass(frozen=True, slots=True)
