@@ -111,3 +111,20 @@ def test_disposable_ci_database_job_runs_real_concurrent_and_audit_negative_case
     assert "image: postgres:17" in workflow
     assert "CASEPROOF_DISPOSABLE_DB: \"YES\"" in workflow
     assert "uv run --locked python scripts/verify_s2_002_database.py" in workflow
+
+
+
+def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> None:
+    root = Path(__file__).resolve().parents[1]
+    migration = (
+        root / "supabase/migrations/20261021232955_caseproof_tenant_foundation.sql"
+    )
+    proposal = root / "db/proposals/S2-002_tenant_foundation.sql"
+    assert migration.exists()
+    assert migration.read_bytes() == proposal.read_bytes()
+    assert len(list((root / "supabase/migrations").glob("*.sql"))) == 1
+    integration = (root / "scripts/verify_s2_002_database.py").read_text(
+        encoding="utf-8"
+    )
+    assert "PROPOSAL = MIGRATION.read_text" in integration
+    assert "MIGRATION.read_bytes() != PROPOSAL_PATH.read_bytes()" in integration
