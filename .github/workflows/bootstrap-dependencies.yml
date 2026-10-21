@@ -1,10 +1,6 @@
 name: Bootstrap Python dependencies
 on:
   workflow_dispatch:
-  push:
-    branches: [docs/stage1-trust-contracts]
-    paths:
-      - .github/workflows/bootstrap-dependencies.yml
 
 permissions:
   contents: write
