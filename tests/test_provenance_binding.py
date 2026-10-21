@@ -13,8 +13,6 @@ from packages.evidence_kernel.domain.coverage import (
     CoverageManifest,
     CoveragePolicy,
     ExpectedSource,
-    ProcessingAttempt,
-    AttemptState,
     InMemoryCoverageLedger,
     LinkUse,
     ProcessingAttempt,
