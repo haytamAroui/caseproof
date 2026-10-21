@@ -235,6 +235,41 @@ class InMemoryFindingEvidenceLedger:
                 raise FindingLinkNotFound("finding version unavailable")
             return result
 
+    def latest_statement(self, tenant_scope: str, finding_id: str) -> FindingStatement:
+        """Return registered current revision without trusting a caller's selector."""
+        tenant = self._scope(tenant_scope)
+        with self._lock:
+            revision = self._latest.get((tenant, finding_id))
+            if revision is None:
+                raise FindingLinkNotFound("finding unavailable")
+            return self._statements[(tenant, finding_id, revision)]
+
+    def current_statement_and_links(
+        self, tenant_scope: str, finding_id: str
+    ) -> tuple[FindingStatement, tuple[FindingEvidenceLinkRevision, ...]]:
+        """Capture the latest statement and the complete link set under one lock.
+
+        The returned immutable objects form one consistent read-time snapshot.
+        This is NOT a durable lock or a transaction for later promotion.
+        """
+        tenant = self._scope(tenant_scope)
+        with self._lock:
+            revision = self._latest.get((tenant, finding_id))
+            if revision is None:
+                raise FindingLinkNotFound("finding unavailable")
+            statement = self._statements[(tenant, finding_id, revision)]
+            links = tuple(sorted(
+                (
+                    history[-1]
+                    for (key_tenant, _), history in self._links.items()
+                    if key_tenant == tenant
+                    and history[-1].statement.finding_id == finding_id
+                    and history[-1].statement.revision == revision
+                ),
+                key=lambda record: record.link_id,
+            ))
+            return statement, links
+
     def append_assessment(
         self,
         tenant_scope: str,
