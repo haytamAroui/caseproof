@@ -11,6 +11,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from apps.api.contracts_v2 import (
+    ROUTE_MODELS,
+    SCHEMA_VERSION,
     ApiError,
     AuthoritativeFactsForTest,
     BusinessExceptionRequest,
@@ -21,8 +23,6 @@ from apps.api.contracts_v2 import (
     LifecycleState,
     PreflightCode,
     PromotionRequest,
-    ROUTE_MODELS,
-    SCHEMA_VERSION,
     VerifiedPrincipalForTest,
     draft_openapi,
     promotion_preflight,
