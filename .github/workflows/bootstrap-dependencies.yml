@@ -1,12 +1,6 @@
 name: Bootstrap Python dependencies
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature/kernel-fastapi-foundation
-    paths:
-      - pyproject.toml
-      - .github/workflows/bootstrap-dependencies.yml
 
 permissions:
   contents: write
