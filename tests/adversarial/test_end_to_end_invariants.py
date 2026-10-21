@@ -225,7 +225,7 @@ def test_independently_labelled_pipeline_outcomes(example: dict[str, object]) ->
     assert packet.sources[0].document_id == "doc"
     assert packet.sources[0].source_sha256_hex == digest(BYTES)
     assert outcome.ordinary_complete == (not outcome.blockers)
-    if example["reason"] is not None:
+    if example.get("reason") is not None:
         assert str(example["reason"]) in {
             blocker.reason.value for blocker in outcome.blockers
         }
