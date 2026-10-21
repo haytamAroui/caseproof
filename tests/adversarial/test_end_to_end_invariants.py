@@ -110,9 +110,11 @@ def _assessment(
     )
 
 
-def build(mutation: str = "none", tenant: str = "tenant-a") -> Scenario:
+def build(
+    mutation: str = "none", tenant: str = "tenant-a", *, shared: Scenario | None = None
+) -> Scenario:
     """Assemble through public domain APIs, not by injecting derived statuses."""
-    sources = InMemorySourceRegistry()
+    sources = shared.sources if shared is not None else InMemorySourceRegistry()
     original = SourceVersion("doc", "v1", digest(BYTES), BYTES, NOW, "application/pdf")
     parsed = TEXT.encode("utf-8")
     rep = DerivedRepresentation(
@@ -122,8 +124,14 @@ def build(mutation: str = "none", tenant: str = "tenant-a") -> Scenario:
     )
     sources.register_source(tenant, original)
     sources.register_representation(tenant, rep)
-    finding = FindingStatement("finding", 1, "The invoice was paid.")
-    findings = InMemoryFindingEvidenceLedger(FidelityEvaluator(AnchorResolver(sources)))
+    finding = FindingStatement(
+        "finding", 1,
+        "The invoice was paid." if tenant == "tenant-a" else "The invoice is disputed.",
+    )
+    findings = (
+        shared.findings if shared is not None
+        else InMemoryFindingEvidenceLedger(FidelityEvaluator(AnchorResolver(sources)))
+    )
     findings.register_statement(tenant, finding)
     anchor = EvidenceAnchor(
         "anchor", "doc", "v1", original.sha256_hex,
@@ -189,14 +197,16 @@ def build(mutation: str = "none", tenant: str = "tenant-a") -> Scenario:
     manifest = CoverageManifest(
         "case", 1, 1, "coverage-policy-v1", (issue,), (source,),
     )
-    manifests = InMemoryCoverageLedger()
+    manifests = shared.coverage_ledger if shared is not None else InMemoryCoverageLedger()
     manifests.register(tenant, manifest)
-    coverage = CoverageEvaluator(manifests, findings)
+    coverage = shared.coverage if shared is not None else CoverageEvaluator(manifests, findings)
+    bridge = (
+        shared.bridge if shared is not None
+        else InMemoryProvenanceBridge(coverage, InMemoryProvenanceLedger())
+    )
     return Scenario(
         tenant, sources, findings, manifests, coverage,
-        GroundingGate(findings), InMemoryProvenanceBridge(
-            coverage, InMemoryProvenanceLedger()
-        ), finding, anchor, manifest,
+        GroundingGate(findings), bridge, finding, anchor, manifest,
     )
 
 
@@ -298,16 +308,28 @@ def test_seeded_hidden_links_cannot_make_ordinary_coverage_look_complete(seed: i
     assert ("link_inventory_incomplete", "material-issue") in packet.blockers
 
 
-def test_cross_tenant_same_identifiers_do_not_cross_read_and_have_different_hashes() -> None:
+def test_cross_tenant_same_ids_are_isolated_in_the_same_stores() -> None:
     a = build(tenant="tenant-a")
-    b = build(tenant="tenant-b")
+    # Distinct tenants are registered in exactly the same registry, ledgers,
+    # evaluator and provenance bridge. Object-per-tenant tests prove nothing.
+    b = build(tenant="tenant-b", shared=a)
+    assert a.sources is b.sources
+    assert a.findings is b.findings
+    assert a.coverage_ledger is b.coverage_ledger
+    assert a.bridge is b.bridge
     assert a.sources.get_source("tenant-a", "doc", "v1").sha256_hex == (
         b.sources.get_source("tenant-b", "doc", "v1").sha256_hex
     )
-    with pytest.raises(SourceRecordNotFound):
-        a.sources.get_source("tenant-b", "doc", "v1")
-    with pytest.raises(KeyError):
-        a.bridge.capture("tenant-b", "case", CoveragePolicy("coverage-policy-v1"))
+    assert a.findings.get_statement("tenant-a", "finding", 1) != (
+        b.findings.get_statement("tenant-b", "finding", 1)
+    )
+    assert a.packet().issues[0].links[0].statement_sha256_hex != (
+        b.packet().issues[0].links[0].statement_sha256_hex
+    )
+    assert a.packet().fingerprint != b.packet().fingerprint
+    assert a.grounded() and b.grounded()
+    assert a.check().ordinary_complete and b.check().ordinary_complete
+
     first = a.bridge.record(
         "tenant-a", a.packet(), event_id="same-event", idempotency_key="same-key",
         actor_reference_claim="untrusted-user", action=ObservationAction.SNAPSHOT,
@@ -319,9 +341,20 @@ def test_cross_tenant_same_identifiers_do_not_cross_read_and_have_different_hash
         occurred_at=NOW,
     )
     assert first.event_hash != second.event_hash
+    assert first.packet.fingerprint != second.packet.fingerprint
     assert a.bridge.verify_record("tenant-a", "same-key")
-    with pytest.raises(BindingNotFound):
-        a.bridge.verify_record("tenant-b", "same-key")
+    assert b.bridge.verify_record("tenant-b", "same-key")
+    assert a.bridge.events.history("tenant-a") != a.bridge.events.history("tenant-b")
+    # Mutating the B finding and manifest leaves A's snapshot untouched.
+    snapshot_a = a.packet()
+    b.findings.register_statement(
+        "tenant-b", FindingStatement("finding", 2, "Tenant B revision only.")
+    )
+    assert a.packet() == snapshot_a
+    assert b.packet().ordinary_complete is False
+    # Tenant A cannot use B's B-only revision by swapping the namespace.
+    with pytest.raises(KeyError):
+        a.findings.get_statement("tenant-a", "finding", 2)
 
 
 def test_stale_manifest_or_changed_finding_cannot_be_logged_as_old_current_packet() -> None:
