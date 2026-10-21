@@ -23,12 +23,8 @@
 - **Architecture reference:** `docs/adr/`, `docs/reference/`, `docs/ENGINEERING_STANDARDS.md`.
 - **No customer evidence** may be pasted into this file.
 
-## Task ledger — newest first
-| Task ID | Status | PR / commit | Verified outcome | Next |
-|---|---|---|---|---|
-| DOC-MEM-001 | In review | Branch `docs/durable-project-memory`; commit pending | Establish persistent handoff protocol | Review and merge only after approval |
-
-**Status vocabulary:** `planned`, `in_progress`, `blocked`, `in_review`, `merged`, `verified`, `reverted`. Never write `verified` without evidence of checks and merged code.
+## Latest task
+- DOC-MEM-001: memory system in review, PR #2. See `docs/tasks/DOC-MEM-001.md` and `docs/memory/tasks.jsonl`.
 
 ## Current work / blockers
 - No implementation task should be assumed active from this file alone.
@@ -38,7 +34,7 @@
 
 ## Durable memory protocol (mandatory after each bounded task)
 1. Create/update one task record in `docs/tasks/<TASK-ID>.md` with objective, scope, acceptance criteria, implementation, tests, risk and actual commit/PR URLs.
-2. Update **only** this short index: snapshot, current blockers, task-ledger entry and next task. Keep the ledger to the latest ~15 items; archive older records in task files.
+2. Update **only** this short index: snapshot, current blockers, task-ledger entry and next task. Keep only the latest task here; archive all task events in `docs/memory/tasks.jsonl` and full details in task files.
 3. Record **full commit SHA**, branch and PR status; never invent a SHA. Use `pending` before commit and update after the commit exists.
 4. Distinguish `implemented`, `tested`, `reviewed`, `merged`, `deployed`; these are not synonyms.
 5. Document failed tests and unresolved problems. Do not erase them to make progress look complete.
