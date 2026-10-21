@@ -1,0 +1,30 @@
+name: S2-002A generate canonical migration via official CLI
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/s2-002a-migration-cli.yml'
+      - 'db/proposals/S2-002_tenant_foundation.sql'
+      - 'docs/tasks/S2-002A.md'
+  workflow_dispatch:
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Discover Supabase CLI migration syntax
+        run: |
+          npx --yes supabase@latest --version
+          npx --yes supabase@latest migration --help
+          npx --yes supabase@latest migration new --help
+      - name: Generate canonical migration from reviewed proposal
+        run: |
+          set -euo pipefail
+          npx --yes supabase@latest migration new caseproof_tenant_foundation < db/proposals/S2-002_tenant_foundation.sql
+          echo "GENERATED_FILE=$(find supabase/migrations -maxdepth 1 -name '*_caseproof_tenant_foundation.sql' -type f -print -quit)"
+          sha256sum db/proposals/S2-002_tenant_foundation.sql supabase/migrations/*_caseproof_tenant_foundation.sql
+          cmp db/proposals/S2-002_tenant_foundation.sql supabase/migrations/*_caseproof_tenant_foundation.sql
+          echo 'S2-002A_CLI_GENERATION_VERIFIED'
