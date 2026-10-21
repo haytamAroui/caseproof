@@ -1,9 +1,11 @@
--- S2-002 ONLY for NEW disposable caseproof-dev PostgreSQL.
--- Must execute AFTER S2-002_tenant_foundation.sql INSIDE THE SAME transaction.
--- This tests SQL RLS with impersonated PostgreSQL runtime roles and simulated
--- auth.uid() claim settings; it DOES NOT verify any actual signed JWT.
--- The outer caller MUST issue BEGIN before schema creation, and ROLLBACK after
--- this file, even if verification fails (an exception aborts the transaction).
+-- S2-002 TEST FIXTURE ONLY. On connected caseproof-dev, run after the
+-- proposal inside one transaction and ALWAYS roll back after verification.
+-- In disposable GitHub Actions PostgreSQL (caseproof_s2_ci) the harness may
+-- commit its synthetic fixture before launching two independent sessions;
+-- that one-job PostgreSQL service is destroyed after CI. NEVER commit this
+-- test fixture to a shared Supabase project.
+-- Tests simulate runtime PostgreSQL roles/auth.uid() claim context, NOT a
+-- real Supabase Auth signature or authenticated HTTPS user session.
 
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
 values
