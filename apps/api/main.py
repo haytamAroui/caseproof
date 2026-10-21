@@ -1,11 +1,17 @@
 """Development-only FastAPI adapter for evidence-kernel primitives."""
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
+
 from packages.evidence_kernel.domain.evidence import (
-    CorroborationStatus, ExtractedClaim, SourceReference, SourceStatus,
+    CorroborationStatus,
+    ExtractedClaim,
+    SourceReference,
+    SourceStatus,
 )
 from packages.evidence_kernel.domain.store import (
-    DuplicateClaimError, InMemoryEvidenceStore, MissingClaimError,
+    DuplicateClaimError,
+    InMemoryEvidenceStore,
+    MissingClaimError,
 )
 
 
