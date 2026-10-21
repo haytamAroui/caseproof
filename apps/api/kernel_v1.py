@@ -1,16 +1,25 @@
 """Reference-only FastAPI adapter; refuses requests without trusted scope injection."""
+from collections.abc import Callable
 from dataclasses import asdict
-from typing import Callable
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from packages.evidence_kernel.domain.evidence import (
-    CorroborationStatus, ExtractedClaim, ReviewDecision, ReviewStatus, SourceReference,
+    CorroborationStatus,
+    ExtractedClaim,
+    ReviewDecision,
+    ReviewStatus,
+    SourceReference,
 )
 from packages.evidence_kernel.domain.workflow import (
-    ClaimNotFound, CorroborationAssessment, DocumentVersion, EvidenceConflict,
-    EvidenceWorkflow, EvidenceWorkflowError, SourceNotFound,
+    ClaimNotFound,
+    CorroborationAssessment,
+    DocumentVersion,
+    EvidenceConflict,
+    EvidenceWorkflow,
+    EvidenceWorkflowError,
+    SourceNotFound,
 )
 
 
