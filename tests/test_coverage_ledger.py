@@ -486,3 +486,102 @@ def test_mapping_to_different_required_finding_requires_scope_revision() -> None
     )
     with pytest.raises(CoverageConflict, match="scope"):
         ledger.register("tenant", changed)
+
+
+def test_unlisted_current_contradiction_blocks_supported_issue() -> None:
+    ledger, findings, evaluator, m, anchor = fixture()
+    statement = findings.get_statement("tenant", "finding", 1)
+    findings.append_assessment(
+        "tenant", "zz-contradiction", 1, statement,
+        replace(anchor, anchor_id="different-anchor"), ExactQuote("Approved"),
+        SemanticAssessmentProposal(
+            SemanticRelation.CONTRADICTS, LinkSufficiency.SUFFICIENT,
+            AssessorKind.DETERMINISTIC, "review-proposal", "method-v1",
+            "This passage contradicts the material finding.", NOW,
+        ),
+    )
+    result = evaluator.evaluate("tenant", m, CoveragePolicy("coverage-v1"))
+    assert result.ordinary_complete is False
+    assert result.issues[0].status is IssueStatus.CONTRADICTED
+    assert CoverageReason.CONTRADICTION_PRESENT in errors(result)
+    assert CoverageReason.LINK_INVENTORY_INCOMPLETE in errors(result)
+    assert ledger.current("tenant", "case-1") == m
+
+
+def test_unlisted_current_supporting_link_is_also_incomplete_inventory() -> None:
+    _, findings, evaluator, m, anchor = fixture()
+    statement = findings.get_statement("tenant", "finding", 1)
+    findings.append_assessment(
+        "tenant", "zz-other-support", 1, statement,
+        replace(anchor, anchor_id="other-anchor"), ExactQuote("Approved"),
+        SemanticAssessmentProposal(
+            SemanticRelation.SUPPORTS, LinkSufficiency.SUFFICIENT,
+            AssessorKind.DETERMINISTIC, "proposal", "method-v1",
+            "Supporting proposal still must be in the declared inventory.", NOW,
+        ),
+    )
+    result = evaluator.evaluate("tenant", m, CoveragePolicy("coverage-v1"))
+    assert result.ordinary_complete is False
+    assert CoverageReason.LINK_INVENTORY_INCOMPLETE in errors(result)
+
+
+def test_complete_explicit_link_inventory_can_pass_after_new_manifest_revision() -> None:
+    manifests, findings, evaluator, m, anchor = fixture()
+    statement = findings.get_statement("tenant", "finding", 1)
+    findings.append_assessment(
+        "tenant", "zz-support", 1, statement,
+        replace(anchor, anchor_id="a-second"), ExactQuote("Approved"),
+        SemanticAssessmentProposal(
+            SemanticRelation.SUPPORTS, LinkSufficiency.SUFFICIENT,
+            AssessorKind.DETERMINISTIC, "proposer", "method-v1",
+            "Another matching citation from the same source.", NOW,
+        ),
+    )
+    comprehensive = manifest(
+        revision=2, issues=(issue(links=(
+            LinkUse("link", 1, "finding", 1),
+            LinkUse("zz-support", 1, "finding", 1),
+        )),),
+    )
+    manifests.register("tenant", comprehensive)
+    result = evaluator.evaluate("tenant", comprehensive, CoveragePolicy("coverage-v1"))
+    assert result.ordinary_complete is True
+    assert result.issues[0].status is IssueStatus.SUPPORTED
+
+
+def test_mutable_exclusions_collection_rejected_even_in_frozen_manifest() -> None:
+    excluded = ExpectedSource("src", "doc", "v1", SourceState.EXCLUDED)
+    with pytest.raises(CoverageError, match="immutable"):
+        manifest(sources=(excluded,), exclusions=[exclude()])  # type: ignore[arg-type]
+    with pytest.raises(CoverageError, match="immutable"):
+        manifest(exclusions=[])  # type: ignore[arg-type]
+
+
+def test_new_link_added_during_evaluation_invalidates_complete_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, findings, evaluator, m, anchor = fixture()
+    original = findings.current_statement_and_links
+    statement = findings.get_statement("tenant", "finding", 1)
+    triggered = False
+
+    def add_link_after_inventory(tenant: str, finding_id: str):
+        nonlocal triggered
+        result = original(tenant, finding_id)
+        if not triggered:
+            triggered = True
+            findings.append_assessment(
+                "tenant", "zz-late", 1, statement,
+                replace(anchor, anchor_id="late"), ExactQuote("Approved"),
+                SemanticAssessmentProposal(
+                    SemanticRelation.CONTRADICTS, LinkSufficiency.INSUFFICIENT,
+                    AssessorKind.DETERMINISTIC, "late", "method-v1",
+                    "New conflicting evidence while evaluating.", NOW,
+                ),
+            )
+        return result
+
+    monkeypatch.setattr(findings, "current_statement_and_links", add_link_after_inventory)
+    result = evaluator.evaluate("tenant", m, CoveragePolicy("coverage-v1"))
+    assert result.ordinary_complete is False
+    assert CoverageReason.LINK_UNAVAILABLE_OR_STALE in errors(result)
