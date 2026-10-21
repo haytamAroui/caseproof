@@ -26,6 +26,7 @@ from packages.evidence_kernel.domain.fidelity import (
     ContentFidelity,
     ExactJsonScalar,
     ExactQuote,
+    FidelityAssessment,
     FidelityEvaluator,
     FindingRevision,
 )
@@ -322,3 +323,42 @@ def test_legacy_reference_api_is_unchanged() -> None:
 
     assert SourceReference("doc", digest(SOURCE), "text").document_id == "doc"
     assert DocumentVersion("doc", "v1", digest(b"x"), "x").version_id == "v1"
+
+
+def test_assessment_constructor_rejects_forged_support_or_approval() -> None:
+    evaluator, evidence = setup()
+    valid = evaluator.evaluate("tenant-a", FINDING, evidence, ExactQuote("Approved"))
+    for forged in (
+        {"semantic_relation": "supports"},
+        {"sufficiency": "sufficient"},
+        {"method_version": "unreviewed-v2"},
+        {"citation_resolution": CitationResolution.INVALID},
+    ):
+        with pytest.raises(ValueError):
+            replace(valid, **forged)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError):
+        FidelityAssessment(
+            FINDING, evidence, CitationResolution.UNRESOLVED,
+            ContentFidelity.MATCHED, "forged",
+        )
+
+
+def test_constructor_cannot_claim_fidelity_for_pdf_location_only() -> None:
+    _, evidence = setup()
+    region = PdfRegion(
+        0, Decimal(1), Decimal(1), Decimal(5), Decimal(5),
+        Decimal(500), Decimal(700), 0,
+    )
+    with pytest.raises(ValueError, match="location-only"):
+        FidelityAssessment(
+            FINDING, replace(evidence, locator=region),
+            CitationResolution.RESOLVED, ContentFidelity.MATCHED, "forged",
+        )
+
+
+def test_expectations_do_not_expose_private_content_in_repr() -> None:
+    quote = ExactQuote("customer-secret-phrase")
+    value = ExactJsonScalar("another-secret")
+    assert "customer-secret-phrase" not in repr(quote)
+    assert "another-secret" not in repr(value)
