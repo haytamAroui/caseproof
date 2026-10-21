@@ -1,19 +1,13 @@
-# CaseProof — universal coding-agent instructions
+# ExceptionDesk — coding-agent instructions
 
-1. Read `CONSTITUTION.md`, `docs/ROADMAP.md`, `docs/ENGINEERING_STANDARDS.md`, and the nearest directory-level instructions before editing.
-2. Read `docs/AGENT_ORCHESTRATION.md`; choose the smallest suitable specialist. Never spawn agents merely to increase agent count.
-3. State objective, touched files, acceptance criteria, risks and proposed tests before implementation. For nontrivial work, create/update `docs/tasks/<ID>.md` using `templates/TASK.md`.
-4. Inspect existing code and tests; do not invent APIs or assume AZComply paths are generic. Treat `docs/reference/` as reference, not executable code.
-5. Make one vertical slice at a time; prefer <400 net changed lines per PR where feasible. If larger, explain why and split by independently testable contract.
-6. Tests first for legal rules, money, provenance, auth and state transitions. For UI, test the user journey and accessibility.
-7. Do not run migrations or deployment against live systems without explicit human approval. Never change AZComply in the same CaseProof PR.
-8. No outbound network or model calls with real customer evidence unless approved processors, routing and retention are documented.
-9. Finish with: files changed, exact commands run, pass/fail, security effects, remaining risks, and recommended next PR. Never say 'done' when acceptance criteria are unverified.
-10. If task requires a constitutional exception, STOP and write an ADR for human review.
+Read `CONSTITUTION.md`, `README.md`, `docs/ROADMAP.md`, and `docs/architecture/EXCEPTIONDESK_HEXAGONAL.md` before coding. Existing `docs/reference/` contains historical CaseProof research, not the current product definition.
 
-## Repo layout (target)
-`backend/src/caseproof/{identity,matters,documents,evidence,reconciliation,finance,legal_rules,review,dossiers,workflow,shared}/` each with `domain/`, `application/`, `adapters/` as needed. `backend/tests/`, `frontend/`, `infra/`, `docs/`, `scripts/`.
+**Product:** one app, finance-first. Dispute dossiers are a second workflow, not a second startup. Do not build insurance, trade-finance, general legal AI or a plugin marketplace without a decision record.
 
-## Quick commands (target, create in P0)
-`make lint` · `make typecheck` · `make test` · `make test-security` · `make test-contract` · `make check`.
-No command is assumed to exist until the scaffold PR implements it.
+**Boundaries:** `packages.evidence_kernel` imports neither `domains` nor frameworks/ORM/LLM clients; `domains.finance` imports kernel primitives; adapters depend inward. Kernel facts are immutable. Reconciliation emits findings; it does not mutate source facts or assert that a mismatch proves wrongdoing. Source verification, corroboration and reviewer disposition are independent.
+
+**Working procedure:** choose one vertical slice, write deterministic tests, report exact tests run and limitations. For substantial changes create `docs/tasks/<ID>.md`. No claims of tests passing without executing them. Do not merge/deploy/change production or contact customers without explicit approval. Preserve privacy, tenancy and evidence immutability invariants.
+
+**Run now:** `python -m unittest discover -s tests -v` (Python 3.11+). No infrastructure is required for the initial domain tests.
+
+Existing `CLAUDE.md` and specialist instructions are subordinate to this current product definition where they refer to the old CaseProof-only MVP.
