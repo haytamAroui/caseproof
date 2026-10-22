@@ -76,6 +76,54 @@ create trigger s2_009b_availability_no_rewrite
 before update or delete on caseproof._s2_009b_availability_events
 for each row execute function caseproof._s2_009b_immutable_availability();
 
+-- Allow ONLY a logged pending->verified->unavailable state transition.
+-- A privileged database owner can still disable triggers: reference integrity
+-- here does not constitute production writer authorization.
+create function caseproof._s2_009b_guard_intent()
+returns trigger language plpgsql security invoker
+set search_path=pg_catalog,pg_temp
+as $intent_guard$
+declare
+  v_action text;
+begin
+  if tg_op='DELETE' then
+    raise exception 'vault intent identity cannot be deleted' using errcode='55000';
+  end if;
+  if row(
+       new.org_id,new.case_id,new.intent_id,new.actor_user_id,
+       new.document_id,new.document_version_id,new.object_key,
+       new.sha256_hex,new.byte_length,new.media_type,
+       new.created_audit_id,new.created_case_revision,new.created_at
+     ) is distinct from row(
+       old.org_id,old.case_id,old.intent_id,old.actor_user_id,
+       old.document_id,old.document_version_id,old.object_key,
+       old.sha256_hex,old.byte_length,old.media_type,
+       old.created_audit_id,old.created_case_revision,old.created_at
+     ) then
+    raise exception 'vault intent immutable identity cannot change' using errcode='55000';
+  end if;
+  v_action := case when old.state='pending' and new.state='verified'
+    then 's2_009b_vault_verify'
+    when old.state='verified' and new.state='unavailable'
+    then 's2_009b_vault_unavailable' else null end;
+  if v_action is null or new.intent_revision!=old.intent_revision+1
+     or new.last_audit_id is not distinct from old.last_audit_id
+     or not exists (
+       select 1 from caseproof.audit_events a
+       where a.id=new.last_audit_id and a.org_id=old.org_id
+         and a.case_id=old.case_id and a.action=v_action
+     ) then
+    raise exception 'unreviewed intent state or revision mutation'
+    using errcode='55000';
+  end if;
+  return new;
+end
+$intent_guard$;
+
+create trigger s2_009b_intent_identity_immutable
+before update or delete on caseproof._s2_009b_vault_intents
+for each row execute function caseproof._s2_009b_guard_intent();
+
 create function caseproof._s2_009b_disposable_command(
   p_actor uuid,
   p_case uuid,
@@ -97,7 +145,8 @@ returns table(
   resulting_intent_revision bigint,
   resulting_case_revision bigint,
   recorded_audit uuid,
-  idempotent_replay boolean
+  idempotent_replay boolean,
+  persisted_object_key text
 )
 language plpgsql security invoker
 set search_path=pg_catalog,pg_temp
@@ -229,8 +278,16 @@ begin
        )) then
       raise exception 'stored receipt inconsistent with durable event' using errcode='55000';
     end if;
-    return query select v_intent.state, v_intent.intent_revision,
-        v_case.case_revision,v_existing_event,true;
+    -- Replay the ORIGINAL committed operation result, never a later
+    -- current head while attaching the old audit ID. The object key remains
+    -- the single frozen key; reconciliation must separately check fresh
+    -- state/authorization after this historical response.
+    return query select
+        case when p_operation='stage' then 'pending'
+             when p_operation='verify' then 'verified'
+             else 'unavailable' end,
+        v_existing_intent_revision,v_existing_case_revision,
+        v_existing_event,true,v_intent.object_key;
     return;
   end if;
 
@@ -261,7 +318,7 @@ begin
     v_next_intent:=1;
     v_state:='pending';
   else
-    if v_intent.intent_id is null or v_intent.actor_user_id!=p_actor then
+    if v_intent.intent_id is null then
       raise exception 'source not found' using errcode='P0002';
     end if;
     if v_intent.intent_revision!=p_expected_intent_revision then
@@ -337,7 +394,8 @@ begin
     jsonb_build_object('schema','s2-009b-vault-v1','audit',v_event,
       'intent_revision',v_next_intent,'case_revision',v_next_case)::text
   );
-  return query select v_state,v_next_intent,v_next_case,v_event,false;
+  return query select v_state,v_next_intent,v_next_case,v_event,false,
+    case when p_operation='stage' then p_object_key else v_intent.object_key end;
 end;
 $body$;
 
@@ -349,6 +407,8 @@ revoke execute on function caseproof._s2_009b_disposable_command(
   uuid,uuid,uuid,text,text,uuid,uuid,text,text,bigint,text,bigint,text,text
 ) from public,anon,authenticated;
 revoke execute on function caseproof._s2_009b_immutable_availability()
+from public,anon,authenticated;
+revoke execute on function caseproof._s2_009b_guard_intent()
 from public,anon,authenticated;
 
 do $deny$
