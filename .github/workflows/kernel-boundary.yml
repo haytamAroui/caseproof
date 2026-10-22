@@ -18,7 +18,7 @@ jobs:
       - name: Ruff check
         run: uv run --locked ruff check .
       - name: Mypy check
-        run: uv run --locked mypy --explicit-package-bases packages/evidence_kernel apps/api/contracts_v2.py apps/api/access_control.py apps/api/supabase_auth_verifier.py apps/api/postgres_case_repository.py apps/api/supabase_password_signin.py apps/api/live_auth_probe.py
+        run: uv run --locked mypy --explicit-package-bases packages/evidence_kernel apps/api/contracts_v2.py apps/api/access_control.py apps/api/supabase_auth_verifier.py apps/api/postgres_case_repository.py apps/api/supabase_password_signin.py apps/api/live_auth_probe.py apps/api/internal_observation_contract.py
       - name: Python compilation
         run: uv run --locked python -m compileall -q packages domains apps
 
@@ -57,3 +57,4 @@ jobs:
         run: |
           uv run --locked python scripts/verify_s2_002_database.py
           CASEPROOF_S2_007_SYNTHETIC=YES uv run --locked python -m scripts.verify_s2_007_disposable_tenancy
+          uv run --locked python -m scripts.verify_s2_004_database
