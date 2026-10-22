@@ -22,7 +22,7 @@ import secrets
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
-from uuid import UUID, uuid4
+from uuid import UUID
 
 MAX_REFERENCE_BYTES = 5 * 1024 * 1024  # In-memory reference ONLY, not final upload limit
 _ALLOWED_MIME = frozenset({
@@ -43,7 +43,11 @@ class VaultUnavailable(VaultError):
 
 
 class VaultUnknownOutcome(VaultError):
-    """Mutation outcome unknown; reconcile durable record before retry."""
+    """Mutation outcome unknown; stable request intent ID enables recovery."""
+
+    def __init__(self, message: str, *, intent_id: UUID | None = None) -> None:
+        super().__init__(message)
+        self.intent_id = intent_id
 
 
 class VaultConflict(VaultError):
@@ -149,15 +153,24 @@ class VaultCoordinator:
         self._ledger = ledger
 
     def begin(
-        self, *, scope: VaultScope, sha256_hex: str, byte_length: int,
-        media_type: str,
+        self, *, scope: VaultScope, intent_id: UUID, sha256_hex: str,
+        byte_length: int, media_type: str,
     ) -> UploadIntent:
-        """Stage durable metadata; never create an exposed source version."""
+        """Persist/replay one stable request identity, before blob dispatch.
+
+        A trusted request handler must preserve intent_id across HTTP retries,
+        and enforce current actor/tenant authority for this ID. Retrying with
+        a fresh ID cannot safely reconcile an ambiguous commit.
+        """
         if not isinstance(scope, VaultScope):
             raise ValueError("authenticated server scope required")
+        if not isinstance(intent_id, UUID) or intent_id.version != 4:
+            raise ValueError("stable random UUIDv4 request intent required")
+        # Validate semantic inputs even if the record already exists; freeze
+        # the original random object key on replay, never derive a new one.
         intent = UploadIntent(
             scope=scope,
-            intent_id=uuid4(),
+            intent_id=intent_id,
             object_key=(
                 f"org/{scope.org_id.hex}/case/{scope.case_id.hex}/sources/"
                 + secrets.token_hex(16)
@@ -167,9 +180,24 @@ class VaultCoordinator:
             media_type=media_type,
         )
         try:
+            previous = self._ledger.get_scoped(scope, intent_id)
+        except Exception as exc:
+            raise VaultUnknownOutcome(
+                "pending intent lookup uncertain", intent_id=intent_id
+            ) from exc
+        if previous is not None:
+            saved = previous.intent
+            if (saved.scope != scope or saved.intent_id != intent_id
+                    or (saved.sha256_hex, saved.byte_length, saved.media_type)
+                    != (sha256_hex, byte_length, media_type)):
+                raise VaultConflict("same request ID with different immutable upload")
+            return saved  # replay exact object key, even after lost create ACK
+        try:
             record = self._ledger.create_pending(intent)
         except Exception as exc:
-            raise VaultUnknownOutcome("durable upload intent status uncertain") from exc
+            raise VaultUnknownOutcome(
+                "durable upload intent status uncertain", intent_id=intent_id
+            ) from exc
         if record.intent != intent or record.state != VaultState.PENDING:
             raise VaultConflict("pending record does not match new upload intent")
         return intent
@@ -199,7 +227,9 @@ class VaultCoordinator:
         except Exception as exc:
             # A commit may have succeeded before its acknowledgment was lost.
             # Caller must query the ledger again, not replay an object write.
-            raise VaultUnknownOutcome("upload commit outcome unknown") from exc
+            raise VaultUnknownOutcome(
+                "upload commit outcome unknown", intent_id=record.intent.intent_id
+            ) from exc
         if (completed.intent != record.intent
                 or completed.state != VaultState.VERIFIED
                 or completed.revision <= record.revision):
@@ -223,7 +253,9 @@ class VaultCoordinator:
             self._store.put_once(record.intent.object_key, data)
         except Exception as exc:
             # Provider may have accepted the PUT. No automatic second write.
-            raise VaultUnknownOutcome("private object write outcome unknown") from exc
+            raise VaultUnknownOutcome(
+                "private object write outcome unknown", intent_id=intent_id
+            ) from exc
         observed = self._read_store(record.intent)
         if not self._verify(observed, record.intent):
             raise VaultUnavailable("stored object is not verified")
