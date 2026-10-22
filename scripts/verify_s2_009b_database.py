@@ -125,7 +125,7 @@ def _unchanged(env: dict[str, str], expected: tuple[int, int, int, int, int, str
         raise AssertionError(f"{label}: transaction partially committed {actual} != {expected}")
 
 
-def _concurrent_replay(env: dict[str, str], sql: str, expected: str) -> None:
+def _concurrent_replay(env: dict[str, str], sql: str, prefix: str) -> None:
     """Two real connections: A commits and holds membership lock; B replays."""
     marker = "VAULT_TX_LOCKED"
     tx_a = subprocess.Popen(
@@ -143,16 +143,17 @@ def _concurrent_replay(env: dict[str, str], sql: str, expected: str) -> None:
         if not ready:
             raise AssertionError("Vault transaction did not start")
         first = tx_a.stdout.readline().strip()
-        if first != expected:
-            raise AssertionError("First writer did not commit the expected event result")
+        if not first.startswith(prefix) or not first.endswith("|false"):
+            raise AssertionError("First writer did not commit one expected event")
         ready, _, _ = select.select([tx_a.stdout], [], [], 15)
         if not ready or tx_a.stdout.readline().strip() != marker:
             raise AssertionError("Transaction lock marker absent")
         start = time.monotonic()
         replay = _run(sql, env)
         elapsed = time.monotonic() - start
-        if not replay.endswith("|true") or elapsed < 0.7:
-            raise AssertionError("Concurrent replay did not serialize on membership/case lock")
+        if (not replay.endswith("|true") or replay.rsplit("|", 1)[0]
+                != first.rsplit("|", 1)[0] or elapsed < 0.7):
+            raise AssertionError("Concurrent replay did not preserve one event and case revision")
         if tx_a.wait(timeout=8) != 0:
             raise AssertionError("First writer failed to commit")
     finally:
@@ -273,6 +274,22 @@ def main() -> None:
     )
     _blocked(env, call("verify"), "forged saved receipt revision denied")
     _unchanged(env, c, "FORGED_RECEIPT")
+    # A second stable UUIDv4 request races on two independent PostgreSQL
+    # connections. Exactly one stage intent/audit/receipt commits.
+    second_id = "87654321-4321-4321-8321-abcdefabcdef"
+    second_key = OBJECT_KEY[:-32] + "0123456789abcdefabcdef0123456789"
+    before_race = snapshot(env)
+    _concurrent_replay(
+        env, call("stage", intent=second_id, object_key=second_key), "pending|1|"
+    )
+    after_race = snapshot(env)
+    if (after_race[0] != before_race[0] + 1
+            or after_race[1] != before_race[1] + 1
+            or after_race[2] != before_race[2] + 1
+            or after_race[4] != before_race[4] + 1):
+        raise AssertionError("Concurrent stage replay committed duplicate effects")
+    print("S2-009b concurrent identical-key stage and replay across connections: PASS")
+
     print("S2-009b_DISPOSABLE_VAULT_LEDGER_PASSED")
 
 
