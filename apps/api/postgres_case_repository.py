@@ -72,8 +72,8 @@ def _row_to_models(
         if type(action) is not str:
             raise ValueError("Invalid stored permission value")
         permissions.append(CaseAction(action))
-    if len(permissions) != len(set(permissions)):
-        raise ValueError("Duplicate stored permissions")
+    # Duplicates are schema-valid under the installed Postgres actions <@
+    # check. Idempotently normalize permitted grants to a set.
     stored = StoredCase(
         case_id=_uuid(case_uuid),
         owner_org_id=_uuid(case_org),
