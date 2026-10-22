@@ -225,7 +225,7 @@ def test_invalid_pdf_geometry_fails(bad: dict[str, object]) -> None:
 
 
 @pytest.mark.parametrize("changed", [
-    {"a1_range": "A0:B2"}, {"a1_range": "B1"}, {"sheet_id": ""},
+    {"a1_range": "A0:B2"}, {"a1_range": "B3:A1"}, {"sheet_id": ""},
 ])
 def test_invalid_spreadsheet_locator_fails(changed: dict[str, object]) -> None:
     body = anchor("sheet_range")
@@ -422,7 +422,7 @@ def test_duplicate_idempotency_fingerprint_replay_is_not_a_legal_success() -> No
 
 
 def test_operation_matrix_matches_exported_schema_routes_and_permissions() -> None:
-    assert MATRIX["status"] == "typed_contract_only_no_v2_routes_enabled"
+    assert MATRIX["status"] == "typed_contract_only_all_v2_routes_disabled"
     assert MATRIX["schema_version"] == SCHEMA_VERSION
     assert {
         f"{op['method']} {op['path']}" for op in MATRIX["operations"]
