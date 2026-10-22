@@ -98,6 +98,10 @@ def test_sql_is_disposable_only_non_approval_without_runtime_grants() -> None:
     assert "input_sha256_hex" in SQL
     assert "caseproof.idempotency_records" in SQL
     assert "caseproof.audit_events" in SQL
+    assert "caseproof._s2_004_disposable_event_revisions" in SQL
+    assert "and er.committed_revision = v_next" in SQL
+    assert "and er.committed_revision <= v_case.case_revision" in SQL
+    assert "and 'case:read' = any(m.actions)" in SQL
     assert "audit" in SQL and "receipt" in SQL
     assert "set state=" not in SQL.lower()
     assert "approved_conclusion" not in re.sub(r"--[^\n]*", "", SQL.lower())
@@ -131,3 +135,6 @@ def test_ci_runs_real_disposable_postgres_function_proof() -> None:
     assert "AUDIT_FAILURE" in harness
     assert "RECEIPT_FAILURE" in harness
     assert "CONCURRENT_REPLAY" in harness
+    assert "STRUCTURALLY_VALID_FORGED_REVISION" in harness
+    assert "masked(base)" in harness
+    assert "caseproof._s2_004_disposable_event_revisions" in harness
