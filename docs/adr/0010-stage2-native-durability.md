@@ -64,6 +64,7 @@ The seven-table schema is a foundation, **not** a complete representation of KRN
 |---|---|
 | `source_versions` (extends existing document versions) | tenant, case, original byte digest, immutable object reference, capture time, media/size and access policy |
 | `representations` | tenant, parent source-version/digest, own immutable byte digest, parser/OCR implementation+version, configuration hash, coordinate convention and trusted layout manifest |
+| `source_verification_revisions` | independent append-only source-authenticity/identity assessment: exact source/version, claimed or verified assessor identity, assessment basis/method, `unassessed`/`authenticated`/`disputed`/`indeterminate` status, revision, UTC time and audit link; this does **not** update citation fidelity or semantic support |
 | `finding_revisions` | tenant/case, immutable statement text or private content reference, exact revision/hash, author provenance, no in-place rewriting |
 | `evidence_link_revisions` | exact finding revision, typed anchor including source/representation identity, deterministic resolution and fidelity, separate semantic/sufficiency *proposal* and assessment revision |
 | `coverage_manifest_revisions` | case, scope/policy revisions, required issues and source inventory, omissions/exclusions and declared link selectors |
@@ -71,7 +72,7 @@ The seven-table schema is a foundation, **not** a complete representation of KRN
 | `audit_events` | event schema version, trusted tenant/actor, previous/next state, correlation/causation, input fingerprint, safe metadata; no UPDATE/DELETE grants |
 | `idempotency_records` | operation scope+key, exact semantic fingerprint, committed result reference and event/decision pointer |
 
-Every tenant-owned relationship must use server-derived organization ownership and appropriate composite FKs. Parser representations are append-only and must not silently remap old offsets or anchors. Store raw content privately; audit/event payloads use minimized references and digests, not private quotes or credentials. Source/version IDs and original bytes are distinct from extracted assertions.
+Every tenant-owned relationship must use server-derived organization ownership and appropriate composite FKs. Parser representations and source-authenticity verification assessments are append-only, independently revised and must not silently remap old offsets or anchors. A source verification is neither a hash match nor a claim that its extracted facts are true. Store raw content privately; audit/event payloads use minimized references and digests, not private quotes or credentials. Source/version IDs and original bytes are distinct from extracted assertions.
 
 **The storage/review graph requires its own independently reviewed additive migration and rollback/recovery plan; do not modify the existing installed migration or apply this table list as SQL.**
 
@@ -85,14 +86,14 @@ The existing private schema uses RLS and very narrow authenticated SELECT grants
 
 These are alternatives requiring a specific, reviewed connectivity design—not permission to combine an untrusted user-supplied actor ID with a privileged connection. `SECURITY DEFINER` is exceptional and requires explicit security review of execution grants, `search_path`, role ownership and spoofed-actor tests. Runtime connection pooling must not leak one user's authorization context into another.
 
-Before any v2 exposure, run **real signed Auth session -> application -> real PostgreSQL runtime role** tests across two organizations, including membership revocation, cross-tenant joins and source/download protection. Disposable simulated `auth.uid()` tests are useful but not sufficient.
+Before any v2 exposure, run **real signed Auth session -> application -> real PostgreSQL runtime role** tests across two organizations, including membership revocation, cross-tenant joins and source/download protection. Prove **positive controls first** (A reads its own fixture through the actual connection/pool, B reads its own fixture; for future permitted writes A and B each perform their own authorized mutation), followed by reciprocal denied reads, writes, downloads and masked lookups. A deny-all/unconfigured adapter must fail the acceptance gate. Independently test **IdP session revocation**, session expiry and banned/deleted identities: a revoked session must fail its **next command authorization** despite a previously verified subject or cached token. Define a short bounded token/session-staleness policy and verify it against authoritative server-side session state for sensitive actions; no cross-request cached VerifiedSubject may bypass a revocation check. Disposable simulated `auth.uid()` tests are useful but not sufficient.
 
 ## Atomic decision boundary (S2-004)
 
 A consequential transition has one database transaction, or no acknowledged result:
 
 1. Validate/verify identity at the server entry and derive tenant/case permission context; parse a strict, versioned request. Never deserialize trusted principal/tenant from client JSON.
-2. Begin transaction. Lock and re-read **current active membership, exact case, effective policy and relevant immutable evidence/coverage revisions** using one documented lock order. Authorization derived before the transaction cannot authorize the write alone.
+2. Begin transaction. Lock and re-read **current active membership, exact case, effective policy and relevant immutable evidence/coverage revisions** using one documented lock order. Authorization derived before the transaction cannot authorize the write alone. **Aggregate serialization invariant:** every mutator of the case's *current* source/representation, finding/assessment, link, coverage/manifest or effective-policy head MUST take that same case-aggregate lock and advance its `case_revision` in its own transaction. The decision holds that lock while evaluating the frozen heads. A new immutable history record alone is not a current-head update; publishing a new current head without a case revision bump is prohibited. If this cannot be proved, use a reviewed serializable transaction/retry strategy instead. Test graph/policy writers racing the decision, not merely two decision writers.
 3. Check unique operation-scoped idempotency key and canonical semantic-input fingerprint **while currently authorized**. Same key+fingerprint returns the previously committed reference only without exposing data after revoked access; same key+different fingerprint conflicts.
 4. Re-evaluate exact KRN-105/106/109 preconditions on the authoritative frozen snapshot. Reject missing evidence, forged assessors, stale snapshot, policy/version drift, self-approval and insufficient human attestation. The synthetic Stage 1 preflight is not authorization.
 5. Compare-and-swap the expected case revision; insert append-only decision/audit events and the idempotency result/reference in the **same transaction**.
@@ -109,7 +110,7 @@ Uploading a blob and committing Postgres metadata cannot be atomic across system
 1. Authenticate and authorize tenant/case, enforce strict size/type, sandbox validation and rate limits; create bounded quarantine intent with a unique immutable object key.
 2. Write immutable bytes in a private bucket; read back or otherwise verify stored content digest and byte count before making it referenceable.
 3. Transactionally publish the *verified* metadata and source-version record, preserving the original object version and hash. Parser/OCR outputs create separate representations with lineage.
-4. On interruption, reconciliation workers inspect pending/failed/orphan states; no silent overwrite, premature availability, cross-tenant key reassignment or deletion of referenced approved evidence.
+4. On interruption, reconciliation workers inspect pending/failed/orphan states; no silent overwrite, premature availability, cross-tenant key reassignment or deletion of referenced approved evidence. **Also test post-publication loss**: once SQL metadata refers to a verified object, delete/corrupt/block the exact immutable object in a fixture. Every source resolution, promotion and export must fail closed until independently verified bytes are restored or the source is marked unavailable with an auditable new status/assessment; retained metadata alone cannot certify availability.
 5. Enforce server-side access on every signed-URL issuance; short TTL, scope checks, retention/legal hold and lawful erasure policy precede customer uploads.
 
 This differs deliberately from any best-effort upload followed by a separate metadata update that could leave a falsely available source.
@@ -118,7 +119,7 @@ This differs deliberately from any best-effort upload followed by a separate met
 
 Start with deterministic finance and document-processing jobs. A persisted step identity and input/release fingerprint decide whether a resumed step reuses its prior result. Work claims use transactional lease, heartbeat, expiry, attempts and bounded retry policy; completion includes durable event/outbox consistency. Workers must re-establish server-owned tenant rights on every state-changing operation.
 
-An external provider call has distinct `CREATED` -> `DISPATCH_INTENT_RECORDED` -> `RESPONSE_CAPTURED` -> `SUCCEEDED` / `FAILED_BEFORE_DISPATCH` / `OUTCOME_UNKNOWN` states. A timeout **after dispatch** is not evidence the provider did not execute; replay only when provider-native idempotency or reconciliation proves safety. Save response bytes privately before schema interpretation; record provider, model, prompt/schema versions and limited diagnostics without logging document content.
+An external provider call uses **branching**, not a linear terminal chain: `CREATED` -> `FAILED_BEFORE_DISPATCH` when no dispatch occurs; or `CREATED` -> `DISPATCH_INTENT_RECORDED` -> `RESPONSE_CAPTURED` -> `SUCCEEDED` after a stored result. A dispatched call without a proven response moves **directly** from `DISPATCH_INTENT_RECORDED` to `OUTCOME_UNKNOWN` and cannot be blindly retried. Captured responses may have a separate deterministic validation failure, which is not a provider non-dispatch claim. A timeout **after dispatch** is not evidence the provider did not execute; replay only when provider-native idempotency or reconciliation proves safety. Save response bytes privately before schema interpretation; record provider, model, prompt/schema versions and limited diagnostics without logging document content.
 
 Outbox delivery is at least once. Consumers deduplicate on stable event identity; no external emails, legal filings, payments or demands run autonomously.
 
@@ -142,15 +143,16 @@ These labels are **new planning proposals**, not a renaming or completion claim 
 
 | Risk | Required proof before customer release |
 |---|---|
-| Tenant crossover | Real signed users A/B cannot read/write each other's case, metadata, source objects, URL, worker job or cached result |
+| Tenant crossover | **Positive first:** A and B each successfully perform their own authorized read (and write where enabled) through the actual pooled runtime role; **then** both fail to access the other's case, metadata, source objects, URL, worker job or cached result |
 | Revoked member | Recheck active membership at command time; no unauthorized replay of earlier idempotency response |
+| Revoked/expired IdP session | Separate from membership: revoked/banned/deleted/expired session fails on the next command with server-state revalidation; no persistent VerifiedSubject cache grants access |
 | Forged authority | Fake human flag, actor ID, tenant ID, role claims and unreviewed policies never authorize review or approval |
 | Audit failure | Inject failed audit insert: state, decision and receipt all roll back |
 | Concurrent decisions | Two writers at same revision produce one committed decision; other receives deterministic conflict |
 | Idempotency | Identical retry returns same authorized committed reference; different fingerprint conflicts, no duplicate events |
-| Evidence drift | Hash, parser representation, offset and finding revision changes make old anchors stale or require new reassessment |
+| Evidence drift | Hash, parser representation, offset and finding revision changes make old anchors stale or require new reassessment; **all current-head mutators acquire and advance the case aggregate revision**, with a true concurrent writer test |
 | Incomplete coverage | Missing/failed/excluded/contradicting required source or issue blocks ordinary approval; qualified exceptions stay visibly unresolved |
-| Object-store interruption | Pending upload not visible as verified; orphan/quarantine recovery, read-back mismatch and signed-URL denial tested |
+| Object-store interruption | Pending upload not visible as verified; orphan/quarantine recovery, read-back mismatch, signed-URL denial **and later loss/corruption of an already-published verified blob** tested |
 | Worker crash | Retry/restart never duplicates review, export, charging or external calls with outcome unknown |
 | Reviewer UI | Side-by-side exact evidence version, visible contradictions, missing source, authority and action consequences; WCAG 2.2 AA target |
 
