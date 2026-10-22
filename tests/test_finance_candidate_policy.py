@@ -78,3 +78,36 @@ def test_domain_unsupported_fractional_precision_or_credit_is_unresolved() -> No
         assert result.status == "unresolved"
         assert result.delta is None
         assert any("precision" in message for message in result.unresolved)
+
+
+def test_domain_blank_po_references_cannot_match() -> None:
+    invoice = _doc("inv", "1250.00")
+    order = _doc("po", "1150.00")
+    for invoice_ref, order_ref in ((" ", " "), ("\t", " "), ("", "PO-1"),
+                                   ("PO-1", " \t ")):
+        result = assess_invoice_order_net(invoice, invoice_ref, order, order_ref)
+        assert result.status == "unresolved"
+        assert result.delta is None
+        assert result.currency is None
+        assert any("reference missing" in issue or "identity missing" in issue
+                   for issue in result.unresolved)
+    valid = assess_invoice_order_net(invoice, " PO-1 ", order, "PO-1")
+    assert valid.status == "candidate_requires_review"
+    assert valid.delta == "100.00"
+
+
+def test_domain_uses_fully_independent_decimal_context() -> None:
+    from decimal import Overflow, Underflow, localcontext
+
+    with localcontext() as context:
+        context.prec = 2
+        context.Emax = 1
+        context.Emin = -1
+        context.traps[Overflow] = True
+        context.traps[Underflow] = True
+        result = assess_invoice_order_net(
+            _doc("inv", "1250.01"), "PO-1",
+            _doc("po", "1150.00"), "PO-1",
+        )
+        assert result.status == "candidate_requires_review"
+        assert result.delta == "100.01"
