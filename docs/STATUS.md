@@ -23,13 +23,13 @@
 
 **SEC-01: owner-controlled merge protection.** Repeated main CI succeeds; architecture negative-control PR #4 failed explicitly on `forbidden import domains.finance.reconciliation` in [run 39555343328](https://github.com/haytamAroui/caseproof/actions/runs/39555343328). GitHub rulesets query returned an empty list on 2026-10-22 and branch protection read returned 403 to the connector. **Neither proves main is protected.** Owner must enable/prove branch protection, mandatory status checks and review. [Issue #5](https://github.com/haytamAroui/caseproof/issues/5) stays open until verified. Never merge sabotage PR #4.
 
-**SEC-02: real signed Auth and secure DB runtime.** Create two separate confirmed **development** Auth accounts, configure approved protected GitHub environment, run S2-007 manual workflow, then implement/test true verified bearer-to-least-privilege tenant DB authorization, session revocation and pool cleanup. Signed Auth→synthetic SQL claims in the fixture is **not** true live database identity propagation.
+**[SEC-02: real signed Auth and secure DB runtime](https://github.com/haytamAroui/caseproof/issues/37).** Create two separate confirmed **development** Auth accounts, configure approved protected GitHub environment, run S2-007 manual workflow, then implement/test true verified bearer-to-least-privilege tenant DB authorization, session revocation and pool cleanup. Signed Auth→synthetic SQL claims in the fixture is **not** true live database identity propagation.
 
-**STORAGE-01: actual immutable private bytes.** No private bucket/real object bridge, scanning/quarantine, row-level object access, signed URL threat tests, persistent object availability recovery, or verified external Storage transaction boundary.
+**[STORAGE-01: actual immutable private bytes](https://github.com/haytamAroui/caseproof/issues/38).** No private bucket/real object bridge, scanning/quarantine, row-level object access, signed URL threat tests, persistent object availability recovery, or verified external Storage transaction boundary.
 
-**DATA-01: durable kernel and authorized decisions.** S2-008 proposal schema remains under `db/proposals/`. No installed representation/anchor/assessment/coverage/head migrations; no server-bound `/v2` approval route, authenticated human-attestation policy, or fully persisted case resolution.
+**[DATA-01: durable kernel and authorized decisions](https://github.com/haytamAroui/caseproof/issues/39).** S2-008 proposal schema remains under `db/proposals/`. No installed representation/anchor/assessment/coverage/head migrations; no server-bound `/v2` approval route, authenticated human-attestation policy, or fully persisted case resolution.
 
-**OPS-01: crash recovery and end-to-end product.** S2-010 leased durable workers/recovery unimplemented. The current `apps/api/main.py` is a development-only `/v1/claims` in-memory app trusting caller-provided `X-Tenant-Id`. `apps/web` does not exist. No real invoice/PO upload, extraction, issue inbox, review or export customer journey.
+**OPS-01: crash recovery and [MVP-01 end-to-end product](https://github.com/haytamAroui/caseproof/issues/40).** S2-010 leased durable workers/recovery unimplemented. The current `apps/api/main.py` is a development-only `/v1/claims` in-memory app trusting caller-provided `X-Tenant-Id`. `apps/web` does not exist. No real invoice/PO upload, extraction, issue inbox, review or export customer journey.
 
 ## Next work — prioritize an actual usable outcome
 
