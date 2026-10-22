@@ -21,7 +21,14 @@ create table caseproof._s2_004_disposable_event_revisions (
     case_id uuid not null,
     actor_user_id uuid not null,
     committed_revision bigint not null check (committed_revision > 0),
-    input_sha256_hex text not null check (input_sha256_hex ~ '^[0-9a-f]{64}
+    input_sha256_hex text not null check (input_sha256_hex ~ '^[0-9a-f]{64}$'),
+    foreign key (org_id, case_id, audit_event_id)
+        references caseproof.audit_events(org_id, case_id, id)
+);
+alter table caseproof._s2_004_disposable_event_revisions enable row level security;
+revoke all on caseproof._s2_004_disposable_event_revisions from public, anon, authenticated;
+
+create function caseproof._s2_004_disposable_observation(
     p_actor_user_id uuid,
     p_case_id uuid,
     p_expected_case_revision bigint,
