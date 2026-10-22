@@ -203,7 +203,7 @@ def test_https_transport_is_pinned_and_does_not_redirect_or_expose_secret(
         return conn
 
     monkeypatch.setattr("apps.api.supabase_auth_verifier.http.client.HTTPSConnection", connect)
-    lookup = HttpsSupabaseUserLookup(REF, "sb_publishable_test", 2.0)
+    lookup = HttpsSupabaseUserLookup(REF, "sb_publishable_test_key", 2.0)
     token = jwt()
     assert lookup.get_verified_user(token)["id"] == USER
     assert len(instances) == 1
@@ -213,9 +213,9 @@ def test_https_transport_is_pinned_and_does_not_redirect_or_expose_secret(
     assert conn.method == "GET"
     assert conn.path == "/auth/v1/user"
     assert conn.headers["Authorization"] == f"Bearer {token}"
-    assert conn.headers["apikey"] == "sb_publishable_test"
+    assert conn.headers["apikey"] == "sb_publishable_test_key"
     assert conn.closed
-    assert "sb_publishable_test" not in repr(lookup)
+    assert "sb_publishable_test_key" not in repr(lookup)
 
 
 @pytest.mark.parametrize(
@@ -239,7 +239,7 @@ def test_http_nonverified_response_never_returns_user(
         return FakeHttpsConnection(host, timeout, status, body)
     monkeypatch.setattr("apps.api.supabase_auth_verifier.http.client.HTTPSConnection", connect)
     with pytest.raises(error):
-        HttpsSupabaseUserLookup(REF, "sb_publishable_test").get_verified_user(jwt())
+        HttpsSupabaseUserLookup(REF, "sb_publishable_test_key").get_verified_user(jwt())
 
 
 def test_nonhuman_login_can_never_request_approval_even_if_member_was_granted_permission() -> None:
@@ -311,3 +311,16 @@ def test_current_ban_is_still_rejected_even_with_200_auth_response() -> None:
     })
     with pytest.raises(InvalidBearer):
         SupabaseAuthUserVerifier(REF, fake, lambda: NOW).verify_bearer(jwt())
+
+
+@pytest.mark.parametrize("unsafe_key", [
+    "", " ", "public", "sb_publishable_", "sb_publishable_short",
+    "sb_secret_DEVELOPMENT_FIXTURE", "service_role",
+    "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.fake",
+    "sb_publishable_test_key\\r\\nX-Injected: bad",
+])
+def test_auth_user_lookup_rejects_non_publishable_or_header_injection_key(
+    unsafe_key: str,
+) -> None:
+    with pytest.raises(ValueError, match="publishable"):
+        HttpsSupabaseUserLookup(REF, unsafe_key)
