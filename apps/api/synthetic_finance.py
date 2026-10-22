@@ -15,7 +15,8 @@ from hashlib import sha256
 from typing import Literal
 from xml.etree import ElementTree as ET
 
-from domains.finance.reconciliation import DocumentAmount, Money, compare_invoice_to_po
+from domains.finance.candidate_policy import assess_invoice_order_net
+from domains.finance.reconciliation import DocumentAmount, Money
 from packages.evidence_kernel.domain.anchors import StructuredField
 
 CBC = "{urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2}"
@@ -26,7 +27,7 @@ PARSER_VERSION = "exceptiondesk-ubl-net-subset-v1"
 REP_SCHEMA = "exceptiondesk.finance.net-subset.v1"
 MAX_SYNTHETIC_BYTES = 64 * 1024
 MAX_NODES = 250
-_DECIMAL_TEXT = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?\Z")
+_DECIMAL_TEXT = re.compile(r"(?:0|[1-9][0-9]{0,17})(?:\.[0-9]{1,6})?\Z")
 _CURRENCY = re.compile(r"[A-Z]{3}\Z")
 
 
@@ -61,8 +62,11 @@ def _single_text(root: ET.Element, path: str, label: str, *, required: bool = Tr
     found = root.findall(path)
     if not found and not required:
         return None
-    if len(found) != 1 or found[0].text is None or not found[0].text.strip():
-        raise SyntheticParseError(f"{label} missing or ambiguous")
+    if (
+        len(found) != 1 or len(found[0]) != 0
+        or found[0].text is None or not found[0].text.strip()
+    ):
+        raise SyntheticParseError(f"{label} missing, nested or ambiguous")
     result = found[0].text.strip()
     if len(result) > 128:
         raise SyntheticParseError(f"{label} too long")
@@ -77,6 +81,23 @@ def parse_synthetic_ubl(
         raise SyntheticParseError("unsupported UBL kind")
     if type(raw) is not bytes or not raw or len(raw) > MAX_SYNTHETIC_BYTES:
         raise SyntheticParseError("synthetic UBL byte limit or type invalid")
+    # Constrain encoding before scanning so UTF-16/32 cannot hide DTD tokens
+    # in interleaved NUL bytes. Do not trust a conflicting XML declaration.
+    try:
+        xml_text = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise SyntheticParseError("only UTF-8 synthetic XML supported") from exc
+    if "\x00" in xml_text or xml_text.startswith("\ufeff"):
+        raise SyntheticParseError("BOM/NUL or non-UTF8 XML unsupported")
+    declaration = re.match(r"\s*<\?xml\b[^>]*\?>", xml_text, re.IGNORECASE)
+    if declaration is not None:
+        declared = re.search(
+            r"""\bencoding\s*=\s*(['"])([^'"]+)\1""",
+            declaration.group(0),
+            re.IGNORECASE,
+        )
+        if declared is not None and declared.group(2).lower() != "utf-8":
+            raise SyntheticParseError("declared XML encoding must be UTF-8")
     if b"<!DOCTYPE" in raw.upper() or b"<!ENTITY" in raw.upper():
         raise SyntheticParseError("DTD and entities forbidden")
     try:
@@ -99,6 +120,8 @@ def parse_synthetic_ubl(
     if len(totals) != 1:
         raise SyntheticParseError("exactly one net line-extension total required")
     total = totals[0]
+    if len(total) != 0:
+        raise SyntheticParseError("nested net amount content forbidden")
     amount_text = total.text.strip() if total.text else ""
     if total.attrib.get("currencyID") != currency or not _DECIMAL_TEXT.fullmatch(amount_text):
         raise SyntheticParseError("currency mismatch or invalid net amount")
@@ -142,39 +165,23 @@ def synthetic_review_packet(invoice_bytes: bytes, po_bytes: bytes | None) -> dic
     """An UNREVIEWED deterministic candidate packet. No privileged state change."""
     invoice = parse_synthetic_ubl(invoice_bytes, "invoice")
     order = parse_synthetic_ubl(po_bytes, "purchase_order") if po_bytes is not None else None
-    unresolved: list[str] = [
-        "No evidence byte-store verification, real coverage or authenticated human review.",
-        "Delivery, amendments, credit notes, freight and applicable VAT/tolerance policy not assessed.",
-    ]
-    if order is None:
-        unresolved.append("Purchase order missing.")
-    elif invoice.order_reference is None:
-        unresolved.append("Invoice purchase-order reference missing.")
-    elif invoice.order_reference != order.ubl_id:
-        unresolved.append("Invoice references a different purchase order.")
-    if order is not None and invoice.currency != order.currency:
-        unresolved.append("Currencies differ; no conversion rule is authorized.")
-
-    comparable = (
-        order is not None
-        and invoice.order_reference == order.ubl_id
-        and invoice.currency == order.currency
+    candidate = assess_invoice_order_net(
+        DocumentAmount(
+            invoice.evidence.document_id,
+            Money(invoice.amount, invoice.currency),
+            invoice.evidence.representation_id,
+        ),
+        invoice.order_reference,
+        (
+            DocumentAmount(
+                order.evidence.document_id,
+                Money(order.amount, order.currency),
+                order.evidence.representation_id,
+            )
+            if order is not None else None
+        ),
+        order.ubl_id if order is not None else None,
     )
-    status: str = "unresolved"
-    delta: str | None = None
-    if comparable and order is not None:
-        finding = compare_invoice_to_po(
-            DocumentAmount(invoice.evidence.document_id, Money(invoice.amount, invoice.currency),
-                           invoice.evidence.representation_id),
-            DocumentAmount(order.evidence.document_id, Money(order.amount, order.currency),
-                           order.evidence.representation_id),
-        )
-        if finding is None:
-            status = "match_unreviewed"
-            delta = "0"
-        else:
-            status = "candidate_requires_review"
-            delta = str(finding.difference.amount)
 
     def serialize(item: ParsedNetAmount) -> dict[str, object]:
         ref = item.evidence
@@ -203,12 +210,12 @@ def synthetic_review_packet(invoice_bytes: bytes, po_bytes: bytes | None) -> dic
         "schema_version": "exceptiondesk.synthetic-finance-review.v1",
         "mode": "synthetic_only_no_customer_data",
         "parser_version": PARSER_VERSION,
-        "status": status,
-        "difference": delta,
-        "currency": invoice.currency if comparable else None,
+        "status": candidate.status,
+        "difference": candidate.delta,
+        "currency": candidate.currency,
         "invoice": serialize(invoice),
         "purchase_order": serialize(order) if order is not None else None,
-        "unresolved": unresolved,
+        "unresolved": list(candidate.unresolved),
         "review": {"state": "not_requested", "authenticated": False, "authorized": False},
         "audit": {"persisted": False, "receipt": None},
         "export": {"status": "draft_only_not_an_approved_report"},
