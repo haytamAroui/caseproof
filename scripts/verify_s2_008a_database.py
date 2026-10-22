@@ -109,7 +109,7 @@ commit;
     ) != "2":
         raise AssertionError("Equal-byte representations must preserve TWO distinct IDs")
     if _run(
-        "select kernel_document_id||'|'||kernel_version_id||'|'||kernel_representation_id "
+        "select s.kernel_document_id||'|'||v.kernel_version_id||'|'||r.kernel_representation_id "
         "from caseproof.s2_008a_anchors a "
         "join caseproof.s2_008a_representations r using(representation_pk) "
         "join caseproof.s2_008a_version_logical_ids v "
