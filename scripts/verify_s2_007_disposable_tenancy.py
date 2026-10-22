@@ -37,6 +37,11 @@ DOC_B = "dddddddd-4444-4444-8444-444444444444"
 VER_A = "cccccccc-5555-4555-8555-555555555555"
 VER_B = "dddddddd-6666-4666-8666-666666666666"
 
+# Fixed, synthetic fixture inventory. Direct source IDs are checked under
+# every principal so an independent RLS regression on document_versions
+# cannot hide behind the documents table's separate RLS filter.
+_RESOURCES = {CASE_A: (DOC_A, VER_A), CASE_B: (DOC_B, VER_B)}
+
 
 def _as_uuid(value: str) -> UUID:
     parsed = UUID(value)
@@ -112,6 +117,10 @@ def _session_sql(
 ) -> str:
     subject = str(_as_uuid(alias))
     own, other = str(_as_uuid(own_case)), str(_as_uuid(other_case))
+    if own not in _RESOURCES or other not in _RESOURCES or own == other:
+        raise ValueError("Only separate fixed synthetic fixture cases are allowed")
+    own_doc, own_version = _RESOURCES[own]
+    other_doc, other_version = _RESOURCES[other]
     # BEGIN + SET LOCAL means a single transaction owns its claim and role,
     # never a connection-global principal. This is a policy simulation, NOT
     # signature verification by Postgres.
@@ -128,11 +137,14 @@ begin
  {assign}
  if (select count(*) from caseproof.cases where id='{own}') <> {expected_own}
     or (select count(*) from caseproof.cases where id='{other}') <> {expected_other}
-    or (select count(*) from caseproof.documents where case_id='{own}')
+    or (select count(*) from caseproof.documents where id='{own_doc}')
         <> {expected_inventory}
-    or (select count(*) from caseproof.document_versions where
-        document_id in (select id from caseproof.documents where case_id='{own}'))
+    or (select count(*) from caseproof.documents where id='{other_doc}')
+        <> {expected_other}
+    or (select count(*) from caseproof.document_versions where id='{own_version}')
         <> {expected_inventory}
+    or (select count(*) from caseproof.document_versions where id='{other_version}')
+        <> {expected_other}
  then
    raise exception 'S2-007 own/foreign isolation invariant violated';
  end if;
@@ -202,6 +214,36 @@ def check_disposable_rls(
     _run(_session_sql(b, CASE_B, CASE_A), env)
 
 
+def _isolated_postgres_env() -> dict[str, str]:
+    """Reject libpq host overrides; pass only explicit localhost parameters.
+
+    PGHOSTADDR overrides PGHOST for connection address selection. Other
+    PG* environment keys (PGSERVICE, PGOPTIONS, ...) can silently redirect
+    or alter psql. Never forward them from a CI runner to a SQL subprocess.
+    """
+    env = _env()
+    if os.environ.get("PGHOSTADDR") is not None:
+        raise RuntimeError("Unsafe libpq address override")
+    if env.get("PGHOST") != "127.0.0.1":
+        raise RuntimeError("Numerical loopback address required")
+    if env.get("PGPORT") != "5432":
+        raise RuntimeError("Expected disposable PostgreSQL port")
+    if env.get("PGPASSWORD") != "caseproof_ephemeral_ci":
+        raise RuntimeError("Expected disposable fixture password")
+    # Keep non-PostgreSQL process environment for PATH/runtime, but strip
+    # every PG* variable and reintroduce an explicitly verified allowlist.
+    clean = {key: value for key, value in env.items() if not key.startswith("PG")}
+    clean.update({
+        "PGHOST": "127.0.0.1",
+        "PGPORT": "5432",
+        "PGDATABASE": "caseproof_s2_ci",
+        "PGUSER": "postgres",
+        "PGPASSWORD": "caseproof_ephemeral_ci",
+        "PGCONNECT_TIMEOUT": "5",
+    })
+    return clean
+
+
 def _required(name: str) -> str:
     value = os.environ.get(name)
     if not value:
@@ -242,7 +284,7 @@ def _real_auth_subjects() -> tuple[str, str]:
 
 def main() -> int:
     try:
-        env = _env()  # Refuse any nonlocal host/DB before Auth network traffic.
+        env = _isolated_postgres_env()  # Enforce pinned loopback before any Auth traffic.
         if os.environ.get("CASEPROOF_S2_007_REAL_AUTH") == "YES":
             user_a, user_b = _real_auth_subjects()
             mode = "SIGNED_AUTH_WITH_DISPOSABLE_RLS"
