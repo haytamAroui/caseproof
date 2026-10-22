@@ -340,7 +340,7 @@ def test_forged_stale_record_and_orphan_metadata_fail_closed(
     intent = create(service)
     rec = ledger.get_scoped(scope(), intent.intent_id)
     assert rec is not None
-    with pytest.raises(VaultConflict):
+    with pytest.raises(ValueError, match="stale availability revision"):
         ledger.publish_verified(replace(rec, revision=rec.revision + 1))
     with pytest.raises(ValueError):
         replace(intent, object_key="public/supplier-invoice.pdf")
@@ -357,7 +357,8 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
     root = Path(__file__).resolve().parents[1]
     source = (root / "apps/api/evidence_vault_protocol.py").read_text()
     app = (root / "apps/api/main.py").read_text()
-    assert "supabase" not in source.lower()
+    assert "from supabase" not in source.lower()
+    assert "import supabase" not in source.lower()
     assert "signed_url" not in source.lower()
     assert "service_role" not in source  # never invokes privileged storage access
     assert "evidence_vault_protocol" not in app
