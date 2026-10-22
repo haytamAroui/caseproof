@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0.0-draft",
-  "status": "typed_contract_only_no_v2_routes_enabled",
+  "status": "typed_contract_only_all_v2_routes_disabled",
   "source": "contracts/kernel-api.v2.proposal.json",
   "operations": [
     {
@@ -16,7 +16,12 @@
         404,
         409,
         422
-      ]
+      ],
+      "permission_installation": "blocked_new_scopes_not_installed",
+      "uninstalled_actions": [
+        "evidence:write"
+      ],
+      "runtime_route_enabled": false
     },
     {
       "method": "POST",
@@ -31,7 +36,10 @@
         404,
         409,
         422
-      ]
+      ],
+      "permission_installation": "installed_scopes_only_no_v2_route",
+      "uninstalled_actions": [],
+      "runtime_route_enabled": false
     },
     {
       "method": "POST",
@@ -46,7 +54,12 @@
         404,
         409,
         422
-      ]
+      ],
+      "permission_installation": "blocked_new_scopes_not_installed",
+      "uninstalled_actions": [
+        "evidence:write"
+      ],
+      "runtime_route_enabled": false
     },
     {
       "method": "GET",
@@ -62,7 +75,10 @@
         404,
         409,
         422
-      ]
+      ],
+      "permission_installation": "installed_scopes_only_no_v2_route",
+      "uninstalled_actions": [],
+      "runtime_route_enabled": false
     },
     {
       "method": "POST",
@@ -78,7 +94,13 @@
         404,
         409,
         422
-      ]
+      ],
+      "permission_installation": "blocked_new_scopes_not_installed",
+      "uninstalled_actions": [
+        "finding:promote",
+        "conclusion:approve"
+      ],
+      "runtime_route_enabled": false
     },
     {
       "method": "POST",
@@ -93,7 +115,12 @@
         404,
         409,
         422
-      ]
+      ],
+      "permission_installation": "blocked_new_scopes_not_installed",
+      "uninstalled_actions": [
+        "exception:accept"
+      ],
+      "runtime_route_enabled": false
     }
   ],
   "failure_precedence": [
@@ -112,6 +139,10 @@
     "effective policy is supplied by trusted server state not HTTP body",
     "preflight never produces an approval or committed state transition",
     "business risk acceptance cannot change evidence fidelity or legal approval",
-    "v2 endpoints are disabled until Stage 2 authentication, persistence, atomic audit and RLS are in place"
-  ]
+    "v2 endpoints are disabled until Stage 2 authentication, persistence, atomic audit and RLS are in place",
+    "conclusion:request_approval cannot authorize conclusion:approve or finding:promote",
+    "exception:request cannot authorize exception:accept",
+    "all /v2 routes stay disabled; no proposed permission is implicitly installed"
+  ],
+  "action_catalog": "contracts/action_catalog.v1.json"
 }
