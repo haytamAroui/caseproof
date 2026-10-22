@@ -117,7 +117,7 @@ def test_disposable_ci_database_job_runs_real_concurrent_and_audit_negative_case
 def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> None:
     root = Path(__file__).resolve().parents[1]
     migration = (
-        root / "supabase/migrations/20261021232955_caseproof_tenant_foundation.sql"
+        root / "supabase/migrations/20261022001009_caseproof_tenant_foundation.sql"
     )
     proposal = root / "db/proposals/S2-002_tenant_foundation.sql"
     assert migration.exists()
@@ -133,7 +133,7 @@ def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> Non
 
 def test_human_audit_actor_is_bound_to_event_tenant() -> None:
     root = Path(__file__).resolve().parents[1]
-    sql = (root / "supabase/migrations/20261021232955_caseproof_tenant_foundation.sql").read_text(
+    sql = (root / "supabase/migrations/20261022001009_caseproof_tenant_foundation.sql").read_text(
         encoding="utf-8"
     )
     assert "foreign key (org_id, actor_user_id)" in sql
