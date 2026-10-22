@@ -41,13 +41,15 @@ declare
 begin
     if p_actor_user_id is null or p_case_id is null
        or p_correlation_id is null
-       or p_expected_case_revision < 1
-       or p_expected_scope_version < 1
-       or p_expected_manifest_revision < 1
+       or p_expected_case_revision is null or p_expected_case_revision < 1
+       or p_expected_scope_version is null or p_expected_scope_version < 1
+       or p_expected_manifest_revision is null or p_expected_manifest_revision < 1
        or p_expected_policy_version is null
        or length(btrim(p_expected_policy_version)) = 0
        or p_idempotency_key is null
        or length(p_idempotency_key) not between 1 and 128
+       or length(btrim(p_idempotency_key)) != length(p_idempotency_key)
+       or p_semantic_sha256 is null
        or p_semantic_sha256 !~ '^[0-9a-f]{64}$'
        or p_fault not in ('audit', 'receipt') then
        -- NULL fault is intentional; p_fault NOT IN is NULL in SQL.
@@ -172,7 +174,7 @@ $body$;
 -- EXECUTE for PUBLIC, so explicit revocation is mandatory.
 revoke all on function caseproof._s2_004_disposable_observation(
     uuid,uuid,bigint,bigint,bigint,text,text,text,uuid,text
-) from public, anon, authenticated, service_role;
+) from public, anon, authenticated;
 
 -- Explicit permission assertion; a mistake here invalidates this fixture.
 do $grants$
