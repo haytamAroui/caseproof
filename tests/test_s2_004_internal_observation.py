@@ -120,8 +120,12 @@ def test_ci_runs_real_disposable_postgres_function_proof() -> None:
     harness = (ROOT / "scripts/verify_s2_004_database.py").read_text(
         encoding="utf-8"
     )
-    assert "scripts/verify_s2_004_database.py" in workflow
-    assert "CASEPROOF_DISPOSABLE_DB" in harness
+    assert "python -m scripts.verify_s2_004_database" in workflow
+    assert "from scripts.verify_s2_002_database import _cmd, _env, _run" in harness
+    assert "env = _env()" in harness
+    guard = (ROOT / "scripts/verify_s2_002_database.py").read_text(encoding="utf-8")
+    assert 'os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES"' in guard
+    assert 'not in {"127.0.0.1", "localhost"}' in guard
     assert "S2-004_DISPOSABLE_ATOMIC_OBSERVATION_PASSED" in harness
     assert "subprocess.Popen(" in harness
     assert "AUDIT_FAILURE" in harness
