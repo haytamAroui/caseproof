@@ -1,0 +1,68 @@
+"""S2-008a fail-closed schema contract: not a live migration or vault."""
+
+from pathlib import Path
+
+from scripts.verify_s2_008a_database import SCHEMA
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_schema_preserves_opaque_ids_and_case_constrained_ancestry() -> None:
+    assert "create table caseproof.s2_008a_source_logical_ids" in SCHEMA
+    assert "create table caseproof.s2_008a_version_logical_ids" in SCHEMA
+    assert "create table caseproof.s2_008a_representations" in SCHEMA
+    assert "create table caseproof.s2_008a_layouts" in SCHEMA
+    assert "create table caseproof.s2_008a_anchors" in SCHEMA
+    assert "kernel_document_id text not null" in SCHEMA
+    assert "kernel_version_id text not null" in SCHEMA
+    assert "kernel_representation_id text not null" in SCHEMA
+    assert "unique (org_id, case_id, kernel_document_id)" in SCHEMA
+    assert "foreign key (org_id, case_id, document_pk)" in SCHEMA
+    assert "references caseproof.documents(org_id, case_id, id)" in SCHEMA
+    assert "references caseproof.s2_008a_representations(" in SCHEMA
+    assert "and source_sha256" not in SCHEMA  # SQL conditions are typed FKs, not string predicates
+
+
+def test_every_evidence_row_has_audit_reference_and_no_client_grants() -> None:
+    # All 5 new tables are private, RLS-enabled, and must be audit-linked.
+    assert SCHEMA.count("audit_event_id uuid not null") == 5
+    assert SCHEMA.count("references caseproof.audit_events(org_id, case_id, id)") == 5
+    assert SCHEMA.count("enable row level security;") == 5
+    assert "revoke all on caseproof.s2_008a_source_logical_ids" in SCHEMA
+    assert "grant select" not in SCHEMA.lower()
+    assert "security definer" not in SCHEMA.lower()
+    assert SCHEMA.count("before update or delete") == 6
+    assert "create trigger s2_008a_parent_source_metadata_immutable" in SCHEMA
+    assert "caseproof.document_versions" in SCHEMA
+    assert "create function caseproof._s2_008a_disposable_no_mutation()" in SCHEMA
+
+
+def test_disposable_guard_and_cloud_verification_wiring() -> None:
+    runner = (ROOT / "scripts/verify_s2_008a_database.py").read_text(encoding="utf-8")
+    assert "env = _isolated_postgres_env()" in runner
+    assert "caseproof_s2_ci" in runner[:500]
+    assert "_assert_sql_rejected" in runner
+    assert "s2_008a_src_case_fk" in runner
+    assert "s2_008a_anchor_repr_case_digest_fk" in runner
+    assert "OTHER_AUDIT" in runner
+    assert "get stacked diagnostics actual_constraint = constraint_name" in runner
+    assert "Equal-byte representations must preserve TWO distinct IDs" in runner
+    assert "aborted append transaction" in runner
+    assert "append-only update denied" in runner
+    assert "referenced original source-version metadata update denied" in runner
+    assert "referenced original source-version delete denied" in runner
+    assert "authenticated role cannot read unapproved graph" in runner
+    assert "S2-008a_DISPOSABLE_EVIDENCE_GRAPH_CONTRACT_PASSED" in runner
+    workflow = (ROOT / ".github/workflows/kernel-boundary.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "uv run --locked python -m scripts.verify_s2_008a_database" in workflow
+    assert "CASEPROOF_DEV_AUTH" not in workflow
+
+
+def test_no_installed_migration_or_prod_route() -> None:
+    assert len(list((ROOT / "supabase/migrations").glob("*.sql"))) == 1
+    assert "S2-008a_disposable_representation_anchor_graph.sql" not in (
+        ROOT / "apps/api/main.py"
+    ).read_text(encoding="utf-8")
+    assert not (ROOT / "apps/api/evidence_write_service.py").exists()
