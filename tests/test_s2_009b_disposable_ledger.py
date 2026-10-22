@@ -1,0 +1,80 @@
+"""S2-009b reference-only PostgreSQL ledger contract guards."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from scripts.verify_s2_009b_database import (
+    OBJECT_KEY,
+    SQL,
+    call,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_sql_is_disposable_and_enforces_scoped_source_identity() -> None:
+    assert "NEVER apply to Supabase" in SQL
+    assert "create table caseproof._s2_009b_vault_intents" in SQL
+    assert "create table caseproof._s2_009b_availability_events" in SQL
+    assert "foreign key (org_id, case_id, document_id)" in SQL
+    assert "foreign key (org_id, document_id, document_version_id, sha256_hex)" in SQL
+    assert "references caseproof.document_versions(" in SQL
+    assert "unique (object_key)" in SQL
+    assert "check (state in ('pending','verified','unavailable'))" in SQL
+    assert "before update or delete" in SQL
+
+
+def test_atomic_audit_idempotency_and_rollback_faults_remain_required() -> None:
+    assert "security invoker" in SQL.lower()
+    assert "set search_path=pg_catalog,pg_temp" in SQL
+    assert "for update of m" in SQL
+    assert "for update;" in SQL
+    assert "case_revision=c.case_revision+1" in SQL
+    assert "insert into caseproof.audit_events" in SQL
+    assert "insert into caseproof.idempotency_records" in SQL
+    assert "insert into caseproof._s2_009b_availability_events" in SQL
+    assert "p_fault='audit'" in SQL
+    assert "p_fault='receipt'" in SQL
+    assert "p_fault='availability'" in SQL
+    assert "stored receipt inconsistent with durable event" in SQL
+    assert "invalid randomized object key format" in SQL
+    assert SQL.count("enable row level security") == 2
+    assert "from public,anon,authenticated" in SQL
+    assert "grant execute" not in SQL.lower()
+    assert "security definer" not in SQL.lower()
+
+
+def test_only_synthetic_fixed_values_can_enter_psql_fixture() -> None:
+    query = call("stage")
+    assert "caseproof._s2_009b_disposable_command" in query
+    assert "s2_009b_vault_" not in query  # operation determined only server-side
+    assert OBJECT_KEY in query
+    for invalid in (
+        "invalid'; DROP TABLE caseproof.cases;--",
+        "unsafe key",
+        "bad/path",
+    ):
+        with pytest.raises(ValueError):
+            call("stage", key=invalid)
+    with pytest.raises(ValueError):
+        call("not-an-operation")
+    with pytest.raises(ValueError):
+        call("stage", intent="not-a-uuid")
+
+
+def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
+    workflow = (ROOT / ".github/workflows/kernel-boundary.yml").read_text(encoding="utf-8")
+    assert "uv run --locked python -m scripts.verify_s2_009b_database" in workflow
+    assert "CASEPROOF_DISPOSABLE_DB: \"YES\"" in workflow
+    assert "postgres:17" in workflow
+    runner = (ROOT / "scripts/verify_s2_009b_database.py").read_text(encoding="utf-8")
+    assert "env = _isolated_postgres_env()" in runner
+    for gate in ("AUDIT_STAGE", "RECEIPT_STAGE", "VERIFICATION_FAILURE_ROLLBACK",
+                 "UNAVAILABLE_FAILURE_ROLLBACK", "FORGED_RECEIPT"):
+        assert gate in runner
+    assert len(list((ROOT / "supabase/migrations").glob("*.sql"))) == 1
+    assert not (ROOT / "apps/api/vault_repository.py").exists()
+    assert "evidence_vault_protocol" not in (ROOT / "apps/api/main.py").read_text()
