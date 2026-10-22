@@ -49,6 +49,60 @@ insert into caseproof.document_versions(
  ('bbbbbbbb-6666-4666-8666-666666666666','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   'bbbbbbbb-4444-4444-8444-444444444444',1,repeat('b',64),12,'text/plain');
 
+-- Audit actors must be a member of the SAME org as the recorded case.
+-- A human linked only to tenant B cannot be attributed to tenant A.
+do $audit_actor_fk$
+begin
+ begin
+   insert into caseproof.audit_events (
+      org_id, case_id, actor_type, actor_user_id, action,
+      event_schema_version, correlation_id, input_sha256_hex
+   ) values (
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'aaaaaaaa-1111-4111-8111-111111111111',
+      'human', '22222222-2222-4222-8222-222222222222',
+      'forged-foreign-actor', 'test-v1', gen_random_uuid(), repeat('a',64)
+   );
+   raise exception 'cross-tenant audit actor unexpectedly accepted';
+ exception
+   when foreign_key_violation then null;
+ end;
+ begin
+   insert into caseproof.audit_events (
+      org_id, case_id, actor_type, actor_user_id, action,
+      event_schema_version, correlation_id, input_sha256_hex
+   ) values (
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'aaaaaaaa-1111-4111-8111-111111111111',
+      'service', '11111111-1111-4111-8111-111111111111',
+      'service-impersonating-human', 'test-v1', gen_random_uuid(), repeat('a',64)
+   );
+   raise exception 'service audit event with human actor unexpectedly accepted';
+ exception
+   when check_violation then null;
+ end;
+ -- A correctly scoped human actor and a service event WITHOUT a human
+ -- subject are accepted by the schema (both vanish on rollback).
+ insert into caseproof.audit_events (
+    org_id, case_id, actor_type, actor_user_id, action,
+    event_schema_version, correlation_id, input_sha256_hex
+ ) values (
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'aaaaaaaa-1111-4111-8111-111111111111',
+    'human', '11111111-1111-4111-8111-111111111111',
+    'valid-tenant-actor', 'test-v1', gen_random_uuid(), repeat('a',64)
+ );
+ insert into caseproof.audit_events (
+    org_id, case_id, actor_type, actor_user_id, action,
+    event_schema_version, correlation_id, input_sha256_hex
+ ) values (
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'aaaaaaaa-1111-4111-8111-111111111111',
+    'service', null,
+    'valid-service-actor', 'test-v1', gen_random_uuid(), repeat('a',64)
+ );
+end $audit_actor_fk$;
+
 -- Confirm all seven application tables enforce RLS.
 do $audit$
 declare rls_count integer;

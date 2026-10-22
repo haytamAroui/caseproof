@@ -86,7 +86,12 @@ create table caseproof.audit_events (
     occurred_at timestamptz not null default now(),
     unique (org_id, case_id, id),
     foreign key (org_id, case_id) references caseproof.cases(org_id, id),
-    check ((actor_type = 'human' and actor_user_id is not null) or actor_type = 'service')
+    foreign key (org_id, actor_user_id)
+        references caseproof.organization_members(org_id, user_id),
+    check (
+        (actor_type = 'human' and actor_user_id is not null)
+        or (actor_type = 'service' and actor_user_id is null)
+    )
 );
 
 create table caseproof.idempotency_records (
