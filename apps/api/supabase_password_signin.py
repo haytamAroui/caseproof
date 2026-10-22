@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from apps.api.access_control import IdentityServiceUnavailable, InvalidBearer
-from apps.api.supabase_auth_verifier import MAX_RESPONSE_BYTES, PROJECT_REF
+from apps.api.supabase_auth_verifier import MAX_RESPONSE_BYTES, PROJECT_REF, PUBLISHABLE_KEY
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,8 +53,10 @@ class SupabasePasswordSignin:
     def __post_init__(self) -> None:
         if not PROJECT_REF.fullmatch(self.project_ref):
             raise ValueError("Exact trusted Supabase project reference required")
-        if not isinstance(self.publishable_key, str) or not self.publishable_key.strip():
-            raise ValueError("Publishable key required (never secret/service_role)")
+        if not isinstance(self.publishable_key, str) or not PUBLISHABLE_KEY.fullmatch(
+            self.publishable_key
+        ):
+            raise ValueError("Only a Supabase sb_publishable_ key is allowed")
         if not 0.1 <= self.timeout_seconds <= 30.0:
             raise ValueError("Invalid HTTPS timeout")
 
