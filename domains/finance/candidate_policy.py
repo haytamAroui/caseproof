@@ -33,7 +33,10 @@ def _supported_net(amount: object) -> bool:
     if not isinstance(amount, Decimal) or not amount.is_finite() or amount < 0:
         return False
     integral_digits = max(1, amount.adjusted() + 1) if amount != 0 else 1
-    fractional_digits = max(0, -amount.as_tuple().exponent)
+    exponent = amount.as_tuple().exponent
+    if not isinstance(exponent, int):
+        return False
+    fractional_digits = max(0, -exponent)
     return (
         integral_digits <= MAX_NET_INTEGRAL_DIGITS
         and fractional_digits <= MAX_NET_FRACTIONAL_DIGITS
