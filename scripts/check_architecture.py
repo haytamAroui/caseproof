@@ -4,9 +4,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RULES = {
-    "packages/evidence_kernel": {"domains", "apps", "fastapi", "supabase", "redis", "sqlalchemy", "openai", "anthropic"},
-    "domains/finance": {"apps", "domains.disputes", "fastapi", "supabase", "redis", "sqlalchemy", "openai", "anthropic"},
-    "domains/disputes": {"apps", "domains.finance", "fastapi", "supabase", "redis", "sqlalchemy", "openai", "anthropic"},
+    "packages/evidence_kernel": {"domains", "apps", "application", "infrastructure", "fastapi", "supabase", "redis", "sqlalchemy", "openai", "anthropic"},
+    "domains/finance": {"apps", "application", "infrastructure", "domains.disputes", "fastapi", "supabase", "redis", "sqlalchemy", "openai", "anthropic"},
+    "domains/disputes": {"apps", "application", "infrastructure", "domains.finance", "fastapi", "supabase", "redis", "sqlalchemy", "openai", "anthropic"},
+    # The application layer owns use-case coordination and abstract ports.
+    # It must not import concrete delivery frameworks or infrastructure.
+    "application": {"apps", "infrastructure", "fastapi", "supabase", "redis", "sqlalchemy", "openai", "anthropic"},
 }
 errors = []
 
