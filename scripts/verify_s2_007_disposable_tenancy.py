@@ -107,6 +107,7 @@ commit;
 def _session_sql(
     alias: str, own_case: str, other_case: str, *,
     expected_own: int = 1,
+    expected_other: int = 0,
     claim: bool = True,
 ) -> str:
     subject = str(_as_uuid(alias))
@@ -126,7 +127,7 @@ do $probe$
 begin
  {assign}
  if (select count(*) from caseproof.cases where id='{own}') <> {expected_own}
-    or (select count(*) from caseproof.cases where id='{other}') <> 0
+    or (select count(*) from caseproof.cases where id='{other}') <> {expected_other}
     or (select count(*) from caseproof.documents where case_id='{own}')
         <> {expected_inventory}
     or (select count(*) from caseproof.document_versions where
@@ -185,8 +186,8 @@ def check_disposable_rls(
 
     # No claim, bad claim and wrong-tenant case do not expose any case.
     _run(_session_sql(a, CASE_A, CASE_B, expected_own=0, claim=False), env)
-    _run(_session_sql(a, CASE_B, CASE_A, expected_own=0), env)
-    _run(_session_sql(b, CASE_A, CASE_B, expected_own=0), env)
+    _run(_session_sql(a, CASE_B, CASE_A, expected_own=0, expected_other=1), env)
+    _run(_session_sql(b, CASE_A, CASE_B, expected_own=0, expected_other=1), env)
     _run(_no_claim_after_rollback(a, CASE_A), env)
 
     # Revocation persists. A can no longer read its own earlier document,
