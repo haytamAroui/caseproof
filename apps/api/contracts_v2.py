@@ -87,7 +87,7 @@ class SheetRangeLocator(StrictContract):
     kind: Literal["sheet_range"]
     sheet_id: Identifier
     a1_range: Annotated[str, Field(min_length=2, max_length=64)]
-    table_id: Identifier | None
+    table_id: Identifier | None = None
     basis: Literal["spreadsheet_a1_sheet_id"]
 
     @model_validator(mode="after")
@@ -99,7 +99,7 @@ class SheetRangeLocator(StrictContract):
 class StructuredFieldLocator(StrictContract):
     kind: Literal["structured_field"]
     schema_id: Identifier
-    path: Annotated[list[str | int], Field(min_length=1)]
+    path: Annotated[list[str | int], Field(min_length=1, max_length=128)]
     basis: Literal["json_path_v1"]
 
     @model_validator(mode="after")
@@ -107,10 +107,13 @@ class StructuredFieldLocator(StrictContract):
         if any(
             type(value) is bool
             or (type(value) is int and value < 0)
-            or (type(value) is str and not value)
+            or (type(value) is str and (not value.strip() or len(value) > 256))
             for value in self.path
         ):
-            raise ValueError("structured path must contain nonempty keys or nonnegative indices")
+            raise ValueError("structured path must contain bounded nonblank keys or nonnegative indices")
+        # The executable boundary must reject exactly the same unencodable
+        # inputs that the persistent KRN-102 codec would reject.
+        encode_locator(StructuredField(self.schema_id, tuple(self.path)))
         return self
 
 
