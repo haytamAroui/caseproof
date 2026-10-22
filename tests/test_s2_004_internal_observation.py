@@ -1,0 +1,129 @@
+"""S2-004 non-approval fingerprint tests; PostgreSQL integration lives in CI.
+
+No test in this module authenticates a user or proves durable execution.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import replace
+from pathlib import Path
+from uuid import UUID
+
+import pytest
+
+from apps.api.internal_observation_contract import (
+    InternalObservation,
+    semantic_input_sha256,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+SQL = (ROOT / "db/proposals/S2-004_disposable_observation.sql").read_text(
+    encoding="utf-8"
+)
+A = UUID("11111111-1111-4111-8111-111111111111")
+B = UUID("22222222-2222-4222-8222-222222222222")
+CASE = UUID("aaaaaaaa-1111-4111-8111-111111111111")
+
+
+def command() -> InternalObservation:
+    return InternalObservation(
+        case_id=CASE,
+        expected_case_revision=2,
+        expected_scope_version=1,
+        expected_manifest_revision=1,
+        expected_policy_version="test-v1",
+        idempotency_key="review-note-request-A",
+        observation_sha256="a" * 64,
+    )
+
+
+def test_fingerprint_is_deterministic_replayable_and_actor_scoped() -> None:
+    c = command()
+    first = semantic_input_sha256(A, c)
+    assert first == semantic_input_sha256(A, c)
+    assert re.fullmatch(r"[0-9a-f]{64}", first)
+    assert first != semantic_input_sha256(B, c)
+    assert first != semantic_input_sha256(A, replace(c, observation_sha256="b" * 64))
+    assert first != semantic_input_sha256(A, replace(c, idempotency_key="other"))
+    assert first != semantic_input_sha256(A, replace(c, expected_case_revision=3))
+    assert first != semantic_input_sha256(A, replace(c, expected_scope_version=2))
+    assert first != semantic_input_sha256(A, replace(c, expected_manifest_revision=2))
+    assert first != semantic_input_sha256(A, replace(c, expected_policy_version="test-v2"))
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("case_id", UUID(int=0)),
+    ("case_id", "not-a-uuid"),
+    ("expected_case_revision", 0),
+    ("expected_case_revision", True),
+    ("expected_scope_version", -1),
+    ("expected_manifest_revision", 1.0),
+    ("expected_policy_version", ""),
+    ("expected_policy_version", " " * 3),
+    ("expected_policy_version", "x" * 129),
+    ("idempotency_key", ""),
+    ("idempotency_key", " leading-space"),
+    ("idempotency_key", "x" * 129),
+    ("observation_sha256", "G" * 64),
+    ("observation_sha256", "a" * 63),
+])
+def test_untrusted_invalid_semantic_inputs_are_rejected(
+    field: str, value: object
+) -> None:
+    with pytest.raises(ValueError):
+        replace(command(), **{field: value})
+
+
+def test_non_uuid_subject_and_non_strict_command_fail() -> None:
+    with pytest.raises(ValueError):
+        semantic_input_sha256(UUID(int=0), command())
+    with pytest.raises(ValueError):
+        semantic_input_sha256("unverified user", command())  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        semantic_input_sha256(A, {})  # type: ignore[arg-type]
+
+
+def test_sql_is_disposable_only_non_approval_without_runtime_grants() -> None:
+    assert "create function caseproof._s2_004_disposable_observation" in SQL.lower()
+    assert "security invoker" in SQL.lower()
+    assert "security definer" not in SQL.lower()
+    assert "revoke all on function" in SQL.lower()
+    assert "from public, anon, authenticated;" in SQL.lower()
+    assert "grant execute" not in SQL.lower()
+    assert "set search_path = pg_catalog, pg_temp" in SQL.lower()
+    assert "for update of m" in SQL.lower()
+    assert "for update;" in SQL.lower()
+    assert "case_revision = c.case_revision + 1" in SQL
+    assert "input_sha256_hex" in SQL
+    assert "caseproof.idempotency_records" in SQL
+    assert "caseproof.audit_events" in SQL
+    assert "audit" in SQL and "receipt" in SQL
+    assert "set state=" not in SQL.lower()
+    assert "approved_conclusion" not in re.sub(r"--[^\n]*", "", SQL.lower())
+
+
+def test_no_new_live_route_or_staged_migration() -> None:
+    app = (ROOT / "apps/api/main.py").read_text(encoding="utf-8")
+    assert "/v2/" not in app
+    assert "internal_observation_contract" not in app
+    assert "S2-004_disposable_observation.sql" not in (
+        ROOT / "scripts/verify_s2_002_database.py"
+    ).read_text(encoding="utf-8")
+    assert len(list((ROOT / "supabase/migrations").glob("*.sql"))) == 1
+
+
+def test_ci_runs_real_disposable_postgres_function_proof() -> None:
+    workflow = (ROOT / ".github/workflows/kernel-boundary.yml").read_text(
+        encoding="utf-8"
+    )
+    harness = (ROOT / "scripts/verify_s2_004_database.py").read_text(
+        encoding="utf-8"
+    )
+    assert "scripts/verify_s2_004_database.py" in workflow
+    assert "CASEPROOF_DISPOSABLE_DB" in harness
+    assert "S2-004_DISPOSABLE_ATOMIC_OBSERVATION_PASSED" in harness
+    assert "subprocess.Popen(" in harness
+    assert "AUDIT_FAILURE" in harness
+    assert "RECEIPT_FAILURE" in harness
+    assert "CONCURRENT_REPLAY" in harness
