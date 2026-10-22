@@ -25,6 +25,7 @@ VERSION = "aaaaaaaa-5555-4555-8555-555555555555"
 REP1 = "aaaaaaaa-9001-4001-8001-aaaaaaaaaaaa"
 REP2 = "aaaaaaaa-9002-4002-8002-aaaaaaaaaaaa"
 ANCHOR = "aaaaaaaa-a001-4a01-8a01-aaaaaaaaaaaa"
+OTHER_AUDIT = "aaaaaaaa-7888-4888-8888-aaaaaaaaaaaa"
 AUDITS = [
     f"aaaaaaaa-7{i:03d}-4{i:03d}-8{i:03d}-aaaaaaaaaaaa"
     for i in range(1, 9)
@@ -38,6 +39,31 @@ def _audit(i: int) -> str:
 def _assert_sql_rejected(env: dict[str, str], sql: str, context: str) -> None:
     _run(sql, env, should_pass=False)
     print(f"S2-008a {context}: PASS")
+
+
+def _assert_named_fk_rejected(
+    env: dict[str, str], statement: str, expected_constraint: str,
+) -> None:
+    """The expected ancestry FK must fail, not an unrelated audit FK."""
+    if not expected_constraint.startswith("s2_008a_"):
+        raise ValueError("Unexpected fixture FK")
+    command = f"""
+do $named_fk$
+declare actual_constraint text;
+begin
+  begin
+    {statement}
+    raise exception 'forged insert unexpectedly succeeded' using errcode='P0001';
+  exception when foreign_key_violation then
+    get stacked diagnostics actual_constraint = constraint_name;
+    if actual_constraint is distinct from '{expected_constraint}' then
+      raise exception 'wrong FK constraint rejected cross-case insert';
+    end if;
+  end;
+end $named_fk$;
+"""
+    _run(command, env)
+    print(f"S2-008a verified named {expected_constraint}: PASS")
 
 
 def main() -> None:
@@ -127,11 +153,19 @@ commit;
         "insert into caseproof.cases(id,org_id,created_by_user,effective_policy_version) "
         f"values('{OTHER_CASE}','{ORG}','{ACTOR}','test-v1')", env,
     )
-    _assert_sql_rejected(env, f"""
+    _run(
+        "insert into caseproof.audit_events("
+        "id,org_id,case_id,actor_type,actor_user_id,action,"
+        "event_schema_version,correlation_id,input_sha256_hex) "
+        f"values ('{OTHER_AUDIT}','{ORG}','{OTHER_CASE}',"
+        f"'human','{ACTOR}','other-case-fixture-audit','test-v1',"
+        "gen_random_uuid(),repeat('e',64));", env,
+    )
+    _assert_named_fk_rejected(env, f"""
 insert into caseproof.s2_008a_source_logical_ids(
  org_id,case_id,document_pk,kernel_document_id,audit_event_id
-) values ('{ORG}','{OTHER_CASE}','{DOC}','forged-cross-case','{_audit(1)}');
-""", "same-tenant cross-case composite FK")
+) values ('{ORG}','{OTHER_CASE}','{DOC}','forged-cross-case','{OTHER_AUDIT}');
+""", "s2_008a_src_case_fk")
     _assert_sql_rejected(env, f"""
 insert into caseproof.s2_008a_representations(
  representation_pk,org_id,case_id,document_pk,version_pk,kernel_version_id,
@@ -143,14 +177,14 @@ insert into caseproof.s2_008a_representations(
  'invalid-source-hash',repeat('b',64),repeat('c',64),'text/plain',
  'test-parser','3',repeat('f',64),'unicode_codepoint_zero_based_half_open','{_audit(8)}');
 """, "stale original-byte fingerprint FK")
-    _assert_sql_rejected(env, f"""
+    _assert_named_fk_rejected(env, f"""
 insert into caseproof.s2_008a_anchors(
  anchor_pk,org_id,case_id,kernel_anchor_id,document_pk,version_pk,representation_pk,
  source_sha256_hex,representation_sha256_hex,locator_kind,locator_schema_version,locator,audit_event_id
 ) values (
  gen_random_uuid(),'{ORG}','{OTHER_CASE}','forged','{DOC}','{VERSION}','{REP1}',
- repeat('a',64),repeat('c',64),'text_span','krn102-locator-v1','{{}}'::jsonb,'{_audit(8)}');
-""", "foreign case anchor denied")
+ repeat('a',64),repeat('c',64),'text_span','krn102-locator-v1','{{}}'::jsonb,'{OTHER_AUDIT}');
+""", "s2_008a_anchor_repr_case_digest_fk")
 
     # The external object store and exact bytes are NOT yet present. Prove
     # that metadata row insert has mandatory audit relationship and that
@@ -182,6 +216,27 @@ insert into caseproof.s2_008a_anchors(
  repeat('a',64),repeat('c',64),'text_span','krn102-locator-v1','{{}}'::jsonb,
  'aaaaaaaa-7998-4998-8998-aaaaaaaaaaaa');
 """, "missing trusted audit FK")
+    # Immutable graph ancestry includes the pre-existing source-version
+    # metadata, not just its byte digest. Mutation of non-FK columns must fail.
+    for assignment in (
+        "media_type='application/pdf'",
+        "byte_length=byte_length+1",
+        "parser_version='rewritten-parser'",
+        "version_number=version_number+10",
+        "ingested_at=ingested_at + interval '1 day'",
+    ):
+        _assert_sql_rejected(
+            env,
+            "update caseproof.document_versions set " + assignment
+            + f" where id='{VERSION}';",
+            "referenced original source-version metadata update denied",
+        )
+    _assert_sql_rejected(
+        env,
+        f"delete from caseproof.document_versions where id='{VERSION}';",
+        "referenced original source-version delete denied",
+    )
+
     _assert_sql_rejected(
         env,
         "update caseproof.s2_008a_representations set kernel_representation_id='mutated' "
