@@ -55,6 +55,9 @@ class TextSpanLocator(StrictContract):
     def verify_bounds(self) -> TextSpanLocator:
         if self.end <= self.start:
             raise ValueError("text span must be nonempty and half-open")
+        # A valid kernel TextSpan can still exceed the persistent codec's
+        # bounded JSON envelope. Reject it at the API boundary, not later.
+        encode_locator(TextSpan(self.start, self.end, self.encoding, self.normalization))
         return self
 
 
