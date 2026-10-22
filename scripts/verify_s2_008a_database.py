@@ -55,7 +55,7 @@ def main() -> None:
     audit_values = ",".join(
         "("
         + f"'{event}','{ORG}','{CASE}','human','{ACTOR}',"
-        + f"'s2_008a_test_append','s2-008a-fixture-v1',gen_random_uuid(),repeat('a',64)"
+        + "'s2_008a_test_append','s2-008a-fixture-v1',gen_random_uuid(),repeat('a',64)"
         + ")"
         for event in AUDITS
     )
