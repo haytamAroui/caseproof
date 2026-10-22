@@ -8,7 +8,7 @@
 - **Not yet implemented:** live signed Auth→DB role, complete durable graph, private object Storage, real human review approvals, durable workers, customer-facing invoice/PO intake/UI/export.
 - **Security blocker:** issue [#5](https://github.com/haytamAroui/caseproof/issues/5). Positive CI and forbidden-import negative control are proven; owner-controlled merge protection is unverified. Do not equate green tests with a protected branch.
 - **Next bounded work:** owner verifies protection, then genuine Auth tenant DB runtime and real private Vault integration toward first working finance case.
-- **Historical open PRs:** #2 old memory proposal; #7 old Stage 1 docs; #4 deliberate forbidden import DO NOT MERGE. Read live PR state, not this list.
+- **Historical PR cleanup (2026-10-22):** #2 old memory, #7 superseded Stage 1 docs and #4 deliberate forbidden import are **closed unmerged**. #4 test run is preserved as negative-control evidence. [PR #36](https://github.com/haytamAroui/caseproof/pull/36) proposes this handoff/status reconciliation and is not merged as of this snapshot.
 - **Never:** commit tokens, real customer documents, signed URLs, private user IDs or misleading approval claims to memory.
 
 For code changes, preserve repo constitution/standards and record exact feature branch, CI link, review findings, rejected attacks and remaining release gates. This index does not add a mandatory global JSONL/change-log gate.
