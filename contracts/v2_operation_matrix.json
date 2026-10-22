@@ -67,7 +67,8 @@
       "request": null,
       "response": "CoverageResponse",
       "permissions": [
-        "case:read"
+        "case:read",
+        "coverage:read"
       ],
       "errors": [
         401,
