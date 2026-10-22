@@ -1,6 +1,6 @@
 # ExceptionDesk — execution roadmap (finance first)
 
-**Product:** one Belgium-first B2B finance operations platform. **Launch workflow:** supplier invoice versus purchase order mismatch. **Second workflow:** CaseProof dispute dossiers after finance validation. Historical CaseProof-only roadmap is superseded by this file; historical ADRs remain reference.
+**Current status:** Stage 1 reference kernel merged; Stage 2 disposable integration proofs merged through PR #35, but no production-ready customer workflow. Consult [verified status](STATUS.md) before using this roadmap. **Product:** one Belgium-first B2B finance operations platform. **Launch workflow:** supplier invoice versus purchase order mismatch. **Second workflow:** CaseProof dispute dossiers after finance validation. Historical CaseProof-only roadmap is superseded by this file; historical ADRs remain reference.
 
 | ID | Priority | Work | Acceptance |
 |---|---|---|---|
@@ -20,7 +20,7 @@ Interview 8–12 Belgian accounts-payable/finance operations buyers. Determine i
 Executable tests and reproducible results, source traceability, tenant isolation before production, human decisions audited, no fabricated legal/financial conclusions, no autonomous external actions.
 
 ## Stage gates — v3 trust-contract amendment (proposed; finance-first remains authoritative)
-- **Stage 0 — Foundation:** reference implementation exists, but merge authorization is blocked until a genuine CI run passes, the deliberately forbidden-import negative-control PR fails for the intended reason, and owner-controlled merge protection is enabled (CONSTITUTION C25). Verification debt is not merge permission.
+- **Stage 0 — Foundation:** Python modular reference and CI exist. Positive runs on `main` and forbidden-import negative control PR #4 were **actually verified** by 2026-10-22. Owner-controlled branch protection remains **unverified** (issue #5); CI passing is not permission to bypass CONSTITUTION C13/C25.
 - **Stage 1 — Evidence integrity:** KRN-101 immutable passage/version model; KRN-102 typed anchors; KRN-103 citation resolution vs quote/value fidelity; KRN-104 finding-to-evidence support links; KRN-105 promotion gate; KRN-106 issue/source coverage ledger; KRN-107 provenance integration; KRN-108 adversarial tests; KRN-109 versioned API contracts. Stage 1 reference implementation is in-memory, not durable.
 - **Stage 2 — Durable infrastructure:** tenant-scoped persistence, atomic state+audit, object storage, idempotency, crash recovery and authorization.
 - **Stage 3 — Sellable invoice/PO exception workflow:** PDF/UBL intake, typed extraction, deterministic Decimal reconciliation, source viewer, contradiction queue, human review and export. Deliver a usable deterministic pilot without agents.
@@ -28,24 +28,30 @@ Executable tests and reproducible results, source traceability, tenant isolation
 - **Stage 5 — Evaluation and paid pilot:** independent kernel invariant suite, finance golden corpus, agent comparative benchmark if adopted, security and customer outcome gates. Invariant tests begin in Stage 1, not Stage 5.
 - **Stage 6 — Conditional expansion:** dispute dossiers and sector packs after validated customer demand; independent kernel packaging after two consumers.
 
-### Stage 2 — native implementation slices (proposed, 2026-10-22)
+### Stage 2 — merged reference slices and remaining integration (verified 2026-10-22)
 
 **Design reference:** [ADR 0010](adr/0010-stage2-native-durability.md). The purpose is to preserve KRN-101–109's trust contracts in a **new, independent CaseProof implementation**, learning from earlier engineering experience without copying external product code, database schemas, roles or runtime dependencies.
 
-| Slice | Actual status on `main` | Exit/gate |
+| Slice | Verified state on `main` | Production exit / remaining gate |
 |---|---|---|
-| S2-001 identity/case access | Merged deny-by-default application boundary | No fake verifier wired to customer-facing routes |
-| S2-002/002A and migration reconciliation | Canonical seven-table dev schema installed; CI RLS, CAS, audit rollback tests use synthetic identities | No claim of genuine remote signed-identity tenancy from synthetic claims |
-| S2-003 auth verifier | Merged independent Supabase /user verifier | No human-reviewer assurance from password login alone |
-| S2-005 read-only case repository | Merged; not connected to a live app DB pool | Real runtime-role tenancy and 404/503 masking still required |
-| S2-006 genuine auth probe | Merged manual-only workflow; requires real test accounts and restricted environment secrets | Successful signed A/B login, remote JWT validation and tamper rejection must be observed before claimed |
-| **S2-004 atomic state+audit+idempotency** | **New [implementation specification](tasks/S2-004.md); no writer or route yet** | Real disposable PostgreSQL transaction, current-membership recheck, audit/receipt rollback, concurrent CAS, safe idempotent replay and reviewer-authority denial |
-| **S2-007 real Auth/tenant runtime integration** | **Proposed only** | Real signed sessions, two real organizations/memberships, reviewed least-privilege DB connection, revocation, denial of cross-tenant case/source reads and no session bleed |
-| **S2-008 durable evidence graph** | **Proposed only** | Persist immutable source representations, finding/link revisions, semantic assessment proposals, coverage/policy manifests and provenance; reject stale/foreign pointers |
-| **S2-009 private Evidence Vault** | **Proposed only** | Tenant-scoped quarantine/storage, verified SHA/bytes, trusted parser representations, signed URL access, pending/orphan recovery and privacy controls |
-| **S2-010 durable worker/recovery** | **Proposed only** | Lease/heartbeat, immutable step input and output, replay reconciliation, outbox/idempotency, crash/restart negative tests and safe unknown external outcomes |
+| S2-001 identity/case access | Merged deny-by-default boundary | No spoofable client tenant header as authority |
+| S2-002/002A foundational migration | Canonical seven-table `caseproof` development Supabase schema installed; disposable PG17 RLS/CAS/rollback CI | Genuine tenant identity and least-privilege deployed roles |
+| S2-003 Auth verifier | Merged independently checked Supabase `/user` verifier | Real signed-user and session-revocation proof; not automatically human approval |
+| S2-005 case reader | Merged read-only repository adapter, unwired to live pool | Authorized real DB connection, tenant and same-org case isolation |
+| S2-006 signed Auth probe | Merged manual-only authentic session verification tool | Two genuine development accounts, protected environment secrets and successful run |
+| S2-004 / PR #28 | **Merged disposable PostgreSQL** atomic observation/audit/idempotency proof | Real review-command writer, case/evidence heads and human authorization, `/v2` routes |
+| S2-007 / PR #29 | **Merged** synthetic PostgreSQL tenant-denial suite and protected manual genuine-Auth workflow | Real signed Auth→least-privilege runtime DB identity; A/B and revocation/pool proof |
+| S2-008 / PRs #30–33 | **Merged** graph design, **disposable** representation/anchor SQL, typed codec, read-only scoped JSONB reconstruction | Canonical graph migration; finding/link/assessment/coverage persistence, real object provenance and current-head gate |
+| S2-009a / PR #34 | **Merged** in-memory private Vault protocol: stable intents, put-once, SHA readback and unknown-commit reconciliation | Actual object store/scan/version identity and deployed authorized ledger |
+| S2-009b / PR #35 | **Merged disposable PostgreSQL** audited staged/verified/unavailable ledger with atomic CAS, idempotency and concurrent replay | Install reviewed migration, real Supabase private Storage, trusted byte proof and availability-head invalidation |
+| S2-010 | **Not implemented** | Persistent lease/worker restart, outbox replay, crash/timeout negatives and safe unknown outcomes |
 
-S2-004 can be implemented and tested as a **production-disabled internal primitive** against disposable DB fixtures while S2-007/008/009 are designed. A **real authorized promotion/approval API** depends on their integration plus trusted human attestation, aligned action permissions and effective-policy resolution. No `/v2` customer route is authorized by a green unit test or by creation of these docs.
+S2-004 **has been implemented as a production-disabled reference** with disposable DB tests. S2-007/008/009 references have also been implemented in development form; they are not a connected, authenticated customer workflow. A **real authorized promotion/approval API** depends on their integration plus trusted human attestation, aligned action permissions and effective-policy resolution. No `/v2` customer route is authorized by a green unit test or by creation of these docs.
+
+
+**Open repository administration gate:** [issue #5](https://github.com/haytamAroui/caseproof/issues/5). As of this audit, actual main-branch CI green, intentional architecture negative-control fail demonstrated, but owner-controlled merge protections **not verified**. Never merge negative-control PR #4. [`docs/STATUS.md`](STATUS.md) tracks actual evidence and release blockers.
+
+**Priority before more kernel prototypes:** [real signed Auth→tenant DB least privilege](https://github.com/haytamAroui/caseproof/issues/37); [real private stored source bytes and reviewed ledger](https://github.com/haytamAroui/caseproof/issues/38); [persisted evidence/coverage and human decisions](https://github.com/haytamAroui/caseproof/issues/39); then [a working invoice/PO discrepancy user journey](https://github.com/haytamAroui/caseproof/issues/40), not open-ended agent framework construction.
 
 **Stage 2 release gate:** real cryptographic Auth and runtime DB isolation; fine-grained kernel evidence persisted without lossy flattening; verified private original bytes and immutable parser lineage; authorization, snapshot and state+audit+receipt committed atomically; revocation, concurrent retries, audit-failure rollback, signed URL attacks and crash/restart demonstrated using appropriate real integrations. Unknowns remain blockers.
 

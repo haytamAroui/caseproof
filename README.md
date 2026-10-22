@@ -1,27 +1,42 @@
-# ExceptionDesk — Evidence-backed financial exception resolution
+# ExceptionDesk — evidence-backed invoice/PO exception resolution
 
-**Status:** initial runnable Python domain slice; not production-ready. Existing GitHub repository remains `caseproof` until a separately approved rename.
+**Repository:** `caseproof`. **Status:** engineering reference and Stage 2 development infrastructure; **not yet a production-ready or end-to-end sellable application**. See [verified status and blockers](docs/STATUS.md) and [execution roadmap](docs/ROADMAP.md).
 
-ExceptionDesk is one Belgian-first B2B finance operations product with two connected workflows:
-1. **Finance (first):** supplier invoice versus purchase order discrepancies, reviewer resolution and evidence-backed records.
-2. **Disputes (later):** CaseProof factual chronology and professional dispute dossiers, reusing the same evidence references.
+## Product
 
-The reusable **evidence kernel** owns provenance, source verification, immutable claims and review records. Finance owns amounts, matching, VAT treatment, tolerances and financial findings. Disputes owns chronology and dossier policy. A source quote is **not** proof of real-world truth.
+ExceptionDesk targets Belgian B2B finance operations, initially **supplier invoice versus purchase-order discrepancies**. A later CaseProof factual dispute-dossier workflow may reuse its sector-neutral Evidence Kernel after the finance use case is validated. AZComply is independent.
 
-## First runnable slice
-Requires Python 3.11+. No database, cloud account, LLM or customer data is required for the deterministic first tests.
+The product's desired outcome is a trusted, human-reviewed resolution package, not generic legal AI chat. A correct quotation from a document is **not** proof of document authenticity or factual truth.
+
+## What runs today
+
+- Pure Python `packages/evidence_kernel` reference contracts (KRN-101–109): immutable sources/representations, typed anchors, fidelity vs semantic support, coverage and gated findings.
+- `domains/finance/reconciliation.py` compares **like-for-like totals** using `Decimal` and emits an unreviewed discrepancy; line items/VAT/fees are not yet implemented.
+- Development-only FastAPI `apps/api/main.py` mounts `/health` and in-memory `/v1/claims`; `X-Tenant-Id` is **caller-controlled** and does not authenticate users. Do not expose this API as a real secure tenant service.
+- Seven-table foundational SQL was installed in a dedicated development Supabase project. **Further evidence/Vault schemas under `db/proposals/` run only on disposable PostgreSQL 17.** They are not installed cloud migrations.
+- Strictly scoped Auth, tenant RLS, atomic audit/idempotency, typed evidence reader, immutable Vault protocol and recovery have automated tests. Genuine signed-user→DB connectivity and real private object Storage are **not** integrated.
+
+## Tests
+
+Prerequisite: Python 3.11+ and the checked-in `uv.lock`.
 
 ```sh
-python -m unittest discover -s tests -v
+uv sync --locked
+uv run --locked pytest -q
+uv run --locked python scripts/check_architecture.py
 ```
 
-See [the architecture](docs/architecture/EXCEPTIONDESK_HEXAGONAL.md), [execution roadmap](docs/ROADMAP.md), and [first task](docs/tasks/EXD-001.md). This is an **initial finance reconciliation kernel**, not an upload-to-PDF MVP.
+Cloud CI also tests disposable PostgreSQL 17 transaction and tenant-isolation invariants; review the actual [GitHub Actions results](https://github.com/haytamAroui/caseproof/actions) for the SHA being assessed.
 
-## Directory ownership
-- `packages/evidence_kernel/`: source/evidence primitives and ports; no finance or dispute imports.
-- `domains/finance/`: money and invoice-to-PO reconciliation.
-- `domains/disputes/`: reserved for the later CaseProof workflow.
-- `apps/api/`, `apps/web/`: planned FastAPI and Next.js adapters; not yet implemented.
-- `tests/`: executable contract and domain tests.
+The root `MEMORY.md` and `docs/STATUS.md` are handoff aids, not trust authorities. `CONSTITUTION.md` and owner-controlled release gates still apply. Real Auth, private Storage, a safe /v2 app and an invoice/PO reviewer journey are outstanding.
 
-AZComply remains an independent product and database. Only port domain-neutral algorithms after review and regression tests. No automatic collection, legal filing or unsupported compliance claim.
+## Source layout
+
+- `packages/evidence_kernel/` — sector-neutral pure domain semantics
+- `domains/finance/` — initial reconciliation domain
+- `apps/api/` — development FastAPI and unmounted Stage 2 ports
+- `db/proposals/` — **disposable, not deployable** verification-only schema contracts
+- `supabase/migrations/` — existing canonical baseline only
+- `docs/tasks/` — staged engineering tasks and design proposals
+
+For the first product milestone, a genuine user must be able to securely upload an invoice and PO, inspect source-backed discrepancies, make an authorized decision and export a reproducible package. **That workflow is not built yet.**
