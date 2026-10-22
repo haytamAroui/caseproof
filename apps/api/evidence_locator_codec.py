@@ -122,6 +122,30 @@ def _parse_json(value: object) -> dict[str, object]:
     return value
 
 
+def _decimal_wire(value: Decimal) -> str:
+    """Bound exponent and significant digits BEFORE fixed-point expansion.
+
+    A valid in-memory Decimal may have a 100-million-digit exponent; formatting
+    it unguarded would allocate huge memory even if the result is rejected.
+    """
+    sign, digits, exponent = value.as_tuple()
+    if not value.is_finite() or sign and value.is_zero():
+        raise StoredLocatorError("unencodable PDF decimal")
+    if type(exponent) is not int or abs(exponent) > 64 or len(digits) > 64:
+        raise StoredLocatorError("PDF decimal exceeds wire precision")
+    integer_digits = max(len(digits) + exponent, 1)
+    fraction_digits = max(-exponent, 0)
+    estimated_length = (
+        integer_digits + fraction_digits + (1 if fraction_digits else 0)
+        + (1 if sign else 0)
+    )
+    if estimated_length > 64:
+        raise StoredLocatorError("PDF decimal exceeds wire length")
+    encoded = format(value, "f")
+    _decimal(encoded, "PDF coordinate")
+    return encoded
+
+
 def encode_locator(locator: Locator) -> tuple[str, str, dict[str, object]]:
     """Canonical JSONB-ready value. Decimals remain strings, never floats."""
     if isinstance(locator, TextSpan):
@@ -134,10 +158,10 @@ def encode_locator(locator: Locator) -> tuple[str, str, dict[str, object]]:
         kind = "pdf_region"
         payload = {
             "page_index": locator.page_index,
-            "x0": format(locator.x0, "f"), "y0": format(locator.y0, "f"),
-            "x1": format(locator.x1, "f"), "y1": format(locator.y1, "f"),
-            "page_width": format(locator.page_width, "f"),
-            "page_height": format(locator.page_height, "f"),
+            "x0": _decimal_wire(locator.x0), "y0": _decimal_wire(locator.y0),
+            "x1": _decimal_wire(locator.x1), "y1": _decimal_wire(locator.y1),
+            "page_width": _decimal_wire(locator.page_width),
+            "page_height": _decimal_wire(locator.page_height),
             "rotation": locator.rotation,
             "coordinate_system": locator.coordinate_system,
         }
@@ -153,6 +177,10 @@ def encode_locator(locator: Locator) -> tuple[str, str, dict[str, object]]:
         payload = {"schema_id": locator.schema_id, "path": list(locator.path)}
     else:
         raise StoredLocatorError("unsupported kernel locator class")
+    # Kernel type validity alone does not guarantee a representable,
+    # round-trippable wire payload. Fail on oversize path, key or JSONB now.
+    if decode_locator(kind, LOCATOR_SCHEMA_VERSION, payload) != locator:
+        raise StoredLocatorError("locator cannot round-trip exactly")
     return kind, LOCATOR_SCHEMA_VERSION, payload
 
 
