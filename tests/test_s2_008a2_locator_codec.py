@@ -125,6 +125,34 @@ def test_invalid_locator_shapes_fail_closed(kind: str, payload: object) -> None:
         decode_locator(kind, LOCATOR_SCHEMA_VERSION, payload)
 
 
+def test_encoder_rejects_kernel_valid_but_nonrepresentable_locators() -> None:
+    # Valid domain locations can still exceed the bounded persistence wire.
+    huge = PdfRegion(
+        page_index=0, x0=Decimal(0), y0=Decimal(0),
+        x1=Decimal("1E+10000000"), y1=Decimal(1),
+        page_width=Decimal("1E+10000000"), page_height=Decimal(10),
+        rotation=0,
+    )
+    with pytest.raises(StoredLocatorError):
+        encode_locator(huge)
+    too_precise = replace(
+        LOCATORS[1], x0=Decimal("1e-64"),
+    )
+    with pytest.raises(StoredLocatorError):
+        encode_locator(too_precise)
+    for invalid in (
+        StructuredField("schema", ("field-" + "x" * 257,)),
+        StructuredField("schema", tuple(range(129))),
+        StructuredField("s" * 257, ("x",)),
+        SheetRange(sheet_id="x" * 257, a1_range="A1"),
+    ):
+        with pytest.raises(StoredLocatorError):
+            encode_locator(invalid)
+    many_large_keys = StructuredField("schema", tuple("x" * 128 + str(i) for i in range(80)))
+    with pytest.raises(StoredLocatorError):
+        encode_locator(many_large_keys)
+
+
 def test_unknown_version_duplicates_and_nonfinite_json_rejected() -> None:
     kind, version, payload = encode_locator(LOCATORS[0])
     with pytest.raises(StoredLocatorError):
