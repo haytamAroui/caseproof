@@ -111,3 +111,21 @@ def test_domain_uses_fully_independent_decimal_context() -> None:
         )
         assert result.status == "candidate_requires_review"
         assert result.delta == "100.01"
+
+
+
+def test_domain_delta_serialization_ignores_ambient_capitals() -> None:
+    from decimal import localcontext
+
+    result_a = assess_invoice_order_net(
+        _doc("inv", "9E+17"), "PO-1", _doc("po", "8E+17"), "PO-1"
+    )
+    with localcontext() as ctx:
+        ctx.capitals = 0
+        ctx.prec = 2
+        ctx.Emax = 18
+        result_b = assess_invoice_order_net(
+            _doc("inv", "9E+17"), "PO-1", _doc("po", "8E+17"), "PO-1"
+        )
+    assert result_a.status == result_b.status == "candidate_requires_review"
+    assert result_a.delta == result_b.delta == "1E+17"
