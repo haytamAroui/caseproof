@@ -276,6 +276,24 @@ def main() -> None:
     _unchanged(env, c, "UNAUTHORIZED_RESTORATION")
     print("S2-009b unavailable ledger event + aggregate revision: PASS")
 
+    # Even an internally privileged writer cannot silently rewrite
+    # the immutable source identity carried by all availability history.
+    for alteration in (
+        "object_key='" + new_key + "'",
+        "sha256_hex=repeat('b',64)",
+        "actor_user_id='33333333-3333-4333-8333-333333333333'",
+        "created_case_revision=created_case_revision+1",
+    ):
+        _blocked(env,
+            "update caseproof._s2_009b_vault_intents set " + alteration
+            + f" where intent_id='{INTENT}';",
+            "immutable intent identity update denied",
+        )
+    _blocked(env,
+        f"delete from caseproof._s2_009b_vault_intents where intent_id='{INTENT}';",
+        "immutable intent deletion denied")
+    _unchanged(env, c, "IMMUTABLE_INTENT")
+
     _blocked(env,
         "update caseproof._s2_009b_availability_events set reason='missing' "
         f"where intent_id='{INTENT}' and status='verified';",
