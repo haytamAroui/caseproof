@@ -13,7 +13,6 @@ from apps.api.evidence_vault_protocol import (
     UploadIntent,
     VaultConflict,
     VaultCoordinator,
-    VaultLedger,
     VaultMissing,
     VaultRecord,
     VaultScope,
@@ -360,7 +359,7 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
     app = (root / "apps/api/main.py").read_text()
     assert "supabase" not in source.lower()
     assert "signed_url" not in source.lower()
-    assert "service_role" in source  # explicitly prohibited in module docstring
+    assert "service_role" not in source  # never invokes privileged storage access
     assert "evidence_vault_protocol" not in app
     assert "/v2/" not in app
     assert len(list((root / "supabase/migrations").glob("*.sql"))) == 1
