@@ -12,6 +12,8 @@ from scripts.verify_s2_007_disposable_tenancy import (
     CASE_A,
     CASE_B,
     _fixture_sql,
+    _isolated_postgres_env,
+    DOC_A, DOC_B, VER_A, VER_B,
     _no_claim_after_rollback,
     _session_sql,
     pseudonymous_fixture_subjects,
@@ -68,12 +70,78 @@ def test_rls_positive_negative_and_transaction_isolation_contract() -> None:
 
 def test_live_probe_is_explicit_and_never_connects_to_dev_db() -> None:
     script = (ROOT / "scripts/verify_s2_007_disposable_tenancy.py").read_text()
-    assert "env = _env()" in script
+    assert "env = _isolated_postgres_env()" in script
     assert "run_live_auth_probe(" in script
     assert "secrets.token_bytes(32)" in script
     assert 'CASEPROOF_S2_007_REAL_AUTH' in script
     assert 'CASEPROOF_S2_007_SYNTHETIC' in script
     assert "CASEPROOF_DEV_AUTH_A_PASSWORD" in script
+
+
+
+def test_explicit_document_and_version_ids_detect_independent_rls_drift() -> None:
+    # Each principal must access *both* direct own + foreign version IDs.
+    # A subquery through already-filtered documents would hide a broken
+    # document_versions policy, falsely passing the foreign-version proof.
+    for own, other, own_doc, other_doc, own_version, other_version in (
+        (CASE_A, CASE_B, DOC_A, DOC_B, VER_A, VER_B),
+        (CASE_B, CASE_A, DOC_B, DOC_A, VER_B, VER_A),
+    ):
+        sql = _session_sql(A, own, other)
+        assert "document_id in (select" not in sql
+        assert f"caseproof.documents where id='{own_doc}'" in sql
+        assert f"caseproof.documents where id='{other_doc}'" in sql
+        assert f"caseproof.document_versions where id='{own_version}'" in sql
+        assert f"caseproof.document_versions where id='{other_version}'" in sql
+
+
+@pytest.fixture()
+def disposable_pg_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CASEPROOF_DISPOSABLE_DB", "YES")
+    monkeypatch.setenv("PGHOST", "127.0.0.1")
+    monkeypatch.setenv("PGPORT", "5432")
+    monkeypatch.setenv("PGDATABASE", "caseproof_s2_ci")
+    monkeypatch.setenv("PGUSER", "postgres")
+    monkeypatch.setenv("PGPASSWORD", "caseproof_ephemeral_ci")
+    monkeypatch.delenv("PGHOSTADDR", raising=False)
+
+
+def test_disposable_env_strips_pgservice_pgoptions_and_all_other_libpq(
+    disposable_pg_env: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PGSERVICE", "external-service")
+    monkeypatch.setenv("PGOPTIONS", "-c search_path=public")
+    monkeypatch.setenv("PGSERVICEFILE", "/tmp/untrusted.conf")
+    monkeypatch.setenv("PGSSLMODE", "require")
+    env = _isolated_postgres_env()
+    assert env["PGHOST"] == "127.0.0.1"
+    assert env["PGPORT"] == "5432"
+    assert env["PGDATABASE"] == "caseproof_s2_ci"
+    assert env["PGUSER"] == "postgres"
+    assert env["PGCONNECT_TIMEOUT"] == "5"
+    assert env["PGPASSWORD"] == "caseproof_ephemeral_ci"
+    for forbidden in ("PGHOSTADDR", "PGSERVICE", "PGOPTIONS", "PGSERVICEFILE", "PGSSLMODE"):
+        assert forbidden not in env
+
+
+@pytest.mark.parametrize(("name", "value"), [
+    ("PGHOSTADDR", "198.51.100.2"),
+    ("PGHOSTADDR", "127.0.0.1"),
+    ("PGHOST", "localhost"),
+    ("PGHOST", "localhost,host.example"),
+    ("PGPORT", "6432"),
+    ("PGDATABASE", "other"),
+    ("PGUSER", "other"),
+    ("PGPASSWORD", "other"),
+    ("CASEPROOF_DISPOSABLE_DB", "NO"),
+])
+def test_disposable_env_rejects_destination_credential_or_role_override(
+    disposable_pg_env: None,
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str,
+) -> None:
+    monkeypatch.setenv(name, value)
+    with pytest.raises(RuntimeError):
+        _isolated_postgres_env()
 
 
 def test_manual_workflow_uses_main_only_and_environment_only_secrets() -> None:
