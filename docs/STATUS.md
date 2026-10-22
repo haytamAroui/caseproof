@@ -19,6 +19,10 @@
 
 **CI snapshot:** main `66db736` had successful `Kernel boundary` run [39746350280](https://github.com/haytamAroui/caseproof/actions/runs/39746350280) and migration integrity run [39746350518](https://github.com/haytamAroui/caseproof/actions/runs/39746350518). The PR #35 test branch passed 778 Python tests + PostgreSQL 17 fixture in [39745880251](https://github.com/haytamAroui/caseproof/actions/runs/39745880251). **Fixtures and unit doubles are not proof of cloud authorization or customer readiness.**
 
+## Architecture contract consolidation (stacked proposal, NOT merged)
+
+[ADR 0011](adr/0011-architecture-freeze-and-first-finance-slice.md) freezes the original six-responsibility architecture and shifts execution to parallel secure-foundation and synthetic-only finance product tracks. [Architecture baseline](../contracts/architecture_baseline_v1.json) and [Action catalog](../contracts/action_catalog.v1.json) are checked by tests: API ↔ KRN-102 ↔ persistence exact locator round trip (canonical `sheet_range`, PDF decimal strings, text normalization, sheet table ID), all uninstalled v2 approval actions blocked, no new permission grants or enabled routes. This feature PR is **stacked on unmerged PR #36**; no statement here implies it is live on main or deployed.
+
 ## Real blockers — must remain open until verified
 
 **SEC-01: owner-controlled merge protection.** Repeated main CI succeeds; architecture negative-control PR #4 failed explicitly on `forbidden import domains.finance.reconciliation` in [run 39555343328](https://github.com/haytamAroui/caseproof/actions/runs/39555343328). GitHub rulesets query returned an empty list on 2026-10-22 and branch protection read returned 403 to the connector. **Neither proves main is protected.** Owner must enable/prove branch protection, mandatory status checks and review. [Issue #5](https://github.com/haytamAroui/caseproof/issues/5) stays open until verified. Never merge sabotage PR #4.
