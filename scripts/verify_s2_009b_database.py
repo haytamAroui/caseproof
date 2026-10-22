@@ -87,7 +87,7 @@ def call(
     return (
         "select resulting_state||'|'||resulting_intent_revision::text||'|'||"
         "resulting_case_revision::text||'|'||recorded_audit::text||'|'||"
-        "idempotent_replay::text "
+        "idempotent_replay::text||'|'||persisted_object_key "
         "from caseproof._s2_009b_disposable_command(" + params + ");"
     )
 
