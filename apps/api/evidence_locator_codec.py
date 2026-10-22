@@ -23,7 +23,6 @@ from packages.evidence_kernel.domain.anchors import (
     PDF_BASIS,
     SHEET_BASIS,
     TEXT_BASIS,
-    AnchorResolutionError,
     EvidenceAnchor,
     Locator,
     PdfLayout,
@@ -113,7 +112,11 @@ def _parse_json(value: object) -> dict[str, object]:
     if type(value) is not dict:
         raise StoredLocatorError("persisted JSONB locator must be an object")
     # DB adapters may return a decoded dict. We still enforce all nested types.
-    if len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")) > 8192:
+    try:
+        size = len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+    except (ValueError, TypeError, UnicodeError) as exc:
+        raise StoredLocatorError("unsupported stored JSONB value") from exc
+    if size > 8192:
         raise StoredLocatorError("oversized persisted locator")
     return value
 
