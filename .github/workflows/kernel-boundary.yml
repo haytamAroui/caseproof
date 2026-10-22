@@ -56,4 +56,4 @@ jobs:
       - name: Run PostgreSQL RLS, concurrent CAS and audit-failure negative tests
         run: |
           uv run --locked python scripts/verify_s2_002_database.py
-          uv run --locked python scripts/verify_s2_004_database.py
+          uv run --locked python -m scripts.verify_s2_004_database
