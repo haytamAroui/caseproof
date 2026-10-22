@@ -22,6 +22,7 @@ create table caseproof._s2_009b_vault_intents (
     check (state in ('pending','verified','unavailable')),
   intent_revision bigint not null default 1 check (intent_revision > 0),
   created_audit_id uuid not null,
+  created_case_revision bigint not null check (created_case_revision>0),
   last_audit_id uuid not null,
   created_at timestamptz not null default now(),
   primary key (org_id, case_id, intent_id),
@@ -117,6 +118,7 @@ declare
   v_existing_event uuid;
   v_existing_intent_revision bigint;
   v_existing_case_revision bigint;
+  v_existing_schema text;
   v_expected_object_prefix text;
 begin
   if p_actor is null or p_case is null or p_intent is null
@@ -195,6 +197,7 @@ begin
       raise exception 'request intent conflict' using errcode='23505';
     end if;
     begin
+      v_existing_schema := v_receipt.response_reference::jsonb->>'schema';
       v_existing_event := (v_receipt.response_reference::jsonb->>'audit')::uuid;
       v_existing_intent_revision :=
         (v_receipt.response_reference::jsonb->>'intent_revision')::bigint;
@@ -203,7 +206,8 @@ begin
     exception when others then
       raise exception 'invalid stored receipt' using errcode='55000';
     end;
-    if v_existing_event is null or v_existing_intent_revision is null
+    if v_existing_schema is distinct from 's2-009b-vault-v1'
+       or v_existing_event is null or v_existing_intent_revision is null
        or v_existing_case_revision is null
        or v_existing_intent_revision>v_intent.intent_revision
        or v_existing_case_revision>v_case.case_revision
@@ -212,7 +216,11 @@ begin
          where a.org_id=v_org and a.case_id=p_case
            and a.id=v_existing_event and a.actor_user_id=p_actor
            and a.action=v_operation and a.input_sha256_hex=v_fingerprint
-       ) or (p_operation!='stage' and not exists (
+       ) or (p_operation='stage' and (
+         v_existing_event is distinct from v_intent.created_audit_id
+         or v_existing_intent_revision!=1
+         or v_existing_case_revision is distinct from v_intent.created_case_revision
+       )) or (p_operation!='stage' and not exists (
          select 1 from caseproof._s2_009b_availability_events e
          where e.org_id=v_org and e.case_id=p_case and e.intent_id=p_intent
            and e.intent_revision=v_existing_intent_revision
@@ -297,10 +305,10 @@ begin
     insert into caseproof._s2_009b_vault_intents(
       org_id,case_id,intent_id,actor_user_id,document_id,
       document_version_id,object_key,sha256_hex,byte_length,media_type,
-      state,intent_revision,created_audit_id,last_audit_id
+      state,intent_revision,created_audit_id,created_case_revision,last_audit_id
     ) values (
       v_org,p_case,p_intent,p_actor,v_document,p_document_version,p_object_key,
-      p_sha,p_byte_length,p_media,'pending',1,v_event,v_event
+      p_sha,p_byte_length,p_media,'pending',1,v_event,v_next_case,v_event
     );
   else
     update caseproof._s2_009b_vault_intents i
