@@ -70,23 +70,25 @@ def sql_call(
     )
 
 
-def state(env: dict[str, str]) -> tuple[int, int, int]:
+def state(env: dict[str, str]) -> tuple[int, int, int, int]:
     q = (
         "select c.case_revision || '|' || "
         "(select count(*) from caseproof.audit_events a "
         "where a.action = 's2_004_internal_observation' and a.case_id = c.id) || '|' || "
         "(select count(*) from caseproof.idempotency_records i "
-        "where i.operation='s2_004_internal_observation' and i.case_id=c.id) "
+        "where i.operation='s2_004_internal_observation' and i.case_id=c.id) || '|' || "
+        "(select count(*) from caseproof._s2_004_disposable_event_revisions er "
+        "where er.case_id=c.id) "
         f"from caseproof.cases c where c.id='{CASE_A}';"
     )
     result = _run(q, env)
     return tuple(int(x) for x in result.split("|"))  # type: ignore[return-value]
 
 
-def assert_state(env: dict[str, str], expected: tuple[int, int, int], label: str) -> None:
+def assert_state(env: dict[str, str], expected: tuple[int, int, int, int], label: str) -> None:
     current = state(env)
     if current != expected:
-        raise AssertionError(f"{label}: revision/audit/receipt counts {current} != {expected}")
+        raise AssertionError(f"{label}: revision/audit/receipt/event-binding counts {current} != {expected}")
 
 
 def concurrent_call(
@@ -141,7 +143,7 @@ def main() -> None:
     env = _env()
     # Refuse running unless the existing S2-002 disposable suite already
     # created the exact synthetic data. This script never bootstraps a live DB.
-    if state(env) != (2, 0, 0):
+    if state(env) != (2, 0, 0, 0):
         raise RuntimeError("S2-004 requires fresh S2-002 disposable CI fixtures")
 
     _run(REFERENCE_SQL, env)
@@ -160,6 +162,29 @@ def main() -> None:
     base = observation("baseline")
     _run(sql_call(base, actor=B), env, should_pass=False)
     _run(sql_call(replace(base, case_id=CASE_B)), env, should_pass=False)
+    # A member granted finding:write but NOT case:read must receive the
+    # same masked P0002 as an unknown/foreign case, not permission-denied
+    # 42501 which would reveal case existence.
+    _run(
+        "update caseproof.organization_members "
+        "set actions=array['finding:write']::text[] "
+        f"where org_id='{ORG_A}' and user_id='{A}';",
+        env,
+    )
+    def masked(command: InternalObservation) -> None:
+        call = sql_call(command)
+        query = call.split(" from caseproof._s2_004_disposable_observation(", 1)[1]
+        fixture = "caseproof._s2_004_disposable_observation(" + query
+        assert _run(
+            "do $mask$ begin perform 1 from " + fixture +
+            " raise exception 'unmasked case lookup'; "
+            "exception when sqlstate 'P0002' then null; end $mask$; "
+            "select 'MASKED';", env,
+        ) == "MASKED"
+    masked(base)
+    masked(replace(base, case_id=UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")))
+    print("S2-004 action-only and unknown case masked identically: PASS")
+
     _run(
         "update caseproof.organization_members "
         "set actions=array['case:read']::text[] "
@@ -173,28 +198,28 @@ def main() -> None:
         f"where org_id='{ORG_A}' and user_id='{A}';",
         env,
     )
-    assert_state(env, (2, 0, 0), "CROSS_TENANT_AND_PERMISSION_DENIAL")
+    assert_state(env, (2, 0, 0, 0), "CROSS_TENANT_AND_PERMISSION_DENIAL")
     print("S2-004 cross-tenant and missing-grant denial: PASS")
 
     _run(sql_call(base, fault="audit"), env, should_pass=False)
-    assert_state(env, (2, 0, 0), "AUDIT_FAILURE")
+    assert_state(env, (2, 0, 0, 0), "AUDIT_FAILURE")
     print("S2-004 AUDIT_FAILURE_RACE_FREE_ROLLBACK: PASS")
     _run(sql_call(base, fault="receipt"), env, should_pass=False)
-    assert_state(env, (2, 0, 0), "RECEIPT_FAILURE")
+    assert_state(env, (2, 0, 0, 0), "RECEIPT_FAILURE")
     print("S2-004 RECEIPT_FAILURE_RACE_FREE_ROLLBACK: PASS")
 
     first = _run(sql_call(base), env)
     event, rev, replay = first.split("|")
     if rev != "3" or replay != "false":
         raise AssertionError("Internal observation was not committed")
-    assert_state(env, (3, 1, 1), "FIRST_ATOMIC_COMMIT")
+    assert_state(env, (3, 1, 1, 1), "FIRST_ATOMIC_COMMIT")
     retried = _run(sql_call(base), env)
     if retried != f"{event}|3|true":
         raise AssertionError("Committed observation was not exactly replayed")
-    assert_state(env, (3, 1, 1), "IDEMPOTENT_REPLAY")
+    assert_state(env, (3, 1, 1, 1), "IDEMPOTENT_REPLAY")
     _run(sql_call(observation("baseline", source="b")), env, should_pass=False)
     _run(sql_call(observation("stale", expected=2)), env, should_pass=False)
-    assert_state(env, (3, 1, 1), "REPLAY_CONFLICT_AND_STALE_REVISION")
+    assert_state(env, (3, 1, 1, 1), "REPLAY_CONFLICT_AND_STALE_REVISION")
     print("S2-004 idempotent replay, conflict and stale revision: PASS")
 
     _run(
@@ -202,7 +227,7 @@ def main() -> None:
         f"where org_id='{ORG_A}' and user_id='{A}';", env,
     )
     _run(sql_call(base), env, should_pass=False)
-    assert_state(env, (3, 1, 1), "REVOKED_ACTOR_REPLAY_DENIAL")
+    assert_state(env, (3, 1, 1, 1), "REVOKED_ACTOR_REPLAY_DENIAL")
     _run(
         "update caseproof.organization_members set active=true "
         f"where org_id='{ORG_A}' and user_id='{A}';", env,
@@ -218,7 +243,7 @@ def main() -> None:
     match = re.search(r"([a-f0-9-]{36})\|4\|false", a)
     if match is None or b.strip() != f"{match.group(1)}|4|true":
         raise AssertionError("CONCURRENT_REPLAY event ID disagrees across sessions")
-    assert_state(env, (4, 2, 2), "CONCURRENT_REPLAY")
+    assert_state(env, (4, 2, 2, 2), "CONCURRENT_REPLAY")
     print(f"S2-004 CONCURRENT_REPLAY across two real connections: PASS ({elapsed:.2f}s)")
 
     first_race, _, _ = concurrent_call(
@@ -227,8 +252,21 @@ def main() -> None:
     )
     if "|5|false" not in first_race:
         raise AssertionError("Competing writer did not commit first revision")
-    assert_state(env, (5, 3, 3), "CONCURRENT_DISTINCT_KEY_STALE_CAS")
+    assert_state(env, (5, 3, 3, 3), "CONCURRENT_DISTINCT_KEY_STALE_CAS")
     print("S2-004 concurrent CAS with distinct request keys: PASS")
+
+    # Privileged attacker keeps schema+event but forges another legal
+    # bigint revision. An event-id existence check alone misses this.
+    _run(
+        "update caseproof.idempotency_records "
+        "set response_reference=jsonb_set(response_reference::jsonb,"
+        "'{revision}','999'::jsonb)::text "
+        "where operation='s2_004_internal_observation' "
+        f"and case_id='{CASE_A}' and idempotency_key='baseline';", env,
+    )
+    _run(sql_call(base), env, should_pass=False)
+    assert_state(env, (5, 3, 3, 3), "STRUCTURALLY_VALID_FORGED_REVISION")
+    print("S2-004 structurally valid forged replay revision rejected: PASS")
 
     # Test actual post-commit receipt tampering: production authorization
     # would never grant this privileged UPDATE. Poisoned receipts fail closed.
@@ -238,7 +276,7 @@ def main() -> None:
         f"and case_id='{CASE_A}' and idempotency_key='baseline';", env,
     )
     _run(sql_call(base), env, should_pass=False)
-    assert_state(env, (5, 3, 3), "CORRUPTED_RECEIPT_REPLAY")
+    assert_state(env, (5, 3, 3, 3), "CORRUPTED_RECEIPT_REPLAY")
     print("S2-004 corruption of idempotency receipt detected: PASS")
 
     print("S2-004_DISPOSABLE_ATOMIC_OBSERVATION_PASSED")
