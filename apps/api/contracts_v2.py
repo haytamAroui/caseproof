@@ -17,8 +17,8 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from apps.api.evidence_locator_codec import encode_locator
+from packages.evidence_kernel.domain.anchors import Locator as KernelLocator
 from packages.evidence_kernel.domain.anchors import (
-    Locator as KernelLocator,
     PdfRegion,
     SheetRange,
     StructuredField,
