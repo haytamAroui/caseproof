@@ -129,6 +129,24 @@ def test_uninstalled_permissions_are_blocked_and_no_v2_routing_exists() -> None:
     assert BASELINE["release_gates"]["explicit_human_attestation_for_approval"]
 
 
+
+def test_coverage_operation_requires_dedicated_read_grant() -> None:
+    """Case read is necessary but never sufficient for coverage visibility."""
+    matches = [
+        op for op in OPERATIONS["operations"]
+        if op["method"] == "GET" and op["path"] == "/v2/cases/{id}/coverage"
+    ]
+    assert len(matches) == 1
+    op = matches[0]
+    assert op["permissions"] == [
+        CaseAction.READ_CASE.value, CaseAction.READ_COVERAGE.value
+    ]
+    assert set(op["permissions"]) <= set(CATALOG["installed_actions"])
+    assert op["uninstalled_actions"] == []
+    assert op["runtime_route_enabled"] is False
+    assert op["permission_installation"] == "installed_scopes_only_no_v2_route"
+
+
 def test_kernel_sectors_and_workflow_are_distinct_concerns() -> None:
     assert BASELINE["architecture"] == "hexagonal_modular_monolith"
     assert BASELINE["deployment"]["microservices"] is False
