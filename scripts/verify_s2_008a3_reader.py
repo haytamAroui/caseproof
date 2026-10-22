@@ -42,7 +42,7 @@ _FIXTURE_PARENT = ExpectedEvidenceParent(
     source_sha256_hex=_SOURCE_SHA,
     representation_sha256_hex=_REP_SHA,
 )
-_PLACEHOLDER = re.compile(r"%\(([a-z_]+)\)s")
+_PLACEHOLDER = re.compile(r"%\(([a-z][a-z0-9_]*)\)s")
 
 
 class _DisposablePsqlReader:
