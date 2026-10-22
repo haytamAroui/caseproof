@@ -33,7 +33,7 @@ class ArchitectureGuardTests(unittest.TestCase):
                 CHECKER.read_text(encoding="utf-8"), encoding="utf-8"
             )
             (root / "application" / "cases" / "bad.py").write_text(
-                "from infrastructure.persistence import concrete_adapter\\n", encoding="utf-8"
+                "from infrastructure.persistence import concrete_adapter\n", encoding="utf-8"
             )
             result = subprocess.run(
                 [sys.executable, str(root / "scripts" / "check_architecture.py")],
@@ -51,7 +51,7 @@ class ArchitectureGuardTests(unittest.TestCase):
                 CHECKER.read_text(encoding="utf-8"), encoding="utf-8"
             )
             (root / "packages" / "evidence_kernel" / "bad.py").write_text(
-                "import application.review\\n", encoding="utf-8"
+                "import application.review\n", encoding="utf-8"
             )
             result = subprocess.run(
                 [sys.executable, str(root / "scripts" / "check_architecture.py")],
