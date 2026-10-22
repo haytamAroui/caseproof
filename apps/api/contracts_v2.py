@@ -16,6 +16,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from apps.api.evidence_locator_codec import encode_locator
 from packages.evidence_kernel.domain.anchors import (
     Locator as KernelLocator,
     PdfRegion,
@@ -23,7 +24,6 @@ from packages.evidence_kernel.domain.anchors import (
     StructuredField,
     TextSpan,
 )
-from apps.api.evidence_locator_codec import encode_locator
 
 SCHEMA_VERSION = "2.0.0-draft"
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
