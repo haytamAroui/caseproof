@@ -31,7 +31,9 @@ def test_every_evidence_row_has_audit_reference_and_no_client_grants() -> None:
     assert "revoke all on caseproof.s2_008a_source_logical_ids" in SCHEMA
     assert "grant select" not in SCHEMA.lower()
     assert "security definer" not in SCHEMA.lower()
-    assert SCHEMA.count("before update or delete") == 5
+    assert SCHEMA.count("before update or delete") == 6
+    assert "create trigger s2_008a_parent_source_metadata_immutable" in SCHEMA
+    assert "caseproof.document_versions" in SCHEMA
     assert "create function caseproof._s2_008a_disposable_no_mutation()" in SCHEMA
 
 
@@ -40,10 +42,15 @@ def test_disposable_guard_and_cloud_verification_wiring() -> None:
     assert "env = _isolated_postgres_env()" in runner
     assert "caseproof_s2_ci" in runner[:500]
     assert "_assert_sql_rejected" in runner
-    assert "same-tenant cross-case composite FK" in runner
+    assert "s2_008a_src_case_fk" in runner
+    assert "s2_008a_anchor_repr_case_digest_fk" in runner
+    assert "OTHER_AUDIT" in runner
+    assert "get stacked diagnostics actual_constraint = constraint_name" in runner
     assert "Equal-byte representations must preserve TWO distinct IDs" in runner
     assert "aborted append transaction" in runner
     assert "append-only update denied" in runner
+    assert "referenced original source-version metadata update denied" in runner
+    assert "referenced original source-version delete denied" in runner
     assert "authenticated role cannot read unapproved graph" in runner
     assert "S2-008a_DISPOSABLE_EVIDENCE_GRAPH_CONTRACT_PASSED" in runner
     workflow = (ROOT / ".github/workflows/kernel-boundary.yml").read_text(
