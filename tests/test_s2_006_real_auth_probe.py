@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -297,3 +298,26 @@ def test_publishable_validation_happens_before_auth_network(
     with pytest.raises(ValueError):
         SupabasePasswordSignin(PROJECT, "sb_secret_leaked_service_key")
     assert calls == []
+
+
+def test_manual_live_auth_workflow_scopes_secrets_to_final_probe_step() -> None:
+    """Regression: checkout and setup-uv must never inherit Auth secrets."""
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github" / "workflows" / "s2-006-live-auth-sessions.yml"
+    ).read_text(encoding="utf-8")
+    before_probe, marker, probe = workflow.partition(
+        "      - name: Validate genuine, separate development Auth user sessions\n"
+    )
+    assert marker
+    assert "  workflow_dispatch:" in before_probe
+    assert "${{ secrets." not in before_probe
+    assert "        env:\n" in probe
+    for key in (
+        "CASEPROOF_DEV_PUBLISHABLE_KEY",
+        "CASEPROOF_DEV_AUTH_A_EMAIL",
+        "CASEPROOF_DEV_AUTH_A_PASSWORD",
+        "CASEPROOF_DEV_AUTH_B_EMAIL",
+        "CASEPROOF_DEV_AUTH_B_PASSWORD",
+    ):
+        assert f"${{{{ secrets.{key} }}}}" in probe
