@@ -13,7 +13,10 @@ from apps.api.access_control import CaseAction
 from apps.api.contracts_v2 import EvidenceAnchorInput, to_kernel_locator
 from apps.api.evidence_locator_codec import decode_locator, encode_locator
 from packages.evidence_kernel.domain.anchors import (
-    PdfRegion, SheetRange, StructuredField, TextSpan,
+    PdfRegion,
+    SheetRange,
+    StructuredField,
+    TextSpan,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
