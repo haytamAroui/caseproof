@@ -1,12 +1,12 @@
 # ExceptionDesk / CaseProof — coding-agent instructions
 
-Read `CONSTITUTION.md`, `MEMORY.md`, `docs/STATUS.md`, `docs/ROADMAP.md`, `docs/standards/database-v1.md` when working with data, and the nearest `AGENTS.md`/ADR before changes. **Git and CI are authoritative**; memory is a checked snapshot.
+Read `CONSTITUTION.md`, [accepted architecture ADR 0011](docs/adr/0011-architecture-freeze-and-first-finance-slice.md), `MEMORY.md`, `docs/STATUS.md`, `docs/ROADMAP.md`, `docs/standards/database-v1.md` when working with data, and the nearest `AGENTS.md`/ADR before changes. **Git and CI are authoritative**; memory is a checked snapshot.
 
 **Product:** finance-first ExceptionDesk for supplier invoice vs purchase order exception resolution; CaseProof dispute dossiers later. Never silently rename the product, copy AZComply code/data, or introduce unrelated sectors.
 
 **Architecture:** the pure `packages.evidence_kernel` must not import `domains`, FastAPI, ORM or LLM SDKs. `domains.finance` consumes the kernel, adapters depend inward. Quoted source text ≠ semantic support ≠ source authenticity ≠ independently authorized human approval. `Decimal` for money.
 
-**Workflow:** smallest testable vertical slice, independently review security/evidence/tenant changes, record actual branch + CI + test outcomes, and update `docs/STATUS.md` after material milestones. No production upload, migration, secret, external customer data or user action without separately authorized safeguards. Do not claim a prototype is deployed.
+**Workflow:** prioritize a complete synthetic invoice/PO reviewer journey in parallel with real Auth/Vault/review security gates. Frozen [action catalog](contracts/action_catalog.v1.json) distinguishes installed request scopes from uninstalled approval scopes, and [baseline](contracts/architecture_baseline_v1.json) names exact `sheet_range`/decimal-string PDF contract. Do not introduce DomainPack or generic EvidenceState without a superseding ADR. Smallest testable vertical slice, independently review security/evidence/tenant changes, record actual branch + CI + test outcomes, and update `docs/STATUS.md` after material milestones. No production upload, migration, secret, external customer data or user action without separately authorized safeguards. Do not claim a prototype is deployed.
 
 ## Cloud-first verification (Constitution C25)
 
