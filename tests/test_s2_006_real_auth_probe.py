@@ -198,7 +198,7 @@ def test_live_password_transport_is_project_pinned_and_returns_only_access_token
         return c
 
     monkeypatch.setattr("apps.api.supabase_password_signin.http.client.HTTPSConnection", connect)
-    client = SupabasePasswordSignin(PROJECT, "sb_publishable_test", 2.5)
+    client = SupabasePasswordSignin(PROJECT, "sb_publishable_test_key", 2.5)
     token = client.sign_in(PasswordCredentials("a@dev.invalid", "private-password"))
     assert (token.access_token, token.user_id) == ("signed.test.token", A)
     assert "signed.test.token" not in repr(token)
@@ -208,7 +208,7 @@ def test_live_password_transport_is_project_pinned_and_returns_only_access_token
     assert c.host == f"{PROJECT}.supabase.co"
     assert c.path == "/auth/v1/token?grant_type=password"
     assert c.method == "POST"
-    assert c.headers["apikey"] == "sb_publishable_test"
+    assert c.headers["apikey"] == "sb_publishable_test_key"
     assert c.headers["Content-Type"] == "application/json"
     assert json.loads(c.request_body) == {
         "email": "a@dev.invalid", "password": "private-password"
@@ -240,7 +240,7 @@ def test_password_transport_fail_closed(
 
     monkeypatch.setattr("apps.api.supabase_password_signin.http.client.HTTPSConnection", connect)
     with pytest.raises(exc):
-        SupabasePasswordSignin(PROJECT, "sb_publishable_test").sign_in(
+        SupabasePasswordSignin(PROJECT, "sb_publishable_test_key").sign_in(
             PasswordCredentials("a@dev.invalid", "private-password")
         )
 
@@ -271,3 +271,29 @@ def test_live_probe_does_not_register_unauthenticated_v2_routes() -> None:
 
     paths = create_app().openapi()["paths"]
     assert not any(name.startswith("/v2/") for name in paths)
+
+
+@pytest.mark.parametrize("unsafe_key", [
+    "", " ", "anonymous", "sb_publishable_", "sb_publishable_short",
+    "sb_secret_DEVELOPMENT_FIXTURE", "service_role",
+    "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.fake",
+    "sb_publishable_test_key\\r\\nX-Injected: bad",
+])
+def test_dev_password_transport_rejects_privileged_or_malformed_api_keys(
+    unsafe_key: str,
+) -> None:
+    with pytest.raises(ValueError, match="publishable"):
+        SupabasePasswordSignin(PROJECT, unsafe_key)
+
+
+def test_publishable_validation_happens_before_auth_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    def forbidden_connect(host: str, timeout: float) -> FakeAuthHttpConnection:
+        calls.append(host)
+        raise AssertionError("network must not be contacted with secret key")
+    monkeypatch.setattr("apps.api.supabase_password_signin.http.client.HTTPSConnection", forbidden_connect)
+    with pytest.raises(ValueError):
+        SupabasePasswordSignin(PROJECT, "sb_secret_leaked_service_key")
+    assert calls == []
