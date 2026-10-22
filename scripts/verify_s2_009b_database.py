@@ -204,6 +204,17 @@ def main() -> None:
     if original_key != OBJECT_KEY:
         raise AssertionError("Replay replaced immutable object key")
     _unchanged(env, a, "PENDING_REPLAY")
+    # Authorized previously is NOT authorization after membership revocation.
+    _run(
+        "update caseproof.organization_members set active=false "
+        f"where org_id='{ORG}' and user_id='{ACTOR}';", env,
+    )
+    _blocked(env, call("stage"), "revoked membership cannot replay stage")
+    _run(
+        "update caseproof.organization_members set active=true "
+        f"where org_id='{ORG}' and user_id='{ACTOR}';", env,
+    )
+    _unchanged(env, a, "REVOKED_STAGE_REPLAY")
     print("S2-009b durable pending intent + same-ID replay: PASS")
 
     _blocked(env, call("verify", fault="audit"), "verification audit rollback")
@@ -274,6 +285,18 @@ def main() -> None:
     )
     _blocked(env, call("verify"), "forged saved receipt revision denied")
     _unchanged(env, c, "FORGED_RECEIPT")
+
+    # Stage receipt must carry exactly its original creation audit and case
+    # revision, not merely a numerically plausible revision <= current.
+    _run(
+        "update caseproof.idempotency_records "
+        "set response_reference=jsonb_set(response_reference::jsonb,"
+        "'{case_revision}','999'::jsonb)::text "
+        "where operation='s2_009b_vault_stage' "
+        f"and case_id='{CASE}' and idempotency_key='{INTENT}';", env,
+    )
+    _blocked(env, call("stage"), "forged stage creation revision denied")
+    _unchanged(env, c, "FORGED_STAGE_RECEIPT")
     # A second stable UUIDv4 request races on two independent PostgreSQL
     # connections. Exactly one stage intent/audit/receipt commits.
     second_id = "87654321-4321-4321-8321-abcdefabcdef"
