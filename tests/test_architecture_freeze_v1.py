@@ -193,3 +193,30 @@ def test_v2_proposal_locator_contract_tracks_executable_schema() -> None:
     assert "path" in anchor["locator_contracts"]["structured_field"]["fields"]
     assert "spreadsheet_range" not in anchor["anchor_types"]
     assert OPERATIONS["status"] == "typed_contract_only_all_v2_routes_disabled"
+
+
+def test_v2_structured_field_rejects_unpersistable_locator_at_validation() -> None:
+    valid = {"kind": "structured_field", "schema_id": "UBL-v1",
+             "path": ["Invoice", "LegalMonetaryTotal"], "basis": "json_path_v1"}
+    assert isinstance(EvidenceAnchorInput.model_validate(_anchor(valid)).locator, StructuredFieldLocator)
+    for bad in (
+        {**valid, "path": ["a"] * 129},
+        {**valid, "path": ["a" * 257]},
+        {**valid, "path": [" "]},
+        {**valid, "schema_id": "   "},
+        {**valid, "path": ["a" * 256] * 60},
+    ):
+        with pytest.raises(ValidationError):
+            EvidenceAnchorInput.model_validate(_anchor(bad))
+
+
+def test_v2_sheet_optional_table_id_can_be_omitted_or_null() -> None:
+    locator: dict[str, object] = {
+        "kind": "sheet_range", "sheet_id": "sheet", "a1_range": "A1:B3",
+        "basis": "spreadsheet_a1_sheet_id",
+    }
+    absent = EvidenceAnchorInput.model_validate(_anchor(locator))
+    explicit_null = EvidenceAnchorInput.model_validate(_anchor({**locator, "table_id": None}))
+    assert absent.locator.table_id is None
+    assert absent.locator == explicit_null.locator
+    assert to_kernel_locator(absent.locator) == SheetRange("sheet", "A1:B3", None)
