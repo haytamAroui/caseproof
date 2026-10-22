@@ -27,7 +27,6 @@ from scripts.verify_s2_007_disposable_tenancy import _isolated_postgres_env
 from scripts.verify_s2_008a_database import (
     ANCHOR,
     CASE,
-    DOC,
     ORG,
 )
 
