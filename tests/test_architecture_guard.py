@@ -24,6 +24,42 @@ class ArchitectureGuardTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("forbidden import", result.stderr)
 
+    def test_application_cannot_import_concrete_infrastructure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            (root / "application" / "cases").mkdir(parents=True)
+            (root / "scripts" / "check_architecture.py").write_text(
+                CHECKER.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            (root / "application" / "cases" / "bad.py").write_text(
+                "from infrastructure.persistence import concrete_adapter\n", encoding="utf-8"
+            )
+            result = subprocess.run(
+                [sys.executable, str(root / "scripts" / "check_architecture.py")],
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("forbidden import infrastructure.persistence", result.stderr)
+
+    def test_kernel_cannot_import_future_application_layer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            (root / "packages" / "evidence_kernel").mkdir(parents=True)
+            (root / "scripts" / "check_architecture.py").write_text(
+                CHECKER.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            (root / "packages" / "evidence_kernel" / "bad.py").write_text(
+                "import application.review\n", encoding="utf-8"
+            )
+            result = subprocess.run(
+                [sys.executable, str(root / "scripts" / "check_architecture.py")],
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("forbidden import application.review", result.stderr)
+
     def test_forbidden_cross_domain_import_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

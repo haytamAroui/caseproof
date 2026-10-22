@@ -9,17 +9,34 @@ The existing development /v1 API remains unchanged.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from apps.api.evidence_locator_codec import encode_locator
+from packages.evidence_kernel.domain.anchors import Locator as KernelLocator
+from packages.evidence_kernel.domain.anchors import (
+    PdfRegion,
+    SheetRange,
+    StructuredField,
+    TextSpan,
+)
+
 SCHEMA_VERSION = "2.0.0-draft"
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Identifier = Annotated[str, Field(min_length=1, max_length=256)]
 PositiveRevision = Annotated[int, Field(ge=1)]
 NonemptyReason = Annotated[str, Field(min_length=1, max_length=4000)]
+# Canonical persisted PDF coordinates are decimal STRINGS, never JSON floats.
+# Using a string is mandatory because a JSON number can already have lost
+# precision before a typed model receives it.
+Coordinate = Annotated[str, Field(
+    min_length=1, max_length=64,
+    pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$",
+)]
 
 
 class StrictContract(BaseModel):
@@ -30,47 +47,62 @@ class TextSpanLocator(StrictContract):
     kind: Literal["text_span"]
     start: Annotated[int, Field(ge=0)]
     end: Annotated[int, Field(gt=0)]
+    encoding: Literal["utf-8"]
+    normalization: Literal["none", "NFC", "NFD", "NFKC", "NFKD"]
     basis: Literal["unicode_codepoint_zero_based_half_open"]
 
     @model_validator(mode="after")
     def verify_bounds(self) -> TextSpanLocator:
         if self.end <= self.start:
             raise ValueError("text span must be nonempty and half-open")
+        # A valid kernel TextSpan can still exceed the persistent codec's
+        # bounded JSON envelope. Reject it at the API boundary, not later.
+        encode_locator(TextSpan(self.start, self.end, self.encoding, self.normalization))
         return self
 
 
 class PdfRegionLocator(StrictContract):
     kind: Literal["pdf_region"]
     page_index: Annotated[int, Field(ge=0)]
-    x0: Annotated[float, Field(ge=0, allow_inf_nan=False)]
-    y0: Annotated[float, Field(ge=0, allow_inf_nan=False)]
-    x1: Annotated[float, Field(gt=0, allow_inf_nan=False)]
-    y1: Annotated[float, Field(gt=0, allow_inf_nan=False)]
-    page_width: Annotated[float, Field(gt=0, allow_inf_nan=False)]
-    page_height: Annotated[float, Field(gt=0, allow_inf_nan=False)]
+    x0: Coordinate
+    y0: Coordinate
+    x1: Coordinate
+    y1: Coordinate
+    page_width: Coordinate
+    page_height: Coordinate
     rotation: Literal[0, 90, 180, 270]
     basis: Literal["pdf_points_unrotated_bottom_left"]
 
     @model_validator(mode="after")
     def verify_geometry(self) -> PdfRegionLocator:
-        if self.x1 <= self.x0 or self.y1 <= self.y0:
-            raise ValueError("nonempty PDF bounding box required")
-        if self.x1 > self.page_width or self.y1 > self.page_height:
-            raise ValueError("PDF bounding box must be inside page")
+        # Validate against the SAME pure kernel constraints and persistence
+        # representation. This is draft I/O validation, not citation resolution.
+        encode_locator(PdfRegion(
+            self.page_index, Decimal(self.x0), Decimal(self.y0),
+            Decimal(self.x1), Decimal(self.y1),
+            Decimal(self.page_width), Decimal(self.page_height),
+            self.rotation, self.basis,
+        ))
         return self
 
 
 class SheetRangeLocator(StrictContract):
-    kind: Literal["spreadsheet_range"]
+    kind: Literal["sheet_range"]
     sheet_id: Identifier
-    a1_range: Annotated[str, Field(pattern=r"^[A-Z]+[1-9][0-9]*:[A-Z]+[1-9][0-9]*$")]
+    a1_range: Annotated[str, Field(min_length=2, max_length=64)]
+    table_id: Identifier | None = None
     basis: Literal["spreadsheet_a1_sheet_id"]
+
+    @model_validator(mode="after")
+    def verify_range(self) -> SheetRangeLocator:
+        encode_locator(SheetRange(self.sheet_id, self.a1_range, self.table_id))
+        return self
 
 
 class StructuredFieldLocator(StrictContract):
     kind: Literal["structured_field"]
     schema_id: Identifier
-    path: Annotated[list[str | int], Field(min_length=1)]
+    path: Annotated[list[str | int], Field(min_length=1, max_length=128)]
     basis: Literal["json_path_v1"]
 
     @model_validator(mode="after")
@@ -78,10 +110,13 @@ class StructuredFieldLocator(StrictContract):
         if any(
             type(value) is bool
             or (type(value) is int and value < 0)
-            or (type(value) is str and not value)
+            or (type(value) is str and (not value.strip() or len(value) > 256))
             for value in self.path
         ):
-            raise ValueError("structured path must contain nonempty keys or nonnegative indices")
+            raise ValueError("structured path must contain bounded nonblank keys or nonnegative indices")
+        # The executable boundary must reject exactly the same unencodable
+        # inputs that the persistent KRN-102 codec would reject.
+        encode_locator(StructuredField(self.schema_id, tuple(self.path)))
         return self
 
 
@@ -89,6 +124,35 @@ Locator = Annotated[
     TextSpanLocator | PdfRegionLocator | SheetRangeLocator | StructuredFieldLocator,
     Field(discriminator="kind"),
 ]
+
+
+def to_kernel_locator(value: TextSpanLocator | PdfRegionLocator |
+                      SheetRangeLocator | StructuredFieldLocator) -> KernelLocator:
+    """Explicit typed v2 proposal -> KRN-102 mapping (NOT authorization).
+
+    This mapping must preserve all exact coordinates, original representation
+    identity and normalization. JSON number floats are forbidden for PDF.
+    """
+    if isinstance(value, TextSpanLocator):
+        result: KernelLocator = TextSpan(
+            value.start, value.end, value.encoding, value.normalization
+        )
+    elif isinstance(value, PdfRegionLocator):
+        result = PdfRegion(
+            value.page_index, Decimal(value.x0), Decimal(value.y0),
+            Decimal(value.x1), Decimal(value.y1),
+            Decimal(value.page_width), Decimal(value.page_height),
+            value.rotation, value.basis,
+        )
+    elif isinstance(value, SheetRangeLocator):
+        result = SheetRange(value.sheet_id, value.a1_range, value.table_id)
+    elif isinstance(value, StructuredFieldLocator):
+        result = StructuredField(value.schema_id, tuple(value.path))
+    else:
+        raise TypeError("unsupported evidence locator")
+    # Contract must not admit a kernel-valid object that cannot persist exactly.
+    encode_locator(result)
+    return result
 
 
 class EvidenceAnchorInput(StrictContract):

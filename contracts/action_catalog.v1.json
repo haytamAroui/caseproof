@@ -1,0 +1,28 @@
+{
+  "schema_version": "actions-v1-draft-no-production_grant",
+  "authority": "installed Supabase foundation DDL and apps/api/access_control.py",
+  "authorization_scope": "active_org_membership_and_action; no case assignment (pilot decision)",
+  "installed_actions": [
+    "case:read",
+    "coverage:read",
+    "evidence:read",
+    "finding:write",
+    "review:request",
+    "conclusion:request_approval",
+    "exception:request"
+  ],
+  "future_actions_not_installed": [
+    "evidence:write",
+    "finding:promote",
+    "conclusion:approve",
+    "exception:accept"
+  ],
+  "rules": [
+    "An installed action is not evidence of a live v2 route or deployment.",
+    "Never treat conclusion:request_approval as conclusion:approve.",
+    "Never treat exception:request as exception:accept.",
+    "Approval, disposition, and evidence writes are disabled until a separately approved action/RLS migration and real human authorization.",
+    "The same-org different-case policy remains organization-wide for approved read actions only; no implied case-assignment restriction.",
+    "No migration is authorized by this catalog and no live permissions are changed."
+  ]
+}

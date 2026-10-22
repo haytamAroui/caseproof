@@ -47,19 +47,20 @@ def anchor(kind: str = "text_span") -> dict[str, object]:
     if kind == "text_span":
         locator = {
             "kind": "text_span", "start": 0, "end": 7,
+            "encoding": "utf-8", "normalization": "none",
             "basis": "unicode_codepoint_zero_based_half_open",
         }
     elif kind == "pdf_region":
         locator = {
             "kind": "pdf_region", "page_index": 0,
-            "x0": 0.0, "y0": 0.0, "x1": 12.0, "y1": 9.0,
-            "page_width": 100.0, "page_height": 200.0, "rotation": 0,
+            "x0": "0", "y0": "0", "x1": "12", "y1": "9",
+            "page_width": "100", "page_height": "200", "rotation": 0,
             "basis": "pdf_points_unrotated_bottom_left",
         }
-    elif kind == "spreadsheet_range":
+    elif kind == "sheet_range":
         locator = {
-            "kind": "spreadsheet_range", "sheet_id": "sheet",
-            "a1_range": "A1:B3", "basis": "spreadsheet_a1_sheet_id",
+            "kind": "sheet_range", "sheet_id": "sheet",
+            "a1_range": "A1:B3", "table_id": None, "basis": "spreadsheet_a1_sheet_id",
         }
     else:
         locator = {
@@ -157,7 +158,7 @@ def test_valid_request_json_round_trip_and_schema(
 
 
 @pytest.mark.parametrize("kind", [
-    "text_span", "pdf_region", "spreadsheet_range", "structured_field",
+    "text_span", "pdf_region", "sheet_range", "structured_field",
 ])
 def test_typed_anchors_have_exact_locator_discriminants(kind: str) -> None:
     value = EvidenceAnchorInput.model_validate_json(encode(anchor(kind)))
@@ -206,13 +207,13 @@ def test_malformed_text_locator_fails_closed(
 
 
 @pytest.mark.parametrize("bad", [
-    {"x1": 0.0},
-    {"x1": 105.0},
-    {"y1": 205.0},
+    {"x1": "0"},
+    {"x1": "105"},
+    {"y1": "205"},
     {"rotation": 45},
     {"page_index": -1},
     {"x1": float("nan")},
-    {"page_height": -1.0},
+    {"page_height": "-1"},
 ])
 def test_invalid_pdf_geometry_fails(bad: dict[str, object]) -> None:
     body = anchor("pdf_region")
@@ -224,10 +225,10 @@ def test_invalid_pdf_geometry_fails(bad: dict[str, object]) -> None:
 
 
 @pytest.mark.parametrize("changed", [
-    {"a1_range": "A0:B2"}, {"a1_range": "B1"}, {"sheet_id": ""},
+    {"a1_range": "A0:B2"}, {"a1_range": "B3:A1"}, {"sheet_id": ""},
 ])
 def test_invalid_spreadsheet_locator_fails(changed: dict[str, object]) -> None:
-    body = anchor("spreadsheet_range")
+    body = anchor("sheet_range")
     assert isinstance(body["locator"], dict)
     body["locator"].update(changed)
     with pytest.raises(ValidationError):
@@ -421,7 +422,7 @@ def test_duplicate_idempotency_fingerprint_replay_is_not_a_legal_success() -> No
 
 
 def test_operation_matrix_matches_exported_schema_routes_and_permissions() -> None:
-    assert MATRIX["status"] == "typed_contract_only_no_v2_routes_enabled"
+    assert MATRIX["status"] == "typed_contract_only_all_v2_routes_disabled"
     assert MATRIX["schema_version"] == SCHEMA_VERSION
     assert {
         f"{op['method']} {op['path']}" for op in MATRIX["operations"]

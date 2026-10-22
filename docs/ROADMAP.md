@@ -13,6 +13,18 @@
 | EXD-007 | P1 | Security/privacy/tenancy hardening and paid pilot | DPA, threat model, retention, tenant tests, measured customer outcome |
 | EXD-008 | P2 | Independent kernel packaging and other sector packs | Only after two proven domain consumers and stable contracts |
 
+## Frozen architecture and revised delivery tracks (ADR 0011)
+
+**Architecture:** [accepted target ADR 0011](adr/0011-architecture-freeze-and-first-finance-slice.md), not a production authorization. One hexagonal modular monolith, pure sector-neutral Evidence Kernel, a deterministic finance domain, application-controlled intake/review/workflow, and infrastructure ports. **Do not restart Stage 1, introduce generic DomainPack/EvidenceState, split microservices or build a recursive agent engine before a paid-workflow baseline.**
+
+**Track A — secure platform release gates:** #5 protected merge owner verification → [#37 genuine Auth+least-privilege tenant DB](https://github.com/haytamAroui/caseproof/issues/37) → [#38 private immutable source bytes](https://github.com/haytamAroui/caseproof/issues/38) → [#39 persisted evidence + authorized review](https://github.com/haytamAroui/caseproof/issues/39) → S2-010 bounded worker recovery. Work may overlap where trusted dependencies are preserved. Disposable fixtures do NOT satisfy live security gates.
+
+**Track B — parallel synthetic product:** [#40 deterministic invoice/PO flow](https://github.com/haytamAroui/caseproof/issues/40): synthetic UBL + PO parsing, golden financial fixtures, candidate findings with versioned source references, reviewer workbench prototype, reproducible report template. No customer data or mock approvals become production writes.
+
+**Join gate:** one real signed-in reviewer completes private intake → typed source reference → exact cited mismatch → versioned coverage → explicitly authorized disposition → atomic audit/receipt → export. This supersedes treating all Stage 2 infrastructure as a blocking prerequisite for beginning *synthetic-only* Stage 3 engineering.
+
+**Contract gates fixed before connecting v2:** [installed-vs-proposed action catalog](../contracts/action_catalog.v1.json), [canonical architecture identifiers](../contracts/architecture_baseline_v1.json). Current /v2 approval scopes are **not installed**; PDF coordinates are exact decimal strings and sheet kind is `sheet_range`. Same-org case reads are membership+action wide, not case-assigned. KRN-101 is the new source lineage and /v1 is legacy development-only.
+
 ## Customer validation in parallel
 Interview 8–12 Belgian accounts-payable/finance operations buyers. Determine invoice volumes, existing ERP exception workflows, investigation time, repeated cases and actual willingness to pay. Do not assume per-pack price or Gulf expansion.
 

@@ -47,23 +47,67 @@
         "anchor_id",
         "document_id",
         "version_id",
+        "source_sha256_hex",
         "representation_id",
-        "anchor_type",
+        "representation_sha256_hex",
         "locator"
       ],
       "anchor_types": [
         "text_span",
         "pdf_region",
-        "structured_field",
-        "spreadsheet_range"
+        "sheet_range",
+        "structured_field"
       ],
       "locator_contracts": {
-        "text_span": "{start:int,end:int} zero-based half-open Unicode code-point offsets in the identified immutable text representation; end > start and <= representation length",
-        "pdf_region": "{page_index:int>=0,bbox:[x0,y0,x1,y1],page_width:number,page_height:number,units:string,origin:string,rotation_degrees:number} in identified PDF representation; reject ambiguous geometry",
-        "structured_field": "{schema_id:string,field_path:string} referencing a stable key in a versioned representation",
-        "spreadsheet_range": "{sheet_id:string,a1_range:string} within identified versioned workbook representation"
+        "text_span": {
+          "fields": [
+            "kind",
+            "start",
+            "end",
+            "encoding",
+            "normalization",
+            "basis"
+          ],
+          "rules": "kind=text_span; start/end strict nonnegative integers, 0-based Unicode code-point half-open; end>start; encoding=utf-8; normalization=none|NFC|NFD|NFKC|NFKD; basis=unicode_codepoint_zero_based_half_open"
+        },
+        "pdf_region": {
+          "fields": [
+            "kind",
+            "page_index",
+            "x0",
+            "y0",
+            "x1",
+            "y1",
+            "page_width",
+            "page_height",
+            "rotation",
+            "basis"
+          ],
+          "rules": "kind=pdf_region; x0/y0/x1/y1/page_width/page_height are canonical bounded decimal JSON STRINGS, never numbers/floats/exponents; page_index 0-based int; rotation 0|90|180|270; basis=pdf_points_unrotated_bottom_left; region within page bounds"
+        },
+        "sheet_range": {
+          "fields": [
+            "kind",
+            "sheet_id",
+            "a1_range",
+            "table_id",
+            "basis"
+          ],
+          "rules": "kind=sheet_range; sheet_id identifies the versioned workbook sheet; A1 uppercase range; table_id explicit nullable optional identifier; basis=spreadsheet_a1_sheet_id"
+        },
+        "structured_field": {
+          "fields": [
+            "kind",
+            "schema_id",
+            "path",
+            "basis"
+          ],
+          "rules": "kind=structured_field; path is nonempty JSON array of nonempty string keys or nonnegative integer indices; basis=json_path_v1"
+        }
       },
-      "invalidation": "Stale, missing, cross-tenant or unresolved anchors fail closed. Re-OCR/reparse requires a new anchor and support assessment; no fuzzy fallback resolution."
+      "invalidation": "Stale, missing, cross-tenant or unresolved anchors fail closed. Re-OCR/reparse requires a new anchor and support assessment; no fuzzy fallback resolution.",
+      "canonical_executable_locator_contract": "apps/api/contracts_v2.py (typed v2 draft; unmounted)",
+      "wire_authority": "KRN-102 typed locators via to_kernel_locator + exact storage codec; no live v2 routes"
     },
     "FindingCandidate": {
       "required": [
