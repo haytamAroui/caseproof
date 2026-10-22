@@ -141,3 +141,45 @@ def test_kind_confusion_rejected() -> None:
         parse_synthetic_ubl(ORDER, "invoice")
     with pytest.raises(SyntheticParseError):
         parse_synthetic_ubl(INVOICE, "purchase_order")
+
+
+def test_utf16_and_false_utf8_declarations_cannot_bypass_dtd_rejection() -> None:
+    entity_invoice = INVOICE.replace(
+        b"1250.00",
+        b"&probe;",
+    ).replace(
+        b"<Invoice ",
+        b'<!DOCTYPE Invoice [<!ENTITY probe "1250.00">]><Invoice ',
+    )
+    for raw in (
+        entity_invoice,
+        entity_invoice.decode("utf-8").encode("utf-16"),
+        entity_invoice.decode("utf-8").encode("utf-16-le"),
+        INVOICE.replace(b'encoding="UTF-8"', b'encoding="UTF-16"'),
+    ):
+        with pytest.raises(SyntheticParseError):
+            parse_synthetic_ubl(raw, "invoice")
+
+
+def test_oversized_decimal_digits_rejected_before_default_context_rounding() -> None:
+    over_precision = INVOICE.replace(b"1250.00", b"9" * 28)
+    with pytest.raises(SyntheticParseError):
+        parse_synthetic_ubl(over_precision, "invoice")
+
+
+def test_child_bearing_amount_is_not_accepted_as_scalar() -> None:
+    nested = INVOICE.replace(
+        b"1250.00</cbc:LineExtensionAmount>",
+        b"1250.00<cbc:Note>amended</cbc:Note></cbc:LineExtensionAmount>",
+    )
+    with pytest.raises(SyntheticParseError):
+        parse_synthetic_ubl(nested, "invoice")
+
+
+def test_child_bearing_document_id_is_not_accepted_as_scalar() -> None:
+    nested = INVOICE.replace(
+        b"INV-2026-001</cbc:ID>",
+        b"INV-2026-001<cbc:Note>extra</cbc:Note></cbc:ID>",
+    )
+    with pytest.raises(SyntheticParseError):
+        parse_synthetic_ubl(nested, "invoice")
