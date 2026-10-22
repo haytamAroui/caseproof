@@ -162,7 +162,7 @@ def test_manual_workflow_uses_main_only_and_environment_only_secrets() -> None:
     assert job["env"]["PGDATABASE"] == "caseproof_s2_ci"
     assert job["env"]["PGUSER"] == "postgres"
     steps = job["steps"]
-    assert steps[0]["with"]["ref"] == "main"
+    assert steps[0]["with"]["ref"] == "$" + "{{ github.sha }}"
     assert steps[0]["with"]["persist-credentials"] is False
     assert "secrets" not in json.dumps(steps[:-1])
     final = steps[-1]
