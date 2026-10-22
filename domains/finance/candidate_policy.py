@@ -7,6 +7,7 @@ This function never infers VAT compatibility, deliveries, credits or contracts.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import localcontext
 from typing import Literal
 
 from domains.finance.reconciliation import DocumentAmount, compare_invoice_to_po
@@ -18,6 +19,25 @@ class NetCandidate:
     delta: str | None
     currency: str | None
     unresolved: tuple[str, ...]
+
+
+# Explicit pilot net-amount bounds: max 18 integral + 6 fractional digits.
+# Bounded operands and fixed precision ensure subtraction never rounds a delta.
+MAX_NET_INTEGRAL_DIGITS = 18
+MAX_NET_FRACTIONAL_DIGITS = 6
+
+
+def _supported_net(amount: object) -> bool:
+    from decimal import Decimal
+
+    if not isinstance(amount, Decimal) or not amount.is_finite() or amount < 0:
+        return False
+    integral_digits = max(1, amount.adjusted() + 1) if amount != 0 else 1
+    fractional_digits = max(0, -amount.as_tuple().exponent)
+    return (
+        integral_digits <= MAX_NET_INTEGRAL_DIGITS
+        and fractional_digits <= MAX_NET_FRACTIONAL_DIGITS
+    )
 
 
 _CONTEXT_GAPS = (
@@ -50,12 +70,24 @@ def assess_invoice_order_net(
         unresolved.append("Currencies differ; no conversion rule is authorized.")
 
     if (
+        not _supported_net(invoice.amount.amount)
+        or (order is not None and not _supported_net(order.amount.amount))
+    ):
+        unresolved.append("Net amount is outside supported precision or is a credit/negative amount.")
+
+    if (
         order is None or not order_number or invoice_order_reference != order_number
         or invoice.amount.currency != order.amount.currency
+        or not _supported_net(invoice.amount.amount)
+        or not _supported_net(order.amount.amount)
     ):
         return NetCandidate("unresolved", None, None, tuple(unresolved))
 
-    finding = compare_invoice_to_po(invoice, order)
+    # Do not inherit a caller's narrow Decimal context; 28 digits exceeds the
+    # maximum 18+6 operand precision with a possible subtraction carry.
+    with localcontext() as decimal_context:
+        decimal_context.prec = 28
+        finding = compare_invoice_to_po(invoice, order)
     if finding is None:
         return NetCandidate("match_unreviewed", "0", invoice.amount.currency, tuple(unresolved))
     return NetCandidate(
