@@ -140,13 +140,14 @@ def main() -> None:
     print("S2-008a3 typed KRN locator reconstructed from real PostgreSQL JSONB: PASS")
 
     # A second new psql connection sees the same exact immutable locator.
+    # This does NOT reboot PostgreSQL or prove server-restart recovery.
     second = _DisposablePsqlReader(env)
     again = get_exact_anchor_metadata(
         second, expected=_FIXTURE_PARENT, anchor_id=_ANCHOR
     )
     if second.query_count != 1 or again != record:
-        raise AssertionError("New connection/restart changed immutable locator")
-    print("S2-008a3 independent connection/restart reconstruction: PASS")
+        raise AssertionError("Fresh client connection changed immutable locator")
+    print("S2-008a3 independent client connection reconstruction: PASS")
 
     _expect_missing(
         _DisposablePsqlReader(env),
