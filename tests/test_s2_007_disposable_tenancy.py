@@ -11,9 +11,12 @@ import pytest
 from scripts.verify_s2_007_disposable_tenancy import (
     CASE_A,
     CASE_B,
+    DOC_A,
+    DOC_B,
+    VER_A,
+    VER_B,
     _fixture_sql,
     _isolated_postgres_env,
-    DOC_A, DOC_B, VER_A, VER_B,
     _no_claim_after_rollback,
     _session_sql,
     pseudonymous_fixture_subjects,
