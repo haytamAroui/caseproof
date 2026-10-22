@@ -98,11 +98,13 @@ def assess_invoice_order_net(
         prec=28, rounding=ROUND_HALF_EVEN, Emin=-999999, Emax=999999,
     )):
         finding = compare_invoice_to_po(invoice, order)
-    if finding is None:
-        return NetCandidate("match_unreviewed", "0", invoice.amount.currency, tuple(unresolved))
-    return NetCandidate(
-        "candidate_requires_review",
-        str(finding.difference.amount),
-        invoice.amount.currency,
-        tuple(unresolved),
-    )
+        if finding is None:
+            return NetCandidate("match_unreviewed", "0", invoice.amount.currency, tuple(unresolved))
+        # Decimal string notation observes context.capitals; construct the
+        # result inside this explicit context, never the caller's context.
+        return NetCandidate(
+            "candidate_requires_review",
+            str(finding.difference.amount),
+            invoice.amount.currency,
+            tuple(unresolved),
+        )
