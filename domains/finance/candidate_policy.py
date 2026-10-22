@@ -7,7 +7,7 @@ This function never infers VAT compatibility, deliveries, credits or contracts.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import localcontext
+from decimal import Context, ROUND_HALF_EVEN, localcontext
 from typing import Literal
 
 from domains.finance.reconciliation import DocumentAmount, compare_invoice_to_po
@@ -61,13 +61,17 @@ def assess_invoice_order_net(
     until the application's independent evidence and review gates are satisfied.
     """
     unresolved = list(_CONTEXT_GAPS)
+    # A domain caller may bypass XML parsing: trim edge whitespace and fail
+    # closed on missing/blank identities, rather than matching two blanks.
+    order_ref = invoice_order_reference.strip() if isinstance(invoice_order_reference, str) else ""
+    po_number = order_number.strip() if isinstance(order_number, str) else ""
     if order is None:
         unresolved.append("Purchase order missing.")
-    elif not order_number:
+    elif not po_number:
         unresolved.append("Purchase order identity missing.")
-    if invoice_order_reference is None:
+    if not order_ref:
         unresolved.append("Invoice purchase-order reference missing.")
-    elif order is not None and order_number is not None and invoice_order_reference != order_number:
+    elif order is not None and po_number and order_ref != po_number:
         unresolved.append("Invoice references a different purchase order.")
     if order is not None and invoice.amount.currency != order.amount.currency:
         unresolved.append("Currencies differ; no conversion rule is authorized.")
@@ -79,7 +83,7 @@ def assess_invoice_order_net(
         unresolved.append("Net amount is outside supported precision or is a credit/negative amount.")
 
     if (
-        order is None or not order_number or invoice_order_reference != order_number
+        order is None or not po_number or not order_ref or order_ref != po_number
         or invoice.amount.currency != order.amount.currency
         or not _supported_net(invoice.amount.amount)
         or not _supported_net(order.amount.amount)
@@ -88,8 +92,11 @@ def assess_invoice_order_net(
 
     # Do not inherit a caller's narrow Decimal context; 28 digits exceeds the
     # maximum 18+6 operand precision with a possible subtraction carry.
-    with localcontext() as decimal_context:
-        decimal_context.prec = 28
+    # Use a complete, fixed Decimal context. Cloning the caller context can
+    # inherit exponent traps or limits even when precision is overwritten.
+    with localcontext(Context(
+        prec=28, rounding=ROUND_HALF_EVEN, Emin=-999999, Emax=999999,
+    )):
         finding = compare_invoice_to_po(invoice, order)
     if finding is None:
         return NetCandidate("match_unreviewed", "0", invoice.amount.currency, tuple(unresolved))
