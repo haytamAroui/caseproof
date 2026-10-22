@@ -20,7 +20,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol
 from uuid import UUID, uuid4
 
@@ -50,7 +50,7 @@ class VaultConflict(VaultError):
     """Immutable upload intent changed or incompatible persisted state."""
 
 
-class VaultState(str, Enum):
+class VaultState(StrEnum):
     PENDING = "pending"
     VERIFIED = "verified"
     UNAVAILABLE = "unavailable"
