@@ -152,7 +152,6 @@ def test_untrusted_resource_ids_are_never_interpolated_or_queried(
     [(UUID(CASE_A), UUID(ORG_A), 4, UUID(USER_B), UUID(USER_A),
       UUID(ORG_B), True, ["case:read"])],
     [match_row(case=CASE_B)],
-    [match_row(actions=["case:read", "case:read"])],
     [match_row(actions=["case:read", "permission:superuser"])],
     [match_row(actions={"case:read"})],
     [(UUID(CASE_A), UUID(ORG_A), True, UUID(USER_B), UUID(USER_A),
@@ -164,6 +163,21 @@ def test_corrupt_privileged_row_fails_closed(rows: list[tuple[object, ...]]) -> 
     with pytest.raises(AccessStoreUnavailable) as e:
         PostgresCaseAccessRepository(rig.open).lookup_case_membership(USER_A, CASE_A)
     assert str(e.value) == "Case membership read unavailable"
+    assert rig.connections[0].closed
+
+
+@pytest.mark.parametrize("actions", [
+    ["case:read", "case:read"],
+    ["case:read", "evidence:read", "case:read", "evidence:read"],
+])
+def test_schema_valid_duplicate_membership_grants_are_normalized(
+    actions: list[str],
+) -> None:
+    rig = DBRig([match_row(actions=actions)])
+    pair = PostgresCaseAccessRepository(rig.open).lookup_case_membership(USER_A, CASE_A)
+    assert pair is not None
+    _, membership = pair
+    assert membership.actions == frozenset(CaseAction(value) for value in actions)
     assert rig.connections[0].closed
 
 
