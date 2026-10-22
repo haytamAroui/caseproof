@@ -23,7 +23,7 @@ jobs:
       - name: Verify canonical migration against reviewed proposal
         run: |
           set -euo pipefail
-          file='supabase/migrations/20261021232955_caseproof_tenant_foundation.sql'
+          file='supabase/migrations/20261022001009_caseproof_tenant_foundation.sql'
           test -f "$file"
           cmp "$file" db/proposals/S2-002_tenant_foundation.sql
           sha256sum "$file" db/proposals/S2-002_tenant_foundation.sql
