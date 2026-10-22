@@ -60,3 +60,4 @@ jobs:
           uv run --locked python -m scripts.verify_s2_004_database
           uv run --locked python -m scripts.verify_s2_008a_database
           uv run --locked python -m scripts.verify_s2_008a3_reader
+          uv run --locked python -m scripts.verify_s2_009b_database
