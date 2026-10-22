@@ -220,3 +220,22 @@ def test_v2_sheet_optional_table_id_can_be_omitted_or_null() -> None:
     assert absent.locator.table_id is None
     assert absent.locator == explicit_null.locator
     assert to_kernel_locator(absent.locator) == SheetRange("sheet", "A1:B3", None)
+
+
+
+def test_v2_text_span_rejects_codec_oversized_integers() -> None:
+    """The API cannot accept spans rejected later by the persisted locator codec."""
+    template: dict[str, object] = {
+        "kind": "text_span", "start": 0, "end": 10,
+        "encoding": "utf-8", "normalization": "none",
+        "basis": "unicode_codepoint_zero_based_half_open",
+    }
+    valid = EvidenceAnchorInput.model_validate(_anchor(template))
+    assert to_kernel_locator(valid.locator) == TextSpan(0, 10, "utf-8", "none")
+    enormous = 10**4200
+    for bad in (
+        {**template, "start": enormous, "end": enormous + 1},
+        {**template, "start": 0, "end": 10**8400},
+    ):
+        with pytest.raises(ValidationError):
+            EvidenceAnchorInput.model_validate(_anchor(bad))
