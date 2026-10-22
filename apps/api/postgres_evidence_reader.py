@@ -160,7 +160,7 @@ def get_exact_anchor_metadata(
     if row["kernel_anchor_id"] != anchor_id:
         raise StoredLocatorError("queried anchor identity mismatch")
     kind = row["locator_kind"]
-    if kind not in _KINDS:
+    if not isinstance(kind, str) or kind not in _KINDS:
         raise StoredLocatorError("unsupported stored locator kind")
     layout_kind, basis = _KINDS[kind]
     if row["layout_kind"] != layout_kind or row["coordinate_basis"] != basis:
