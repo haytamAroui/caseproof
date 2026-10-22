@@ -18,7 +18,7 @@ jobs:
       - name: Ruff check
         run: uv run --locked ruff check .
       - name: Mypy check
-        run: uv run --locked mypy --explicit-package-bases packages/evidence_kernel apps/api/contracts_v2.py apps/api/access_control.py apps/api/supabase_auth_verifier.py
+        run: uv run --locked mypy --explicit-package-bases packages/evidence_kernel apps/api/contracts_v2.py apps/api/access_control.py apps/api/supabase_auth_verifier.py apps/api/postgres_case_repository.py
       - name: Python compilation
         run: uv run --locked python -m compileall -q packages domains apps
 

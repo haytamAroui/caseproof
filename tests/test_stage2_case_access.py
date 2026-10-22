@@ -259,6 +259,14 @@ def test_request_approval_enforces_human_and_no_self_approval_but_does_not_appro
     store.memberships[("bob", "org-a")] = StoredMembership(
         "bob", "org-a", True, frozenset({CaseAction.REQUEST_APPROVAL})
     )
+    # Action-only membership cannot pass the checked-in tenant_case_read
+    # PostgreSQL RLS predicate, which requires case:read.
+    failure(service, "bob-token", "case-a", CaseAction.REQUEST_APPROVAL,
+            AccessFailure.PERMISSION_DENIED)
+    store.memberships[("bob", "org-a")] = StoredMembership(
+        "bob", "org-a", True,
+        frozenset({CaseAction.READ_CASE, CaseAction.REQUEST_APPROVAL}),
+    )
     request = service.authorize("bob-token", "case-a", CaseAction.REQUEST_APPROVAL)
     assert request.subject_id == "bob"
     assert request.action is CaseAction.REQUEST_APPROVAL
@@ -395,3 +403,27 @@ def test_foreign_and_unknown_case_have_identical_masked_response_without_outage(
         ("lookup", "alice", "case-b"),
         ("lookup", "alice", "unknown-case"),
     ]
+
+
+
+@pytest.mark.parametrize("action", [
+    CaseAction.READ_COVERAGE,
+    CaseAction.READ_EVIDENCE,
+    CaseAction.PROPOSE_FINDING,
+    CaseAction.PROPOSE_REVIEW,
+    CaseAction.REQUEST_EXCEPTION,
+    CaseAction.REQUEST_APPROVAL,
+])
+def test_every_case_action_requires_case_read_under_database_rls(action: CaseAction) -> None:
+    service, _, store = rig()
+    store.memberships[("bob", "org-a")] = StoredMembership(
+        "bob", "org-a", True, frozenset({action}),
+    )
+    failure(service, "bob-token", "case-a", action,
+            AccessFailure.PERMISSION_DENIED)
+    store.memberships[("bob", "org-a")] = StoredMembership(
+        "bob", "org-a", True, frozenset({CaseAction.READ_CASE, action}),
+    )
+    result = service.authorize("bob-token", "case-a", action)
+    assert result.action is action
+    assert result.case_id == "case-a"

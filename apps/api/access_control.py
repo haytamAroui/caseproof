@@ -239,7 +239,14 @@ class CaseAccessService:
         ):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
 
-        if action not in membership.actions:
+        # The S2-002 tenant_case_read RLS policy requires case:read for
+        # every case lookup, including requests for more specific actions.
+        # Requiring case:read here keeps the app permission model identical
+        # to the database's read predicate (no action-only bypass).
+        if (
+            CaseAction.READ_CASE not in membership.actions
+            or action not in membership.actions
+        ):
             raise AccessRejected(AccessFailure.PERMISSION_DENIED)
         if action is CaseAction.REQUEST_APPROVAL and (
             not verified.human_authenticated
