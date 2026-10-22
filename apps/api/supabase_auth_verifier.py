@@ -31,6 +31,10 @@ from apps.api.access_control import (
 )
 
 PROJECT_REF = re.compile(r"^[a-z0-9]{20}$")
+# This adapter must never send secret/service_role or legacy JWT API keys.
+# The new-format publishable key is designed for unprivileged client Auth
+# requests; reject every other format rather than trying to decode its role.
+PUBLISHABLE_KEY = re.compile(r"^sb_publishable_[A-Za-z0-9_-]{8,512}$")
 MAX_TOKEN_BYTES = 8192
 MAX_RESPONSE_BYTES = 65536
 ACCEPTED_ALGORITHMS = frozenset({"HS256", "RS256", "ES256"})
@@ -52,8 +56,10 @@ class HttpsSupabaseUserLookup:
     def __post_init__(self) -> None:
         if not PROJECT_REF.fullmatch(self.project_ref):
             raise ValueError("Supabase project reference must be exactly 20 lowercase alphanumerics")
-        if not isinstance(self.publishable_key, str) or not self.publishable_key.strip():
-            raise ValueError("Supabase publishable key required")
+        if not isinstance(self.publishable_key, str) or not PUBLISHABLE_KEY.fullmatch(
+            self.publishable_key
+        ):
+            raise ValueError("Only a Supabase sb_publishable_ key is allowed")
         if not (0.1 <= self.timeout_seconds <= 30.0):
             raise ValueError("TLS timeout must be within 0.1–30 seconds")
 
