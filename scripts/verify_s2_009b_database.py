@@ -143,7 +143,7 @@ def _concurrent_replay(env: dict[str, str], sql: str, prefix: str) -> None:
         if not ready:
             raise AssertionError("Vault transaction did not start")
         first = tx_a.stdout.readline().strip()
-        if not first.startswith(prefix) or not first.endswith("|false"):
+        if not first.startswith(prefix) or first.split("|")[-2] != "false":
             raise AssertionError("First writer did not commit one expected event")
         ready, _, _ = select.select([tx_a.stdout], [], [], 15)
         if not ready or tx_a.stdout.readline().strip() != marker:
@@ -151,8 +151,11 @@ def _concurrent_replay(env: dict[str, str], sql: str, prefix: str) -> None:
         start = time.monotonic()
         replay = _run(sql, env)
         elapsed = time.monotonic() - start
-        if (not replay.endswith("|true") or replay.rsplit("|", 1)[0]
-                != first.rsplit("|", 1)[0] or elapsed < 0.7):
+        first_parts, replay_parts = first.split("|"), replay.split("|")
+        if (len(first_parts)!=6 or len(replay_parts)!=6
+                or replay_parts[4]!="true"
+                or replay_parts[:4]!=first_parts[:4]
+                or replay_parts[5]!=first_parts[5] or elapsed < 0.7):
             raise AssertionError("Concurrent replay did not preserve one event and case revision")
         if tx_a.wait(timeout=8) != 0:
             raise AssertionError("First writer failed to commit")
@@ -186,8 +189,8 @@ def main() -> None:
              "missing reviewer action denied")
 
     committed = _run(call("stage"), env)
-    state, revision, case_revision, audit_id, replay = committed.split("|")
-    if (state, revision, replay) != ("pending", "1", "false"):
+    state, revision, case_revision, audit_id, replay, initial_key = committed.split("|")
+    if (state, revision, replay, initial_key) != ("pending", "1", "false", OBJECT_KEY):
         raise AssertionError("Pending intent not created exactly once")
     a = snapshot(env)
     if a != (original[0] + 1, 1, 1, 0, 1, "pending:1"):
@@ -195,7 +198,7 @@ def main() -> None:
     # Retry submits a fresh random object key, but the DB persists the original.
     new_key = OBJECT_KEY[:-32] + "f" * 32
     replayed = _run(call("stage", object_key=new_key), env)
-    if replayed != f"pending|1|{case_revision}|{audit_id}|true":
+    if replayed != f"pending|1|{case_revision}|{audit_id}|true|{OBJECT_KEY}":
         raise AssertionError("Original pending intent receipt not faithfully replayed")
     original_key = _run(
         f"select object_key from caseproof._s2_009b_vault_intents where intent_id='{INTENT}';",
@@ -226,14 +229,14 @@ def main() -> None:
     _unchanged(env, a, "READBACK_PRECONDITION")
 
     verify = _run(call("verify"), env)
-    vstate, vrevision, vcase_revision, vaudit, vreplay = verify.split("|")
-    if (vstate, vrevision, vreplay) != ("verified", "2", "false"):
+    vstate, vrevision, vcase_revision, vaudit, vreplay, vkey = verify.split("|")
+    if (vstate, vrevision, vreplay, vkey) != ("verified", "2", "false", OBJECT_KEY):
         raise AssertionError("Verified publication failed")
     b = snapshot(env)
     if b != (a[0] + 1, 2, 2, 1, 1, "verified:2"):
         raise AssertionError("Verified publication/audit/idempotency not atomic")
     same = _run(call("verify"), env)
-    if same != f"verified|2|{vcase_revision}|{vaudit}|true":
+    if same != f"verified|2|{vcase_revision}|{vaudit}|true|{OBJECT_KEY}":
         raise AssertionError("Verification receipt not replayed exactly")
     _unchanged(env, b, "VERIFICATION_REPLAY")
     _blocked(env, call("verify", key="stale-verifier", expected=1),
@@ -246,15 +249,28 @@ def main() -> None:
     _unchanged(env, b, "UNAVAILABLE_FAILURE_ROLLBACK")
 
     unavailable = _run(call("unavailable"), env)
-    ustate, urevision, ucase_revision, uaudit, ureplay = unavailable.split("|")
-    if (ustate, urevision, ureplay) != ("unavailable", "3", "false"):
+    ustate, urevision, ucase_revision, uaudit, ureplay, ukey = unavailable.split("|")
+    if (ustate, urevision, ureplay, ukey) != ("unavailable", "3", "false", OBJECT_KEY):
         raise AssertionError("Unavailability revision not committed")
     c = snapshot(env)
     if c != (b[0] + 1, 3, 3, 2, 1, "unavailable:3"):
         raise AssertionError("Loss event did not atomically invalidate case revision")
-    if _run(call("unavailable"), env) != f"unavailable|3|{ucase_revision}|{uaudit}|true":
+    if _run(call("unavailable"), env) != f"unavailable|3|{ucase_revision}|{uaudit}|true|{OBJECT_KEY}":
         raise AssertionError("Unavailability receipt replay failed")
     _unchanged(env, c, "UNAVAILABLE_REPLAY")
+    # Historical idempotent response must remain tied to the original
+    # audit+revision even when the CURRENT state has advanced.
+    if _run(call("stage", object_key=new_key), env) != (
+        f"pending|1|{case_revision}|{audit_id}|true|{OBJECT_KEY}"
+    ):
+        raise AssertionError("Stage replay returned live unavailability as historic outcome")
+    if _run(call("verify"), env) != (
+        f"verified|2|{vcase_revision}|{vaudit}|true|{OBJECT_KEY}"
+    ):
+        raise AssertionError("Verified replay mixed an old audit with current state")
+    _unchanged(env, c, "HISTORICAL_EXACT_REPLAY")
+    print("S2-009b historical receipts and frozen object key: PASS")
+
     _blocked(env, call("verify", key="restore-attempt", expected=3),
              "missing source cannot silently become verified")
     _unchanged(env, c, "UNAUTHORIZED_RESTORATION")
@@ -312,6 +328,61 @@ def main() -> None:
             or after_race[4] != before_race[4] + 1):
         raise AssertionError("Concurrent stage replay committed duplicate effects")
     print("S2-009b concurrent identical-key stage and replay across connections: PASS")
+
+    # Current authenticated successor with case:read+finding:write may
+    # mark source unavailable after its original creator has been revoked.
+    # Provenance retains the creator; fresh audit must identify successor.
+    _run(call("verify", intent=second_id, key="verify-second"), env)
+    _run(
+        "update caseproof.organization_members set active=false "
+        f"where org_id='{ORG}' and user_id='{ACTOR}';", env,
+    )
+    successor = "33333333-3333-4333-8333-333333333333"
+    _run(
+        "update caseproof.organization_members set active=true, "
+        "actions=array['case:read','finding:write']::text[] "
+        f"where org_id='{ORG}' and user_id='{successor}';", env,
+    )
+    loss = _run(call(
+        "unavailable", intent=second_id, actor=successor,
+        key="unavailable-second", expected=2,
+    ), env)
+    if not loss.startswith("unavailable|3|") or loss.split("|")[4]!="false":
+        raise AssertionError("Authorized successor could not append loss event")
+    attribution = _run(
+        "select i.actor_user_id::text||'|'||a.actor_user_id::text||'|'||i.state "
+        "from caseproof._s2_009b_vault_intents i "
+        "join caseproof.audit_events a on a.id=i.last_audit_id "
+        f"where i.intent_id='{second_id}';", env,
+    )
+    if attribution != f"{ACTOR}|{successor}|unavailable":
+        raise AssertionError("Lost creator provenance or impersonated loss operator")
+    _blocked(env, call("stage", intent=second_id, object_key=second_key),
+             "revoked creator cannot replay pending intent")
+    _run(
+        "update caseproof.organization_members set active=true "
+        f"where org_id='{ORG}' and user_id='{ACTOR}';", env,
+    )
+    print("S2-009b authorized successor loss with distinct audit attribution: PASS")
+
+    # A forged negative/zero stage receipt must also be rejected, not only
+    # an overlarge case revision. This is independent of the current head.
+    _run(
+        "update caseproof.idempotency_records "
+        "set response_reference=jsonb_set(response_reference::jsonb,"
+        "'{case_revision}','0'::jsonb)::text "
+        "where operation='s2_009b_vault_stage' "
+        f"and case_id='{CASE}' and idempotency_key='{INTENT}';", env,
+    )
+    _blocked(env, call("stage"), "zero forged creation receipt denied")
+    _run(
+        "update caseproof.idempotency_records "
+        "set response_reference=jsonb_set(response_reference::jsonb,"
+        "'{schema}','\"forged-schema\"'::jsonb)::text "
+        "where operation='s2_009b_vault_stage' "
+        f"and case_id='{CASE}' and idempotency_key='{INTENT}';", env,
+    )
+    _blocked(env, call("stage"), "forged receipt schema denied")
 
     print("S2-009b_DISPOSABLE_VAULT_LEDGER_PASSED")
 
