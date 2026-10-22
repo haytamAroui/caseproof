@@ -301,23 +301,43 @@ def test_publishable_validation_happens_before_auth_network(
 
 
 def test_manual_live_auth_workflow_scopes_secrets_to_final_probe_step() -> None:
-    """Regression: checkout and setup-uv must never inherit Auth secrets."""
-    workflow = (
-        Path(__file__).resolve().parents[1]
-        / ".github" / "workflows" / "s2-006-live-auth-sessions.yml"
-    ).read_text(encoding="utf-8")
-    before_probe, marker, probe = workflow.partition(
-        "      - name: Validate genuine, separate development Auth user sessions\n"
+    """Parse the JSON-form YAML workflow and enforce the security boundary."""
+    workflow = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "s2-006-live-auth-sessions.yml"
+        ).read_text(encoding="utf-8")
     )
-    assert marker
-    assert "  workflow_dispatch:" in before_probe
-    assert "${{ secrets." not in before_probe
-    assert "        env:\n" in probe
-    for key in (
+    assert set(workflow["on"]) == {"workflow_dispatch"}
+    assert "env" not in workflow
+    assert workflow["permissions"] == {"contents": "read"}
+    assert set(workflow["jobs"]) == {"verify"}
+    job = workflow["jobs"]["verify"]
+    assert "env" not in job
+    assert job["environment"] == "caseproof-dev-live-auth"
+    assert job["if"] == (
+        "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' "
+        "&& github.repository == 'haytamAroui/caseproof' }}"
+    )
+    steps = job["steps"]
+    assert len(steps) == 3
+    assert steps[0]["uses"] == "actions/checkout@v4"
+    assert steps[0]["with"] == {"ref": "main", "persist-credentials": False}
+    assert steps[1]["run"] == "python3 -c 'import sys; assert sys.version_info >= (3, 11)'"
+    for step in steps[:-1]:
+        assert "env" not in step
+    probe = steps[-1]
+    assert "uses" not in probe
+    assert probe["name"] == "Validate genuine, separate development Auth user sessions"
+    assert probe["run"] == "python3 -m scripts.verify_s2_006_live_auth"
+    required = {
         "CASEPROOF_DEV_PUBLISHABLE_KEY",
         "CASEPROOF_DEV_AUTH_A_EMAIL",
         "CASEPROOF_DEV_AUTH_A_PASSWORD",
         "CASEPROOF_DEV_AUTH_B_EMAIL",
         "CASEPROOF_DEV_AUTH_B_PASSWORD",
-    ):
-        assert f"${{{{ secrets.{key} }}}}" in probe
+    }
+    assert set(probe["env"]) == required | {"CASEPROOF_LIVE_AUTH_TEST"}
+    assert probe["env"]["CASEPROOF_LIVE_AUTH_TEST"] == "YES"
+    for key in required:
+        assert probe["env"][key] == f"${{{{ secrets.{key} }}}}"
