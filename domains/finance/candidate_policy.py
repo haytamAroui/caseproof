@@ -7,7 +7,7 @@ This function never infers VAT compatibility, deliveries, credits or contracts.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Context, ROUND_HALF_EVEN, localcontext
+from decimal import ROUND_HALF_EVEN, Context, localcontext
 from typing import Literal
 
 from domains.finance.reconciliation import DocumentAmount, compare_invoice_to_po
