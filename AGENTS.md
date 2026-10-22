@@ -1,34 +1,28 @@
-# ExceptionDesk — coding-agent instructions
+# ExceptionDesk / CaseProof — coding-agent instructions
 
-Read `CONSTITUTION.md`, `README.md`, `docs/ROADMAP.md`, and `docs/architecture/EXCEPTIONDESK_HEXAGONAL.md` before coding. Existing `docs/reference/` contains historical CaseProof research, not the current product definition.
+Read `CONSTITUTION.md`, `MEMORY.md`, `docs/STATUS.md`, `docs/ROADMAP.md`, `docs/standards/database-v1.md` when working with data, and the nearest `AGENTS.md`/ADR before changes. **Git and CI are authoritative**; memory is a checked snapshot.
 
-**Product:** one app, finance-first. Dispute dossiers are a second workflow, not a second startup. Do not build insurance, trade-finance, general legal AI or a plugin marketplace without a decision record.
+**Product:** finance-first ExceptionDesk for supplier invoice vs purchase order exception resolution; CaseProof dispute dossiers later. Never silently rename the product, copy AZComply code/data, or introduce unrelated sectors.
 
-**Boundaries:** `packages.evidence_kernel` imports neither `domains` nor frameworks/ORM/LLM clients; `domains.finance` imports kernel primitives; adapters depend inward. Kernel facts are immutable. Reconciliation emits findings; it does not mutate source facts or assert that a mismatch proves wrongdoing. Source verification, corroboration and reviewer disposition are independent.
+**Architecture:** the pure `packages.evidence_kernel` must not import `domains`, FastAPI, ORM or LLM SDKs. `domains.finance` consumes the kernel, adapters depend inward. Quoted source text ≠ semantic support ≠ source authenticity ≠ independently authorized human approval. `Decimal` for money.
 
-**Working procedure:** choose one vertical slice, write deterministic tests, report exact tests run and limitations. For substantial changes create `docs/tasks/<ID>.md`. No claims of tests passing without executing them. Do not merge/deploy/change production or contact customers without explicit approval. Preserve privacy, tenancy and evidence immutability invariants.
+**Workflow:** smallest testable vertical slice, independently review security/evidence/tenant changes, record actual branch + CI + test outcomes, and update `docs/STATUS.md` after material milestones. No production upload, migration, secret, external customer data or user action without separately authorized safeguards. Do not claim a prototype is deployed.
 
-## Cloud-first verification (binding C25)
+## Cloud-first verification (Constitution C25)
 
-- **Markdown-only changes:** Review file scope, Markdown content and links; commit to feature branches without Python tests. Do not claim merge readiness.
-- **Code, configuration, dependencies or migrations:** Require actual cloud-runner results (GitHub Actions or isolated cloud runner) for locked pytest, architecture checks, and affected Ruff, mypy, contract and security tests. Pushing a feature branch to trigger CI is allowed; missing or failing checks block merging.
-- **CI unavailable:** Do not bypass implementation verification; report the blocker and prepare a patch or use an alternative verified cloud runner.
-- **No autonomous merge/deploy.** Preserve all requirements of CONSTITUTION.md, including C12–C16, C21, C24 and C25.
+- Markdown-only edits: review changed-file scope and links; no Python test claim required.
+- Executable code, SQL proposal, workflow/config or dependencies: required real cloud-runner CI (locked pytest, architecture checks, affected Ruff/mypy, actual disposable PostgreSQL/adversarial tests) before merge.
+- CI is **available** on `main` as of 2026-10-22, but confirm every new HEAD. The intentional negative-control PR #4 failed specifically on forbidden finance→kernel import; **never merge it**.
+- **Owner-controlled branch protection is NOT verified**: GitHub rulesets endpoint returned none and branch protection query was inaccessible. `CONSTITUTION.md` C13/C16/C25 and [issue #5](https://github.com/haytamAroui/caseproof/issues/5) remain gates. Do not claim that CI success alone establishes enforced merge protection. No autonomous production deployment or override of review controls.
 
-## Mandatory database standard
+## Runtime security boundaries
 
-Before any database-related task (SQL, ORM, migrations, repository adapters, RLS, Supabase membership/storage metadata, indexes or data-access API), **read `docs/standards/database-v1.md`** and relevant ADRs. If absent, stop and request the standard. Stage 0 is design-only: do not implement database schemas or migrations without separate approval.
+- `/v1/claims` is an **in-memory development adapter** with caller-chosen tenant header, not customer-safe authentication.
+- S2-004 transaction/audit, S2-008 evidence graph, S2-009 Vault ledger have tested disposable SQL proposals; **not live production migrations**, even though source changes merged.
+- S2-006/S2-007 Auth adapters and protected manual workflows do not prove end-to-end genuine Auth → least-privilege database-role binding until genuinely executed with authorized test accounts.
+- `/v2` review/promotion is not mounted. No mock or CLI-injected claim authorizes consequential decisions.
+- Private document bytes, verified object versions, source availability and human approvals are separate production gates.
 
-**Run now:** `python -m unittest discover -s tests -v` (Python 3.11+). No infrastructure is required for the initial domain tests.
+## Delivery format
 
-Existing `CLAUDE.md` and specialist instructions are subordinate to this current product definition where they refer to the old CaseProof-only MVP.
-
-## Stage 1 trust contracts (mandatory design rules)
-- A finding promoted beyond candidate must bind to an immutable versioned, resolvable typed evidence anchor. Citation resolution, content fidelity, semantic support and sufficiency are separate checks. Never equate exact quote matching with truth.
-- Coverage must track scoped requirements, source inventory, processing/exclusion, unresolved issues and completion policy. A PROCESSED flag alone is not proof of complete investigation.
-- Approved conclusions require an authorized decision and passing policy gates. A documented exception disposition may accept business risk but MUST NOT relabel contradictory or insufficient evidence as verified.
-- Persisted evidence/decision changes must atomically record their audit event; in-memory Stage 1 prototypes have no durability guarantee. See ADRs 0008 and 0009.
-- Pydantic belongs at I/O boundaries; keep the domain framework-independent. No autonomous promotion, no model confidence as an approval criterion.
-
-## PR #8 contract review and merge boundary
-The v2 JSON file is a non-executable **proposal**, but it is not Markdown; C25's Markdown-only exception does not waive CI and security/contract review for this pull request. Do not change branch protection, disable a workflow, downgrade checks, or assert merge readiness to work around missing runners. See ADR 0008, ADR 0009 and the issue/decision revision rules in `contracts/kernel-api.v2.proposal.json`. Hold all merges while C25's positive CI, negative-control import check, independent review and owner-enabled merge protection are unverified.
+After each task: implemented paths and commit, exact CI/test evidence, risk and permission impact, untouched environments, unresolved gates, review findings and next customer-outcome-driven slice. Do not reproduce customer documents or tokens in logs.
