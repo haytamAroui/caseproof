@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>ExceptionDesk · Synthetic review workbench</title>
+<style>
+:root{color-scheme:light;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f7f9;color:#172d38}*{box-sizing:border-box}
+body{margin:0;min-height:100vh}header{background:#103a4b;color:#fff;padding:28px max(24px,calc((100vw - 1140px)/2))}header h1{margin:4px 0;font-size:29px;letter-spacing:-.8px}header p{margin:4px 0;color:#dce6e8}
+.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:#9dc8cb;font-weight:750}
+main{max-width:1188px;padding:28px 24px 60px;margin:auto}section{background:#fff;border:1px solid #dce5e8;border-radius:18px;padding:22px;margin-bottom:20px;box-shadow:0 7px 30px #1737460b}
+.topline{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+h2{font-size:19px;margin:0 0 12px}h3{font-size:15px;margin:0 0 10px}p{line-height:1.5}small,.muted{color:#566f7c}
+.pill{display:inline-block;padding:7px 11px;border-radius:99px;font-weight:700;font-size:12px;background:#fff0d7;color:#875519}
+.lock{border-left:4px solid #d49a45;padding:8px 12px;background:#fff7e9;color:#65450a;border-radius:4px;font-size:13px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.sheet{border:1px solid #e1e8eb;border-radius:12px;padding:20px;min-width:0;background:#fcfefe}
+.money{font-weight:760;font-size:32px;letter-spacing:-.8px;margin:12px 0}.negative{color:#a05d13}
+.kv{display:flex;justify-content:space-between;gap:15px;margin:10px 0;border-bottom:1px solid #e9eef0;padding-bottom:8px}.kv span:first-child{color:#617781}
+.source{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;overflow-wrap:anywhere;padding:12px;background:#eff4f6;border-radius:8px;line-height:1.6}
+.note{font-size:12px;color:#617781}input[type=file]{width:100%;border:1px dashed #8ba9b7;border-radius:11px;padding:15px;background:#f5fafb;color:#183847}
+textarea,select{width:100%;min-height:44px;border:1px solid #bbccd1;border-radius:10px;padding:12px;font:inherit;background:#fff;color:#203844}textarea{min-height:110px}
+label{font-weight:650;display:block;margin:16px 0 8px}ul{padding-left:23px;line-height:1.7}#error{color:#9a2727;font-weight:650}footer{font-size:12px;color:#607886;text-align:center;padding:10px}
+button{padding:11px 14px;background:#103a4b;color:#fff;border:0;border-radius:9px;cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #e7b055}
+@media(max-width:760px){.grid{grid-template-columns:1fr}main{padding:18px 12px}header{padding:25px 18px}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">CaseProof / ExceptionDesk · MVP-01A</div>
+<h1>Finance exception review</h1>
+<p>A source-linked candidate workbench. Synthetic local demo only.</p>
+</header>
+<main>
+<section>
+<div class="topline"><h2>Load deterministic review packet</h2><span class="pill">No authenticated review</span></div>
+<p class="muted">Generate a packet with <code>uv run --locked python -m scripts.demo_synthetic_finance &gt; synthetic_packet.json</code>, then open it here. The file stays in your browser; nothing is uploaded.</p>
+<input aria-label="Choose a synthetic review packet JSON file" id="packet" type="file" accept=".json,application/json">
+<p id="error" role="alert"></p>
+<div class="lock">Do not load customer documents. Parsed fields, hashes and demo notes are not verified evidence, durable audits or authorization.</div>
+</section>
+<div id="results" hidden>
+<section>
+<div class="topline"><h2>Candidate comparison</h2><span id="status" class="pill">Unreviewed</span></div>
+<p class="muted">Comparison uses declared net amounts excluding tax only. Differences are not financial conclusions.</p>
+<div class="money" id="difference"></div>
+<p id="basis" class="note"></p>
+</section>
+<div class="grid">
+<section class="sheet"><h2>Supplier invoice</h2><div id="invoice"></div></section>
+<section class="sheet"><h2>Purchase order</h2><div id="order"></div></section>
+</div>
+<section><h2>Coverage and uncertainty</h2><ul id="unresolved"></ul></section>
+<section>
+<div class="topline"><h2>Reviewer draft</h2><span class="pill">Local notes only</span></div>
+<p class="muted">No approval permission is installed here; selecting a draft outcome never changes recorded evidence or workflow status.</p>
+<label for="draft">Draft assessment</label>
+<select id="draft"><option>Needs clarification</option><option>Possible discrepancy</option><option>Investigate evidence basis</option></select>
+<label for="notes">Notes for later authenticated review</label>
+<textarea id="notes" placeholder="Which document, version, or business context needs clarification?"></textarea>
+<p class="note" id="draftNotice">Notes are not stored, submitted or audited.</p>
+<button id="clear" type="button">Clear local draft</button>
+</section>
+</div>
+</main>
+<footer>No real tenant identity · No real source verification · No promotion or approved export</footer>
+<script>
+"use strict";
+const byId = (id) => document.getElementById(id);
+const put = (parent,tag,text,cls) => { const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;parent.append(el);return el; };
+function pair(parent,label,value){const row=put(parent,"div","","kv");put(row,"span",label);put(row,"span",String(value??"Unknown"));}
+function renderDoc(node,data){
+  node.replaceChildren();
+  if(!data){put(node,"p","No purchase-order source supplied.","muted");return;}
+  pair(node,"Document ID",data.ubl_id);
+  pair(node,"Currency",data.currency);
+  pair(node,"Net excluding tax",data.net_excluding_tax);
+  if(data.kind==="invoice")pair(node,"PO reference",data.order_reference);
+  const ref=data.source;
+  put(node,"h3","Draft provenance");
+  put(node,"div","Original source SHA-256: "+ref.source_sha256_hex,"source");
+  put(node,"div","Parser representation SHA-256: "+ref.representation_sha256_hex,"source");
+  put(node,"p","Typed path: "+(ref.locator?.path||[]).join(".")+" · "+ref.verification_status,"note");
+}
+function renderPacket(p){
+  if(p?.schema_version!=="exceptiondesk.synthetic-finance-review.v1"
+    ||p.mode!=="synthetic_only_no_customer_data"
+    ||!p.invoice?.source||!Array.isArray(p.unresolved)
+    ||p.review?.authorized!==false||p.audit?.persisted!==false)
+     throw new Error("Only an unreviewed synthetic CaseProof packet is accepted.");
+  byId("results").hidden=false;
+  byId("status").textContent=p.status.replaceAll("_"," ");
+  byId("difference").textContent=p.difference===null
+    ?"Comparison unavailable":p.difference+" "+p.currency;
+  byId("basis").textContent="Source version "+p.invoice.source.version_id;
+  renderDoc(byId("invoice"),p.invoice);
+  renderDoc(byId("order"),p.purchase_order);
+  const list=byId("unresolved");list.replaceChildren();
+  p.unresolved.forEach(x=>put(list,"li",String(x)));
+}
+byId("packet").addEventListener("change",async(e)=>{
+  byId("error").textContent="";byId("results").hidden=true;
+  const file=e.target.files?.[0];if(!file)return;
+  if(file.size>150000){byId("error").textContent="Packet too large.";return;}
+  try {renderPacket(JSON.parse(await file.text()));}
+  catch(err){byId("error").textContent=err instanceof Error?err.message:"Invalid file";}
+});
+byId("clear").addEventListener("click",()=>{
+  byId("draft").selectedIndex=0;byId("notes").value="";
+  byId("draftNotice").textContent="Local draft cleared. No audit event was created.";
+});
+</script>
+</body></html>
