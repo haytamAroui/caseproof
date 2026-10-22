@@ -51,7 +51,7 @@ S2-004 **has been implemented as a production-disabled reference** with disposab
 
 **Open repository administration gate:** [issue #5](https://github.com/haytamAroui/caseproof/issues/5). As of this audit, actual main-branch CI green, intentional architecture negative-control fail demonstrated, but owner-controlled merge protections **not verified**. Never merge negative-control PR #4. [`docs/STATUS.md`](STATUS.md) tracks actual evidence and release blockers.
 
-**Priority before more kernel prototypes:** real signed Auth→tenant DB least privilege; real private stored source bytes and approved ledger migrations; complete persisted evidence/coverage and human decision path; then a working deterministic invoice/PO discrepancy user journey, not open-ended agent framework construction.
+**Priority before more kernel prototypes:** [real signed Auth→tenant DB least privilege](https://github.com/haytamAroui/caseproof/issues/37); [real private stored source bytes and reviewed ledger](https://github.com/haytamAroui/caseproof/issues/38); [persisted evidence/coverage and human decisions](https://github.com/haytamAroui/caseproof/issues/39); then [a working invoice/PO discrepancy user journey](https://github.com/haytamAroui/caseproof/issues/40), not open-ended agent framework construction.
 
 **Stage 2 release gate:** real cryptographic Auth and runtime DB isolation; fine-grained kernel evidence persisted without lossy flattening; verified private original bytes and immutable parser lineage; authorization, snapshot and state+audit+receipt committed atomically; revocation, concurrent retries, audit-failure rollback, signed URL attacks and crash/restart demonstrated using appropriate real integrations. Unknowns remain blockers.
 
