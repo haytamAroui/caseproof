@@ -199,6 +199,36 @@ end $empty$;
 
 reset role;
 
+-- App access contract aligns with case RLS: even a reviewer whose
+-- only capability is conclusion:request_approval must also be granted
+-- case:read to see the case for an authorization preflight.
+update caseproof.organization_members
+set actions=array['conclusion:request_approval']::text[]
+where org_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  and user_id='33333333-3333-4333-8333-333333333333';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','33333333-3333-4333-8333-333333333333',true);
+do $action_only$
+begin
+ if (select count(*) from caseproof.cases) <> 0 then
+   raise exception 'action-only user saw case without case:read';
+ end if;
+end $action_only$;
+reset role;
+update caseproof.organization_members
+set actions=array['case:read','conclusion:request_approval']::text[]
+where org_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  and user_id='33333333-3333-4333-8333-333333333333';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','33333333-3333-4333-8333-333333333333',true);
+do $dual_granted$
+begin
+ if (select count(*) from caseproof.cases) <> 1 then
+   raise exception 'case:read plus action grant did not reveal permitted case';
+ end if;
+end $dual_granted$;
+reset role;
+
 -- Revocation must take effect on subsequent authenticated statements.
 update caseproof.organization_members
 set active=false, membership_revision=membership_revision+1
