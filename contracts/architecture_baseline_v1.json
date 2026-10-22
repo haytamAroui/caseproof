@@ -1,0 +1,122 @@
+{
+  "schema_version": "architecture-baseline-v1",
+  "decision_status": "frozen_target_not_production_authorization",
+  "architecture": "hexagonal_modular_monolith",
+  "deployment": {
+    "one_codebase": true,
+    "api_process": "FastAPI",
+    "worker_process": "separate_future_process",
+    "microservices": false,
+    "initial_queue": "PostgreSQL leases and outbox",
+    "redis_mandatory": false
+  },
+  "product": {
+    "platform": "CaseProof",
+    "first_application": "ExceptionDesk",
+    "first_outcome": "human-reviewed invoice versus PO exception package",
+    "later_consumer": "factual dispute dossiers only after finance pilot",
+    "other_product_dependency": "none"
+  },
+  "ownership": {
+    "kernel": [
+      "source_identity",
+      "representation_lineage",
+      "typed_anchors",
+      "citation_resolution",
+      "content_fidelity",
+      "finding_evidence_links",
+      "coverage_contracts",
+      "pure_promotion_policy",
+      "provenance_contracts",
+      "immutable_snapshots"
+    ],
+    "application": [
+      "authenticated_actor_context",
+      "intake",
+      "parsing_coordination",
+      "candidate_extraction",
+      "review_workflows",
+      "atomic_authorized_decisions",
+      "dossier_export",
+      "durable_step_run"
+    ],
+    "finance": [
+      "money_and_currency_rules",
+      "invoice_po_comparison",
+      "VAT_basis",
+      "amendments",
+      "business_exception_semantics"
+    ],
+    "infrastructure": [
+      "postgresql",
+      "private_object_storage",
+      "parsers",
+      "model_providers",
+      "queue_workers",
+      "signed_identity_boundary",
+      "renderers"
+    ],
+    "evaluation": [
+      "kernel_invariants",
+      "finance_golden_cases",
+      "adversarial_documents",
+      "runtime_observability",
+      "optional_agent_benchmarks"
+    ]
+  },
+  "release_gates": {
+    "installed_permissions_version": "existing-foundation-v1",
+    "client_tenant_id_never_authority": true,
+    "client_reviewer_id_never_authority": true,
+    "real_signed_auth_required": true,
+    "private_original_bytes_required": true,
+    "atomic_state_audit_receipt_required": true,
+    "explicit_human_attestation_for_approval": true,
+    "worker_success_not_evidence_approval": true,
+    "missing_evidence_never_implicit_acceptance": true,
+    "signed_url_not_instant_revoke": true
+  },
+  "mvp_access_scope": "org_membership_with_action_grants_no_per_case_assignment",
+  "case_assignment_future_policy": "must_be_separately_approved_if_reviewer_specific_cases_required",
+  "source_model": "KRN-101 SourceVersion and DerivedRepresentation authoritative for new v2 flow; v1 DocumentVersion legacy dev only",
+  "locator_kind_names": [
+    "text_span",
+    "pdf_region",
+    "sheet_range",
+    "structured_field"
+  ],
+  "locator_pdf_wire_type": "bounded canonical decimal string",
+  "state_dimensions": [
+    "source_verification",
+    "coverage_inventory",
+    "vault_availability",
+    "finding_lifecycle",
+    "human_review",
+    "worker_execution"
+  ],
+  "defer": [
+    "DomainPack_framework",
+    "universal_EvidenceState_enum",
+    "adaptive_multi_pass_llm",
+    "recursive_agent_orchestration",
+    "sector_expansion",
+    "independent_kernel_package"
+  ],
+  "delivery_tracks": {
+    "foundation": [
+      "owner_branch_protection",
+      "real_auth_db_isolation",
+      "private_vault",
+      "authorized_transactional_graph_and_review",
+      "worker_recovery"
+    ],
+    "synthetic_product": [
+      "UBL_parser",
+      "invoice_PO_candidate_comparison",
+      "golden_case_corpus",
+      "reviewer_workbench_mock",
+      "report_template"
+    ],
+    "join_gate": "genuine source+auth+review+audit+export verified on one end-to-end case"
+  }
+}
