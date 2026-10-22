@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations/20261021232955_caseproof_tenant_foundation.sql"
+MIGRATION = ROOT / "supabase/migrations/20261022001009_caseproof_tenant_foundation.sql"
 PROPOSAL_PATH = ROOT / "db/proposals/S2-002_tenant_foundation.sql"
 PROPOSAL = MIGRATION.read_text(encoding="utf-8")
 # The final applied contract must match the already rollback-tested proposal.
