@@ -85,6 +85,7 @@ function renderDoc(node,data){
 function renderPacket(p){
   if(p?.schema_version!=="exceptiondesk.synthetic-finance-review.v1"
     ||p.mode!=="synthetic_only_no_customer_data"
+    ||!["unresolved","match_unreviewed","candidate_requires_review"].includes(p.status)
     ||!p.invoice?.source||!Array.isArray(p.unresolved)
     ||p.review?.authorized!==false||p.audit?.persisted!==false)
      throw new Error("Only an unreviewed synthetic CaseProof packet is accepted.");
