@@ -30,7 +30,8 @@ create table caseproof.s2_008a_source_logical_ids (
     audit_event_id uuid not null,
     primary key (org_id, case_id, document_pk),
     unique (org_id, case_id, kernel_document_id),
-    foreign key (org_id, case_id, document_pk)
+    constraint s2_008a_src_case_fk
+        foreign key (org_id, case_id, document_pk)
         references caseproof.documents(org_id, case_id, id),
     foreign key (org_id, case_id, audit_event_id)
         references caseproof.audit_events(org_id, case_id, id)
@@ -131,7 +132,8 @@ create table caseproof.s2_008a_anchors (
                                 and octet_length(locator::text) <= 8192),
     audit_event_id uuid not null,
     unique (org_id, case_id, kernel_anchor_id),
-    foreign key (org_id, case_id, document_pk, version_pk, representation_pk,
+    constraint s2_008a_anchor_repr_case_digest_fk
+        foreign key (org_id, case_id, document_pk, version_pk, representation_pk,
                  source_sha256_hex, representation_sha256_hex)
         references caseproof.s2_008a_representations(
             org_id, case_id, document_pk, version_pk, representation_pk,
@@ -174,6 +176,39 @@ create trigger s2_008a_layout_immutable before update or delete
 create trigger s2_008a_anchor_immutable before update or delete
     on caseproof.s2_008a_anchors
     for each row execute function caseproof._s2_008a_disposable_no_mutation();
+
+-- The pre-existing source-version row is a parent of the immutable graph.
+-- Snapshotting its SHA in an FK alone does not freeze byte_length, media_type,
+-- parser_version, ingested_at or version_number. In this DISPOSABLE fixture,
+-- deny ANY rewrite/delete of a version once it has a logical kernel binding.
+-- This is intentionally not a production trigger/migration. The real schema
+-- will need its own reviewed policy and audited source-version lifecycle.
+create function caseproof._s2_008a_disposable_protect_parent_version()
+returns trigger language plpgsql security invoker
+set search_path=pg_catalog,pg_temp
+as $parent_guard$
+begin
+    if exists (
+        select 1 from caseproof.s2_008a_version_logical_ids v
+        where v.org_id = old.org_id
+          and v.document_pk = old.document_id
+          and v.version_pk = old.id
+    ) then
+        raise exception 'S2-008a referenced document version cannot be modified';
+    end if;
+    if tg_op = 'DELETE' then
+        return old;
+    end if;
+    return new;
+end
+$parent_guard$;
+
+create trigger s2_008a_parent_source_metadata_immutable
+    before update or delete on caseproof.document_versions
+    for each row execute function caseproof._s2_008a_disposable_protect_parent_version();
+
+revoke execute on function caseproof._s2_008a_disposable_protect_parent_version()
+    from public, anon, authenticated;
 
 revoke execute on function caseproof._s2_008a_disposable_no_mutation()
     from public, anon, authenticated;
