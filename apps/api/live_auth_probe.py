@@ -8,6 +8,7 @@ synthetic Signin is permitted ONLY in isolated unit tests.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 from apps.api.access_control import InvalidBearer, VerifiedSubject
 from apps.api.supabase_password_signin import (
@@ -17,9 +18,8 @@ from apps.api.supabase_password_signin import (
 )
 
 
-class SessionVerifier:
-    def verify_bearer(self, token: str) -> VerifiedSubject:  # pragma: no cover - protocol
-        raise NotImplementedError
+class SessionVerifier(Protocol):
+    def verify_bearer(self, token: str) -> VerifiedSubject: ...
 
 
 @dataclass(frozen=True, slots=True)
