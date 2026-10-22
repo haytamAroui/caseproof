@@ -10,7 +10,14 @@ import pytest
 from pydantic import ValidationError
 
 from apps.api.access_control import CaseAction
-from apps.api.contracts_v2 import EvidenceAnchorInput, to_kernel_locator
+from apps.api.contracts_v2 import (
+    EvidenceAnchorInput,
+    PdfRegionLocator,
+    SheetRangeLocator,
+    StructuredFieldLocator,
+    TextSpanLocator,
+    to_kernel_locator,
+)
 from apps.api.evidence_locator_codec import decode_locator, encode_locator
 from packages.evidence_kernel.domain.anchors import (
     PdfRegion,
@@ -23,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASELINE = json.loads((ROOT / "contracts/architecture_baseline_v1.json").read_text())
 CATALOG = json.loads((ROOT / "contracts/action_catalog.v1.json").read_text())
 OPERATIONS = json.loads((ROOT / "contracts/v2_operation_matrix.json").read_text())
+PROPOSAL = json.loads((ROOT / "contracts/kernel-api.v2.proposal.json").read_text())
 FOUNDATION = (ROOT / "supabase/migrations/20261022001009_caseproof_tenant_foundation.sql").read_text()
 
 
@@ -162,3 +170,26 @@ def test_kernel_sectors_and_workflow_are_distinct_concerns() -> None:
     assert "worker_execution" in BASELINE["state_dimensions"]
     assert "real_auth_db_isolation" in BASELINE["delivery_tracks"]["foundation"]
     assert "UBL_parser" in BASELINE["delivery_tracks"]["synthetic_product"]
+
+
+def test_v2_proposal_locator_contract_tracks_executable_schema() -> None:
+    """Design outline cannot direct implementers to obsolete v2 wire types."""
+    anchor = PROPOSAL["schemas"]["EvidenceAnchor"]
+    assert anchor["required"] == list(EvidenceAnchorInput.model_fields)
+    assert anchor["anchor_types"] == BASELINE["locator_kind_names"]
+    assert anchor["canonical_executable_locator_contract"].startswith("apps/api/contracts_v2.py")
+    models = {
+        "text_span": TextSpanLocator,
+        "pdf_region": PdfRegionLocator,
+        "sheet_range": SheetRangeLocator,
+        "structured_field": StructuredFieldLocator,
+    }
+    assert set(anchor["locator_contracts"]) == set(models)
+    for kind, model in models.items():
+        assert set(anchor["locator_contracts"][kind]["fields"]) == set(model.model_fields)
+    assert "decimal JSON STRINGS" in anchor["locator_contracts"]["pdf_region"]["rules"]
+    assert "encoding=utf-8" in anchor["locator_contracts"]["text_span"]["rules"]
+    assert "table_id" in anchor["locator_contracts"]["sheet_range"]["fields"]
+    assert "path" in anchor["locator_contracts"]["structured_field"]["fields"]
+    assert "spreadsheet_range" not in anchor["anchor_types"]
+    assert OPERATIONS["status"] == "typed_contract_only_all_v2_routes_disabled"
