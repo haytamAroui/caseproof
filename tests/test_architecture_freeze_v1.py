@@ -65,7 +65,7 @@ def test_exact_v2_to_domain_to_storage_roundtrip(
 
 @pytest.mark.parametrize("value", [
     0.1, 1, None, -0.1, float("inf"), float("nan"), "1e-2", "-1", ".5",
-    "0001", "0.", "9" * 65, "1.000000000000000000000000000000000000000000000000000000000000",
+    "0001", "0.", "9" * 65, "1." + "0" * 65,
 ])
 def test_pdf_coordinate_json_number_or_noncanonical_string_rejected(value: object) -> None:
     locator: dict[str, object] = {
