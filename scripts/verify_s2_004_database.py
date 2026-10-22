@@ -143,10 +143,20 @@ def main() -> None:
     env = _env()
     # Refuse running unless the existing S2-002 disposable suite already
     # created the exact synthetic data. This script never bootstraps a live DB.
-    if state(env) != (2, 0, 0, 0):
+    preflight = _run(
+        "select c.case_revision::text || '|' || "
+        "(select count(*) from caseproof.audit_events a "
+        "where a.action='s2_004_internal_observation' and a.case_id=c.id)"
+        " || '|' || "
+        "(select count(*) from caseproof.idempotency_records i "
+        "where i.operation='s2_004_internal_observation' and i.case_id=c.id) "
+        f"from caseproof.cases c where c.id='{CASE_A}';", env,
+    )
+    if preflight != "2|0|0":
         raise RuntimeError("S2-004 requires fresh S2-002 disposable CI fixtures")
 
     _run(REFERENCE_SQL, env)
+    assert_state(env, (2, 0, 0, 0), "FRESH_REFERENCE_SCHEMA")
     _run(
         "update caseproof.organization_members "
         "set active=true, actions=array['case:read','finding:write']::text[] "
