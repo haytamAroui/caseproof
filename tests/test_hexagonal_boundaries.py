@@ -63,3 +63,19 @@ def test_bad_python_is_reported() -> None:
         filename="kernel.py",
         banned=RULES["packages/evidence_kernel"],
     )
+
+
+def test_relative_import_cannot_escape_to_infrastructure() -> None:
+    assert scan_source(
+        "from ...infrastructure import persistence",
+        filename="packages/evidence_kernel/domain/anchors.py",
+        banned=RULES["packages/evidence_kernel"],
+    )
+
+
+def test_relative_local_import_is_allowed() -> None:
+    assert not scan_source(
+        "from . import fidelity",
+        filename="packages/evidence_kernel/domain/anchors.py",
+        banned=RULES["packages/evidence_kernel"],
+    )
