@@ -1,6 +1,6 @@
 """Application boundary is a contract, not a mock approval implementation."""
-from dataclasses import FrozenInstanceError
 import dataclasses
+from dataclasses import FrozenInstanceError
 
 import pytest
 
