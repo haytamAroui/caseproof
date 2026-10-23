@@ -32,10 +32,15 @@ def scan_source(source: str, *, filename: str, banned: set[str]) -> list[str]:
         if isinstance(node, ast.Import):
             modules = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
-            # Relative imports stay within their current package by convention.
-            # Cross-package relative imports should be rejected by package-level
-            # review; do not guess the resolved module from an isolated snippet.
-            if not node.level:
+            if node.level:
+                parts = Path(filename).with_suffix("").parts[:-1]
+                if node.level > len(parts):
+                    errors.append(f"{filename}:{node.lineno}: relative import escapes package root")
+                    continue
+                prefix = parts[:len(parts) - node.level + 1]
+                suffix = (node.module or "").split(".") if node.module else []
+                modules = [".".join((*prefix, *suffix))]
+            else:
                 modules = [node.module or ""]
         elif isinstance(node, ast.Call):
             dynamic = (
