@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from apps.api.access_control import CaseAccessService, CaseAction, AuthorizedCase
+from apps.api.access_control import AuthorizedCase, CaseAccessService, CaseAction
 from domains.finance.candidate_policy import NetCandidate, assess_invoice_order_net
 from domains.finance.reconciliation import DocumentAmount
 
