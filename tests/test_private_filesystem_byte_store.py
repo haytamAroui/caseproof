@@ -1,19 +1,22 @@
 """Local private vault storage integration and adversarial filesystem tests."""
 
 import hashlib
-import os
 from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from test_s2_009a_vault_protocol import FakeAtomicLedger
 
 from apps.api.evidence_vault_protocol import (
-    VaultCoordinator, VaultScope, VaultState, VaultUnavailable,
+    VaultCoordinator,
+    VaultScope,
+    VaultState,
+    VaultUnavailable,
 )
 from apps.api.private_filesystem_byte_store import (
-    PrivateFilesystemByteStore, PrivateObjectConflict,
+    PrivateFilesystemByteStore,
+    PrivateObjectConflict,
 )
-from test_s2_009a_vault_protocol import FakeAtomicLedger
 
 ORG = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 CASE = UUID("aaaaaaaa-1111-4111-8111-111111111111")
