@@ -15,7 +15,12 @@ from typing import Protocol, Self
 from uuid import UUID
 
 from apps.api.evidence_vault_protocol import (
-    UploadIntent, VaultConflict, VaultLedger, VaultRecord, VaultScope, VaultState,
+    UploadIntent,
+    VaultConflict,
+    VaultLedger,
+    VaultRecord,
+    VaultScope,
+    VaultState,
 )
 
 COMMAND_SQL = """
