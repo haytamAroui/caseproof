@@ -40,6 +40,7 @@ from apps.api.evidence_vault_protocol import (
 from apps.api.private_filesystem_byte_store import PrivateFilesystemByteStore
 from scripts.verify_s2_007_disposable_tenancy import _isolated_postgres_env
 
+SYNTHETIC_SOURCE = b"Synthetic invoice: net EUR 1150.00\n"
 
 def connect(*, cursor_factory=psycopg.Cursor):
     # Reuse the existing fail-closed disposable guard, and explicitly override
@@ -62,16 +63,16 @@ class Fixture:
     actor: UUID
     version: UUID
     intent: UUID
-    data: bytes = b"Synthetic invoice: net EUR 1150.00\n"
+    data: bytes = SYNTHETIC_SOURCE
 
     @property
     def digest(self):
         return sha256(self.data).hexdigest()
 
 
-def seed():
+def seed(*, data: bytes = SYNTHETIC_SOURCE):
     """Fresh tenant/case/version with digest of ACTUAL synthetic source bytes."""
-    f = Fixture(VaultScope(uuid4(), uuid4()), uuid4(), uuid4(), uuid4())
+    f = Fixture(VaultScope(uuid4(), uuid4()), uuid4(), uuid4(), uuid4(), data)
     document = uuid4()
     with connect() as conn:
         conn.execute(

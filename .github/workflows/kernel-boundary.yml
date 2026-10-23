@@ -22,7 +22,7 @@ jobs:
       - name: Python compilation
         run: uv run --locked python -m compileall -q packages domains apps
       - name: Type check disposable Vault adapters
-        run: uv run --locked mypy --explicit-package-bases apps/api/disposable_postgres_vault_ledger.py apps/api/private_filesystem_byte_store.py
+        run: uv run --locked mypy --explicit-package-bases apps/api/disposable_postgres_vault_ledger.py apps/api/private_filesystem_byte_store.py apps/api/disposable_text_evidence.py
 
   database-security:
     name: Disposable PostgreSQL concurrency and audit regression
@@ -65,3 +65,5 @@ jobs:
           uv run --locked python -m scripts.verify_s2_009b_database
       - name: Verify Vault coordinator with real PostgreSQL and private bytes
         run: uv run --locked python -m scripts.verify_vault_integration
+      - name: Resolve persisted text evidence after process restart
+        run: uv run --locked python -m scripts.verify_text_anchor_integration

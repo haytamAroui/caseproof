@@ -1,5 +1,20 @@
 # CaseProof / ExceptionDesk — verified engineering status
 
+## 2026-10-23 — Persisted exact text evidence increment
+
+PR #51 is merged at `9dabe59a4ddeea2f9aaed9b4d83c32af67683099`; its
+verified feature head passed 881 unit tests, eight real disposable Vault
+integration tests, type/lint/architecture and migration checks in
+[CI 39938192806](https://github.com/haytamAroui/caseproof/actions/runs/39938192806).
+
+[TEXT-INT-001](tasks/TEXT-INT-001.md) adds internal read composition for the
+existing persisted graph plus actual Vault bytes. Its first identity UTF-8
+representation reuses original bytes, preserves exact code-point offsets and
+separates citation/fidelity from support/approval. A separate-process PostgreSQL
+fixture demonstrates recovery and negative cases; new-head CI evidence must
+be recorded on its PR. No live migration, new authoritative facts table,
+production identity, parser/OCR/LLM pipeline or human decision is introduced.
+
 ## 2026-10-23 — Vault integration increment (feature branch)
 
 Base `main` is `901c51d08dfac577d56799889701416e9139940d`, including PRs
