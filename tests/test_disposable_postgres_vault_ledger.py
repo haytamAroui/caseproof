@@ -142,3 +142,15 @@ def test_invalid_transitions_never_issue_sql() -> None:
     with pytest.raises(ValueError):
         adapter._command(intent, "approve")
     assert cursor.sql is None
+
+
+@pytest.mark.parametrize("column,value", [
+    (3, b"not-a-text-key"), (4, b"a" * 64), (5, True),
+    (6, None), (7, None), (8, True),
+])
+def test_malformed_driver_column_types_fail_closed(column, value) -> None:
+    row = [ORG, CASE, INTENT, intent_key(), "a" * 64, 12, "text/plain", "pending", 1, AUDIT]
+    row[column] = value
+    adapter, intent, _ = fixture([tuple(row)])
+    with pytest.raises(VaultConflict, match="column types"):
+        adapter.get_scoped(intent.scope, INTENT)
