@@ -91,25 +91,13 @@ class PrivateFilesystemByteStore:
                 obj = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
             except FileNotFoundError:
                 return None
-            try:
-                metadata = os.fstat(obj)
+            with os.fdopen(obj, "rb", closefd=True) as stream:
+                metadata = os.fstat(stream.fileno())
                 if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_REFERENCE_BYTES:
                     raise VaultUnavailable("untrusted object type or size")
-                with os.fdopen(obj, "rb", closefd=True) as stream:
-                    data = stream.read(MAX_REFERENCE_BYTES + 1)
+                data = stream.read(MAX_REFERENCE_BYTES + 1)
                 if len(data) > MAX_REFERENCE_BYTES:
                     raise VaultUnavailable("object exceeded bounded read")
                 return data
-            except BaseException:
-                os.close(obj) if _fd_open(obj) else None
-                raise
         finally:
             os.close(fd)
-
-
-def _fd_open(fd: int) -> bool:
-    try:
-        os.fstat(fd)
-    except OSError:
-        return False
-    return True
