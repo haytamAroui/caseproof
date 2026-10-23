@@ -64,15 +64,16 @@ class Fixture:
     version: UUID
     intent: UUID
     data: bytes = SYNTHETIC_SOURCE
+    media_type: str = "text/plain"
 
     @property
     def digest(self):
         return sha256(self.data).hexdigest()
 
 
-def seed(*, data: bytes = SYNTHETIC_SOURCE):
+def seed(*, data: bytes = SYNTHETIC_SOURCE, media_type: str = "text/plain"):
     """Fresh tenant/case/version with digest of ACTUAL synthetic source bytes."""
-    f = Fixture(VaultScope(uuid4(), uuid4()), uuid4(), uuid4(), uuid4(), data)
+    f = Fixture(VaultScope(uuid4(), uuid4()), uuid4(), uuid4(), uuid4(), data, media_type)
     document = uuid4()
     with connect() as conn:
         conn.execute(
@@ -100,7 +101,7 @@ def seed(*, data: bytes = SYNTHETIC_SOURCE):
         conn.execute(
             "insert into caseproof.document_versions(id,org_id,document_id,version_number,"
             "original_sha256_hex,byte_length,media_type) values(%s,%s,%s,1,%s,%s,%s)",
-            (f.version, f.scope.org_id, document, f.digest, len(f.data), "text/plain"),
+            (f.version, f.scope.org_id, document, f.digest, len(f.data), f.media_type),
         )
     return f
 
@@ -118,7 +119,7 @@ def coordinator(root, f, factory=connect):
 def begin(vault, f):
     return vault.begin(
         scope=f.scope, intent_id=f.intent, sha256_hex=f.digest,
-        byte_length=len(f.data), media_type="text/plain",
+        byte_length=len(f.data), media_type=f.media_type,
     )
 
 

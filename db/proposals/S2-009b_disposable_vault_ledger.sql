@@ -17,7 +17,7 @@ create table caseproof._s2_009b_vault_intents (
   sha256_hex text not null check (sha256_hex ~ '^[0-9a-f]{64}$'),
   byte_length bigint not null check (byte_length between 1 and 5242880),
   media_type text not null check (media_type in
-     ('application/pdf','application/xml','text/xml','text/plain')),
+     ('application/pdf','application/xml','text/xml','text/plain','message/rfc822')),
   state text not null default 'pending'
     check (state in ('pending','verified','unavailable')),
   intent_revision bigint not null default 1 check (intent_revision > 0),
@@ -183,7 +183,7 @@ begin
        p_document_version is null
        or p_object_key is null or p_sha !~ '^[0-9a-f]{64}$'
        or p_byte_length is null or p_byte_length not between 1 and 5242880
-       or p_media not in ('application/pdf','application/xml','text/xml','text/plain')
+       or p_media not in ('application/pdf','application/xml','text/xml','text/plain','message/rfc822')
        or p_request_key != p_intent::text
        or p_expected_intent_revision is not null or p_reason is not null) then
     raise exception 'invalid stage contract' using errcode='22023';

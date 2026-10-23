@@ -21,6 +21,8 @@ jobs:
         run: uv run --locked mypy --explicit-package-bases packages/evidence_kernel apps/api/contracts_v2.py apps/api/access_control.py apps/api/supabase_auth_verifier.py apps/api/postgres_case_repository.py apps/api/supabase_password_signin.py apps/api/live_auth_probe.py apps/api/internal_observation_contract.py apps/api/evidence_locator_codec.py apps/api/postgres_evidence_reader.py apps/api/evidence_vault_protocol.py domains/finance/reconciliation.py domains/finance/candidate_policy.py apps/api/synthetic_finance.py scripts/demo_synthetic_finance.py
       - name: Type check Evidence Intelligence runtime and adapters
         run: uv run --locked mypy --explicit-package-bases application/extraction apps/api/requesty_extraction.py apps/api/disposable_extraction_journal.py domains/finance/extraction_rules.py domains/construction
+      - name: Type check document intake, parsers and evaluation
+        run: uv run --locked mypy --explicit-package-bases application/documents infrastructure/parsers apps/api/authenticated_document_intelligence.py evals
       - name: Python compilation
         run: uv run --locked python -m compileall -q packages domains apps
       - name: Type check disposable Vault adapters
@@ -71,3 +73,5 @@ jobs:
         run: uv run --locked python -m scripts.verify_text_anchor_integration
       - name: Verify durable extraction recovery, scope, CAS and audit rollback
         run: uv run --locked python -m scripts.verify_extraction_integration
+      - name: Verify document intake to extraction with real private bytes and PostgreSQL
+        run: uv run --locked python -m scripts.verify_document_intake_integration

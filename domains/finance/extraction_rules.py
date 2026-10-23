@@ -6,7 +6,7 @@ import re
 class FinanceEvidencePolicy:
     namespace = "finance"
     version = "finance-observations-v1"
-    signals = (
+    signals: tuple[str, ...] = (
         "invoice_issued",
         "purchase_order_issued",
         "amount_disputed",

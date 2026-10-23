@@ -1,0 +1,10 @@
+From: Supplier <supplier@example.invalid>
+To: Finance <finance@example.invalid>
+Subject: Invoice discrepancy
+Message-ID: <synthetic-caseproof@example.invalid>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+We dispute invoice INV-2026-001 amount EUR 1250.00.
+Please provide the purchase order amendment.

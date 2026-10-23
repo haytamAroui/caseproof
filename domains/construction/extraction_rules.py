@@ -6,7 +6,7 @@ import re
 class ConstructionEvidencePolicy:
     namespace = "construction"
     version = "construction-observations-v1"
-    signals = (
+    signals: tuple[str, ...] = (
         "variation_instruction_issued",
         "variation_work_performed",
         "scope_changed",
