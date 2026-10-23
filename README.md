@@ -73,3 +73,20 @@ uv run --locked python -m scripts.run_document_evaluation --live-requesty --run-
 ```
 
 Maximum 8 calls × 512 output tokens, no automatic retry/repair/fallback. Saved raw responses and parser artifacts replay from PostgreSQL; unknown dispatch requires reconciliation. Provider-reported cost remains null if missing. No Requesty key/model was configured during implementation, so live quality/cost are not measured. See [ADR 0013](docs/adr/0013-document-normalization-and-evaluation.md) for parser/security limits and remaining production gates.
+
+### Synthetic reviewer workbench and draft pack
+
+```bash
+uv run --locked python -m scripts.run_review_workbench
+# Open http://127.0.0.1:8765/demo
+```
+
+This separate loopback app loads only repository-owned synthetic sources and makes no LLM calls or uploads. Inspect exact parsed source text and competing amounts, record retain/reject/correct/qualify/request-evidence **recommendations**, and download a draft pack. The default server honestly uses session memory; restarting it clears its demo notes. Durable event/head/receipt behavior is covered with the injected disposable PostgreSQL adapter in CI. No approval, promotion or supplier message is enabled.
+
+Keep the displayed manifest hash separately from the downloaded ZIP. Verify it offline with trusted repository code:
+
+```bash
+uv run --locked python -m scripts.verify_resolution_pack draft-evidence-review.zip --expected-manifest YOUR_RETAINED_SHA256
+```
+
+The verifier reads bounded ZIP entries without extracting or running them. It checks originals, normalized representations, exact citations and audit-chain consistency. Hash verification is not source authenticity, human identity, legal validity or approval. The readable report retains conflicts, missing evidence and unreviewed sufficiency. See [ADR 0014](docs/adr/0014-review-recommendations-and-draft-pack.md) for security, persistence and remaining production gates.

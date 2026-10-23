@@ -23,6 +23,20 @@ jobs:
         run: uv run --locked mypy --explicit-package-bases application/extraction apps/api/requesty_extraction.py apps/api/disposable_extraction_journal.py domains/finance/extraction_rules.py domains/construction
       - name: Type check document intake, parsers and evaluation
         run: uv run --locked mypy --explicit-package-bases application/documents infrastructure/parsers apps/api/authenticated_document_intelligence.py evals
+      - name: Type check review and draft export
+        run: uv run --locked mypy --explicit-package-bases application/review application/dossiers apps/api/review_workbench.py apps/api/disposable_review_repository.py apps/api/synthetic_review_app.py scripts/review_demo_fixture.py
+      - name: Verify reviewer browser journey
+        env:
+          CASEPROOF_BROWSER_LOG_SCREENSHOT: "YES"
+        run: uv run --locked python -m scripts.verify_review_browser
+      - name: Verify reviewer UI contracts
+        run: uv run --locked python scripts/check_review_ui.py
+      - name: Save synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-review-browser
+          path: /tmp/caseproof-review-browser
       - name: Python compilation
         run: uv run --locked python -m compileall -q packages domains apps
       - name: Type check disposable Vault adapters
@@ -75,3 +89,5 @@ jobs:
         run: uv run --locked python -m scripts.verify_extraction_integration
       - name: Verify document intake to extraction with real private bytes and PostgreSQL
         run: uv run --locked python -m scripts.verify_document_intake_integration
+      - name: Verify atomic review recommendations and draft export
+        run: uv run --locked python -m scripts.verify_review_integration
