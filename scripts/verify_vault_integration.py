@@ -9,6 +9,7 @@ Missing dependencies/database fail the command; nothing is skipped.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -44,10 +45,13 @@ def connect(*, cursor_factory=psycopg.Cursor):
     # Reuse the existing fail-closed disposable guard, and explicitly override
     # libpq service/options/address settings rather than inheriting PG* values.
     env = _isolated_postgres_env()
+    allowed = {"PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD", "PGCONNECT_TIMEOUT"}
+    if any(key.startswith("PG") and key not in allowed for key in os.environ):
+        raise RuntimeError("Unexpected libpq environment override")
     return psycopg.connect(
         host=env["PGHOST"], hostaddr=env["PGHOST"], port=env["PGPORT"],
         dbname=env["PGDATABASE"], user=env["PGUSER"], password=env["PGPASSWORD"],
-        service="", options="", sslmode="disable", connect_timeout=5,
+        options="", sslmode="disable", connect_timeout=5,
         cursor_factory=cursor_factory,
     )
 
