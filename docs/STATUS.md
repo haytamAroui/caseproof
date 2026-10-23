@@ -1,5 +1,22 @@
 # CaseProof / ExceptionDesk — verified engineering status
 
+## 2026-10-23 — Vault integration increment (feature branch)
+
+Base `main` is `901c51d08dfac577d56799889701416e9139940d`, including PRs
+#45/#46/#50; its architecture, disposable PostgreSQL and canonical migration
+checks were verified successful. PR #49 supplies private filesystem bytes;
+PR #50 supplies the disposable DB-API VaultLedger driver. Neither is a live
+Supabase Storage deployment. Older snapshots below predate those merges.
+
+[VAULT-INT-001](tasks/VAULT-INT-001.md) adds a real psycopg + filesystem +
+coordinator integration command to required PostgreSQL CI. It exercises
+fresh-process recovery, retry/concurrency, lost acknowledgments, tampering,
+audited availability loss, rollback and scoped denial. New-head CI evidence
+must be recorded on its PR before this increment is called verified.
+Synthetic actors and postgres-owner fixtures do not establish genuine Auth,
+runtime RLS or production read authorization. No live grants, migrations,
+storage buckets, HTTP routes or approved decisions are introduced.
+
 **Last verified:** 2026-10-22 UTC against `main` commit `66db73667cc4932995e0376d7f1b7c9279c70041`, merged PR #35. **Not a live release certificate.** Recheck GitHub before acting; this file can become stale.
 
 **Product direction:** ExceptionDesk finance-first supplier invoice ↔ purchase-order exception resolution; CaseProof factual dispute dossiers only after finance validation. Repository name stays `caseproof`. AZComply remains independent.

@@ -129,6 +129,10 @@ class DisposablePostgresVaultLedger(VaultLedger):
         if (str(org) != str(scope.org_id) or str(case) != str(scope.case_id)
                 or str(identity) != str(intent_id)):
             raise VaultConflict("disposable source scope mismatch")
+        if (not isinstance(key, str) or not isinstance(digest, str)
+                or type(size) is not int or not isinstance(media, str)
+                or not isinstance(state, str) or type(revision) is not int):
+            raise VaultConflict("invalid disposable source column types")
         intent = UploadIntent(scope, intent_id, key, digest, size, media)
         status = VaultState(state)
         return VaultRecord(
