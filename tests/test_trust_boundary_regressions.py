@@ -9,8 +9,8 @@ from dataclasses import fields, is_dataclass, replace
 from application.decision_ports import DecisionRequest, TrustedActor
 from packages.evidence_kernel.domain.finding_links import SemanticRelation
 from packages.evidence_kernel.domain.grounding import GroundingPolicy, GroundingReason
+from test_coverage_ledger import errors as coverage_errors
 from test_coverage_ledger import fixture as coverage_fixture
-from tests.test_coverage_ledger import errors as coverage_errors
 from test_grounding_gate import link, setup
 
 
