@@ -9,11 +9,17 @@ from uuid import UUID
 import pytest
 
 from apps.api.disposable_postgres_vault_ledger import (
-    COMMAND_SQL, READ_SQL, DisposablePostgresVaultLedger,
+    COMMAND_SQL,
+    READ_SQL,
+    DisposablePostgresVaultLedger,
     DisposableVaultActorContext,
 )
 from apps.api.evidence_vault_protocol import (
-    UploadIntent, VaultConflict, VaultRecord, VaultScope, VaultState,
+    UploadIntent,
+    VaultConflict,
+    VaultRecord,
+    VaultScope,
+    VaultState,
 )
 
 ORG = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
