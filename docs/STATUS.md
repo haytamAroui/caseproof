@@ -77,3 +77,9 @@ storage buckets, HTTP routes or approved decisions are introduced.
 6. Validate customer time saved; only then implement optional agent orchestration, ERP/Peppol integrations and dispute expansion.
 
 **Do not invent** real accounts, Storage buckets, approval status, CI checks, revenue or deployment. Update this file after each substantive change; mark human approval/production states separately.
+
+## EI-001 — integrated extraction candidate runtime (feature branch)
+
+Branch `feat/evidence-intelligence-v1`, based on main `6e8290faa638f3d1159add37e52a3558a870a7ba`. Adds Requesty-only HTTP integration, bounded discovery/extraction/repair strategies, independent entity boundaries, item-level quote and signal checks, rejected-candidate/conflict ledger, Kernel finding/link/coverage projection and disposable PostgreSQL checkpoints/events. [ADR 0012](adr/0012-evidence-intelligence-candidate-runtime.md) and [task/persistence review](tasks/EI-001.md) delimit scope. No Kernel changes, production migration, provider SDK, live model request, customer documents, approval route or deployment. Finance-first product remains; construction is an experimental second vocabulary only.
+
+Local locked pytest (988 tests), Ruff, strict extraction mypy, architecture check, compilation and offline demo pass. Real PostgreSQL recovery tests are wired into CI, not locally executed; the final suite count and cloud results will be recorded on the combined PR. Live provider quality/cost baseline **not measured**. Production Auth/Vault authorization, rich parsers, reviewer UI/decisions, durable accepted evidence graph and independently verifiable dossier remain open gates.
