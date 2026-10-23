@@ -67,7 +67,7 @@ def test_bad_python_is_reported() -> None:
 
 def test_relative_import_cannot_escape_to_infrastructure() -> None:
     assert scan_source(
-        "from ...infrastructure import persistence",
+        "from .....infrastructure import persistence",
         filename="packages/evidence_kernel/domain/anchors.py",
         banned=RULES["packages/evidence_kernel"],
     )
