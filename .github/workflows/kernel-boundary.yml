@@ -25,6 +25,8 @@ jobs:
         run: uv run --locked mypy --explicit-package-bases application/documents infrastructure/parsers apps/api/authenticated_document_intelligence.py evals
       - name: Type check review and draft export
         run: uv run --locked mypy --explicit-package-bases application/review application/dossiers apps/api/review_workbench.py apps/api/disposable_review_repository.py apps/api/synthetic_review_app.py scripts/review_demo_fixture.py
+      - name: Type check leased extraction worker
+        run: uv run --locked mypy --explicit-package-bases application/runtime infrastructure/execution apps/worker apps/api/extraction_scheduler.py
       - name: Verify reviewer browser journey
         env:
           CASEPROOF_BROWSER_LOG_SCREENSHOT: "YES"
@@ -91,3 +93,5 @@ jobs:
         run: uv run --locked python -m scripts.verify_document_intake_integration
       - name: Verify atomic review recommendations and draft export
         run: uv run --locked python -m scripts.verify_review_integration
+      - name: Verify worker leases, checkpoint fences and process recovery
+        run: uv run --locked python -m scripts.verify_worker_integration

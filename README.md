@@ -90,3 +90,9 @@ uv run --locked python -m scripts.verify_resolution_pack draft-evidence-review.z
 ```
 
 The verifier reads bounded ZIP entries without extracting or running them. It checks originals, normalized representations, exact citations and audit-chain consistency. Hash verification is not source authenticity, human identity, legal validity or approval. The readable report retains conflicts, missing evidence and unreviewed sufficiency. See [ADR 0014](docs/adr/0014-review-recommendations-and-draft-pack.md) for security, persistence and remaining production gates.
+
+## Internal extraction worker reference
+
+`application/runtime` and `infrastructure/execution` add an internal, case-scoped job queue with database-time leases, heartbeats, immutable inputs, attempt budgets and atomic execution events. `apps/worker` fences the existing extraction journal inside its transaction; source parsing and provider calls happen outside database transactions. Expired dispatched/unknown calls never auto-retry. A successful job stores a **review proposal**, never an approved decision.
+
+The adapter is disposable and production-disabled. It has no mounted endpoint, live service role, deployed supervisor or provider credentials. Run its real PostgreSQL acceptance suite only in the existing disposable CI setup: `uv run --locked python -m scripts.verify_worker_integration` after the earlier database integrations. See [ADR 0015](docs/adr/0015-leased-document-jobs.md) and [EI-004](docs/tasks/EI-004.md) for setup, exact boundaries and recovery behavior. Requesty remains the configured provider port; this change makes no live LLM request.
