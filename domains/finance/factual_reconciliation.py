@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, cast
 
 from domains.finance.reconciliation import DocumentAmount, Money
 
@@ -173,7 +173,10 @@ def assess_accounting_evidence(
             gaps.append(f"{label}_gross_components_incomplete")
             continue
         assert all(getattr(doc, component) is not None for component in COMPONENTS)
-        components = {part: getattr(doc, part) for part in COMPONENTS}
+        components = {
+            part: cast(DocumentAmount, getattr(doc, part))
+            for part in COMPONENTS
+        }
         expected = (
             doc.net.amount.amount
             + components["vat"].amount.amount

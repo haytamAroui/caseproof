@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 from collections.abc import Sequence
+from typing import Any
 from uuid import UUID
 
 from application.extraction.contracts import ExtractionError, Scope
@@ -63,7 +64,7 @@ def validate_live_configuration(args: argparse.Namespace) -> tuple[Scope, UUID, 
     return scope, actor, dsn
 
 
-def run(argv: Sequence[str] | None = None) -> dict:
+def run(argv: Sequence[str] | None = None) -> dict[str, Any]:
     args = parser().parse_args(argv)
     if args.show_call_budget:
         return {
@@ -84,7 +85,7 @@ def run(argv: Sequence[str] | None = None) -> dict:
 
     from apps.api.disposable_extraction_journal import DisposablePostgresJournal
 
-    def connect():
+    def connect() -> psycopg.Connection[Any]:
         return psycopg.connect(dsn, connect_timeout=5, autocommit=False)
 
     # Fail before any inference if DB identity/scope/permissions/checkpoint tables
