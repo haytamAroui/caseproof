@@ -134,7 +134,8 @@ class WorkerIntegration(unittest.TestCase):
             run = executor(root, f, q, provider)
             result = ExtractionWorker(q, run).run_once(scope, uuid4())
             self.assertEqual(result["state"], "succeeded")
-            self.assertEqual(len(provider.calls), 1)
+            self.assertEqual(len(provider.calls), 2)  # Global scout, then targeted extraction.
+            self.assertEqual(len(set(provider.calls)), 2)
             self.assertFalse(result["approved"])
             payload = decode(result["result_json"])
             snapshot = ReviewSnapshot(scope, payload["snapshot_hash"], canonical(payload["snapshot"]))
@@ -235,7 +236,8 @@ class WorkerIntegration(unittest.TestCase):
             lease = q.claim(scope, uuid4(), 30)
             provider = CorpusProvider()
             result = executor(root, f, q, provider)(lease)  # crash before durable job acknowledgement
-            self.assertEqual(len(provider.calls), 1)
+            self.assertEqual(len(provider.calls), 2)
+            self.assertEqual(len(set(provider.calls)), 2)
             expire(q, lease.spec)
             (root / "worker-restart.json").write_text(
                 json.dumps(
@@ -445,7 +447,9 @@ class WorkerIntegration(unittest.TestCase):
             replay_provider = CorpusProvider()
             outcome = executor(root, f, q, replay_provider)(next_lease)
             self.assertEqual(q.finish(next_lease, outcome)["state"], "succeeded")
-            self.assertEqual(replay_provider.calls, [])
+            # Replay the received scout; only the not-yet-dispatched targeted step may call.
+            self.assertEqual(len(replay_provider.calls), 1)
+            self.assertTrue(set(provider.calls).isdisjoint(replay_provider.calls))
 
     def test_enqueue_audit_outage_leaves_no_job_and_stale_read_hides_result(self):
         class Broken(DisposableJobQueue):
@@ -516,6 +520,38 @@ class WorkerIntegration(unittest.TestCase):
                 q.enqueue(replace(s, scope=Scope(foreign.scope.org_id, foreign.scope.case_id)))
             with self.assertRaises(ExtractionError):
                 q.read(Scope(foreign.scope.org_id, foreign.scope.case_id), identity, f.actor)
+
+    def test_total_deadline_cannot_be_extended_by_heartbeat(self):
+        with TemporaryDirectory() as temp:
+            f, q, scope, identity = setup(Path(temp))
+            lease = q.claim(scope, uuid4(), 30)
+            with connect() as conn:
+                conn.execute(
+                    "update caseproof._worker_jobs set deadline_at=created_at+interval '1 microsecond' where org_id=%s and case_id=%s and request_id=%s",
+                    q._keys(lease.spec),
+                )
+            with self.assertRaises(LeaseLost):
+                q.heartbeat(lease, 300)
+            self.assertIsNone(q.claim(scope, uuid4(), 30))
+            state = q.read(scope, identity, f.actor)
+            self.assertEqual((state["state"], state["reason"]), ("failed", "deadline_exceeded"))
+
+    def test_deadline_with_unresolved_dispatch_remains_unknown(self):
+        with TemporaryDirectory() as temp:
+            f, q, scope, identity = setup(Path(temp))
+            lease = q.claim(scope, uuid4(), 30)
+            j = FencedExtractionJournal(q, lease)
+            j.reserve(scope, lease.spec.run_id + ":extract", "global", digest({}))
+            j.transition(
+                scope, lease.spec.run_id + ":extract", "global", StepState.PREPARED, StepState.DISPATCHED
+            )
+            with connect() as conn:
+                conn.execute(
+                    "update caseproof._worker_jobs set deadline_at=created_at+interval '1 microsecond' where org_id=%s and case_id=%s and request_id=%s",
+                    q._keys(lease.spec),
+                )
+            self.assertIsNone(q.claim(scope, uuid4(), 30))
+            self.assertEqual(q.read(scope, identity, f.actor)["state"], "outcome_unknown")
 
 
 def replace_snapshot_spec(q, scope, identity):

@@ -6,13 +6,22 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from application.documents.intake import CapturedDocument, DocumentIntelligence
-from application.extraction.contracts import ExtractionError, StepJournal, canonical, decode
+from application.extraction.contracts import (
+    PROMPT_VERSION,
+    SCHEMA_VERSION,
+    ExtractionError,
+    StepJournal,
+    canonical,
+    decode,
+)
 from application.review.contracts import freeze_review
 from application.runtime.jobs import JobResult, JobSpec, JobState, Lease
 
 
 def engine_identity(service: DocumentIntelligence) -> dict[str, str]:
     return {
+        "schema": SCHEMA_VERSION,
+        "prompt": PROMPT_VERSION,
         "parser": service.parser.identity,
         "provider": service.provider.identity,
         "model": service.provider.model,

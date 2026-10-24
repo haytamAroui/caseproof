@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from application.extraction.contracts import ExtractionError, Scope, canonical
 from application.runtime.jobs import JobResult, JobSpec, JobState, Lease, LeaseLost
 
-_COLUMNS = "spec_json,state,attempt,revision,lease_token,worker_id,result_json,result_sha,reason"
+_COLUMNS = "spec_json,state,attempt,revision,lease_token,worker_id,result_json,result_sha,reason,(deadline_at<=clock_timestamp())"
 
 
 class DisposableJobQueue:
@@ -82,9 +82,15 @@ class DisposableJobQueue:
         with self.connect() as conn:
             self._current(conn, spec)
             inserted = conn.execute(
-                "insert into caseproof._worker_jobs(org_id,case_id,request_id,actor_id,input_sha,spec_json) "
-                "values(%s,%s,%s,%s,%s,%s) on conflict do nothing returning request_id",
-                (*self._keys(spec), spec.actor_id, spec.fingerprint, canonical(spec.payload())),
+                "insert into caseproof._worker_jobs(org_id,case_id,request_id,actor_id,input_sha,spec_json,deadline_at) "
+                "values(%s,%s,%s,%s,%s,%s,clock_timestamp()+(%s*interval '1 second')) on conflict do nothing returning request_id",
+                (
+                    *self._keys(spec),
+                    spec.actor_id,
+                    spec.fingerprint,
+                    canonical(spec.payload()),
+                    spec.max_runtime_seconds,
+                ),
             ).fetchone()
             row = conn.execute(
                 "select input_sha from caseproof._worker_jobs where org_id=%s and case_id=%s and request_id=%s",
@@ -127,8 +133,8 @@ class DisposableJobQueue:
             )
             row = conn.execute(
                 "select " + _COLUMNS + " from caseproof._worker_jobs where org_id=%s and case_id=%s and "
-                "((state in ('queued','retry_wait') and available_at<=clock_timestamp()) or "
-                "(state='running' and lease_until<=clock_timestamp())) order by created_at,request_id limit 1 for update skip locked",
+                "((state in ('queued','retry_wait') and (available_at<=clock_timestamp() or deadline_at<=clock_timestamp())) or "
+                "(state='running' and (lease_until<=clock_timestamp() or deadline_at<=clock_timestamp()))) order by created_at,request_id limit 1 for update skip locked",
                 (scope.org_id, scope.case_id),
             ).fetchone()
             if row is None:
@@ -136,6 +142,9 @@ class DisposableJobQueue:
             spec = JobSpec.restore(row[0])
             if self._hazard(conn, spec):
                 self._terminal(conn, row, JobState.UNKNOWN, "dispatched_step_unresolved")
+                return None
+            if row[9]:
+                self._terminal(conn, row, JobState.FAILED, "deadline_exceeded")
                 return None
             try:
                 self._current(conn, spec)
@@ -160,7 +169,8 @@ class DisposableJobQueue:
             "select "
             + _COLUMNS
             + " from caseproof._worker_jobs where org_id=%s and case_id=%s and request_id=%s "
-            "and state='running' and lease_token=%s and worker_id=%s and attempt=%s and lease_until>clock_timestamp() for update",
+            "and state='running' and lease_token=%s and worker_id=%s and attempt=%s and lease_until>clock_timestamp() "
+            "and deadline_at>clock_timestamp() for update",
             (*self._keys(lease.spec), lease.token, lease.worker_id, lease.attempt),
         ).fetchone()
         if row is None or JobSpec.restore(row[0]).fingerprint != lease.spec.fingerprint:

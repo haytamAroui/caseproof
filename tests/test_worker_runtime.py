@@ -72,6 +72,9 @@ def test_job_roundtrip_and_fingerprint_pin_all_inputs():
     [
         {"max_attempts": 0},
         {"max_attempts": True},
+        {"max_runtime_seconds": 0},
+        {"max_runtime_seconds": True},
+        {"max_runtime_seconds": 3601},
         {"case_revision": -1},
         {"request_id": UUID(int=0)},
         {"sources": ()},
@@ -140,10 +143,11 @@ def test_document_executor_reuses_existing_source_to_review_without_authority():
     assert executor(lease).payload_json == result.payload_json
 
 
-def test_changed_engine_is_blocked_before_read_or_provider_dispatch():
+@pytest.mark.parametrize("version_key", ["model", "schema", "prompt"])
+def test_changed_engine_is_blocked_before_read_or_provider_dispatch(version_key):
     s = spec()
     p = decode(s.plan_json)
-    p["engine"]["model"] = "changed"
+    p["engine"][version_key] = "changed"
     s = replace(s, plan_json=canonical(p))
 
     def forbidden(_):

@@ -73,6 +73,7 @@ class JobSpec:
     sources: tuple[SourceRef, ...]
     plan_json: str
     max_attempts: int = 3
+    max_runtime_seconds: int = 1800
 
     def __post_init__(self) -> None:
         if not isinstance(self.scope, Scope):
@@ -84,6 +85,8 @@ class JobSpec:
         text(self.policy_version, limit=128)
         if type(self.max_attempts) is not int or not 1 <= self.max_attempts <= 5:
             raise ExtractionError("bounded attempts required")
+        if type(self.max_runtime_seconds) is not int or not 30 <= self.max_runtime_seconds <= 3600:
+            raise ExtractionError("bounded total job deadline required")
         if type(self.sources) is not tuple or not 1 <= len(self.sources) <= 32:
             raise ExtractionError("bounded immutable source references required")
         if any(not isinstance(s, SourceRef) for s in self.sources):
@@ -105,6 +108,8 @@ class JobSpec:
             raise ExtractionError("slot inventory mismatch")
         engine = plan["engine"]
         if type(engine) is not dict or set(engine) != {
+            "schema",
+            "prompt",
             "parser",
             "provider",
             "model",
@@ -142,6 +147,7 @@ class JobSpec:
             "sources": [s.payload() for s in self.sources],
             "plan": decode(self.plan_json),
             "max_attempts": self.max_attempts,
+            "max_runtime_seconds": self.max_runtime_seconds,
         }
 
     @property
@@ -164,6 +170,7 @@ class JobSpec:
                 "sources",
                 "plan",
                 "max_attempts",
+                "max_runtime_seconds",
             }
             or p["schema"] != "document-job-v1"
         ):
@@ -182,6 +189,7 @@ class JobSpec:
                 sources,
                 canonical(p["plan"]),
                 p["max_attempts"],
+                p["max_runtime_seconds"],
             )
         except (KeyError, TypeError, ValueError):
             raise ExtractionError("invalid persisted job") from None

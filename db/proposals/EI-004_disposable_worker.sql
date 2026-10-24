@@ -14,6 +14,7 @@ create table caseproof._worker_jobs (
     lease_token uuid,
     lease_until timestamptz,
     available_at timestamptz not null default clock_timestamp(),
+    deadline_at timestamptz not null,
     result_json text check (octet_length(result_json) <= 2097152),
     result_sha text check (result_sha ~ '^[0-9a-f]{64}$'),
     reason text not null default 'submitted',
