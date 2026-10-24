@@ -40,3 +40,17 @@ The root `MEMORY.md` and `docs/STATUS.md` are handoff aids, not trust authoritie
 - `docs/tasks/` — staged engineering tasks and design proposals
 
 For the first product milestone, a genuine user must be able to securely upload an invoice and PO, inspect source-backed discrepancies, make an authorized decision and export a reproducible package. **That workflow is not built yet.**
+
+### Evidence Intelligence (candidate runtime)
+
+Run the **offline synthetic** finance/construction demonstration (no API key or network):
+
+```bash
+uv run --locked python -m scripts.demo_evidence_intelligence
+```
+
+The shared runtime discovers proposed entities/relationships, extracts quote-anchored candidates, checks independent entity boundaries, applies versioned observation validators and projects existing Kernel findings/coverage. Every result remains unapproved. Three bounded strategies: `global_first` (default), `segmented`, experimental `four_pass`; bounded repair, no silent fallback. Scripted demo responses are not live model evaluation.
+
+For server-side Requesty composition use `RequestyProvider.from_environment()` and `EvidenceIntelligence(provider, journal, policy)`. Set `CASEPROOF_REQUESTY_API_KEY` (or existing `REQUESTY_API_KEY`) and `CASEPROOF_EXTRACTION_MODEL` (or existing `REQUESTY_MODEL_PAID`) to an explicitly reviewed concrete Requesty model. No implicit model, direct alternate provider or SDK integration. Review [Requesty routing](https://www.requesty.ai/product/routing) before sending documents; an EU gateway alone does not guarantee inference residency. Never put keys in browser code or source control. No live-call CLI or public route is enabled here.
+
+`MemoryJournal` is test-only. `DisposablePostgresJournal` exercises real checkpoint/CAS/restart behavior only against disposable CI; it accepts a synthetic actor and is **not production authentication**. Source intake must supply trusted immutable representations, case scope, confirmed entity boundaries and required slots. See [ADR 0012](docs/adr/0012-evidence-intelligence-candidate-runtime.md) for remaining parsing/reviewer/export gates.
