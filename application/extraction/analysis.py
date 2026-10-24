@@ -7,10 +7,11 @@ side effects, no provider calls. Every suggestion remains tied to original spans
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from application.extraction.contracts import (
     EntityScope,

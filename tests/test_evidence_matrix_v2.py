@@ -1,6 +1,7 @@
 """Regression tests for scout-guided targeting, explicit review and typed reconciliation."""
 
 from dataclasses import replace
+
 import pytest
 
 from application.extraction.analysis import (
@@ -9,7 +10,14 @@ from application.extraction.analysis import (
     evidence_matrix,
     reconcile_facts,
 )
-from application.extraction.contracts import EntityScope, ExtractionConfig, ExtractionError, ProviderReply, decode, digest
+from application.extraction.contracts import (
+    EntityScope,
+    ExtractionConfig,
+    ExtractionError,
+    ProviderReply,
+    decode,
+    digest,
+)
 from application.extraction.journal import MemoryJournal
 from application.extraction.pipeline import EvidenceIntelligence, check_atom
 from domains.finance.extraction_rules import FinanceEvidencePolicy
