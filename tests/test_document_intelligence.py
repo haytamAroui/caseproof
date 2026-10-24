@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
-
-from decimal import Decimal
 
 import pytest
 from pypdf import PdfWriter
 from pypdf.generic import ArrayObject, DictionaryObject, NameObject, TextStringObject
 
 from application.documents.contracts import restore
-from application.documents.finance import compare_ubl_accounting_evidence, compare_ubl_evidence, observe_ubl
+from application.documents.finance import (
+    compare_ubl_accounting_evidence,
+    compare_ubl_evidence,
+    observe_ubl,
+)
 from application.documents.intake import CapturedDocument, DocumentIntelligence, EntityAssignment
 from application.documents.structured import resolve_xml_citation, xml_citation
 from application.extraction.contracts import ClaimSlot, ExtractionConfig, ExtractionError
