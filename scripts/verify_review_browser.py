@@ -135,7 +135,7 @@ def main() -> None:
             expect(page.locator("#source-text mark")).to_have_text("😀")
             page.reload()
             expect(page.locator("#finding-count")).to_have_text("4")
-            page.locator(".finding").filter(has_text="invoice ·").click()
+            page.locator("#findings .finding").filter(has_text="invoice ·").click()
             page.screenshot(path=str(output / "desktop.png"), full_page=True)
             if os.environ.get("CASEPROOF_BROWSER_LOG_SCREENSHOT") == "YES":
                 import base64
@@ -159,6 +159,15 @@ def main() -> None:
             page.locator("#reload").click()
             expect(page.locator("#finding-count")).to_have_text("4")
             checks.append("load_failure_retry")
+            expect(page.locator("#entity-suggestions .finding")).to_have_count(1)
+            page.locator("#entity-suggestions .finding").click()
+            expect(page.locator("#action")).to_have_value("confirm_boundary")
+            expect(page.locator("#source-text mark")).to_have_count(1)
+            page.locator("#note").fill("Reviewed this exact text boundary for the next extraction.")
+            page.locator("#save").click()
+            expect(page.locator("#review-count")).to_have_text("4")
+            expect(page.locator("#history")).to_contain_text("Confirm evidence boundary")
+            checks.append("audited_entity_boundary_confirmation")
             assert errors == [], errors
             browser.close()
     finally:

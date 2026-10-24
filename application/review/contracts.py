@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 from application.documents.intake import IntakeResult
@@ -29,6 +29,8 @@ class ReviewKind(StrEnum):
     CORRECT = "correct"
     QUALIFY = "qualify"
     REQUEST_EVIDENCE = "request_evidence"
+    CONFIRM_BOUNDARY = "confirm_boundary"
+    REJECT_BOUNDARY = "reject_boundary"
 
 
 @dataclass(frozen=True)
@@ -139,6 +141,27 @@ def freeze_review(
             }
         )
     locations = {}
+    for discovery in report.discoveries:
+        if discovery.get("category") != "entities" or discovery.get("state") != "proposed":
+            continue
+        proposal = discovery.get("proposal")
+        if type(proposal) is not dict or set(proposal) != {"entity_id", "kind", "source_id", "quote"}:
+            raise ExtractionError("malformed frozen boundary proposal")
+        if digest(proposal) != discovery.get("id"):
+            raise ExtractionError("frozen boundary proposal identity mismatch")
+        matching = [
+            parsed for parsed in result.documents if parsed.evidence.source_id == proposal["source_id"]
+        ]
+        start, quote = discovery.get("start"), proposal["quote"]
+        if (
+            len(matching) != 1
+            or type(start) is not int
+            or start < 0
+            or type(quote) is not str
+            or not quote
+            or matching[0].evidence.content[start : start + len(quote)] != quote
+        ):
+            raise ExtractionError("frozen boundary citation not exact")
     for atom in report.atoms:
         if atom.start is not None and atom.end is not None and atom.state != "rejected":
             parsed = next(p for p in result.documents if p.evidence.source_id == atom.source_id)
@@ -164,9 +187,62 @@ def event_digest(event: dict[str, Any]) -> str:
     return digest({k: v for k, v in event.items() if k != "audit_hash"})
 
 
+def boundary_proposal(snapshot: ReviewSnapshot, proposal_id: str) -> dict[str, Any]:
+    """Validate an untrusted discovery against the frozen, independently scoped inventory."""
+
+    data = snapshot.data
+    discoveries = [
+        discovery
+        for discovery in data["extraction"]["discoveries"]
+        if discovery.get("category") == "entities" and discovery.get("id") == proposal_id
+    ]
+    if len(discoveries) != 1 or discoveries[0].get("state") != "proposed":
+        raise ExtractionError("boundary proposal absent or not grounded")
+    discovery = discoveries[0]
+    proposal = discovery.get("proposal")
+    if type(proposal) is not dict or set(proposal) != {"entity_id", "kind", "source_id", "quote"}:
+        raise ExtractionError("invalid boundary proposal schema")
+    if digest(proposal) != proposal_id:
+        raise ExtractionError("boundary proposal identity mismatch")
+    source_id, start, quote = proposal["source_id"], discovery.get("start"), proposal["quote"]
+    if type(start) is not int or start < 0 or type(quote) is not str or not 0 < len(quote) <= 8192:
+        raise ExtractionError("boundary proposal span invalid")
+    matches = [
+        source for source in data["sources"]
+        if source["source_id"] == source_id and source["complete"] is True
+    ]
+    if len(matches) != 1:
+        raise ExtractionError("boundary original source unavailable")
+    report_source = next(
+        (item for item in data["extraction"]["manifest"]["sources"] if item["id"] == source_id),
+        None,
+    )
+    if (
+        report_source is None
+        or report_source["sha"] != matches[0]["sha256"]
+        or report_source["representation_sha"] != matches[0]["representation_sha256"]
+    ):
+        raise ExtractionError("boundary lineage mismatch")
+    boundaries = [
+        boundary for boundary in data["extraction"]["manifest"]["entities"]
+        if boundary["entity_id"] == proposal["entity_id"]
+        and boundary["kind"] == proposal["kind"]
+        and boundary["source_id"] == source_id
+        and boundary["confirmed"] is False
+        and boundary["start"] <= start
+        and start + len(quote) <= boundary["end"]
+    ]
+    if len(boundaries) != 1:
+        raise ExtractionError("boundary does not narrow a single unconfirmed entity")
+    return cast(dict[str, Any], discovery)
+
+
 def validate_command(snapshot: ReviewSnapshot, command: ReviewCommand) -> None:
     if command.snapshot_hash != snapshot.snapshot_hash:
         raise ReviewConflict("snapshot_changed")
+    if command.kind in {ReviewKind.CONFIRM_BOUNDARY, ReviewKind.REJECT_BOUNDARY}:
+        boundary_proposal(snapshot, command.item_id)
+        return
     ids = {a["candidate_id"] for a in snapshot.data["extraction"]["atoms"]}
     if command.item_id not in ids and not (
         command.item_id == "case" and command.kind is ReviewKind.REQUEST_EVIDENCE

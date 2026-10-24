@@ -8,6 +8,13 @@ from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
+from application.extraction.analysis import (
+    conflicting_pairs,
+    evidence_matrix,
+    reconcile_facts,
+    scout_guidance,
+    signal_decisions,
+)
 from application.extraction.contracts import (
     PROMPT_VERSION,
     SCHEMA_VERSION,
@@ -99,6 +106,9 @@ class ExtractionReport:
     extraction_complete: bool
     coverage_complete: bool
     approved: bool = field(default=False, init=False)
+    signal_decisions: tuple[dict[str, Any], ...] = field(default=(), repr=False)
+    reconciliation: tuple[dict[str, Any], ...] = field(default=(), repr=False)
+    evidence_matrix: tuple[dict[str, Any], ...] = field(default=(), repr=False)
 
     def to_json(self) -> str:
         return canonical(asdict(self))
@@ -464,43 +474,45 @@ class EvidenceIntelligence:
             if failures:
                 tasks = []
                 failed_sources.update(sources)
+            else:
+                # Scout output guides subsequent calls only as grounded, unconfirmed hints.
+                # It never expands the request's authorized source/entity/slot inventory.
+                hints = tuple(discoveries.values())
+                tasks = [
+                    (
+                        name,
+                        {**data, "scout_guidance": scout_guidance(hints, data["sources"][0]["id"])},
+                    )
+                    for name, data in tasks
+                ]
         if tasks:
             with ThreadPoolExecutor(max_workers=request.config.max_concurrency) as executor:
                 consume(executor.map(execute, tasks))
             used += len(tasks)
         for repair in range(request.config.repair_passes):
-            uncovered = [
-                s
-                for s in request.slots
-                if not any(
-                    a.state == "validated" and (a.entity_id, a.slot) == (s.entity_id, s.slot_id)
-                    for a in atoms.values()
-                )
-            ]
-            if not uncovered or failed_sources or used >= request.config.max_calls:
+            current = tuple(sorted(atoms.values(), key=lambda a: a.candidate_id))
+            matrix = evidence_matrix(request, current, conflicting_pairs(current))
+            targeted = [row for row in matrix if row["repair_eligible"]]
+            if not targeted or failed_sources or used >= request.config.max_calls:
                 break
-            ids = sorted({sid for slot in uncovered for sid in slot.source_ids})
+            ids = sorted({sid for row in targeted for sid in row["source_ids"]})
             repair_task = (
                 f"repair:{repair}",
                 {
-                    **payload(ids, "repair only uncovered claim slots"),
-                    "uncovered": [asdict(s) for s in uncovered],
+                    **payload(ids, "evidence-matrix gap/conflict targeted repair; retain all originals"),
+                    "uncovered": [
+                        asdict(slot)
+                        for slot in request.slots
+                        if (slot.entity_id, slot.slot_id)
+                        in {(row["entity_id"], row["slot"]) for row in targeted}
+                    ],
+                    "evidence_matrix": targeted,
                 },
             )
             consume([execute(repair_task)])
             used += 1
         ordered = tuple(sorted(atoms.values(), key=lambda a: a.candidate_id))
-        conflicts = tuple(
-            (a.candidate_id, b.candidate_id)
-            for i, a in enumerate(ordered)
-            for b in ordered[i + 1 :]
-            if a.state in {"validated", "needs_review"}
-            and b.state in {"validated", "needs_review"}
-            and a.start is not None
-            and b.start is not None
-            and (a.entity_id, a.slot, a.signal) == (b.entity_id, b.slot, b.signal)
-            and (a.value != b.value or a.polarity != b.polarity)
-        )
+        conflicts = conflicting_pairs(ordered)
         slot_results = []
         for slot in request.slots:
             matching = [a for a in ordered if (a.entity_id, a.slot) == (slot.entity_id, slot.slot_id)]
@@ -531,6 +543,9 @@ class EvidenceIntelligence:
             tuple(telemetry),
             complete,
             False,
+            signal_decisions=signal_decisions(ordered, self.policy),
+            reconciliation=reconcile_facts(ordered, conflicts),
+            evidence_matrix=evidence_matrix(request, ordered, conflicts),
         )
         projection = project_to_kernel(request, report)
         if projection.ordinary_complete:

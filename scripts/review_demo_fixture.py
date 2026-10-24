@@ -27,6 +27,10 @@ ACTOR = UUID(int=301)
 
 
 class DemoProvider(ScriptedProvider):
+    def __init__(self, *, boundary_review: bool = False) -> None:
+        super().__init__()
+        self.boundary_review = boundary_review
+
     def complete(self, system: str, payload: str, *, request_id: str, max_tokens: int) -> ProviderReply:
         data = decode(payload)
         atoms = []
@@ -49,7 +53,19 @@ class DemoProvider(ScriptedProvider):
                     "relation": "supports",
                 }
             )
-        return ProviderReply(envelope(atoms), self.identity, self.model)
+        suggested = []
+        if self.boundary_review and data["purpose"].startswith("case-wide"):
+            response = next((s for s in data["sources"] if s["id"] == "response"), None)
+            if response is not None:
+                suggested = [
+                    {
+                        "entity_id": "E1",
+                        "kind": "invoice",
+                        "source_id": "response",
+                        "quote": response["text"],
+                    }
+                ]
+        return ProviderReply(envelope(atoms, entities=suggested), self.identity, self.model)
 
 
 def demo_material(
@@ -60,6 +76,7 @@ def demo_material(
     case_revision: int = 1,
     policy_version: str = "synthetic-review-policy-v1",
     journal: StepJournal | None = None,
+    boundary_review: bool = False,
 ) -> tuple[ReviewSnapshot, tuple[ParsedDocument, ...]]:
     if documents is None:
         response = b"Invoice INV-2026-001: revised amount EUR 1150.00."
@@ -74,7 +91,8 @@ def demo_material(
         )
     assignments = tuple(
         EntityAssignment(
-            "E1", "purchase_order" if d.source_id == "order" else "invoice", d.source_id, confirmed=True
+            "E1", "purchase_order" if d.source_id == "order" else "invoice", d.source_id,
+            confirmed=not (boundary_review and d.source_id == "response")
         )
         for d in documents
     )
@@ -91,7 +109,7 @@ def demo_material(
             slots.append(ClaimSlot("E1", signal, used))
     result = DocumentIntelligence(
         LimitedDocumentParser(),
-        DemoProvider(),
+        DemoProvider(boundary_review=boundary_review),
         journal if journal is not None else MemoryJournal(),
         FinanceEvidencePolicy(),
     ).run(

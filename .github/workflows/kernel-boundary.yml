@@ -27,6 +27,8 @@ jobs:
         run: uv run --locked mypy --explicit-package-bases application/review application/dossiers apps/api/review_workbench.py apps/api/disposable_review_repository.py apps/api/synthetic_review_app.py scripts/review_demo_fixture.py
       - name: Type check leased extraction worker
         run: uv run --locked mypy --explicit-package-bases application/runtime infrastructure/execution apps/worker apps/api/extraction_scheduler.py
+      - name: Type check governed accounting and opt-in Requesty evaluation
+        run: uv run --locked mypy --explicit-package-bases domains/finance/factual_reconciliation.py scripts/run_topology_comparison.py
       - name: Verify reviewer browser journey
         env:
           CASEPROOF_BROWSER_LOG_SCREENSHOT: "YES"
