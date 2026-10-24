@@ -1,0 +1,32 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": [
+    "apps/web/review"
+  ],
+  "locale": "en-BE",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": [
+    "Form",
+    "Select/Listbox",
+    "Scrollbar",
+    "Toast",
+    "CRUD"
+  ],
+  "ownership": {
+    "Select/Listbox": "native"
+  },
+  "requiredCommands": [
+    "unit",
+    "e2e",
+    "premium"
+  ],
+  "commands": {
+    "unit": "uv run --locked pytest -q tests/test_review_resolution_pack.py",
+    "e2e": "uv run --locked python -m scripts.verify_review_browser",
+    "premium": "uv run --locked python scripts/check_review_ui.py"
+  },
+  "evidence": {
+    "crudFullFlow": "scripts/verify_review_browser.py",
+    "failurePaths": "tests/test_review_resolution_pack.py"
+  }
+}
