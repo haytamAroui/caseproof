@@ -1,8 +1,6 @@
 """Regression tests for scout-guided targeting, explicit review and typed reconciliation."""
 
 from dataclasses import replace
-from uuid import UUID
-
 import pytest
 
 from application.extraction.analysis import (
@@ -11,7 +9,7 @@ from application.extraction.analysis import (
     evidence_matrix,
     reconcile_facts,
 )
-from application.extraction.contracts import EntityScope, ExtractionConfig, ExtractionError, ProviderReply, decode
+from application.extraction.contracts import EntityScope, ExtractionConfig, ExtractionError, ProviderReply, decode, digest
 from application.extraction.journal import MemoryJournal
 from application.extraction.pipeline import EvidenceIntelligence, check_atom
 from domains.finance.extraction_rules import FinanceEvidencePolicy
@@ -52,14 +50,14 @@ def test_boundary_confirmation_requires_authorized_review_and_exact_frozen_bytes
     req = request()
     req = replace(req, entities=(replace(req.entities[0], confirmed=False),))
     discovered = {
-        "category": "entities", "id": "proposal1", "state": "proposed", "start": 0,
+        "category": "entities", "id": digest({"entity_id": "E1", "kind": "invoice", "source_id": "synthetic", "quote": req.sources[0].content}), "state": "proposed", "start": 0,
         "proposal": {
             "entity_id": "E1", "kind": "invoice", "source_id": "synthetic",
             "quote": req.sources[0].content,
         },
     }
     decision = BoundaryReview(
-        "proposal1", "application-review-001", "confirm",
+        discovered["id"], "application-review-001", "confirm",
         req.sources[0].source.sha256_hex, req.sources[0].representation.sha256_hex,
     )
     with pytest.raises(ExtractionError, match="authorized"):
@@ -83,11 +81,11 @@ def test_review_can_only_narrow_existing_entity_span():
     quote = "Invoice I1: net EUR 1150.00."
     offset = req.sources[0].content.index(quote)
     discovered = {
-        "category": "entities", "id": "p", "state": "proposed", "start": offset,
+        "category": "entities", "id": digest({"entity_id": "E1", "kind": "invoice", "source_id": "synthetic", "quote": quote}), "state": "proposed", "start": offset,
         "proposal": {"entity_id": "E1", "kind": "invoice", "source_id": "synthetic", "quote": quote},
     }
     dec = BoundaryReview(
-        "p", "authorized", "confirm",
+        discovered["id"], "authorized", "confirm",
         req.sources[0].source.sha256_hex, req.sources[0].representation.sha256_hex,
     )
     revised = confirm_reviewed_boundaries(req, (discovered,), (dec,), authorize=lambda s, r: True)
@@ -113,7 +111,7 @@ def test_amount_and_amendment_reconciliation_never_auto_supersedes():
     assert report.reconciliation[0]["kind"] == "amendment_requires_review"
     assert report.reconciliation[0]["auto_supersede"] is False
     assert report.slots[0]["state"] == "conflicting"
-    assert len(report.signal_decisions) == 2
+    assert len([row for row in report.signal_decisions if row["disposition"] == "validated"]) == 2
     assert all(row["level"] == "candidate_validation_not_semantic_support" for row in report.signal_decisions)
     assert report.evidence_matrix[0]["state"] == "conflicting"
 

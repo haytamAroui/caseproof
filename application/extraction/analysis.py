@@ -7,7 +7,7 @@ side effects, no provider calls. Every suggestion remains tied to original spans
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, Callable, Literal
@@ -69,6 +69,8 @@ def confirm_reviewed_boundaries(
         if not discovered or discovered.get("state") != "proposed":
             raise ExtractionError("nonexistent or ungrounded boundary proposal")
         proposed = discovered["proposal"]
+        if digest(proposed) != decision.proposal_id:
+            raise ExtractionError("boundary proposal identity mismatch")
         source = sources.get(proposed["source_id"])
         start = discovered.get("start")
         end = start + len(proposed["quote"]) if type(start) is int else None
