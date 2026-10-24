@@ -39,8 +39,7 @@ def evaluate(
     run_id: str = "offline-eval-v1",
     topology: str = "global_first",
 ) -> dict[str, Any]:
-    call_limits = {"global_first": 2, "segmented": 1, "four_pass": 4}
-    if topology not in call_limits:
+    if topology not in {"global_first", "segmented", "four_pass"}:
         raise ExtractionError("unknown benchmark topology")
     if live and (journal is None or isinstance(journal, MemoryJournal)):
         raise ExtractionError("live evaluation requires a durable scoped journal")
@@ -66,6 +65,12 @@ def evaluate(
         )
         parser = LimitedDocumentParser()
         document = case.captured()
+        # Segment count is determined by the real frozen parser, never guessed from
+        # number of documents. Preflight before any billable provider invocation.
+        segments = parser.parse(document.source)["blocks"] if topology == "segmented" else ()
+        call_limit = len(segments) if topology == "segmented" else (2 if topology == "global_first" else 4)
+        if not 1 <= call_limit <= 64:
+            raise ExtractionError("topology call preflight exceeds bounded budget")
         started = time.monotonic()
         result = DocumentIntelligence(
             parser, provider, journal if journal is not None else MemoryJournal(), policy
@@ -76,7 +81,7 @@ def evaluate(
             assignments=(case.assignment,),
             slots=(case.slot,),
             config=ExtractionConfig(
-                topology=topology, max_calls=call_limits[topology], max_output_tokens=512, repair_passes=0
+                topology=topology, max_calls=call_limit, max_output_tokens=512, repair_passes=0
             ),
         )
         # Bounded per topology: 2 global-first / 1 segmented / 4 four-pass calls per case.
@@ -109,6 +114,7 @@ def evaluate(
                 "provider": provider.identity,
                 "model": provider.model,
                 "status": result.status,
+                "configured_call_ceiling": call_limit,
                 "proposals": len(atoms),
                 "exact_anchored": len(anchored),
                 "exact_labeled_matches": len(correct),
@@ -128,7 +134,7 @@ def evaluate(
         "schema": "caseproof-document-eval-v1",
         "mode": "live_requesty" if live else "scripted_safety_only",
         "topology": topology,
-        "max_calls": call_limits[topology] * len(CASES),
+        "max_calls": sum(r["configured_call_ceiling"] for r in rows),
         "live_quality_measured": live and any(row["proposals"] for row in rows),
         "corpus_manifest": digest(
             [

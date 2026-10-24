@@ -13,10 +13,24 @@ from typing import Any
 from application.extraction.contracts import ExtractionError, Scope, StepJournal
 from evals.document_corpus import CASES
 from evals.document_extraction import evaluate
+from infrastructure.parsers.limited import LimitedDocumentParser
 from scripts.extraction_fixtures import SCOPE
 
 TOPOLOGIES = ("global_first", "segmented", "four_pass")
-BILLABLE_CALL_CAP = len(CASES) * (2 + 1 + 4)
+
+
+def planned_call_cap() -> int:
+    """Frozen fixture parser preflight; refuse more than 64 entity blocks per case."""
+
+    parser = LimitedDocumentParser()
+    total_segmented = 0
+    for case in CASES:
+        artifact = parser.parse(case.captured().source)
+        blocks = artifact.get("blocks")
+        if type(blocks) is not list or not 1 <= len(blocks) <= 64:
+            raise ExtractionError("segment count exceeds bounded per-case budget")
+        total_segmented += len(blocks)
+    return len(CASES) * (2 + 4) + total_segmented
 
 
 def compare_topologies(
@@ -27,7 +41,8 @@ def compare_topologies(
     run_id: str = "paired-corpus-v1",
     authorized_billable_calls: int = 0,
 ) -> dict[str, Any]:
-    if live and authorized_billable_calls != BILLABLE_CALL_CAP:
+    cap = planned_call_cap()
+    if live and authorized_billable_calls != cap:
         raise ExtractionError("explicit exact paid Requesty call cap acknowledgement required")
     results = {}
     for topology in TOPOLOGIES:
@@ -59,7 +74,8 @@ def compare_topologies(
         "live_quality_measured": live,
         "source_corpus_sha": results["global_first"]["corpus_manifest"],
         "provider_boundary": "Requesty_only" if live else "scripted_no_inference",
-        "billable_call_cap": BILLABLE_CALL_CAP if live else 0,
+        "billable_call_cap": cap if live else 0,
+        "preflight_call_cap": cap,
         "strategies": rows,
         "four_pass_recall_delta": rows["four_pass"]["recall"] - baseline,
         "caveat": "Four synthetic labeled cases; not a production model-quality or economic benefit claim.",
