@@ -6,12 +6,14 @@ from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 
+from decimal import Decimal
+
 import pytest
 from pypdf import PdfWriter
 from pypdf.generic import ArrayObject, DictionaryObject, NameObject, TextStringObject
 
 from application.documents.contracts import restore
-from application.documents.finance import compare_ubl_evidence, observe_ubl
+from application.documents.finance import compare_ubl_accounting_evidence, compare_ubl_evidence, observe_ubl
 from application.documents.intake import CapturedDocument, DocumentIntelligence, EntityAssignment
 from application.documents.structured import resolve_xml_citation, xml_citation
 from application.extraction.contracts import ClaimSlot, ExtractionConfig, ExtractionError
@@ -295,6 +297,23 @@ def test_real_ubl_comparison_has_native_exact_scalar_citations():
     observation = observe_ubl(inv, kind="invoice", scope=SCOPE.namespace)
     assert resolve_xml_citation(SCOPE.namespace, inv, observation.citation) == "1250.00"
 
+
+
+def test_detailed_ubl_reconciliation_retains_original_exact_citations_and_missing_basis():
+    invoice = captured(
+        (Path(__file__).parent / "fixtures/finance/synthetic_invoice_mismatch_ubl21.xml").read_bytes(),
+        "application/xml",
+        "invoice",
+    )
+    inv, po = parse(invoice), parse(CASES[1].captured())
+    assessment = compare_ubl_accounting_evidence(inv, po, scope=SCOPE.namespace)
+    assert assessment.status == "candidate_requires_review"
+    assert assessment.differences[0].code == "NET_INVOICE_ORDER_DIFFERENCE"
+    assert assessment.differences[0].delta.amount == Decimal("100.00")
+    assert "vat_component_incomplete" in assessment.unresolved
+    assert "delivery_and_quantity_basis_unassessed" in assessment.unresolved
+    assert assessment.approved is False
+    assert len(assessment.evidence_claim_ids) >= 2
 
 def test_duplicate_ubl_monetary_field_does_not_first_win():
     raw = CASES[1].captured().source.content

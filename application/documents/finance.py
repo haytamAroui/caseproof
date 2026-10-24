@@ -14,6 +14,12 @@ from application.finance_comparison import (
     FinanceComparisonResult,
     compare_finance_candidate,
 )
+from domains.finance.factual_reconciliation import (
+    AccountingAssessment,
+    AccountingEvidence,
+    DeliveryEvidence,
+    assess_accounting_evidence,
+)
 from domains.finance.reconciliation import DocumentAmount, Money
 
 CBC = "{urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2}"
@@ -74,4 +80,28 @@ def compare_ubl_evidence(
     po = observe_ubl(order, kind="purchase_order", scope=scope)
     return compare_finance_candidate(
         FinanceComparisonInput(inv.amount, inv.order_reference, po.amount, po.identifier)
+    )
+
+
+def compare_ubl_accounting_evidence(
+    invoice: ParsedDocument,
+    order: ParsedDocument,
+    *,
+    scope: str,
+    delivery: DeliveryEvidence | None = None,
+) -> AccountingAssessment:
+    """Reconcile only exact-cited UBL line-net values, never assume VAT/fee/receipt zeros.
+
+    This is a proposed comparison, not a tax calculation, approved invoice,
+    payment release or assertion that a PO governs the cited invoice.
+    """
+
+    inv = observe_ubl(invoice, kind="invoice", scope=scope)
+    po = observe_ubl(order, kind="purchase_order", scope=scope)
+    if inv.order_reference is not None and inv.order_reference != po.identifier:
+        raise ExtractionError("invoice references a different purchase order")
+    return assess_accounting_evidence(
+        AccountingEvidence(inv.amount),
+        AccountingEvidence(po.amount),
+        delivery=delivery,
     )
