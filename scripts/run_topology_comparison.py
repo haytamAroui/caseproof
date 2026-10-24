@@ -57,7 +57,8 @@ def validate_live_configuration(args: argparse.Namespace) -> tuple[Scope, UUID, 
         raise ExtractionError("invalid disposable DSN") from None
     if opts.get("host") not in {"127.0.0.1", "localhost", "::1"}:
         raise ExtractionError("non-loopback or socket-based database forbidden")
-    if not opts.get("dbname") or opts.get("dbname", "").lower() in {
+    database = opts.get("dbname")
+    if not isinstance(database, str) or database.lower() in {
         "postgres", "template0", "template1", "caseproof", "production"
     }:
         raise ExtractionError("explicit nonproduction evaluation database required")
