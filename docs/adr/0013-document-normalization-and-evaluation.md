@@ -1,0 +1,15 @@
+# ADR 0013 — source-preserving document normalization and extraction evaluation
+
+Status: implementation proposal under the owner's instruction to build a combined document-to-extraction PR. Builds on ADR 0012; does not authorize production uploads, provider use with customer data, live migrations, review approval or deployment.
+
+Keep original `SourceVersion` bytes unchanged. Application contracts describe a bounded normalized text representation and an immutable mapping of exact spans to source page, XML path or MIME part. Concrete parsers live in `infrastructure/parsers`; the Kernel has no new imports or public contracts. Representation IDs bind source version, parser identity and mapping artifact, so equal extracted text from different parser lineages is not interchangeable.
+
+Use current locked `pypdf` 6.21.2 for text-bearing PDFs and current `defusedxml` 0.7.1 for XML. Email parsing uses the Python standard library with explicit policy. No provider SDK, image model or OCR service is introduced. PDF text is parser output, not a verified visual transcription: pypdf itself documents OCR and coordinate limitations ([text extraction](https://pypdf.readthedocs.io/en/stable/user/extract-text.html), [strictness](https://pypdf.readthedocs.io/en/stable/user/robustness.html)). Therefore no bounding boxes are invented and images/blank pages require review/OCR.
+
+Run parsers in a resource-limited Linux child with no inherited secrets/proxy configuration. Forbid external XML entities and active/embedded/form PDFs; never fetch email links or execute HTML. This is controlled internal processing, not a malware sandbox or production upload service. Unprocessed sources are durable explicit failures/incomplete artifacts, never inferred absence of evidence.
+
+Reuse existing EI checkpoints for normalized artifacts and source manifest hashes; do not invent another fact store or authoritative database migration. Existing authorization/byte-Vault checks surround extraction. Native XML scalar citations use a second **derived representation of the same source**, not a second fact authority; exact scalar resolution still does not establish semantics/authenticity/approval. Existing deterministic finance rules consume a constrained UBL net subset and preserve unknown business predicates.
+
+Default evaluations use only repository-owned synthetic documents and scripted responses. They measure deterministic integration behavior, not live LLM capability. Live Requesty evaluation requires explicit configuration, a stable scoped disposable database journal and an opt-in command, with at most 8 calls/512 output tokens each. No silent retries or provider fallback; no model default. Do not fabricate accuracy or cost when credentials/model are missing. The four-case corpus is a small regression set, not a representative customer benchmark.
+
+Review specification, data relationships, access strategy, limits and rollback: [EI-002 task](../tasks/EI-002.md). Remaining: OCR/richer layouts, production Auth→DB/Vault binding, full durable evidence graph, reviewer UI/decisions and offline-verifiable resolution dossier.

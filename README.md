@@ -54,3 +54,22 @@ The shared runtime discovers proposed entities/relationships, extracts quote-anc
 For server-side Requesty composition use `RequestyProvider.from_environment()` and `EvidenceIntelligence(provider, journal, policy)`. Set `CASEPROOF_REQUESTY_API_KEY` (or existing `REQUESTY_API_KEY`) and `CASEPROOF_EXTRACTION_MODEL` (or existing `REQUESTY_MODEL_PAID`) to an explicitly reviewed concrete Requesty model. No implicit model, direct alternate provider or SDK integration. Review [Requesty routing](https://www.requesty.ai/product/routing) before sending documents; an EU gateway alone does not guarantee inference residency. Never put keys in browser code or source control. No live-call CLI or public route is enabled here.
 
 `MemoryJournal` is test-only. `DisposablePostgresJournal` exercises real checkpoint/CAS/restart behavior only against disposable CI; it accepts a synthetic actor and is **not production authentication**. Source intake must supply trusted immutable representations, case scope, confirmed entity boundaries and required slots. See [ADR 0012](docs/adr/0012-evidence-intelligence-candidate-runtime.md) for remaining parsing/reviewer/export gates.
+
+### Document intake and extraction evaluation
+
+The internal document-to-extraction slice accepts preserved UTF-8 text, text-bearing PDF, XML/UBL and RFC5322/MIME email. It checkpoints normalized representations and maps exact text spans to PDF pages, XML paths and MIME parts. Required scans, HTML/attachments, malformed or unsupported sources block extraction; no OCR, invented bounding boxes, live mailbox or customer HTTP upload is enabled.
+
+```bash
+# Offline, repository-owned synthetic corpus; no provider call or key required
+uv run --locked python -m scripts.run_document_evaluation
+```
+
+The report labels this `scripted_safety_only`; its scores are integration checks, not live extraction quality. Native XML scalar citations also feed the existing Decimal invoice/PO candidate comparison. All outputs require review.
+
+A live Requesty evaluation is opt-in and accepts **only these synthetic files**. First provision the existing disposable PostgreSQL fixture/checkpoint schema (CI integration sequence), select a synthetic case/actor with required permissions and set `CASEPROOF_EVAL_ORG`, `CASEPROOF_EVAL_CASE`, `CASEPROOF_EVAL_ACTOR`, plus the guarded disposable `PG*`/`CASEPROOF_DISPOSABLE_DB` environment and Requesty key/model described above. Keep the same `--run-id` to resume; changing it intentionally permits a fresh paid evaluation.
+
+```bash
+uv run --locked python -m scripts.run_document_evaluation --live-requesty --run-id evaluation-001
+```
+
+Maximum 8 calls × 512 output tokens, no automatic retry/repair/fallback. Saved raw responses and parser artifacts replay from PostgreSQL; unknown dispatch requires reconciliation. Provider-reported cost remains null if missing. No Requesty key/model was configured during implementation, so live quality/cost are not measured. See [ADR 0013](docs/adr/0013-document-normalization-and-evaluation.md) for parser/security limits and remaining production gates.
