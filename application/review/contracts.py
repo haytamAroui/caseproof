@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 from application.documents.intake import IntakeResult
@@ -234,7 +234,7 @@ def boundary_proposal(snapshot: ReviewSnapshot, proposal_id: str) -> dict[str, A
     ]
     if len(boundaries) != 1:
         raise ExtractionError("boundary does not narrow a single unconfirmed entity")
-    return discovery
+    return cast(dict[str, Any], discovery)
 
 
 def validate_command(snapshot: ReviewSnapshot, command: ReviewCommand) -> None:
