@@ -20,6 +20,7 @@ from application.extraction.contracts import (
     Scope,
     Vocabulary,
     digest,
+    canonical,
 )
 
 if TYPE_CHECKING:
@@ -63,6 +64,8 @@ def confirm_reviewed_boundaries(
     for decision in decisions:
         if decision.proposal_id in seen:
             raise ExtractionError("duplicate boundary review")
+        if decision.action not in {"confirm", "reject"}:
+            raise ExtractionError("invalid boundary review action")
         seen.add(decision.proposal_id)
         if not decision.reviewer_reference.strip() or not authorize(request.scope, decision.reviewer_reference):
             raise ExtractionError("authorized boundary reviewer required")
@@ -307,3 +310,85 @@ def evidence_matrix(
             }
         )
     return tuple(matrix)
+
+def confirmed_boundaries_from_audit(
+    request: ExtractionRequest,
+    discoveries: tuple[dict[str, Any], ...],
+    state: dict[str, Any],
+    *,
+    authorize: Callable[[Scope, str], bool],
+) -> ExtractionRequest:
+    """Replay *persisted, audited* boundary-review events into a NEW run request.
+
+    Never accept client-submitted BoundaryReview objects as authorization. The
+    caller must obtain state from a scoped authenticated review repository; its
+    authorization callback must verify the recorded actor/audit reference.
+    """
+
+    from application.review.contracts import (
+        ZERO_HASH,
+        ReviewKind,
+        ReviewSnapshot,
+        boundary_proposal,
+        event_digest,
+    )
+
+    if state.get("persistence") not in {"disposable_postgres", "session_memory"}:
+        raise ExtractionError("unrecognized reviewed boundary event store")
+    if state.get("approved") is not False or state.get("snapshot_hash") is None:
+        raise ExtractionError("untrusted review state")
+    snapshot = ReviewSnapshot(
+        request.scope,
+        state["snapshot_hash"],
+        canonical(state["snapshot"]),
+    )
+    original = {
+        s.source_id: (s.source.sha256_hex, s.representation.sha256_hex)
+        for s in request.sources
+    }
+    recorded = {
+        s["source_id"]: (s["sha256"], s["representation_sha256"])
+        for s in snapshot.data["sources"]
+    }
+    if original != recorded:
+        raise ExtractionError("reviewed boundary source revisions changed")
+    events = state.get("events")
+    if type(events) is not list or len(events) > 1000:
+        raise ExtractionError("review history invalid")
+    previous = ZERO_HASH
+    decisions: list[BoundaryReview] = []
+    for index, event in enumerate(events, 1):
+        if (
+            event.get("scope") != request.scope.namespace
+            or event.get("schema") != "review-event-v1"
+            or event.get("revision") != index
+            or event.get("previous_hash") != previous
+            or event_digest(event) != event.get("audit_hash")
+            or event.get("authority") != "recommendation_only"
+            or event.get("command", {}).get("snapshot_hash") != snapshot.snapshot_hash
+        ):
+            raise ExtractionError("review event chain invalid")
+        previous = event["audit_hash"]
+        kind = event["command"].get("kind")
+        if kind not in (ReviewKind.CONFIRM_BOUNDARY, ReviewKind.REJECT_BOUNDARY):
+            continue
+        proposal_id = event["command"].get("item_id")
+        boundary_proposal(snapshot, proposal_id)
+        if not authorize(request.scope, event["audit_hash"]):
+            raise ExtractionError("boundary review actor not authorized")
+        proposal = next(d for d in discoveries if d.get("id") == proposal_id)
+        doc = original[proposal["proposal"]["source_id"]]
+        decisions.append(
+            BoundaryReview(
+                proposal_id=proposal_id,
+                reviewer_reference=event["audit_hash"],
+                action="confirm" if kind == ReviewKind.CONFIRM_BOUNDARY else "reject",
+                source_sha256=doc[0],
+                representation_sha256=doc[1],
+            )
+        )
+    if previous != state.get("audit_head") or len(events) != state.get("revision"):
+        raise ExtractionError("review audit head or revision invalid")
+    if not decisions:
+        return request
+    return confirm_reviewed_boundaries(request, discoveries, tuple(decisions), authorize=authorize)
