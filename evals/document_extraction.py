@@ -37,7 +37,11 @@ def evaluate(
     journal: StepJournal | None = None,
     scope: Scope = SCOPE,
     run_id: str = "offline-eval-v1",
+    topology: str = "global_first",
 ) -> dict[str, Any]:
+    call_limits = {"global_first": 2, "segmented": 1, "four_pass": 4}
+    if topology not in call_limits:
+        raise ExtractionError("unknown benchmark topology")
     if live and (journal is None or isinstance(journal, MemoryJournal)):
         raise ExtractionError("live evaluation requires a durable scoped journal")
     live_provider = RequestyProvider.from_environment() if live else None
@@ -72,10 +76,10 @@ def evaluate(
             assignments=(case.assignment,),
             slots=(case.slot,),
             config=ExtractionConfig(
-                topology="global_first", max_calls=2, max_output_tokens=512, repair_passes=0
+                topology=topology, max_calls=call_limits[topology], max_output_tokens=512, repair_passes=0
             ),
         )
-        # global-first requires scout+targeted; fixed four fixtures => at most 8 calls, no repair/retry.
+        # Bounded per topology: 2 global-first / 1 segmented / 4 four-pass calls per case.
         elapsed = time.monotonic() - started
         report = result.extraction
         atoms = report.atoms if report else ()
@@ -123,6 +127,8 @@ def evaluate(
     return {
         "schema": "caseproof-document-eval-v1",
         "mode": "live_requesty" if live else "scripted_safety_only",
+        "topology": topology,
+        "max_calls": call_limits[topology] * len(CASES),
         "live_quality_measured": live and any(row["proposals"] for row in rows),
         "corpus_manifest": digest(
             [

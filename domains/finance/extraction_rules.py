@@ -1,37 +1,26 @@
-"""Conservative, versioned proposal validation, never payment authorization."""
+"""Versioned typed finance observation candidates; no authorization or semantic promotion."""
 
-import re
+from domains.evidence_signals import SignalDefinition, validate_observation
 
 
 class FinanceEvidencePolicy:
     namespace = "finance"
-    version = "finance-observations-v1"
-    signals: tuple[str, ...] = (
-        "invoice_issued",
-        "purchase_order_issued",
-        "amount_disputed",
-        "payment_asserted",
-        "credit_note_issued",
-        "goods_received",
-        "supplier_response_received",
-    )
-    _phrases = {
-        "invoice_issued": r"\binvoice\b",
-        "purchase_order_issued": r"\bpurchase order\b",
-        "amount_disputed": r"\b(dispute[ds]?|discrepancy)\b",
-        "payment_asserted": r"\b(paid|payment)\b",
-        "credit_note_issued": r"\bcredit note\b",
-        "goods_received": r"\b(received|delivered)\b",
-        "supplier_response_received": r"\b(replied|response)\b",
+    version = "finance-observations-v2"
+    definitions: dict[str, SignalDefinition] = {
+        "invoice_issued": SignalDefinition(r"\binvoice\b", frozenset({"invoice", "transaction", "purchase_order", "payment"})),
+        "purchase_order_issued": SignalDefinition(r"\bpurchase order\b", frozenset({"invoice", "transaction", "purchase_order", "payment"})),
+        "amount_disputed": SignalDefinition(
+            r"\b(dispute[ds]?|discrepancy)\b", frozenset({"invoice", "transaction", "purchase_order", "payment"}), "money"
+        ),
+        "payment_asserted": SignalDefinition(r"\b(paid|payment)\b", frozenset({"invoice", "transaction", "purchase_order", "payment"})),
+        "credit_note_issued": SignalDefinition(r"\bcredit note\b", frozenset({"invoice", "transaction", "purchase_order", "payment"})),
+        "goods_received": SignalDefinition(r"\b(received|delivered)\b", frozenset({"invoice", "transaction", "purchase_order", "payment"})),
+        "supplier_response_received": SignalDefinition(r"\b(replied|response)\b", frozenset({"invoice", "transaction", "purchase_order", "payment"})),
     }
+    signals: tuple[str, ...] = tuple(definitions)
 
     def validate(self, signal: str, slot: str, quote: str, value: str, kind: str) -> tuple[str, str]:
-        if signal not in self.signals:
-            return "needs_review", "unregistered_signal"
-        if signal != slot or kind not in {"invoice", "transaction", "purchase_order", "payment"}:
-            return "rejected", "signal_consumer_mismatch"
-        if not re.search(self._phrases[signal], quote, re.IGNORECASE):
-            return "needs_review", "signal_semantics_unresolved"
-        if not re.search(r"(?<![\w+-])(?<!\d[.,])" + re.escape(value) + r"(?!\w|[.,]\d)", quote):
-            return "rejected", "value_not_in_quote"
-        return "validated", "proposal_lexically_consistent"
+        return validate_observation(
+            signal=signal, slot=slot, quote=quote, value=value, kind=kind,
+            definitions=self.definitions,
+        )

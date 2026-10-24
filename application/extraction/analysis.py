@@ -138,6 +138,9 @@ def signal_decisions(atoms: tuple[Atom, ...], policy: Vocabulary) -> tuple[dict[
 
     return tuple(
         {
+            "evidence_type": (
+                getattr(getattr(policy, "definitions", {}).get(atom.signal), "value_type", "unregistered")
+            ),
             "candidate_id": atom.candidate_id,
             "source_id": atom.source_id,
             "signal": atom.signal,
