@@ -7,7 +7,7 @@ function element(tag,content,cls){const node=document.createElement(tag);node.te
 function status(message){text("status",message);}
 function fail(message,conflict=false){text("failure",message);$("failure").hidden=false;$("reload").hidden=!conflict;$("reload").disabled=!conflict;}
 function clearFailure(){$("failure").hidden=true;$("reload").hidden=true;}
-function clearDraft(){dirty=false;pending=null;$("note").value="";$("correction").value="";$("action").value="retain";$("review-fields").disabled=false;$("correction-field").hidden=true;for(const id of ["note","correction"]){text(id+"-error","");$(id).removeAttribute("aria-invalid");}}
+function clearDraft(){dirty=false;pending=null;$("note").value="";$("correction").value="";$("action").value=$("action").options[0]?.value||"retain";$("review-fields").disabled=false;$("correction-field").hidden=true;for(const id of ["note","correction"]){text(id+"-error","");$(id).removeAttribute("aria-invalid");}}
 function validation(){let valid=true;for(const id of ["note","correction"]){const needed=id==="note"||["correct","qualify"].includes($("action").value);const invalid=needed&&!$(id).value.trim();$(id).setAttribute("aria-invalid",invalid?"true":"false");text(id+"-error",invalid?(id==="note"?"Add a rationale before saving.":"Add the wording you propose."):"");if(invalid)valid=false;}return valid;}
 function navigate(callback){if(busy||pending){fail("Resolve the pending save before leaving this review.");return;}if(!dirty){callback();return;}navigation=callback;navigationOrigin=document.activeElement;$("stay").disabled=false;$("discard-draft").disabled=false;$("discard").showModal();$("stay").focus();}
 $("stay").addEventListener("click",()=>{$("discard").close();navigation=null;navigationOrigin?.focus();});

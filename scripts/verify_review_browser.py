@@ -135,7 +135,7 @@ def main() -> None:
             expect(page.locator("#source-text mark")).to_have_text("😀")
             page.reload()
             expect(page.locator("#finding-count")).to_have_text("4")
-            page.locator(".finding").filter(has_text="invoice ·").click()
+            page.locator("#findings .finding").filter(has_text="invoice ·").click()
             page.screenshot(path=str(output / "desktop.png"), full_page=True)
             if os.environ.get("CASEPROOF_BROWSER_LOG_SCREENSHOT") == "YES":
                 import base64
