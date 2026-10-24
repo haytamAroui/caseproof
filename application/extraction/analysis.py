@@ -19,8 +19,8 @@ from application.extraction.contracts import (
     ExtractionRequest,
     Scope,
     Vocabulary,
-    digest,
     canonical,
+    digest,
 )
 
 if TYPE_CHECKING:

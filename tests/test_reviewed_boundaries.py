@@ -19,7 +19,6 @@ from domains.finance.extraction_rules import FinanceEvidencePolicy
 from infrastructure.parsers.limited import LimitedDocumentParser
 from scripts.extraction_fixtures import SCOPE, ScriptedProvider, atom, envelope, request
 
-
 ACTOR = UUID(int=301)
 
 
