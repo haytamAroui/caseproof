@@ -365,18 +365,21 @@ def confirmed_boundaries_from_audit(
             or event.get("previous_hash") != previous
             or event_digest(event) != event.get("audit_hash")
             or event.get("authority") != "recommendation_only"
-            or event.get("command", {}).get("snapshot_hash") != snapshot.snapshot_hash
         ):
             raise ExtractionError("review event chain invalid")
         previous = event["audit_hash"]
         kind = event["command"].get("kind")
         if kind not in (ReviewKind.CONFIRM_BOUNDARY, ReviewKind.REJECT_BOUNDARY):
             continue
+        if event["command"].get("snapshot_hash") != snapshot.snapshot_hash:
+            raise ExtractionError("boundary confirmation belongs to older snapshot")
         proposal_id = event["command"].get("item_id")
         boundary_proposal(snapshot, proposal_id)
         if not authorize(request.scope, event["audit_hash"]):
             raise ExtractionError("boundary review actor not authorized")
-        proposal = next(d for d in discoveries if d.get("id") == proposal_id)
+        proposal = next((d for d in discoveries if d.get("id") == proposal_id), None)
+        if proposal is None or proposal != boundary_proposal(snapshot, proposal_id):
+            raise ExtractionError("boundary discovery differs from frozen reviewed proposal")
         doc = original[proposal["proposal"]["source_id"]]
         decisions.append(
             BoundaryReview(
