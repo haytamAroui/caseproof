@@ -321,7 +321,7 @@ def test_manual_live_auth_workflow_scopes_secrets_to_final_probe_step() -> None:
     )
     steps = job["steps"]
     assert len(steps) == 3
-    assert steps[0]["uses"] == "actions/checkout@v4"
+    assert steps[0]["uses"] == "actions/checkout@v7.0.1"
     assert steps[0]["with"] == {"ref": "main", "persist-credentials": False}
     assert steps[1]["run"] == "python3 -c 'import sys; assert sys.version_info >= (3, 11)'"
     for step in steps[:-1]:
