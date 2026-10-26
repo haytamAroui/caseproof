@@ -72,6 +72,11 @@ Copy entity_id from authorized_boundaries (or focus_entity), source_id from sour
 slot from claim_slots.slot_id, and signal from signals exactly. Never invent or translate identifiers.
 Use a quote that includes the scalar and the surrounding event wording, not just the numeric token.
 Do not turn negation, conditional wording, allegations, legal commentary or missing data into observed facts.
+Read every source sentence, including language switches within the same source.
+Return one atom per distinct supported scalar observation for every applicable claim slot.
+Do not stop after the first amount, summarize several amounts into one value, or drop a second language.
+Before returning, scan the source again for supported scalar observations omitted from atoms.
+Keep each observation tied to its own exact contextual quote; never treat negated or conditional amounts as confirmed.
 Do not guess absent amounts, entities, evidence or completeness. Empty arrays if no candidates.
 Discovery entities/relationships are proposals only; do not supply confirmed/approved/confidence flags.
 """
