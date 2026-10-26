@@ -2,7 +2,7 @@
 import json
 from dataclasses import replace
 
-from application.extraction.contracts import ProviderReply
+from application.extraction.contracts import ProviderRejected, ProviderReply
 from scripts.verify_live_extraction_quality import CASES, evaluate_case, run_quality
 
 
@@ -15,6 +15,8 @@ class Scripted:
         self.cost = cost
 
     def complete(self, system, payload, *, request_id, max_tokens):
+        if self.mode == "failure":
+            raise ProviderRejected("requesty_http_403")
         data = json.loads(payload)
         src = data["sources"][0]
         case = next(c for c in CASES if c.content == src["text"])
@@ -121,3 +123,11 @@ def test_report_excludes_sources_and_model_outputs():
     encoded = json.dumps(run_quality(Scripted()))
     assert all(c.content not in encoded for c in CASES)
     assert "response_text" not in encoded
+
+
+def test_provider_failure_never_counts_as_negative_abstention():
+    row = evaluate_case(CASES[3], Scripted("failure"))
+    assert row["status"] == "fail"
+    assert row["successful_response"] is False
+    assert row["abstained"] is False
+    assert row["withheld_for_review_or_rejected"] is False
