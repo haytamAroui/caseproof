@@ -7,8 +7,8 @@ jobs:
   architecture:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: '3.11'
       - name: Verify architecture boundaries
@@ -45,7 +45,7 @@ jobs:
         run: uv run --locked python scripts/check_review_ui.py
       - name: Save synthetic browser evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: synthetic-review-browser
           path: /tmp/caseproof-review-browser
@@ -79,8 +79,8 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: caseproof_ephemeral_ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: '3.11'
       - name: Install PostgreSQL test client
