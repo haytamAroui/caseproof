@@ -120,6 +120,9 @@ class FactObservation:
     source_id: str | None
     source_version_id: str | None
     representation_id: str | None
+    source_sha256: str | None
+    source_locator: str | None
+    source_pdf_page: int | None
     source_start: int | None
     source_end: int | None
     explanation: str
@@ -219,10 +222,18 @@ def compare_fact(
     def obs(state: FactState, explanation: str, *, brief: str | None = None,
             source: str | None = None, anchor: tuple[int, int] | None = None) -> FactObservation:
         row = preview.row if preview is not None else None
+        located = next((
+            (locator, index)
+            for a, b, locator, index in (preview.spans if preview else ())
+            if anchor is not None and a <= anchor[0] and anchor[1] <= b
+        ), None)
         return FactObservation(
             assertion.claim_id, assertion.reference_id, assertion.kind, assertion.role, state,
             brief, source, row.source_id if row else None, row.version_id if row else None,
             row.representation_id if row else None,
+            row.original_sha256 if row else None,
+            located[0] if located else None,
+            located[1] + 1 if located and located[1] is not None else None,
             anchor[0] if anchor else None, anchor[1] if anchor else None, explanation,
         )
 

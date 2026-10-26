@@ -111,11 +111,16 @@ class AuthorizedLitigationChecker:
         if (not isinstance(scope, PrivateMatterAccess)
                 or scope.case_id != case_id or scope.case_revision < 1):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
-        decision = authorize_matter(
-            actor_id=subject.subject_id, org_id=scope.org_id, case_id=case_id,
-            action=MatterPermission.DRAFT_CHECK,
-            membership=scope.member, grant=scope.grant,
-        )
+        try:
+            decision = authorize_matter(
+                actor_id=subject.subject_id, org_id=scope.org_id, case_id=case_id,
+                action=MatterPermission.DRAFT_CHECK,
+                membership=scope.member, grant=scope.grant,
+            )
+        except ValueError:
+            # Malformed trusted repository values must not surface as 500s
+            # or accidentally fall back to legacy org-wide authorization.
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         if not decision.allowed:
             raise AccessRejected(
                 AccessFailure.RESOURCE_MASKED if decision.reason == "masked"

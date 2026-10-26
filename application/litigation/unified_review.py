@@ -210,15 +210,21 @@ def run_unified_check(
         "brief": (brief.version_id, brief.sha256_hex, representation.text_sha256,
                   representation.parser_id),
         "exhibit_revision": register.revision,
+        "claim_parsing": tuple(
+            (a.claim_id, a.reference_id, a.text_start, a.text_end,
+             a.kind, a.role, a.language, a.source_language)
+            for a in representation.claims
+        ),
         "exhibit_identifiers": tuple(
-            (e.exhibit_id, e.display_label, e.confirmed, tuple(
+            (e.exhibit_id, e.display_label, e.aliases, e.confirmed, e.manual_inclusion, tuple(
                 (p.source_id, p.version_id, p.pdf_page, p.printed_page, p.bundle_page)
                 for p in e.pages
             )) for e in register.entries
         ),
         "sources": tuple(sorted(
             (x.row.source_id, x.row.version_id, x.row.original_sha256,
-             x.row.representation_id, x.row.parser_id, x.row.status)
+             x.row.representation_id, x.row.parser_id, x.row.status,
+             x.row.warnings, x.spans)
             for x in previews
         )),
         "declared": source_scope.declared_source_versions,

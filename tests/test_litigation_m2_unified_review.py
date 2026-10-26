@@ -87,6 +87,8 @@ def test_quote_free_french_brief_finds_two_anchored_candidates():
     assert {x.kind for x in run.factual_observations} == {FactKind.DATE, FactKind.MONEY}
     assert all(x.state is FactState.DIFFERENCE for x in run.factual_observations)
     assert all(x.source_id == "src-1" and x.source_version_id == "v1" for x in run.factual_observations)
+    assert all(x.source_sha256 and x.source_locator == "pdf-page-1" and x.source_pdf_page == 1
+               for x in run.factual_observations)
     assert all(x.source_start is not None and x.source_end is not None for x in run.factual_observations)
     assert run.incomplete == ()
     assert len(run.snapshot_hash) == 64
@@ -276,3 +278,19 @@ def test_correction_preview_reversible_without_mutating_evidence():
 def test_amount_locale_explicit_not_guessed(token, lang, expected):
     value = _money_value(token, lang)
     assert (str(value) if value is not None else None) == expected
+
+
+def test_run_snapshot_changes_with_exhibit_alias_or_source_locator():
+    b, register, previews, scope = rig()
+    params = dict(representation=b, previews=previews, source_scope=scope,
+                  authorized_case_id="case-1", authorized_register_revision=4)
+    baseline = run_unified_check(register=register, **params)
+    renamed = replace(register, entries=(replace(
+        register.entries[0], aliases=("Stuk 1", "Bijlage A"),
+    ),))
+    assert baseline.snapshot_hash != run_unified_check(register=renamed, **params).snapshot_hash
+    moved = replace(previews[0], spans=((0, len(previews[0].text), "changed-page-locator", 0),))
+    assert baseline.snapshot_hash != run_unified_check(
+        representation=b, register=register, previews=(moved,),
+        source_scope=scope, authorized_case_id="case-1", authorized_register_revision=4,
+    ).snapshot_hash
