@@ -19,7 +19,7 @@ from apps.api.access_control import (
 
 RESTRICTED_CASE_SQL = """
 select c.id, c.org_id, c.case_revision, c.created_by_user,
-       m.user_id, m.org_id, m.active, m.actions, g.role
+       m.user_id, m.org_id, m.active, m.actions, g.role, g.permissions
 from caseproof.cases c
 join caseproof.organization_members m
   on m.org_id=c.org_id and m.user_id=%s and m.active=true
@@ -64,9 +64,9 @@ class RestrictedPostgresCaseRepository:
                     records = cur.fetchall()
             if not records:
                 return None
-            if len(records) != 1 or len(records[0]) != 9:
+            if len(records) != 1 or len(records[0]) != 10:
                 raise ValueError("ambiguous restricted access result")
-            case_id_db, org, rev, creator, user, member_org, active, actions, role = records[0]
+            case_id_db, org, rev, creator, user, member_org, active, actions, role, grants = records[0]
             if (
                 _uuid(case_id_db) != case
                 or _uuid(user) != actor
@@ -74,10 +74,21 @@ class RestrictedPostgresCaseRepository:
                 or active is not True or type(rev) is not int or rev < 1
                 or role not in {"viewer", "reviewer"}
                 or not isinstance(actions, (list, tuple))
+                or not isinstance(grants, (list, tuple))
             ):
                 raise ValueError("invalid restricted matter grant")
-            rights = frozenset(CaseAction(a) for a in actions)
-            if role == "viewer":
+            scoped_names = {
+                'case:read', 'coverage:read', 'evidence:read', 'review:request',
+                'finding:write', 'evidence:upload', 'evidence:index',
+                'exhibit:confirm', 'draft:check',
+            }
+            if any(type(p) is not str or p not in scoped_names for p in grants):
+                raise ValueError('unrecognized matter action')
+            granted_legacy = frozenset(
+                CaseAction(p) for p in grants if p in CaseAction._value2member_map_
+            )
+            rights = frozenset(CaseAction(a) for a in actions) & granted_legacy
+            if role == 'viewer':
                 rights &= frozenset({
                     CaseAction.READ_CASE, CaseAction.READ_COVERAGE, CaseAction.READ_EVIDENCE,
                 })

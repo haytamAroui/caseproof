@@ -29,8 +29,9 @@ def main() -> None:
         "update caseproof.organization_members "
         "set active=true,actions=array['case:read','evidence:read','review:request'] "
         f"where org_id='{ORG}' and user_id='{ACTOR}'; "
-        "insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role) "
-        f"values ('{ORG}','{CASE}','{ACTOR}','reviewer');", env,
+        "insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions) "
+        f"values ('{ORG}','{CASE}','{ACTOR}','reviewer',"
+        "array['case:read','evidence:read','exhibit:confirm']);", env,
     )
     payload = {"schema": "caseproof-exhibit-register-v1", "entries": []}
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -64,6 +65,17 @@ def main() -> None:
         f"'{ACTOR}'::uuid,'{CASE}'::uuid,'{uuid4()}'::uuid,"
         f"1,'{encoded}'::jsonb,'{digest}');", env, should_pass=False,
     )
+    # Role and org membership alone must NOT allow exhibit confirmation.
+    _run(
+        f"update caseproof._m1_matter_grants set permissions=array['case:read'] "
+        f"where case_id='{CASE}';", env,
+    )
+    no_permission = (
+        "select * from caseproof._m1_disposable_confirm_exhibits("
+        f"'{ACTOR}'::uuid,'{CASE}'::uuid,'{uuid4()}'::uuid,"
+        f"1,'{encoded}'::jsonb,'{digest}');"
+    )
+    _run(no_permission, env, should_pass=False)
     _run(
         f"update caseproof._m1_matter_grants set active=false where case_id='{CASE}';", env,
     )

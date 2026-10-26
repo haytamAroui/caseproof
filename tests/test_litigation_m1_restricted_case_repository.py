@@ -57,11 +57,12 @@ class Rig:
         return Connection(Cursor(self.rows, self.statements))
 
 
-def row(role: str = "reviewer") -> tuple[object, ...]:
+def row(role: str = "reviewer", *, granted: list[str] | None = None) -> tuple[object, ...]:
     return (
         UUID(CASE), UUID(ORG), 1, UUID(ACTOR),
         UUID(ACTOR), UUID(ORG), True,
         ["case:read", "evidence:read", "review:request"], role,
+        ["case:read", "evidence:read", "review:request"] if granted is None else granted,
     )
 
 
@@ -71,6 +72,7 @@ def test_restricted_case_is_one_join_with_explicit_matter_grant():
     assert "g.case_id=c.id" in q
     assert "g.user_id=m.user_id" in q
     assert "g.active=true" in q
+    assert "g.permissions" in q
     rig = Rig([row()])
     result = RestrictedPostgresCaseRepository(rig.open).lookup_case_membership(ACTOR, CASE)
     assert result is not None
@@ -93,10 +95,27 @@ def test_unganted_restricted_case_is_masked_no_tenant_oracle():
 
 @pytest.mark.parametrize("broken", [
     [row(), row()],
-    [(*row()[:-1], "admin")],
-    [(*row()[:-2], ["case:read", "role:owner"], "reviewer")],
+    [(*row()[:-2], "admin", ["case:read"])],
+    [(*row()[:-3], ["case:read", "role:owner"], "reviewer", ["case:read"])],
+    [(*row()[:-1], ["case:read", "superuser:all"])],
 ])
 def test_corrupted_or_overprivileged_rows_fail_closed(broken):
     rig = Rig(broken)
     with pytest.raises(AccessStoreUnavailable):
         RestrictedPostgresCaseRepository(rig.open).lookup_case_membership(ACTOR, CASE)
+
+
+
+def test_membership_does_not_imply_case_level_review() -> None:
+    rig = Rig([row(granted=["case:read", "evidence:read"])])
+    pair = RestrictedPostgresCaseRepository(rig.open).lookup_case_membership(ACTOR, CASE)
+    assert pair is not None
+    assert CaseAction.READ_EVIDENCE in pair[1].actions
+    assert CaseAction.PROPOSE_REVIEW not in pair[1].actions
+
+
+def test_explicit_review_without_case_read_does_not_authorize_case() -> None:
+    rig = Rig([row(granted=["review:request"])])
+    pair = RestrictedPostgresCaseRepository(rig.open).lookup_case_membership(ACTOR, CASE)
+    assert pair is not None
+    assert CaseAction.READ_CASE not in pair[1].actions

@@ -9,6 +9,10 @@ create table caseproof._m1_matter_grants (
   case_id uuid not null,
   user_id uuid not null,
   role text not null check(role in ('viewer','reviewer')),
+  permissions text[] not null default '{}'::text[]
+    check (permissions <@ array['case:read','coverage:read','evidence:read',
+      'review:request','finding:write','evidence:upload','evidence:index',
+      'exhibit:confirm','draft:check']::text[]),
   active boolean not null default true,
   revision bigint not null default 1 check(revision >= 1),
   primary key (org_id,case_id,user_id),
@@ -92,6 +96,7 @@ begin
   join caseproof._m1_matter_grants g
     on g.org_id=c.org_id and g.case_id=c.id
        and g.user_id=p_actor and g.active and g.role='reviewer'
+       and 'exhibit:confirm'=any(g.permissions)
   where c.id=p_case and 'case:read'=any(m.actions)
       and 'review:request'=any(m.actions)
   limit 2;
