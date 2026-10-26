@@ -294,3 +294,75 @@ def test_run_snapshot_changes_with_exhibit_alias_or_source_locator():
         representation=b, register=register, previews=(moved,),
         source_scope=scope, authorized_case_id="case-1", authorized_register_revision=4,
     ).snapshot_hash
+
+
+@pytest.mark.parametrize("denied_source", [
+    "Le paiement de €12500 n'a pas été effectué le 22 mai 2026.",
+    "Le paiement de €12500 n’a pas été effectué le 22 mai 2026.",
+    "Le paiement de €12500 ne sera jamais effectué le 22 mai 2026.",
+    "Le paiement de €12500 n'a point été effectué le 22 mai 2026.",
+])
+def test_negated_french_payment_does_not_become_a_value_match(denied_source):
+    affirmative = "Le paiement de €12500 a été effectué le 22 mai 2026."
+    run = check(affirmative, denied_source)
+    assert all(x.state is FactState.NEEDS_CONTEXT for x in run.factual_observations)
+    assert not any(x.state is FactState.MATCH for x in run.factual_observations)
+
+
+@pytest.mark.parametrize("ambiguous_source", [
+    "Le paiement de €12500 a été effectué le 04/05/2026 ou le 22 mai 2026.",
+    "Le paiement de €12500 a été effectué le 31/02/2026 ou le 22 mai 2026.",
+    "Le paiement de €12500 a été effectué le 22 mai 2026 ou le 25 mai 2026.",
+])
+def test_multiple_date_candidates_including_unparseable_do_not_prove_payment_date(ambiguous_source):
+    claim = "Le paiement de €12500 a été effectué le 22 mai 2026."
+    run = check(claim, ambiguous_source)
+    date_candidate = next(x for x in run.factual_observations if x.kind is FactKind.DATE)
+    assert date_candidate.state is FactState.NEEDS_CONTEXT
+    assert date_candidate.source_token is None
+
+
+@pytest.mark.parametrize("signed_source", [
+    "Le paiement de -€12500 a été effectué le 22 mai 2026.",
+    "Le paiement de −€12500 a été effectué le 22 mai 2026.",
+    "Le paiement de €-12500 a été effectué le 22 mai 2026.",
+    "Le paiement de - EUR 12500 a été effectué le 22 mai 2026.",
+    "Le paiement de (€12500) a été effectué le 22 mai 2026.",
+])
+def test_signed_payment_amount_is_not_silently_converted_to_positive(signed_source):
+    claim = "Le paiement de €12500 a été effectué le 22 mai 2026."
+    run = check(claim, signed_source)
+    assert not any(x.state is FactState.MATCH for x in run.factual_observations)
+    assert not any(x.state is FactState.DIFFERENCE for x in run.factual_observations)
+
+
+def test_changed_assertion_anchor_changes_review_snapshot_even_for_same_value():
+    sentence = "Le paiement de €12500 a été effectué le 22 mai 2026."
+    text = sentence + " Puis " + sentence
+    b, reg, previews, scope = rig(text, sentence)
+    def checker(offset):
+        claim = FactAssertion(
+            "fact-money", "ref-1", sentence, offset, offset + len(sentence),
+            FactKind.MONEY, FactRole.PAYMENT, "fr", "fr",
+        )
+        anchored = replace(
+            b, text=text, text_sha256=sha256(text.encode()).hexdigest(), claims=(claim,),
+        )
+        return run_unified_check(
+            representation=anchored, register=reg, previews=previews,
+            source_scope=scope, authorized_case_id="case-1", authorized_register_revision=4,
+        )
+    first = checker(0)
+    second = checker(len(sentence) + len(" Puis "))
+    assert first.factual_observations == second.factual_observations
+    assert first.snapshot_hash != second.snapshot_hash
+    with pytest.raises(VerificationError):
+        revise_review(
+            run=second,
+            packet=ReviewPacket(first.snapshot_hash, 0),
+            expected_revision=0,
+            decision=ObservationReview(
+                "fact:fact-money", "reviewer-1", ReviewDisposition.CONFIRMED,
+                "Different passage from previously reviewed assertion.",
+            ),
+        )

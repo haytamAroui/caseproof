@@ -54,6 +54,15 @@ _UNCERTAINTY = ("peut-être", "waarschijnlijk", "perhaps", "possibly",
                 "avenant", "amendment", "wijziging")
 _BASIS_MARKERS = ("htva", "ttc", "tva", "btw", "vat", "excl.", "incl.",
                   "hors taxe", "inclusief", "exclusief", "gross", "net", "brut")
+# Fail closed on French ne...pas, jamais, point, or bare negative markers.
+# Conservative abstention is preferable to saying that a denied event occurred.
+_FRENCH_NEGATION = re.compile(r"\b(?:pas|jamais|aucun|aucune|point)\b", re.IGNORECASE)
+# Signed/reversed payment values are out of the first M2 comparison profile.
+# The amount regex otherwise starts at € and incorrectly loses a leading minus.
+_SIGNED_MONEY = re.compile(
+    r"(?:[-+−–—]\s*(?:€|EUR\b)|(?:€|EUR\b)\s*[-+−–—]|\(\s*(?:€|EUR\b))",
+    re.IGNORECASE,
+)
 _MONEY = re.compile(
     r"(?<![\w])(?:€\s*|EUR\s*)(?:\d{1,3}(?:[ .,]\d{3})+(?:[,.]\d{2})?|\d+(?:[,.]\d{2})?)(?![\w,.])",
     re.IGNORECASE,
@@ -183,7 +192,9 @@ def _date_value(token: str) -> date | None:
 
 def _safe_context(text: str, role: FactRole) -> bool:
     low = text.casefold()
-    if any(marker in low for marker in _UNCERTAINTY):
+    if (any(marker in low for marker in _UNCERTAINTY)
+            or _FRENCH_NEGATION.search(low) is not None
+            or _SIGNED_MONEY.search(text) is not None):
         return False
     if not any(token in low for token in _ROLE_TERMS[role]):
         return False
@@ -267,9 +278,17 @@ def compare_fact(
         if (assertion.kind is FactKind.DATE
                 and len(_extract(passage, FactKind.MONEY, assertion.source_language)) > 1):
             continue
-        for token, a, b, val in _extract(passage, assertion.kind, assertion.source_language):
-            if val is not None:
-                possibilities.append((token, start + a, start + b, val, passage))
+        source_tokens = _extract(passage, assertion.kind, assertion.source_language)
+        if not source_tokens:
+            continue
+        # Every token in the role-aligned passage counts, including ones
+        # without a safely parseable value. Never select the only parseable
+        # value out of multiple (e.g. 04/05/2026 OR 22 May 2026).
+        if len(source_tokens) != 1 or source_tokens[0][3] is None:
+            return obs(FactState.NEEDS_CONTEXT, "source_role_or_value_ambiguous", brief=claim_token)
+        token, a, b, val = source_tokens[0]
+        assert val is not None
+        possibilities.append((token, start + a, start + b, val, passage))
     if len(possibilities) != 1:
         return obs(FactState.NEEDS_CONTEXT, "source_role_or_value_not_unique", brief=claim_token)
     token, start, end, source_value, source_context = possibilities[0]
