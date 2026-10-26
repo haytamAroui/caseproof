@@ -205,7 +205,10 @@ def test_parsing_timestamp_is_not_falsely_backdated_to_source_ingestion():
 def test_headless_m1_to_m2_exact_citation_path_through_preserved_source():
     """Synthetic Auth/Vault contract: real parser output, NOT production Auth."""
     from application.litigation.brief_checks import (
-        CitationCheckState, DraftReference, VersionedBrief, check_brief_references,
+        CitationCheckState,
+        DraftReference,
+        VersionedBrief,
+        check_brief_references,
     )
     from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 
