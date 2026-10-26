@@ -33,7 +33,7 @@
           "env": {
             "CASEPROOF_LIVE_REQUESTY_TEST": "YES",
             "CASEPROOF_REQUESTY_API_KEY": "${{ secrets.CASEPROOF_REQUESTY_API_KEY }}",
-            "CASEPROOF_EXTRACTION_MODEL": "${{ vars.CASEPROOF_EXTRACTION_MODEL }}"
+            "CASEPROOF_EXTRACTION_MODEL": "${{ vars.CASEPROOF_EXTRACTION_MODEL == 'mistral-small-2603' && 'mistral/mistral-small-2603' || vars.CASEPROOF_EXTRACTION_MODEL }}"
           },
           "run": "python3 -m scripts.verify_live_requesty_litigation"
         },
