@@ -1,3 +1,13 @@
+# Current product direction and M0 status — 2026-10-26
+
+**Principal source:** [Belgian litigation roadmap](ROADMAP.md) and [complete user workflow](PRODUCT_WORKFLOW.md). [ADR 0016](adr/0016-belgian-litigation-product-pivot.md) supersedes *finance-first product sequencing* only; sector-neutral Kernel, constitution, ADR-0011 architecture and finance compatibility remain unchanged. The snapshots below record historical engineering state; their finance-first action recommendations are no longer the active product order.
+
+**M0 single-PR work:** PIV-00 owner/contract and code-status matrix ([BASELINE](m0/BASELINE.md)), unresolved public claims ([CLAIMS REGISTER](m0/CLAIMS_REGISTER.md)), and PIV-01 synthetic NL/FR/mixed fixtures, validator/tests and pre-registered [BENCHMARK PROTOCOL](m0/BENCHMARK_PROTOCOL.md). No actual human/competitor benchmark, independently adjudicated gold, OCR scan evaluation, or Belgian legal opinion. Acceptance remains conditional on PR-head CI, scope review and evaluation-label adjudication.
+
+**Not implemented:** a production litigation web/Word journey, Stuk/Pièce register, authenticated matter authorization with restricted same-org scope, real confidential Storage, DOCX/OCR/filing integrations, release authority or linked legal bundles. These are PIV-02 onward. Open PR #57 remains an unmerged extraction candidate until separately reviewed; do not credit its changes to current main.
+
+---
+
 # CaseProof / ExceptionDesk — verified engineering status
 
 ## 2026-10-23 — Persisted exact text evidence increment

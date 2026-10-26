@@ -2,6 +2,16 @@
 
 **Product workflow:** [Complete lawyer journey](docs/PRODUCT_WORKFLOW.md). **Principal roadmap:** [Belgian litigation workflow and build plan](docs/ROADMAP.md). It supersedes the finance-first product order in older README/roadmap material; historical ADRs remain architecture records. The repository code has not yet completed this pivot and the litigation product is not production-ready. See [verified implementation status and release blockers](docs/STATUS.md).
 
+
+## M0 — Belgian litigation pivot baseline (PIV-00/01)
+
+The first single-PR M0 packet introduces [ADR 0016](docs/adr/0016-belgian-litigation-product-pivot.md), a [pinned implementation/status matrix](docs/m0/BASELINE.md), a [pending external-claims register](docs/m0/CLAIMS_REGISTER.md), a [fixed evaluation protocol](docs/m0/BENCHMARK_PROTOCOL.md) and [original fictional Dutch/French/mixed cases](evals/litigation/README.md). This is **synthetic evaluation preparation, not a functioning litigation product**. PIV-01's labels still require independent review and real-format/scan fixtures; PIV-02–05 customer-security gates remain open.
+
+```bash
+uv run --locked python -m scripts.validate_litigation_corpus
+uv run --locked pytest -q tests/test_litigation_m0_corpus.py
+```
+
 ## Product
 
 CaseProof's target product is a Belgian evidence-linked workspace for lawyers to write with evidence, check their own or an opponent's brief against the exhibit bundle, review and correct findings, and deliver source-linked work. The initial factual-evidence workflow does not claim automatic legal-authority verification. The existing sector-neutral Evidence Kernel remains the foundation; the implementation plan uses `domains/disputes/`. AZComply is independent.
