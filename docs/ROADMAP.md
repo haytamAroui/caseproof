@@ -9,6 +9,8 @@
 
 **M0 implementation packet:** See [ADR 0016](adr/0016-belgian-litigation-product-pivot.md), [pinned capability/gate matrix](m0/BASELINE.md), [external claims register](m0/CLAIMS_REGISTER.md), [fixed manual task benchmark](m0/BENCHMARK_PROTOCOL.md), and [original synthetic evaluation corpus](../evals/litigation/README.md). These are M0 evidence artifacts, **not** claims of approved legal gold labels, benchmarked accuracy, complete PIV-01 real-format coverage or production readiness.
 
+**M1 integrated development slice:** [Implementation evidence and remaining gates](m1/IMPLEMENTATION.md) for PIV-02–06 (PR #62). Until production custody, genuine signed identity/permissions and audited exhibit confirmation exist, this is a tested internal reference, **not a complete or customer-usable M1 milestone**.
+
 ## Product workflow
 
 1. **Set up and access a matter.** Authenticate the user, enforce organization and matter permissions, and create a case workspace.

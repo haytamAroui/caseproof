@@ -12,6 +12,14 @@ uv run --locked python -m scripts.validate_litigation_corpus
 uv run --locked pytest -q tests/test_litigation_m0_corpus.py
 ```
 
+## M1 — Evidence library development (PR #62)
+
+[M1 implementation and open production gates](docs/m1/IMPLEMENTATION.md) describe the combined PIV-02–06 reference slice: bearer-authorized source listing/preview built on existing access and Vault protocols, no-model inventory and page status, bounded DOCX parsing, and versioned Stuk/Pièce exhibit mapping. It includes synthetic security/adversarial tests and an offline demo. **This is not a public customer upload service, durable reviewer-write transaction, nor a finished M1 milestone.** Genuine least-privilege Auth→DB, private cloud Storage, DOCX/OCR acceptance and exhibit persistence still require verified security/release work.
+
+```bash
+uv run --locked python -m scripts.demo_litigation_evidence_library
+```
+
 ## Product
 
 CaseProof's target product is a Belgian evidence-linked workspace for lawyers to write with evidence, check their own or an opponent's brief against the exhibit bundle, review and correct findings, and deliver source-linked work. The initial factual-evidence workflow does not claim automatic legal-authority verification. The existing sector-neutral Evidence Kernel remains the foundation; the implementation plan uses `domains/disputes/`. AZComply is independent.
