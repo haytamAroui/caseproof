@@ -8,7 +8,7 @@
 
 A lawyer can import a brief and its evidence, confirm which files correspond to which Stuk/Pièce references, find and inspect source passages, insert evidence citations while drafting, run a scoped check, resolve or correct findings, hand the exact version to a reviewer, and deliver a navigable brief and exhibit package. When the brief or evidence changes, the product identifies the affected work and requires the appropriate recheck.
 
-The product reports what it checked and what it could not check. “No issue found” means no issue was found within the declared and processed scope; it never means that all facts are true or all evidence was discovered.
+The product reports what it checked and what it could not check. “No issue found” means no issue was found within the declared and processed scope; it never means that all facts are true or all evidence was discovered. **Commercial wedge:** the *first integrated checker* verifies cited-exhibit existence, quotation fidelity **when quotations exist**, and carefully aligned date/amount claims in **one** headless pass, including cases with **zero quotations**. Its result is an auditable review record, not a statement of professional certification or court readiness. See [source/competitor audit](research/BELGIAN_WEDGE_FEEDBACK_AUDIT_2026-10-26.md).
 
 ## Main navigation
 
@@ -28,7 +28,7 @@ The Word task pane exposes the contextual subset: selection, evidence suggestion
 
 The lawyer signs in, selects an authorized organization and opens or creates a matter. The matter setup captures a title/reference, jurisdiction/court when known, working language and permitted collaborators. It does not require a legal rule profile before evidence work can begin.
 
-**System:** checks current identity and matter access before listing or reading documents. An inaccessible or revoked matter is masked/denied. A new matter starts with no evidence and no inferred legal state.
+**System:** checks current identity and matter access before listing or reading documents. An inaccessible or revoked matter is masked/denied. **ADR-0017 default-private litigation** requires an explicit current grant per matter/action even for colleagues in the same firm. A new matter starts with no evidence and no inferred legal state.
 
 **States:** loading, signed out, organization selection, empty matter, active matter, archived, access revoked, service unavailable.
 
@@ -38,7 +38,7 @@ The lawyer signs in, selects an authorized organization and opens or creates a m
 
 The lawyer uploads the current draft or opponent brief and the available exhibits. Files are preserved as immutable originals. The upload screen shows per-file progress, duplicate detection, unsupported formats, quarantine/scanning state and whether a prior version already exists. The user can add files incrementally.
 
-**System:** creates stable source identities and resumable jobs; records byte digest, receipt time, uploader and matter scope. It parses supported pages and parts, runs configured OCR where available, and creates derived representations with parser/version lineage. Failed or unprocessed pages remain visible. An upload does not establish that a document was filed or communicated.
+**System:** creates stable source identities and resumable jobs; records byte digest, receipt time, uploader and matter scope. It parses supported pages and parts, runs configured OCR where available, and creates derived representations with parser/version lineage. Failed or unprocessed pages remain visible. An upload does not establish that a document was filed or communicated. **Keep separate:** (a) present in the user's inventory, (b) bytes actually in custody, (c) communication to the other side proven by a recorded event/receipt, and (d) court submission/receipt actually observed. A missing number proves none of the latter three.
 
 **States:** queued, uploading, quarantined, scanning, parsing, OCR pending, ready, partial, failed, duplicate, removed-from-active-scope.
 
@@ -82,14 +82,15 @@ The lawyer selects a factual sentence or phrase, opens “Find evidence,” and 
 
 The lawyer chooses a check profile and explicitly confirms scope: selected draft revision, confirmed exhibit set, excluded documents/pages, and whether to check only cited evidence or also search the wider record for possible counterevidence.
 
-The deterministic pass checks:
-- references that cannot be resolved or have ambiguous exhibit/page mappings;
-- quotation text against exact source spans, with candidate alignment kept separate from exact fidelity;
-- typed date/amount/percentage observations with roles, units, currencies and ambiguity retained;
-- defined local citation formatting rules;
-- missing or unprocessed material in the declared scope.
+**M2 launch: one unified, non-LLM, headless check pass** (not separate buyer-facing quote-only modules):
+- **Exhibit identity/existence:** resolve Stuk/Pièce/annex aliases, duplicates, exact source ID/version and physical/printed/bundle page; distinguish cited-not-in-register, inventory-only, missing bytes, unproved communication, and actual recorded filing.
+- **Quotation fidelity if present:** literal or properly bounded normalization of the selected quote against the mapped exact source span and page, preserving original wording and candidate alignment separately from exact fidelity. A 35-page brief with zero verbatim quotes still receives the other checks.
+- **Typed date/value candidates:** parse amounts, dates, percentages, units and currencies from brief + mapped evidence; compare only **same-role** values with compatible basis and source anchors (payment vs payment, not due date vs paid date; net vs gross and VAT/amendments require explicit context). Conflicting, absent or multiple roles yield `needs_context`/`not_assessed`, never an invented mismatch or legal truth.
+- **Presentation and scope:** apply reviewed local citation-format profile where configured; include unsupported files, unprocessed/partial pages, corpus denominator, reviewed exclusions, parser quality flags and stale versions.
 
-A second, optional semantic pass may retrieve supporting, qualifying or contrary context and create model-proposed observations. It records the model/prompt/scope version, can abstain, and never changes an issue into an authorized decision. Legal references are marked “not checked” unless a separately specified legal-authority service and source entitlement are active.
+One run returns a reproducible *scope manifest* plus exact/unknown/mismatch observations. **A clean brief can correctly produce no findings**; do not force errors to improve a sales demo.
+
+A second, optional semantic pass may retrieve supporting, qualifying or contrary context and create model-proposed observations. It records the model/prompt/scope version, can abstain, and never changes an issue into an authorized decision. **Opponent-wide mode** may, after separately evaluated PIV-10/12 coverage, search authorized *uncited* pages of the opponent's disclosed record for potentially adverse/qualifying context, with cite/page and surrounding text. It does not auto-label admissions, prove an opponent's wrongdoing or generate court-ready rebuttals; the lawyer must assess relevance and opportunity to contest. Legal references are marked “not checked” unless a separately specified legal-authority service and source entitlement are active.
 
 **System:** reports execution status separately from evidence status. A clean result is allowed. If indexing or parsing was incomplete, the report says exactly which pages/files were not checked. It does not infer that an uncited exhibit was uncommunicated, or that the opponent omitted evidence from the world.
 
@@ -121,7 +122,7 @@ For an opponent brief, the original remains untouched. Corrections are annotatio
 
 The lawyer selects the exact draft revision, exhibit register revision, check run, review state, inclusion policy and output language. Available outputs are separately identified:
 - source-linked working brief or correction copy;
-- cite-check/review report listing checked and unchecked scope, findings and dispositions;
+- cite-check/review report listing checked and unchecked scope, findings and dispositions, with an **optional neutral Verification Run Record / Verificatierapport / Rapport de vérification** that states exactly which source versions, original/representation digests, page spans and checks were processed, which were not, and who reviewed each exception; it is **not** a certificate of factual truth, professional accreditation, procedural compliance or billable client disbursement;
 - exhibit index with stable identifiers and displayed aliases;
 - exhibit bundle with bookmarks/hyperlinks where supported;
 - offline package or hosted courtesy copy.
@@ -159,14 +160,24 @@ Court-profile guidance is versioned and shows the court/division/chamber, docume
 | Court profile is stale, conflicting or unavailable | Mark procedural guidance unverified; explain the profile gap; do not claim court readiness or apply a national rejection rule |
 | Clean check | Show checked scope and “no confirmed issue found”; never award an all-record correctness badge |
 
+## Confidentiality modes and pilot gate
+
+**Professional secrecy is not resolved by pseudonymizing names alone.** The January 2025 OVB/OBFG AI guidance distinguishes personal data from material protected by professional secrecy, and describes processing secrets in AI tools only where the lawyer is certain that a sufficiently protected closed environment is used. A region label, no-training switch or vendor \"zero retention\" claim alone is not that proof.
+
+1. **Now — headless deterministic research:** source-linked checks can be run in isolated tests with synthetic or properly rights-cleared nonconfidential redacted materials, without Requesty credentials. This does not establish that the deployed SaaS processes all content locally or is an approved closed environment.
+2. **Future optional offline product:** requires a real separately packaged local parser/checker with no outbound network, controlled temporary files/logs, tested update/backup behavior and customer/on-device threat modeling. It is a **separate capability gate**, not assumed from the existing server-first architecture.
+3. **Hosted professional deployment:** gated on M1-B/C signed current permissions and true case-isolating RLS, private immutable storage, incident response, vendor/subprocessor contracts, deletion/retention, technical and contractual guarantees and qualified professional-secrecy review. Model-based processing has its own explicit opt-in/processor boundary.
+
+Use the same API/claim/source-check contracts across privacy modes if any are added, without claiming equivalent implementation or legal suitability until proved.
+
 ## Product success measures
 
 Measure task completion on representative NL/FR/EN and mixed-language dossiers through the competitive benchmark and adoption protocol in [ROADMAP.md](ROADMAP.md):
 - compare manual Word/PDF with authorized, tested products on fixed tasks; record source/output correctness, total time including setup/review/cleanup, false positives, assistance, errors and breakage;
 - first complete task, second task on an actual matter, repeat use within a defined window, false-warning review time and abandonment reasons;
 - maintain separate invited/access, registered, trained, active and paying cohorts;
-- track cost per completed reviewed dossier, with observed values distinct from estimates and unavailable unit costs left null;
-- retain existing measures for reference resolution, labelled-passage recall, correction outcomes, round-trip integrity, partial/failure recovery and access rejection.
+- track cost per completed reviewed dossier, with observed values distinct from estimates and unavailable unit costs left null; **test seat, per-dossier and hybrid pricing against actual buyers**, using Alice's dated €85/user/month public Core offer only as a comparison; client reimbursement/pass-through is subject to engagement terms and independent bar/tax review, not an automatic fee or revenue promise;
+- retain existing measures for reference resolution, labelled-passage recall, correction outcomes, round-trip integrity, partial/failure recovery and access rejection; add **quote-free brief performance**, same-role value-mismatch precision, falsely matched dates/units, actionable finding yield, reviewer seconds per alert, zero-findings clean controls, and manually measured opponent uncited-page retrieval recall. Compare with [Hublex](https://hublex.be/en/conclusions-check) + manual Word/PDF + authorized Alice where feasible, without claiming no local competitors.
 
 Use privacy-safe operational metadata; no customer document content enters telemetry. Each measure names its denominator, corpus/task protocol and version. No metric is advertised as legal accuracy without a validated evaluation design.
 
