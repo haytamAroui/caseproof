@@ -116,3 +116,55 @@ def test_docx_unprocessed_header_has_explicit_completeness_warning():
     parsed = restore("header", source, LimitedDocumentParser().parse(source), source.ingested_at)
     assert "docx_headers_footers_comments_unprocessed" in parsed.warnings
     assert parsed.evidence.complete is False
+
+
+def test_docx_nested_textbox_is_rejected_before_creating_fabricated_passages():
+    """A nested text box must not yield 'Outer beforeSeparate boxOuter after'."""
+    raw = make_docx(main="Outer before")
+    with ZipFile(BytesIO(raw)) as archive:
+        document = archive.read("word/document.xml")
+    modified = document.replace(
+        b"</w:t></w:r></w:p>",
+        (
+            b"</w:t></w:r>"
+            b"<w:r><w:txbxContent><w:p><w:r><w:t>Separate box</w:t>"
+            b"</w:r></w:p></w:txbxContent></w:r>"
+            b"<w:r><w:t>Outer after</w:t></w:r></w:p>"
+        ),
+    )
+    assert modified != document
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", compression=ZIP_STORED) as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("word/document.xml", modified)
+    with pytest.raises(ExtractionError, match="docx_textboxes_unsupported"):
+        parse_bytes(buffer.getvalue(), DOCX_MIME)
+    # Existing isolated boundary refuses unrepresentable input; no preview.
+    with pytest.raises(ExtractionError):
+        LimitedDocumentParser().parse(make_source(buffer.getvalue()))
+
+
+def test_docx_footnotes_and_endnotes_keep_tabs_and_breaks_verbatim():
+    for kind in ("footnotes", "endnotes"):
+        xml = (
+            '<w:root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            '<w:p><w:r><w:t>Alpha</w:t><w:tab/><w:t>Beta</w:t>'
+            '<w:br/><w:t>Gamma</w:t><w:cr/><w:t>Delta</w:t></w:r></w:p></w:root>'
+        ).encode()
+        raw = make_docx(extras=[(f"word/{kind}.xml", xml)])
+        source = make_source(raw)
+        parsed = restore(
+            "notes", source, LimitedDocumentParser().parse(source), source.ingested_at
+        )
+        note = next(block for block in parsed.blocks if block.kind == "docx_note")
+        assert parsed.evidence.content[note.start:note.end] == "Alpha\\tBeta\\nGamma\\nDelta"
+
+
+def test_docx_textbox_inside_note_is_also_rejected():
+    note = (
+        '<w:root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        '<w:p><w:txbxContent><w:p><w:r><w:t>Separate</w:t></w:r></w:p>'
+        '</w:txbxContent></w:p></w:root>'
+    ).encode()
+    with pytest.raises(ExtractionError, match="docx_textboxes_unsupported"):
+        parse_bytes(make_docx(extras=[("word/footnotes.xml", note)]), DOCX_MIME)

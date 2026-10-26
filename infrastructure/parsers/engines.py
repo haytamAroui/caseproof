@@ -201,6 +201,21 @@ DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.docu
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
+def _docx_paragraph_text(paragraph: Any) -> str:
+    """Keep literal run separators; never flatten nested paragraphs into a quote."""
+    if any(node is not paragraph and node.tag == _W + "p" for node in paragraph.iter()):
+        raise ExtractionError("docx_nested_paragraph_unsupported")
+    parts: list[str] = []
+    for token in paragraph.iter():
+        if token.tag == _W + "t":
+            parts.append(token.text or "")
+        elif token.tag == _W + "tab":
+            parts.append("\\t")
+        elif token.tag in {_W + "br", _W + "cr"}:
+            parts.append("\\n")
+    return "".join(parts)
+
+
 def parse_docx(raw: bytes) -> dict[str, Any]:
     """Resource-bounded DOCX text, NOT Word layout or trustworthy printed page mapping."""
     if not raw.startswith(b"PK\x03\x04"):
@@ -257,16 +272,16 @@ def parse_docx(raw: bytes) -> dict[str, Any]:
                 builder.warnings.add("docx_visual_objects_require_review")
             if any(el.tag == _W + "altChunk" for el in body.iter()):
                 raise ExtractionError("docx_altchunk_unsupported")
+            # Text boxes have their own reading order. Flattening nested w:p
+            # would fabricate contiguous evidence and duplicate text spans.
+            if any(el.tag == _W + "txbxContent" for el in body.iter()):
+                raise ExtractionError("docx_textboxes_unsupported")
             for i, paragraph in enumerate(body.iter(_W + "p")):
-                parts = []
-                for token in paragraph.iter():
-                    if token.tag == _W + "t":
-                        parts.append(token.text or "")
-                    elif token.tag == _W + "tab":
-                        parts.append("\t")
-                    elif token.tag in {_W + "br", _W + "cr"}:
-                        parts.append("\n")
-                builder.add("".join(parts), "docx_paragraph", f"docx:body:paragraph:{i}")
+                builder.add(
+                    _docx_paragraph_text(paragraph),
+                    "docx_paragraph",
+                    f"docx:body:paragraph:{i}",
+                )
             for kind in ("footnotes", "endnotes"):
                 part_name = f"word/{kind}.xml"
                 if part_name not in names:
@@ -275,9 +290,14 @@ def parse_docx(raw: bytes) -> dict[str, Any]:
                     archive.read(part_name),
                     forbid_dtd=True, forbid_entities=True, forbid_external=True,
                 )
+                if any(el.tag == _W + "txbxContent" for el in tree.iter()):
+                    raise ExtractionError("docx_textboxes_unsupported")
                 for i, para in enumerate(tree.iter(_W + "p")):
-                    contents = "".join(node.text or "" for node in para.iter(_W + "t"))
-                    builder.add(contents, "docx_note", f"docx:{kind}:paragraph:{i}")
+                    builder.add(
+                        _docx_paragraph_text(para),
+                        "docx_note",
+                        f"docx:{kind}:paragraph:{i}",
+                    )
             if any(name.startswith("word/media/") for name in names):
                 builder.warnings.add("docx_images_require_review")
             if any(name.startswith(("word/header", "word/footer", "word/comments")) for name in names):
@@ -286,8 +306,6 @@ def parse_docx(raw: bytes) -> dict[str, Any]:
                 builder.warnings.add("docx_custom_xml_unprocessed")
             if any(el.tag in {_W + "instrText", _W + "fldChar"} for el in body.iter()):
                 builder.warnings.add("docx_fields_require_review")
-            if any(el.tag == _W + "txbxContent" for el in body.iter()):
-                builder.warnings.add("docx_textboxes_require_review")
     except (zipfile.BadZipFile, EOFError, OSError):
         raise ExtractionError("docx_archive_rejected") from None
     builder.warnings.add("docx_layout_page_numbers_unverified")

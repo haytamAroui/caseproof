@@ -45,6 +45,10 @@ Product languages: **NL, FR and EN**. Each must be available for UI, evidence wo
 
 No M2 brief-checking or claim of finished M1 until exit tests on actual final product interfaces and dependencies pass. Do not merge high-risk production authorization/storage work without human review and required CI.
 
+## DOCX review findings (PR #62)
+
+Two review findings flagged the risk of joining a nested DOCX text-box paragraph into its parent's extracted text and loss of explicit tab/line-break separators in notes. The parser now **rejects nested text-box containers fail-closed** rather than manufacturing adjacent citation passages, checks nested paragraphs in the common paragraph extractor and preserves `w:tab`, `w:br`, `w:cr` in footnotes and endnotes. Regression tests exercise both the direct engine and isolated child parser. This narrows currently supported DOCX inputs; full text-box geometry/reading-order support remains PIV-05 work.
+
 ## Remaining pragmatic architecture debt
 
 The existing worker adapter still imports the Vault protocol from `apps/api/evidence_vault_protocol.py` (a pre-pivot packaging choice), although it now imports the shared source descriptor directly from `application/documents/catalog.py`. This is **not a forbidden inward domain dependency** and is unchanged in behavior, but it is imperfect cross-adapter packaging. Move the Vault ports to a neutral application/infrastructure boundary only when integrating real worker custody and once consumer tests cover the migration. Do not create an independent storage truth model or perform a broad folder-only reorganization merely to make the diagram symmetrical.
