@@ -115,6 +115,10 @@ def evaluate_case(case: QualityCase, provider: ExtractionProvider) -> dict[str, 
     negative_control = not expected
     abstained = negative_control and transport_ok and not report.atoms
     withheld = negative_control and transport_ok and bool(report.atoms) and not validated
+    schema_counts: dict[str, int] = {}
+    for atom in report.atoms:
+        for issue in atom.schema_issues:
+            schema_counts[issue] = schema_counts.get(issue, 0) + 1
     reasons: dict[str, int] = {}
     for atom in report.atoms:
         if atom.state != "validated":
@@ -133,6 +137,7 @@ def evaluate_case(case: QualityCase, provider: ExtractionProvider) -> dict[str, 
         "expected_count": len(expected), "matched_count": matched,
         "missed_count": missed, "unexpected_validated_count": unexpected,
         "validated_count": len(validated), "candidate_reason_counts": reasons,
+        "candidate_schema_issue_counts": schema_counts,
         "reported_usd": cost,
     }
 
