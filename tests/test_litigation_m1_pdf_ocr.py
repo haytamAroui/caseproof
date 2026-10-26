@@ -58,3 +58,40 @@ def test_ocr_binaries_absent_does_not_fabricate_text():
     adapter.recognizer = None
     with pytest.raises(OCRUnavailable, match="not_installed"):
         adapter.recognize(source(), page_number=1, languages=("nl", "fr", "en"))
+
+
+def test_pdf_raster_signature_to_ocr_word_pipeline(monkeypatch):
+    """Executable path probe with a stubbed rasterizer; NOT OCR accuracy evidence."""
+    import struct
+
+    from infrastructure.parsers import pdf_ocr
+
+    adapter = LocalPDFOCR()
+    adapter.rasterizer = "fixture-poppler"
+    adapter.recognizer = "fixture-tesseract"
+    called = []
+
+    def produce(command: list[str], *, timeout: int) -> None:
+        from pathlib import Path
+
+        called.append(command[0])
+        if command[0] == "fixture-poppler":
+            # A PNG signature + IHDR, exactly as real PNG bytes start.
+            png = (
+                bytes((137, 80, 78, 71, 13, 10, 26, 10))
+                + bytes((0, 0, 0, 13)) + b"IHDR" + struct.pack(">II", 400, 300)
+            )
+            Path(command[-1] + ".png").write_bytes(png)
+        else:
+            Path(command[2] + ".tsv").write_bytes(
+                HEADER + b"5\\t10\\t20\\t40\\t12\\t83.5\\tWelkom\\n"
+            )
+
+    monkeypatch.setattr(pdf_ocr, "_run", produce)
+    result = adapter.recognize(source(), page_number=1, languages=("nl", "fr", "en"))
+    assert called == ["fixture-poppler", "fixture-tesseract"]
+    assert result.status == "draft_requires_human_review"
+    assert result.content == "Welkom"
+    assert (result.image_width_px, result.image_height_px) == (400, 300)
+    assert result.original_sha256 == source().sha256_hex
+    assert result.coordinate_basis == "raster_pixels_top_left_150dpi"
