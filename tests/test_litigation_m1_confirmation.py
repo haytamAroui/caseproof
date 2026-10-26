@@ -52,10 +52,10 @@ def test_source_version_not_client_defined_and_suspected_replacement_denied():
         use.confirm(principal, ExhibitCommit(uuid4(), 0, (entry,)))
 
 
-def test_nonhuman_or_revoked_reviewer_cannot_confirm():
+def test_noninteractive_or_revoked_reviewer_cannot_confirm():
     store, use, principal, entry = rig()
-    with pytest.raises(ExhibitConfirmationError, match="human attestation"):
-        use.confirm(replace(principal, human_verified=False), ExhibitCommit(uuid4(), 0, (entry,)))
+    with pytest.raises(ExhibitConfirmationError, match="explicit interactive"):
+        use.confirm(replace(principal, interactive_confirmation=False), ExhibitCommit(uuid4(), 0, (entry,)))
     store.allowed_reviewers.clear()
     with pytest.raises(ExhibitConfirmationError, match="revoked"):
         use.confirm(principal, ExhibitCommit(uuid4(), 0, (entry,)))

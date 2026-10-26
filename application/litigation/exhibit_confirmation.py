@@ -20,18 +20,22 @@ class ExhibitConfirmationError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ExhibitPrincipal:
-    """Must be constructed by the server after signed bearer verification."""
+    """Server-constructed only after signed bearer and intentional user confirm.
+
+    This boolean records explicit interactive intent, NOT legal approval or
+    independent human identity attestation. Never deserialize from HTTP body.
+    """
 
     subject_id: UUID
     org_id: UUID
     case_id: UUID
-    human_verified: bool
+    interactive_confirmation: bool
 
     def __post_init__(self) -> None:
         if any(v.int == 0 for v in (self.subject_id, self.org_id, self.case_id)):
             raise ExhibitConfirmationError("non-nil trusted identity required")
-        if type(self.human_verified) is not bool:
-            raise ExhibitConfirmationError("human identity verification required")
+        if type(self.interactive_confirmation) is not bool:
+            raise ExhibitConfirmationError("trusted explicit interactive confirmation flag required")
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,8 +126,8 @@ class ExhibitConfirmationUseCase:
         self.store = store
 
     def confirm(self, principal: ExhibitPrincipal, command: ExhibitCommit) -> ConfirmedExhibits:
-        if not principal.human_verified:
-            raise ExhibitConfirmationError("human attestation required for exhibit confirmation")
+        if not principal.interactive_confirmation:
+            raise ExhibitConfirmationError("explicit interactive exhibit confirmation required")
         known = {(x.source_id, x.version_id) for x in self.store.permitted_versions(principal)}
         if not known:
             raise ExhibitConfirmationError("no authorized preserved sources")

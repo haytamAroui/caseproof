@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from hashlib import sha256
 
 from application.litigation.library import EvidencePreview
 from domains.disputes.exhibits import ExhibitRegister, MappingState
@@ -68,9 +67,9 @@ class VersionedBrief:
             or len(self.references) > 128
         ):
             raise DraftCheckError("immutable versioned brief contract required")
-        ids = [ref.reference_id for ref in self.references]
         if not all(isinstance(ref, DraftReference) for ref in self.references):
             raise DraftCheckError("typed references required")
+        ids = [ref.reference_id for ref in self.references]
         if len(ids) != len(set(ids)):
             raise DraftCheckError("duplicate draft reference IDs")
 
@@ -172,7 +171,7 @@ def check_brief_references(
                                       exhibit_id=resolved.exhibit_id))
             continue
         row = preview.row
-        if row.status != "ready" or row.warnings or not row.representation_id:
+        if row.status != "ready" or row.warnings or not row.representation_id or not preview.spans:
             observations.append(_note(reference, CitationCheckState.INCOMPLETE_EXTRACTION,
                                       exhibit_id=resolved.exhibit_id, preview=preview))
             continue
