@@ -165,27 +165,27 @@ def check_brief_references(
             observations.append(_note(reference, CitationCheckState.PAGE_UNMAPPED, exhibit_id=resolved.exhibit_id))
             continue
         page = resolved.page
-        preview = indexed.get((page.source_id, page.version_id))
-        if preview is None:
+        matched_preview = indexed.get((page.source_id, page.version_id))
+        if matched_preview is None:
             observations.append(_note(reference, CitationCheckState.SOURCE_UNAVAILABLE,
                                       exhibit_id=resolved.exhibit_id))
             continue
-        row = preview.row
-        if row.status != "ready" or row.warnings or not row.representation_id or not preview.spans:
+        row = matched_preview.row
+        if row.status != "ready" or row.warnings or not row.representation_id or not matched_preview.spans:
             observations.append(_note(reference, CitationCheckState.INCOMPLETE_EXTRACTION,
-                                      exhibit_id=resolved.exhibit_id, preview=preview))
+                                      exhibit_id=resolved.exhibit_id, matched_preview=matched_preview))
             continue
         # Derived representation text must have source-linked bounds.
         if any(
             type(start) is not int or type(end) is not int
-            or not 0 <= start < end <= len(preview.text)
-            for start, end, _, _ in preview.spans
+            or not 0 <= start < end <= len(matched_preview.text)
+            for start, end, _, _ in matched_preview.spans
         ):
             raise DraftCheckError("invalid representation span boundaries")
         matches: list[tuple[int, int]] = []
         from_position = 0
         while True:
-            begin = preview.text.find(reference.exact_quote, from_position)
+            begin = matched_preview.text.find(reference.exact_quote, from_position)
             if begin < 0:
                 break
             end = begin + len(reference.exact_quote)
@@ -193,7 +193,7 @@ def check_brief_references(
                 start <= begin and end <= finish
                 and (reference.pdf_page is None or
                      (page_index is not None and page_index + 1 == reference.pdf_page))
-                for start, finish, _, page_index in preview.spans
+                for start, finish, _, page_index in matched_preview.spans
             ):
                 matches.append((begin, end))
             from_position = begin + 1
@@ -204,7 +204,7 @@ def check_brief_references(
         else:
             state = CitationCheckState.QUOTE_NOT_FOUND
         observations.append(_note(
-            reference, state, exhibit_id=resolved.exhibit_id, preview=preview,
+            reference, state, exhibit_id=resolved.exhibit_id, matched_preview=matched_preview,
             span=matches[0] if len(matches) == 1 else None,
         ))
     all_obs = tuple(observations)
