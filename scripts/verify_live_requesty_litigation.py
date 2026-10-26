@@ -174,6 +174,10 @@ def evaluate_fixture(fixture: Fixture, provider: ExtractionProvider) -> dict[str
     counts: dict[str, int] = {}
     for atom in report.atoms:
         counts[atom.state] = counts.get(atom.state, 0) + 1
+    reasons: dict[str, int] = {}
+    for atom in report.atoms:
+        if atom.state != "validated":
+            reasons[atom.reason] = reasons.get(atom.reason, 0) + 1
     usage = report.telemetry
     if len(usage) > 1:
         raise LiveProbeError("unexpected_multiple_provider_calls")
@@ -195,6 +199,7 @@ def evaluate_fixture(fixture: Fixture, provider: ExtractionProvider) -> dict[str
                   else "provider_or_schema_failure",
         "validated_grounded_gold_candidates": len(valid),
         "candidate_state_counts": counts,
+        "candidate_reason_counts": reasons,
         "failure_codes": sorted(set(row["reason"] for row in report.failures)),
         "source_verified": bool(valid),
         "human_review_required": True,
