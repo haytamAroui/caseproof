@@ -27,7 +27,7 @@ def source() -> SourceVersion:
 
 
 def test_ocr_word_geometry_and_lineage_is_explicit():
-                HEADER + b"5\t10\t20\t40\t12\t83.5\tWelkom\n"
+    data = HEADER + b"5\t12\t20\t100\t12\t76.5\tWelkom\n"
     result = parse_tsv(data, width=400, height=500)
     assert result[0].text == "Welkom"
     assert result[0].confidence == "76.5"
@@ -84,7 +84,7 @@ def test_pdf_raster_signature_to_ocr_word_pipeline(monkeypatch):
             Path(command[-1] + ".png").write_bytes(png)
         else:
             Path(command[2] + ".tsv").write_bytes(
-                HEADER + b"5\\t10\\t20\\t40\\t12\\t83.5\\tWelkom\\n"
+                HEADER + b"5\t10\t20\t40\t12\t83.5\tWelkom\n"
             )
 
     monkeypatch.setattr(pdf_ocr, "_run", produce)
