@@ -29,6 +29,8 @@ jobs:
         run: uv run --locked mypy --explicit-package-bases application/runtime infrastructure/execution apps/worker apps/api/extraction_scheduler.py
       - name: Type check M1 litigation reference modules
         run: uv run --locked mypy --explicit-package-bases domains/disputes application/litigation apps/api/authenticated_evidence_library.py
+      - name: Type check M1 completion candidate adapters
+        run: uv run --locked mypy --explicit-package-bases application/litigation/exhibit_confirmation.py infrastructure/persistence apps/api/restricted_case_repository.py apps/api/litigation_evidence_app.py infrastructure/parsers/pdf_ocr.py
       - name: Verify synthetic M1 evidence-library journey
         run: uv run --locked python -m scripts.demo_litigation_evidence_library
       - name: Verify reviewer browser journey
@@ -82,6 +84,7 @@ jobs:
       - name: Run PostgreSQL RLS, concurrent CAS and audit-failure negative tests
         run: |
           uv run --locked python scripts/verify_s2_002_database.py
+          uv run --locked python -m scripts.verify_m1_disposable_exhibits
           CASEPROOF_S2_007_SYNTHETIC=YES uv run --locked python -m scripts.verify_s2_007_disposable_tenancy
           uv run --locked python -m scripts.verify_s2_004_database
           uv run --locked python -m scripts.verify_s2_008a_database
