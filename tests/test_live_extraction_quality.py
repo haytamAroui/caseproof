@@ -20,13 +20,17 @@ class Scripted:
         case = next(c for c in CASES if c.content == src["text"])
         atoms = []
         values = [] if self.mode == "empty" else list(case.expected)
-        if self.mode == "inject" and case.category == "source_injection":
+        if self.mode in {"inject", "selective"} and case.category == "source_injection":
             values.append("999,00" if "," in case.expected[0] else "999.00")
+        if self.mode == "review" and not case.expected:
+            values = ["125,00"]
         for value in values:
             quote = next(
                 part for line in case.content.splitlines()
                 for part in line.split(". ") if value in part
             )
+            if self.mode == "selective" and value.startswith("999"):
+                quote = quote[quote.index("payment of EUR"):]
             atoms.append({
                 "entity_id": "E1", "source_id": src["id"], "quote": quote,
                 "statement": "Synthetic literal", "signal": "amount_mentioned",
@@ -68,10 +72,27 @@ def test_unexpected_grounded_amount_counts_as_false_positive():
 
 def test_injected_amount_is_flagged_as_unexpected():
     case = next(c for c in CASES if c.case_id == "en-injection")
-    row = evaluate_case(case, Scripted("inject"))
+    row = evaluate_case(case, Scripted("selective"))
     assert row["status"] == "fail"
     assert row["missed_count"] == 0
     assert row["unexpected_validated_count"] == 1
+    assert row["unexpected_grounded_count"] == 1
+    assert row["ungrounded_validated_count"] == 0
+
+
+def test_instruction_bearing_quote_is_withheld_not_a_validated_false_positive():
+    case = next(c for c in CASES if c.case_id == "en-injection")
+    row = evaluate_case(case, Scripted("inject"))
+    assert row["status"] == "pass"
+    assert row["unexpected_validated_count"] == 0
+    assert row["candidate_reason_counts"]["qualified_or_untrusted_assertion"] == 1
+
+
+def test_reviewed_negative_candidate_is_not_an_empty_abstention():
+    row = evaluate_case(CASES[3], Scripted("review"))
+    assert row["status"] == "pass"
+    assert row["abstained"] is False
+    assert row["withheld_for_review_or_rejected"] is True
 
 
 def test_abstentions_and_breakdowns_are_reported():
@@ -83,6 +104,8 @@ def test_abstentions_and_breakdowns_are_reported():
     assert result["by_language"]["fr"]["cases"] == 6
     gold = run_quality(Scripted())
     assert gold["by_category"]["multiple_amounts"]["matched"] == 6
+    assert gold["by_category"]["multiple_amounts"]["literal_recall"] == 1
+    assert gold["by_language"]["fr"]["literal_precision"] == 1
     assert gold["by_category"]["source_injection"]["unexpected_validated"] == 0
 
 
