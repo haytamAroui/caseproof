@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import re
+import socket
+import ssl
 from decimal import Decimal, InvalidOperation
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -83,11 +85,26 @@ class RequestyProvider:
             with build_opener(ProxyHandler({}), _NoRedirect()).open(req, timeout=self._timeout) as response:
                 raw = response.read(MAX_RESPONSE_BYTES + 1)
         except HTTPError as exc:
+            # Status codes only, never expose body, URL or credentials.
             if 400 <= exc.code < 500:
-                raise ProviderRejected("Requesty rejected the request") from None
-            raise OutcomeUnknown("Requesty response outcome requires reconciliation") from None
-        except (URLError, TimeoutError, OSError):
-            raise OutcomeUnknown("Requesty transport outcome unknown; do not retry automatically") from None
+                raise ProviderRejected(f"requesty_http_{exc.code}") from None
+            if 500 <= exc.code < 600:
+                raise OutcomeUnknown(f"requesty_http_{exc.code}") from None
+            raise OutcomeUnknown("requesty_http_other") from None
+        except URLError as exc:
+            if isinstance(exc.reason, socket.gaierror):
+                code = "requesty_transport_dns"
+            elif isinstance(exc.reason, TimeoutError):
+                code = "requesty_transport_timeout"
+            elif isinstance(exc.reason, ssl.SSLError):
+                code = "requesty_transport_tls"
+            else:
+                code = "requesty_transport_other"
+            raise OutcomeUnknown(code) from None
+        except TimeoutError:
+            raise OutcomeUnknown("requesty_transport_timeout") from None
+        except OSError:
+            raise OutcomeUnknown("requesty_transport_other") from None
         try:
             result = decode(raw.decode("utf-8"))
             choices = result["choices"]

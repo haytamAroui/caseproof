@@ -35,6 +35,12 @@ class Scripted:
         assert src["text"] in [x.text for x in FIXTURES]
         if self.mode == "unknown":
             raise OutcomeUnknown("no response known")
+        if self.mode == "http503":
+            raise OutcomeUnknown("requesty_http_503")
+        if self.mode == "dns":
+            raise OutcomeUnknown("requesty_transport_dns")
+        if self.mode == "badmodel":
+            raise ExtractionError("unexpected Requesty model identity")
         if self.mode == "rejected":
             raise ExtractionError("provider rejected")
         value = "125.00" if "125.00" in src["text"] else "125,00"
@@ -170,3 +176,29 @@ def test_failed_quality_with_missing_cost_does_not_pretend_zero():
     assert r["cost_gate"] == "cost_telemetry_unavailable"
     assert r["reported_total_usd"] is None
     assert r["model_calls_reserved"] == 1
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("http503", "requesty_http_503"),
+        ("dns", "requesty_transport_dns"),
+        ("badmodel", "requesty_model_identity_mismatch"),
+        ("unknown", "requesty_outcome_unknown_unclassified"),
+        ("rejected", "requesty_response_validation_failed"),
+    ],
+)
+def test_safe_provider_diagnostic_in_receipt(mode, expected):
+    receipt = run_probe(Scripted(mode))
+    assert receipt["model_calls_reserved"] == 1
+    assert receipt["cases"][0]["provider_diagnostic"] == expected
+    assert receipt["cost_gate"] == "cost_telemetry_unavailable"
+    assert receipt["reported_total_usd"] is None
+
+
+def test_protected_receipt_never_copies_raw_provider_exception_text():
+    from scripts.verify_live_requesty_litigation import safe_provider_diagnostic
+
+    value = "PRIVATE-RAW-BEARER-API-KEY-DO-NOT-LOG"
+    assert safe_provider_diagnostic(OutcomeUnknown(value)) == "requesty_outcome_unknown_unclassified"
+    assert safe_provider_diagnostic(ExtractionError(value)) == "requesty_response_validation_failed"

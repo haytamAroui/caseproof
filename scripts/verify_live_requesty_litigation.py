@@ -24,6 +24,7 @@ from application.extraction.contracts import (
     ExtractionProvider,
     ExtractionRequest,
     OutcomeUnknown,
+    ProviderRejected,
     ProviderReply,
 )
 from application.extraction.journal import MemoryJournal
@@ -81,6 +82,38 @@ class SmokeLiteralPolicy:
         return "validated", "probe_exact_literal_candidate"
 
 
+def safe_provider_diagnostic(exc: Exception) -> str:
+    """Return only known, non-sensitive diagnostic codes; never echo raw exceptions."""
+    message = str(exc)
+    if isinstance(exc, ProviderRejected):
+        return (
+            message if re.fullmatch(r"requesty_http_4[0-9]{2}", message)
+            else "requesty_provider_rejected"
+        )
+    if isinstance(exc, OutcomeUnknown):
+        if re.fullmatch(r"requesty_http_5[0-9]{2}", message):
+            return message
+        if message in {
+            "requesty_http_other",
+            "requesty_transport_dns",
+            "requesty_transport_timeout",
+            "requesty_transport_tls",
+            "requesty_transport_other",
+        }:
+            return message
+        return "requesty_outcome_unknown_unclassified"
+    if isinstance(exc, ExtractionError):
+        return {
+            "unexpected Requesty model identity": "requesty_model_identity_mismatch",
+            "incomplete Requesty completion": "requesty_incomplete_response",
+            "non-extraction response": "requesty_non_extraction_response",
+            "invalid Requesty response envelope": "requesty_invalid_response_envelope",
+            "invalid response JSON": "requesty_invalid_response_json",
+            "provider output budget exceeded": "requesty_output_budget_exceeded",
+        }.get(message, "requesty_response_validation_failed")
+    return "requesty_unexpected_client_exception"
+
+
 class BudgetedProvider:
     """Never call a different provider, retry or exceed three bounded dispatches."""
 
@@ -89,6 +122,7 @@ class BudgetedProvider:
         self.identity = delegate.identity
         self.model = delegate.model
         self.calls = 0
+        self.last_diagnostic: str | None = None
 
     def complete(
         self, system: str, payload: str, *, request_id: str, max_tokens: int
@@ -98,9 +132,14 @@ class BudgetedProvider:
         if len(payload) > 2400 or len(system) > 3000:
             raise LiveProbeError("unexpected_prompt_size")
         self.calls += 1  # dispatch reservation happens BEFORE network
-        return self.delegate.complete(
-            system, payload, request_id=request_id, max_tokens=max_tokens
-        )
+        self.last_diagnostic = None
+        try:
+            return self.delegate.complete(
+                system, payload, request_id=request_id, max_tokens=max_tokens
+            )
+        except Exception as exc:
+            self.last_diagnostic = safe_provider_diagnostic(exc)
+            raise
 
 
 def request_for(fixture: Fixture) -> ExtractionRequest:
@@ -179,6 +218,8 @@ def run_probe(provider: ExtractionProvider) -> dict[str, Any]:
             row = {"language": fixture.lang, "status": "extraction_error"}
         # Unexpected Python/programming exceptions intentionally fail the workflow
         # with a sanitized status at the entrypoint; no unsafe automatic retries.
+        if row["status"] != "pass":
+            row["provider_diagnostic"] = guarded.last_diagnostic or "pipeline_or_schema_rejected"
         rows.append(row)
         # Paid response usage must be counted even when the extraction quality
         # fails; unknown cost must never be reported as a verified zero charge.
