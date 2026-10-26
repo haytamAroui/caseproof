@@ -29,7 +29,7 @@ class SourceBlock:
     def __post_init__(self) -> None:
         text(self.block_id, limit=128)
         text(self.locator, limit=4096)
-        if self.kind not in {"text", "pdf_page", "xml_field", "email_header", "email_body"}:
+        if self.kind not in {"text", "pdf_page", "xml_field", "email_header", "email_body", "docx_paragraph", "docx_note"}:
             raise ExtractionError("unsupported block kind")
         if type(self.start) is not int or type(self.end) is not int or not 0 <= self.start < self.end:
             raise ExtractionError("invalid block text range")

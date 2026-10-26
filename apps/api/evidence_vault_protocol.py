@@ -26,7 +26,7 @@ from uuid import UUID
 
 MAX_REFERENCE_BYTES = 5 * 1024 * 1024  # In-memory reference ONLY, not final upload limit
 _ALLOWED_MIME = frozenset({
-    "application/pdf", "application/xml", "text/xml", "text/plain", "message/rfc822",
+    "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/xml", "text/xml", "text/plain", "message/rfc822",
 })
 
 

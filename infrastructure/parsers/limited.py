@@ -31,6 +31,7 @@ class LimitedDocumentParser:
         if source.media_type not in {
             "text/plain",
             "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/xml",
             "text/xml",
             "message/rfc822",
