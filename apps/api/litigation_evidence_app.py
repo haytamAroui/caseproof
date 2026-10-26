@@ -64,7 +64,7 @@ def create_evidence_app(service: EvidenceReader | None = None) -> FastAPI:
     @app.get("/v2/matters/{case_id}/evidence/{source_id}")
     def preview(
         case_id: str, source_id: str, authorization: str | None = Header(default=None)
-    ) -> dict:
+    ) -> dict[str, Any]:
         if service is None:
             return {"status": "unavailable", "enabled": False}
         token = _token(authorization)
