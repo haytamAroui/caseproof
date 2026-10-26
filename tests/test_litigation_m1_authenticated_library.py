@@ -20,7 +20,6 @@ from apps.api.authenticated_evidence_library import AuthenticatedEvidenceLibrary
 from infrastructure.parsers.limited import LimitedDocumentParser
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
-
 NOW = datetime(2026, 10, 26, 9, 0, tzinfo=UTC)
 ORG, CASE, ACTOR = (str(UUID(int=i)) for i in (4001, 4002, 4003))
 READ = frozenset({CaseAction.READ_CASE, CaseAction.READ_EVIDENCE})
