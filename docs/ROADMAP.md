@@ -45,26 +45,26 @@ Milestones are acceptance outcomes, not calendar estimates. The “1–3 person-
 ## PIV-00–20 authoritative backlog
 
 - **PIV-00:** superseding product ADR, active instructions, current status matrix and compatibility plan. Preserve ADR-0011's architecture decisions; supersede finance-first sequencing.
-- **PIV-01:** rights-cleared NL/FR and mixed-language litigation corpus with clean controls, quote/context variants, dates/amounts, aliases, scans, page offsets and gold labels.
+- **PIV-01:** rights-cleared NL/FR and mixed-language litigation corpus with clean controls, quote/context variants, dates/amounts, aliases, scans, page offsets and gold labels; fixed, versioned competitive task benchmarks against manual Word/PDF, with authorized competitor comparisons only.
 - **PIV-02:** authenticated production API, explicit matter access (including same-organization restricted matters if required), scoped jobs and legacy/demo isolation.
 - **PIV-03:** reviewed production persistence and source custody: immutable bytes, graph/review/job records, audit, recovery and retention.
-- **PIV-04:** provider-independent deterministic intake/index/check jobs; page-level completeness and typed warnings; reconcile all file, job, checkpoint and export budgets.
+- **PIV-04:** provider-independent deterministic intake/index/check jobs; page-level completeness and typed warnings; reconcile all file, job, checkpoint and export budgets; capture dossier dimensions and observed/estimated unit economics.
 - **PIV-05:** bounded PDF geometry, OCR and DOCX representations with exact transformation lineage, resource limits and visible failure states.
 - **PIV-06:** confirmed exhibit registry with stable IDs, Stuk/Pièce aliases, annexes, page maps, ambiguity and separate communication records.
 - **PIV-07:** versioned briefs, assertions and citation graph connecting draft references to resolved exhibits, source versions and locations.
 - **PIV-08:** accessible source/reviewer workbench; fix dirty-export, contradiction-filter and save-versus-refresh defects; show partial and failed scope.
 - **PIV-09:** deterministic quote, reference, date/amount and citation-format observations. Keep exact fidelity separate from candidate alignment and legal conclusions.
-- **PIV-10:** matter-scoped lexical search and evidence suggestions; evaluate recall/coverage separately from relation correctness. Add hybrid retrieval only with evidence.
+- **PIV-10:** matter-scoped lexical evidence retrieval with measured NL/FR keyword and paraphrase-query performance; evaluate recall/coverage separately from relation correctness. Broader conceptual-search claims require demonstrated retrieval results. Assess optional semantic support separately under PIV-12.
 - **PIV-11:** Word add-in citation loop with safe range revalidation, formatting/footnote/tracked-change handling, undo and host capability checks.
-- **PIV-12:** optional Requesty semantic support/opponent review with counterevidence scope, abstention, model/prompt lineage, evaluation and unknown-outcome recovery. Not a prerequisite for M3.
+- **PIV-12:** separately evaluated optional semantic support/opponent assessment (including Requesty proposals) with counterevidence scope, abstention, model/prompt lineage, evaluation and unknown-outcome recovery. Semantic retrieval, if proposed, requires its own evaluation and decision record. Not a prerequisite for M3.
 - **PIV-13:** later evidence-linked timelines, tables, narrative drafting, summaries, question answering and hearing preparation; every material generated statement remains linked or marked unsupported.
 - **PIV-14:** versioned DOCX/PDF/report/index/bundle outputs, dynamic exhibits, frozen manifests and reopen/link validation.
 - **PIV-15:** published review copy and recipient access, redaction, expiry/revocation and immutable output versions.
 - **PIV-16:** authenticated review/release transactions with assignment, return-for-correction, change review, policy-specific solo/independent review, atomic audit and stale-snapshot rejection.
-- **PIV-17:** conditional, versioned Belgian procedural advisories with primary authority, jurisdiction, effective date, factual predicates, exceptions and professional review. No legal conclusion from missing inventory alone.
-- **PIV-18:** filing preflight and receipt capture. Export is not submission; unknown external outcomes require reconciliation.
+- **PIV-17:** maintained, conditional Belgian court profiles and procedural advisories with court/division/chamber, document type, official authority/passage, publication/effective/verification dates, owner, mandatory-versus-recommended status, scope, expiry and conflict/unavailable behavior. No legal conclusion from missing inventory alone.
+- **PIV-18:** technical filing preflight, distinct from procedural readiness, plus receipt capture. Stale/unknown profiles cannot support court-ready claims or national rejection rules. Export is not submission; unknown external outcomes require reconciliation.
 - **PIV-19:** one selected document-system connector after customer usage, permissions and API access are verified.
-- **PIV-20:** ongoing deployment/operations, onboarding, monitoring, quotas, deletion/retention, backup/recovery, support, cancellation/export and measured release readiness.
+- **PIV-20:** ongoing deployment/operations, onboarding, monitoring, quotas, deletion/retention, backup/recovery, support, cancellation/export, competitive task benchmarks, dossier economics, adoption/repeat-use measurement and release readiness.
 
 ## Clearbrief feature dispositions
 
@@ -86,7 +86,7 @@ This inventory records scope decisions for all 42 capabilities in the product re
 | F12 | Judicial filing review | Out of scope for initial product |
 | F13 | Relevance/support scoring | Launch retrieval ranking; never present as correctness probability; semantic assessment later |
 | F14 | Formatting/substance flags | Launch defined citation-style and deterministic checks; semantic flags later |
-| F15 | Concept search | Launch lexical search; hybrid only after evaluation |
+| F15 | Concept search | Launch evidence retrieval with measured NL/FR keyword and paraphrase-query performance; broader conceptual-search claims depend on demonstrated retrieval results |
 | F16 | Timelines | Later M5 |
 | F17 | Timeline-to-facts narrative | Later M5, source-linked and editable |
 | F18 | Medical timelines | Out of scope for initial product |
@@ -140,6 +140,26 @@ Legal-authority work has distinct levels: resolve a statute/decision; compare qu
 | External filing | Separate authorized integration or human handoff; receipt bound to artifact; unknown outcomes reconciled; export never means submitted |
 
 Quality thresholds are provisional until measured on PIV-01. Record denominators; separate reference resolution, retrieval recall, literal false positives, semantic quality, output round-trip integrity, reviewer effort, latency/resource use and permission/recovery failures. A clean case returning zero confirmed findings is a success condition.
+
+## Evidence, maintenance and commercial validation
+
+PIV-00 owns a claims register for material external claims in product, sales and roadmap material. Each entry records the claim, source and exact passage, publication/access dates, evidence type, supported scope, limitations, requirement, owner and status (**pending**, **approved**, **qualified** or **withdrawn**). Material claims may be used externally only when supported by approved entries. Keep withdrawn entries and their rationale as history; do not erase them.
+
+Seed these disputed statements as **pending source review**, not established facts: that the DPA native splitter destroys bookmarks; that Belgium has a universal 200-page filing limit; that existing products lack bundle creation (scope must account for products such as Kleos and e-Deposit); that EU hosting establishes professional-secrecy compliance; and that a reported Nexa firm count means paying active customers. Separate access, registration, training, activity, payment and retention metrics. Reject national inferences from local handling advice and unsupported compliance conclusions unless an approved source supports the exact scope.
+
+### Competitive task benchmark (PIV-01, PIV-20)
+
+Compare against a documented manual Word/PDF baseline using a fixed task protocol and versioned, rights-cleared representative dossiers: Dutch, French and mixed-language; clean controls and known issues; scans and clean PDFs; varied dossier sizes. Tasks cover date and email acceptance, a cited amount with VAT and role basis, reference repair after exhibit replacement, and production of a reviewed linked output. Record correctness of sources and outputs, total elapsed time including setup/review/cleanup, false positives, assistance, errors and breakage. Compare Alice, Nexa and Kleos only with authorized access; mark unavailable or untested products as untested. Never invent benchmark results.
+
+### Maintained court profiles (PIV-17, PIV-18)
+
+Each court profile records court/division/chamber, document type, official source and passage, publication and effective dates, last verification date and owner, whether an item is mandatory or recommended, scope, expiry and conflict/source-unavailable behavior. A stale or unknown profile cannot support a court-ready claim or a national rejection rule. Technical bundle validation is distinct from procedural readiness; neither alone asserts legal compliance. Do not populate a profile with unverified legal requirements.
+
+### Dossier economics and repeat use (PIV-04, PIV-05, PIV-10, PIV-12, PIV-20)
+
+Track dossier size/pages/languages and versioned observed or estimated costs for OCR, indexing, inference, export, storage, delivery, retries and human support; record cache/reuse. Define cost per completed, reviewed dossier as processing + indexing + inference + storage + export/delivery + retries + human support. Keep one-time setup separate from recurring cost. Represent unavailable unit costs as null, not zero, and label estimates as estimates.
+
+Measure first complete task, a second task on an actual matter, repeat use within a defined window, time spent reviewing false warnings and reasons for abandoned tasks. Keep invited/access, registered, trained, active and paying adoption cohorts distinct. Use privacy-safe operational metadata only; do not collect customer document content as telemetry. The release question is whether lawyers complete work more reliably with less total effort than their current workflow and return for another matter. Synthetic development and benchmark work can proceed before release gates; confidential customer benchmarks require the applicable release gates.
 
 ## Historical and competing plans
 
