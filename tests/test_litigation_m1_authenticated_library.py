@@ -55,7 +55,7 @@ class Catalog:
     reads = 0
 
     def __init__(self):
-        raw = "De levering gebeurde op 12 april 2026.".encode("utf-8")
+        raw = b"De levering gebeurde op 12 april 2026."
         self.original = SourceVersion(
             "first", "v1", sha256(raw).hexdigest(), raw, NOW, "text/plain"
         )
