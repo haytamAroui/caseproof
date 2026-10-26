@@ -51,6 +51,8 @@ Do not expand M1 into the entire general findings/coverage and legal review grap
 
 ## When M2 may start
 
+**M2 wedge contract update (2026-10-26):** the first M2 acceptance must run **cited exhibit existence + optional literal quote fidelity + typed same-role date/value comparison** together; see [feedback audit](../research/BELGIAN_WEDGE_FEEDBACK_AUDIT_2026-10-26.md). A zero-quote brief still has two meaningful check families; clean cases may yield no warnings. This change affects M2 only, not the M1-A/B/C release separation.
+
 **Go for isolated M2 implementation** once the ADR-0017 default-private policy contract and tests are accepted, typed ports and source/citation/exhibit revisions are pinned, M1 architecture+unit+adversarial CI passes and the M2 suite never routes real customer files into unapproved infrastructure. The M2 branch uses **contract-tested fake adapters** only where the capability does not require live security, and records unavailable/partial as such.
 
 **No-go for M2 customer release** until M1-B and M1-C are verified and active. M2 code must not invent evidence versions, silently promote draft OCR, widen permissions or change established kernel/domain boundaries.
