@@ -9,7 +9,7 @@
 
 **M0 implementation packet:** See [ADR 0016](adr/0016-belgian-litigation-product-pivot.md), [pinned capability/gate matrix](m0/BASELINE.md), [external claims register](m0/CLAIMS_REGISTER.md), [fixed manual task benchmark](m0/BENCHMARK_PROTOCOL.md), and [original synthetic evaluation corpus](../evals/litigation/README.md). These are M0 evidence artifacts, **not** claims of approved legal gold labels, benchmarked accuracy, complete PIV-01 real-format coverage or production readiness.
 
-**M1 integrated development slice:** [Implementation evidence and remaining gates](m1/IMPLEMENTATION.md) for PIV-02–06 (PR #62). Until production custody, genuine signed identity/permissions and audited exhibit confirmation exist, this is a tested internal reference, **not a complete or customer-usable M1 milestone**.
+**M1 integrated development slice:** [Implementation evidence](m1/IMPLEMENTATION.md) for PIV-02–06 (merged PR #62), with expanded completion work in [PR #63](https://github.com/haytamAroui/caseproof/pull/63). **Backend-first milestones and tracked tasks:** [M1 Backend Exit Contract](m1/BACKEND_EXIT_CONTRACT.md). M1 is not customer-ready merely because synthetic/disposable tests pass; a frontend or lawyer UI is **not required** to verify the M1 backend.
 
 ## Product workflow
 
@@ -44,6 +44,8 @@
 | **M4 — Review and deliver** | Partner or policy-compliant solo review of an exact version, linked outputs and controlled recipient copy | PIV-14–16 and operational gates from PIV-20; dynamic exhibit and change propagation pass |
 | **M5 — Deeper analysis** | Optional counterevidence semantics, chronology, tables, summaries and document questions | PIV-12–13; separately measured retrieval and model quality, abstention and costs |
 | **M6 — Belgian operations** | Reviewed procedural profiles, filing preparation/receipt capture and one justified connector | PIV-17–19; verified authorities, local profiles, actual integration entitlements and recovery |
+
+**Backend-first delivery rule:** The full workflow above describes the final product; it does not require browser/Word screens to finish the M1 backend. Use [M1-A contract freeze → M1-B headless integrated backend → M1-C release approval](m1/BACKEND_EXIT_CONTRACT.md). Once M1-A's authorization choice and ports are frozen, isolated M2 checking/correction code and tests may proceed **in parallel with** M1-B infrastructure completion. M1-B and M1-C remain release blockers. Neither CI alone nor an unmerged PR declares M1 finished. The canonical PIV-02–06 task tracking is [#37](https://github.com/haytamAroui/caseproof/issues/37), [#38](https://github.com/haytamAroui/caseproof/issues/38), [#64](https://github.com/haytamAroui/caseproof/issues/64)–[#68](https://github.com/haytamAroui/caseproof/issues/68).
 
 Milestones are acceptance outcomes, not calendar estimates. The “1–3 person-weeks” estimate is withdrawn.
 

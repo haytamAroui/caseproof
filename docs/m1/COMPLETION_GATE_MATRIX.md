@@ -3,7 +3,13 @@
 **Date:** 2026-10-26. **Target:** NL / FR / EN Belgian litigation Evidence Library.
 **Authority:** [principal roadmap](../ROADMAP.md), [workflow](../PRODUCT_WORKFLOW.md), [CONSTITUTION](../../CONSTITUTION.md), ADR-0011 and ADR-0016.
 
-## Status: NOT DONE / NOT DEPLOYED
+## Status: Backend integration OPEN; no UI needed for M1 backend
+
+This historical release-gate matrix is supplemented by [M1 Backend Exit Contract](BACKEND_EXIT_CONTRACT.md). Backend work is graded in three distinct states: **M1-A contracts**, **M1-B real headless integrated pipeline** and **M1-C staging/product release**. M2 engineering can start when M1-A closes, *without requiring a frontend or real lawyer acceptance*. The open engineering tasks are tracked by [#37](https://github.com/haytamAroui/caseproof/issues/37), [#38](https://github.com/haytamAroui/caseproof/issues/38), and [#64](https://github.com/haytamAroui/caseproof/issues/64)–[#68](https://github.com/haytamAroui/caseproof/issues/68).
+
+The dev Supabase project was read-only checked on 2026-10-26: 0 Auth users, 0 organization memberships, 0 matters and 0 documents. Supabase MCP has no supported Auth user-creation action. Never simulate real signed sessions by writing `auth.users` from SQL; use supported Auth test provisioning and secrets storage.
+
+## Previous assessment: NOT DONE / NOT DEPLOYED
 
 This branch is an integrated **M1 engineering completion candidate**, NOT a production release. No gate may be declared passed based solely on CI, mock identity, disposable PostgreSQL, synthetic fixtures or developer-mode UI. The owner's request to complete all M1 items does not waive C13 human approval for auth/RLS changes, privacy-sensitive integrations and production releases. Do not deploy confidential uploads automatically.
 
