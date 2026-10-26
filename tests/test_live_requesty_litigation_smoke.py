@@ -38,6 +38,8 @@ class Scripted:
         if self.mode == "rejected":
             raise ExtractionError("provider rejected")
         value = "125.00" if "125.00" in src["text"] else "125,00"
+        if self.mode == "full_sentence":
+            value = src["text"]
         atom = {
             "entity_id": "E1", "source_id": src["id"],
             "quote": "fabricated" if self.mode == "fabricated" else src["text"],
@@ -74,7 +76,7 @@ def test_three_language_model_answers_really_pass_through_evidence_pipeline():
                and c["human_review_required"] for c in receipt["cases"])
 
 
-@pytest.mark.parametrize("mode", ["fabricated", "conditional"])
+@pytest.mark.parametrize("mode", ["fabricated", "conditional", "full_sentence"])
 def test_hallucinated_quote_or_conditional_assertion_does_not_pass(mode):
     model = Scripted(mode)
     receipt = run_probe(model)
@@ -96,9 +98,11 @@ def test_missing_or_excessive_reported_cost_stops_probe():
     assert missing["quality_gate"] == "not_passed"
     assert missing["cost_gate"] == "cost_telemetry_unavailable"
     assert missing["model_calls_reserved"] == 1
+    assert missing["reported_total_usd"] is None
     expensive = run_probe(Scripted(cost=str(MAX_REPORTED_USD + 1)))
     assert expensive["cost_gate"] == "reported_cost_cap_exceeded"
     assert expensive["model_calls_reserved"] == 1
+    assert expensive["reported_total_usd"] == str(MAX_REPORTED_USD + 1)
 
 
 def test_fourth_call_blocked_before_network():
@@ -150,3 +154,19 @@ def test_receipt_never_contains_raw_source_quote_or_credentials():
     raw = json.dumps(run_probe(Scripted()))
     assert all(f.text not in raw for f in FIXTURES)
     assert "api_key" not in raw and "response_text" not in raw
+
+
+def test_cost_of_failed_quality_is_still_reported_and_never_marked_under_cap():
+    r = run_probe(Scripted("fabricated", "1.00"))
+    assert r["quality_gate"] == "not_passed"
+    assert r["cost_gate"] == "reported_cost_cap_exceeded"
+    assert r["reported_total_usd"] == "1.00"
+    assert r["model_calls_reserved"] == 1
+
+
+def test_failed_quality_with_missing_cost_does_not_pretend_zero():
+    r = run_probe(Scripted("full_sentence", None))
+    assert r["quality_gate"] == "not_passed"
+    assert r["cost_gate"] == "cost_telemetry_unavailable"
+    assert r["reported_total_usd"] is None
+    assert r["model_calls_reserved"] == 1
