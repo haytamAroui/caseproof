@@ -122,3 +122,17 @@ def test_distinct_dutch_and_english_text_must_match_exact_not_translated():
     for quote in variants:
         new=replace(b,references=(replace(b.references[0],exact_quote=quote),))
         assert check(new,r,p).observations[0].state is CitationCheckState.QUOTE_NOT_FOUND
+
+
+def test_exhibit_physical_page_still_scopes_quote_when_draft_page_missing():
+    brief, register, previews = rig()
+    no_draft_page = replace(
+        brief, references=(replace(brief.references[0], pdf_page=None),),
+    )
+    # Quote exists, but only on page 2 while confirmed exhibit maps page 1.
+    source = replace(previews[0], spans=((0, len(previews[0].text), "pdf-page-1", 1),))
+    report = check_brief_references(
+        brief=no_draft_page, register=register, previews=(source,),
+        authorized_case_id="case-a", authorized_register_revision=4,
+    )
+    assert report.observations[0].state is CitationCheckState.QUOTE_NOT_FOUND

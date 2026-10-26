@@ -182,6 +182,9 @@ def check_brief_references(
             for start, end, _, _ in matched_preview.spans
         ):
             raise DraftCheckError("invalid representation span boundaries")
+        # A confirmed mapping to physical page N does not permit matching
+        # a quote on a different page when the draft omits a page number.
+        expected_pdf_page = reference.pdf_page if reference.pdf_page is not None else page.pdf_page
         matches: list[tuple[int, int]] = []
         from_position = 0
         while True:
@@ -191,8 +194,8 @@ def check_brief_references(
             end = begin + len(reference.exact_quote)
             if any(
                 start <= begin and end <= finish
-                and (reference.pdf_page is None or
-                     (page_index is not None and page_index + 1 == reference.pdf_page))
+                and (expected_pdf_page is None or
+                     (page_index is not None and page_index + 1 == expected_pdf_page))
                 for start, finish, _, page_index in matched_preview.spans
             ):
                 matches.append((begin, end))

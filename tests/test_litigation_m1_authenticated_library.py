@@ -200,3 +200,38 @@ def test_parsing_timestamp_is_not_falsely_backdated_to_source_ingestion():
     )._parse(CapturedDocument("first", catalog.original))
     assert parsed.evidence.representation.created_at == parsed_at
     assert parsed.evidence.source.ingested_at == NOW
+
+
+def test_headless_m1_to_m2_exact_citation_path_through_preserved_source():
+    """Synthetic Auth/Vault contract: real parser output, NOT production Auth."""
+    from application.litigation.brief_checks import (
+        CitationCheckState, DraftReference, VersionedBrief, check_brief_references,
+    )
+    from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
+
+    service, _, _, catalog, _ = fixture()
+    evidence = service.preview(
+        bearer="m1-synthetic-fixture", case_id=CASE, source_id="first",
+    )
+    assert evidence.row.original_sha256 == catalog.original.sha256_hex
+    register = ExhibitRegister(1, (
+        ExhibitEntry(
+            "ex-nl-01", "Stuk 1",
+            (ExhibitPage("first", "v1", printed_page=1),),
+            ("Pièce 1",), confirmed=True,
+        ),
+    ))
+    brief = VersionedBrief(
+        CASE, "brief-v1", sha256(b"synthetic-draft").hexdigest(),
+        (DraftReference("ref-nl-01", "Pièce 1",
+                        "De levering gebeurde op 12 april 2026."),),
+    )
+    report = check_brief_references(
+        brief=brief, register=register, previews=(evidence,),
+        authorized_case_id=CASE, authorized_register_revision=1,
+    )
+    assert report.exact_count == 1 and report.mismatch_count == 0
+    assert report.observations[0].state is CitationCheckState.EXACT_MATCH
+    assert report.observations[0].source_sha256 == catalog.original.sha256_hex
+    assert report.observations[0].representation_id == evidence.row.representation_id
+    # Source fidelity never implies legal truth or outcome.
