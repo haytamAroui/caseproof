@@ -55,8 +55,8 @@ def rig(
     return b, register, (p,), scope
 
 
-def check(*args):
-    b, register, previews, scope = rig(*args)
+def check(*args, **kwargs):
+    b, register, previews, scope = rig(*args, **kwargs)
     return run_unified_check(
         representation=b, register=register, previews=previews,
         source_scope=scope, authorized_case_id="case-1",

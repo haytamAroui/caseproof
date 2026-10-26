@@ -251,6 +251,11 @@ def compare_fact(
         passage = preview.text[start:end]
         if not _safe_context(passage, assertion.role):
             continue
+        # Multiple monetary figures in one source passage prevent safely
+        # linking even a unique payment date to the claimed amount.
+        if (assertion.kind is FactKind.DATE
+                and len(_extract(passage, FactKind.MONEY, assertion.source_language)) > 1):
+            continue
         for token, a, b, val in _extract(passage, assertion.kind, assertion.source_language):
             if val is not None:
                 possibilities.append((token, start + a, start + b, val, passage))
