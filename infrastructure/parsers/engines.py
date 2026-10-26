@@ -210,9 +210,9 @@ def _docx_paragraph_text(paragraph: Any) -> str:
         if token.tag == _W + "t":
             parts.append(token.text or "")
         elif token.tag == _W + "tab":
-            parts.append("\\t")
+            parts.append("\t")
         elif token.tag in {_W + "br", _W + "cr"}:
-            parts.append("\\n")
+            parts.append("\n")
     return "".join(parts)
 
 

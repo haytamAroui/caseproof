@@ -157,7 +157,7 @@ def test_docx_footnotes_and_endnotes_keep_tabs_and_breaks_verbatim():
             "notes", source, LimitedDocumentParser().parse(source), source.ingested_at
         )
         note = next(block for block in parsed.blocks if block.kind == "docx_note")
-        assert parsed.evidence.content[note.start:note.end] == "Alpha\\tBeta\\nGamma\\nDelta"
+        assert parsed.evidence.content[note.start:note.end] == "Alpha\tBeta\nGamma\nDelta"
 
 
 def test_docx_textbox_inside_note_is_also_rejected():
