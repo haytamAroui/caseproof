@@ -6,6 +6,9 @@
 
 **Current baseline:** the code audit this plan derives from inspected main at `7c27e4ffcb5d512a55f88aca48423adb1d923861`. Audit observations are pinned to that commit and are not fresh verification. Existing evidence-kernel, finance, extraction, UI, persistence and security behavior must be checked against the implementation branch before each packet starts. Proposed work below is not implemented.
 
+
+**M0 implementation packet:** See [ADR 0016](adr/0016-belgian-litigation-product-pivot.md), [pinned capability/gate matrix](m0/BASELINE.md), [external claims register](m0/CLAIMS_REGISTER.md), [fixed manual task benchmark](m0/BENCHMARK_PROTOCOL.md), and [original synthetic evaluation corpus](../evals/litigation/README.md). These are M0 evidence artifacts, **not** claims of approved legal gold labels, benchmarked accuracy, complete PIV-01 real-format coverage or production readiness.
+
 ## Product workflow
 
 1. **Set up and access a matter.** Authenticate the user, enforce organization and matter permissions, and create a case workspace.
