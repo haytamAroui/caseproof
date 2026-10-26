@@ -104,3 +104,33 @@ def test_non_dev_email_and_unbounded_delete_fail_before_network():
         a.create_confirmed(email="someone@realmail.com", password="longtestpassword")
     with pytest.raises(EphemeralAuthFailure, match="unbounded_admin_delete"):
         a.delete("../../../auth/users")
+
+
+def test_secret_injection_stays_inside_main_only_protected_environment():
+    """Enforce the existing S2-006 private credential boundary on the new workflow."""
+    import json
+    from pathlib import Path
+
+    p = Path(__file__).resolve().parents[1] / ".github/workflows/caseproof-dev-real-auth.yml"
+    workflow = json.loads(p.read_text(encoding="utf-8"))
+    assert list(workflow["on"]) == ["workflow_dispatch"]
+    assert workflow["permissions"] == {"contents": "read"}
+    assert set(workflow["jobs"]) == {"ephemeral-auth", "existing-users"}
+    for mode, job in workflow["jobs"].items():
+        assert job["environment"] == "caseproof-dev-live-auth"
+        assert "github.event_name == 'workflow_dispatch'" in job["if"]
+        assert "github.ref == 'refs/heads/main'" in job["if"]
+        assert "github.repository == 'haytamAroui/caseproof'" in job["if"]
+        assert job["steps"][0]["with"] == {"ref": "main", "persist-credentials": False}
+        assert not any("setup-uv" in str(step) for step in job["steps"])
+        steps = [step for step in job["steps"] if "env" in step]
+        assert len(steps) == 1, mode
+        for key, value in steps[0]["env"].items():
+            if key in {"CASEPROOF_LIVE_AUTH_TEST", "CASEPROOF_EPHEMERAL_AUTH_TEST"}:
+                assert value == "YES"
+                continue
+            assert value == "$" + "{{ secrets." + key + " }}"
+    ephemeral = str(workflow["jobs"]["ephemeral-auth"]["steps"][-1]["env"])
+    existing = str(workflow["jobs"]["existing-users"]["steps"][-1]["env"])
+    assert "CASEPROOF_DEV_AUTH_ADMIN_KEY" in ephemeral
+    assert "CASEPROOF_DEV_AUTH_ADMIN_KEY" not in existing
