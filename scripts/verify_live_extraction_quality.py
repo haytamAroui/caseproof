@@ -17,7 +17,7 @@ from scripts.verify_live_requesty_litigation import (
     request_for,
 )
 
-SCHEMA = "caseproof-extraction-quality-v1"
+SCHEMA = "caseproof-extraction-quality-v2"
 MAX_CASES = 18
 MAX_TOTAL_USD = Decimal("0.02")
 
@@ -101,13 +101,20 @@ def evaluate_case(case: QualityCase, provider: ExtractionProvider) -> dict[str, 
     expected = set(case.expected)
     matched = len(actual & expected)
     missed = len(expected - actual)
-    unexpected = len(actual - expected) + len(validated) - len(grounded)
+    # Recall uses unique expected values. Precision uses individual validated
+    # candidates, partitioned into grounded matches, grounded errors and
+    # ungrounded errors. A candidate can enter only one precision bucket.
+    matched_candidates = sum(a.value in expected for a in grounded)
+    grounded_errors = sum(a.value not in expected for a in grounded)
+    ungrounded_errors = len(validated) - len(grounded)
+    unexpected = grounded_errors + ungrounded_errors
     # Empty extraction is a valid abstention only after a successful model reply.
     transport_ok = len(report.telemetry) == 1 and not any(
         f["reason"] != "zero_atoms_unresolved" for f in report.failures
     )
     negative_control = not expected
-    abstained = negative_control and transport_ok and not validated
+    abstained = negative_control and transport_ok and not report.atoms
+    withheld = negative_control and transport_ok and bool(report.atoms) and not validated
     reasons: dict[str, int] = {}
     for atom in report.atoms:
         if atom.state != "validated":
@@ -119,6 +126,10 @@ def evaluate_case(case: QualityCase, provider: ExtractionProvider) -> dict[str, 
         "status": "pass" if transport_ok and missed == 0 and unexpected == 0 else "fail",
         "successful_response": transport_ok,
         "negative_control": negative_control, "abstained": abstained,
+        "withheld_for_review_or_rejected": withheld,
+        "matched_candidate_count": matched_candidates,
+        "unexpected_grounded_count": grounded_errors,
+        "ungrounded_validated_count": ungrounded_errors,
         "expected_count": len(expected), "matched_count": matched,
         "missed_count": missed, "unexpected_validated_count": unexpected,
         "validated_count": len(validated), "candidate_reason_counts": reasons,
@@ -126,14 +137,15 @@ def evaluate_case(case: QualityCase, provider: ExtractionProvider) -> dict[str, 
     }
 
 
-def summarize(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, int]]:
+def summarize(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, Any]]:
     """Aggregate-only breakdown so a failure shows which category or language caused it."""
-    out: dict[str, dict[str, int]] = {}
+    out: dict[str, dict[str, Any]] = {}
     for r in rows:
         s = out.setdefault(r[key], {
             "cases": 0, "passed": 0, "expected": 0, "matched": 0,
             "missed": 0, "unexpected_validated": 0,
-            "negative_controls": 0, "abstentions": 0,
+            "negative_controls": 0, "abstentions": 0, "withheld": 0,
+            "matched_candidates": 0,
         })
         s["cases"] += 1
         s["passed"] += r["status"] == "pass"
@@ -143,6 +155,12 @@ def summarize(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, int]]
         s["unexpected_validated"] += r["unexpected_validated_count"]
         s["negative_controls"] += r["negative_control"]
         s["abstentions"] += r["abstained"]
+        s["withheld"] += r["withheld_for_review_or_rejected"]
+        s["matched_candidates"] += r["matched_candidate_count"]
+    for s in out.values():
+        s["literal_recall"] = s["matched"] / s["expected"] if s["expected"] else None
+        total = s["matched_candidates"] + s["unexpected_validated"]
+        s["literal_precision"] = s["matched_candidates"] / total if total else None
     return out
 
 
@@ -172,6 +190,7 @@ def run_quality(provider: ExtractionProvider) -> dict[str, Any]:
     expected = sum(r["expected_count"] for r in rows)
     unexpected = sum(r["unexpected_validated_count"] for r in rows)
     complete = len(rows) == len(CASES)
+    matched_candidates = sum(r["matched_candidate_count"] for r in rows)
     return {
         "schema": SCHEMA, "synthetic_only": True, "customer_ready": False,
         "model": provider.model, "provider": provider.identity,
@@ -184,10 +203,14 @@ def run_quality(provider: ExtractionProvider) -> dict[str, Any]:
         "unexpected_validated_count": unexpected,
         "negative_controls_evaluated": sum(r["negative_control"] for r in rows),
         "abstention_count": sum(r["abstained"] for r in rows),
+        "withheld_negative_controls": sum(r["withheld_for_review_or_rejected"] for r in rows),
+        "matched_candidate_count": matched_candidates,
         "by_category": summarize(rows, "category"),
         "by_language": summarize(rows, "language"),
         "literal_recall": matched / expected if expected else None,
-        "literal_precision": matched / (matched + unexpected) if matched + unexpected else None,
+        "literal_precision": matched_candidates / (matched_candidates + unexpected)
+        if matched_candidates + unexpected else None,
+        "scoring_units": "unique expected values for recall; validated candidates for precision",
         "quality_gate": "pass" if complete and cost_gate == "reported_under_cap"
         and all(r["status"] == "pass" for r in rows) else "not_passed",
         "limitation": "18 authored text fixtures; no OCR, PDF, date, entity-discovery or customer accuracy claim",
