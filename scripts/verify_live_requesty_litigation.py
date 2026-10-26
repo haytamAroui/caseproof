@@ -174,6 +174,10 @@ def evaluate_fixture(fixture: Fixture, provider: ExtractionProvider) -> dict[str
     counts: dict[str, int] = {}
     for atom in report.atoms:
         counts[atom.state] = counts.get(atom.state, 0) + 1
+    schema_counts: dict[str, int] = {}
+    for atom in report.atoms:
+        for issue in atom.schema_issues:
+            schema_counts[issue] = schema_counts.get(issue, 0) + 1
     reasons: dict[str, int] = {}
     for atom in report.atoms:
         if atom.state != "validated":
@@ -200,6 +204,7 @@ def evaluate_fixture(fixture: Fixture, provider: ExtractionProvider) -> dict[str
         "validated_grounded_gold_candidates": len(valid),
         "candidate_state_counts": counts,
         "candidate_reason_counts": reasons,
+        "candidate_schema_issue_counts": schema_counts,
         "failure_codes": sorted(set(row["reason"] for row in report.failures)),
         "source_verified": bool(valid),
         "human_review_required": True,
