@@ -1,5 +1,4 @@
 """M2 opt-in HTTP and signed-private-matter boundary — synthetic identity only."""
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
