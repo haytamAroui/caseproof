@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from application.documents.catalog import StoredDocument
+from application.documents.catalog import StoredDocument as StoredDocument
 from application.documents.intake import (
     CapturedDocument,
     DocumentIntelligence,

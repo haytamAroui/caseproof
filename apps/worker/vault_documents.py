@@ -7,10 +7,10 @@ stored bearer token or user-provided path. Real service delegation remains gated
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from application.documents.catalog import StoredDocument
 from application.documents.intake import CapturedDocument
 from application.extraction.contracts import ExtractionError
 from application.runtime.jobs import JobSpec
-from apps.api.authenticated_document_intelligence import StoredDocument
 from apps.api.evidence_vault_protocol import VaultCoordinator, VaultScope
 from infrastructure.execution.postgres_jobs import DisposableJobQueue
 
