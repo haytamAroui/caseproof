@@ -1,14 +1,14 @@
-# ExceptionDesk — evidence-backed invoice/PO exception resolution
+# CaseProof — Belgian litigation writing and evidence review
 
-**Repository:** `caseproof`. **Status:** engineering reference and Stage 2 development infrastructure; **not yet a production-ready or end-to-end sellable application**. See [verified status and blockers](docs/STATUS.md) and [execution roadmap](docs/ROADMAP.md).
+**Principal roadmap:** [Belgian litigation workflow and build plan](docs/ROADMAP.md). It supersedes the finance-first product order in older README/roadmap material; historical ADRs remain architecture records. The repository code has not yet completed this pivot and the litigation product is not production-ready. See [verified implementation status and release blockers](docs/STATUS.md).
 
 ## Product
 
-ExceptionDesk targets Belgian B2B finance operations, initially **supplier invoice versus purchase-order discrepancies**. A later CaseProof factual dispute-dossier workflow may reuse its sector-neutral Evidence Kernel after the finance use case is validated. AZComply is independent.
+CaseProof's target product is a Belgian evidence-linked workspace for lawyers to write with evidence, check their own or an opponent's brief against the exhibit bundle, review and correct findings, and deliver source-linked work. The initial factual-evidence workflow does not claim automatic legal-authority verification. The existing sector-neutral Evidence Kernel remains the foundation; the implementation plan uses `domains/disputes/`. AZComply is independent.
 
-The product's desired outcome is a trusted, human-reviewed resolution package, not generic legal AI chat. A correct quotation from a document is **not** proof of document authenticity or factual truth.
+The product's desired outcome is a reviewed, source-linked legal work product, not generic legal AI chat. A correct quotation from a document is **not** proof of document authenticity or factual truth.
 
-## What runs today
+## Existing implementation (finance/reference workflow)
 
 - Pure Python `packages/evidence_kernel` reference contracts (KRN-101–109): immutable sources/representations, typed anchors, fidelity vs semantic support, coverage and gated findings.
 - `domains/finance/reconciliation.py` compares **like-for-like totals** using `Decimal` and emits an unreviewed discrepancy; line items/VAT/fees are not yet implemented.
@@ -39,7 +39,7 @@ The root `MEMORY.md` and `docs/STATUS.md` are handoff aids, not trust authoritie
 - `supabase/migrations/` — existing canonical baseline only
 - `docs/tasks/` — staged engineering tasks and design proposals
 
-For the first product milestone, a genuine user must be able to securely upload an invoice and PO, inspect source-backed discrepancies, make an authorized decision and export a reproducible package. **That workflow is not built yet.**
+The planned first complete litigation outcome is a lawyer importing evidence, mapping exhibits, finding and inserting source support, checking/correcting a brief, reviewing changes and delivering correctly linked work. **That workflow is not built yet.**
 
 ### Evidence Intelligence (candidate runtime)
 
