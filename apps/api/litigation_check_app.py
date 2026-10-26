@@ -10,9 +10,9 @@ from typing import Any, Protocol
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 
+from application.litigation.unified_review import VerificationRun
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
-from application.litigation.unified_review import VerificationRun
 
 
 class AuthorizedCheckPort(Protocol):

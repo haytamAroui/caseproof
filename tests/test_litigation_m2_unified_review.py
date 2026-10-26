@@ -2,26 +2,42 @@
 
 No real signed Supabase sessions, customer data, hosted persistence or legal review.
 """
+import json
 from dataclasses import replace
 from hashlib import sha256
-import json
 
 import pytest
 
 from application.litigation.brief_checks import (
-    CitationCheckState, DraftReference, VersionedBrief,
+    CitationCheckState,
+    DraftReference,
+    VersionedBrief,
 )
 from application.litigation.factual_values import (
-    FactAssertion, FactError, FactKind, FactRole, FactState, _money_value,
+    FactAssertion,
+    FactError,
+    FactKind,
+    FactRole,
+    FactState,
+    _money_value,
 )
 from application.litigation.library import EvidencePreview, EvidenceRow
 from application.litigation.review_cycle import (
-    CorrectionProposal, ReviewPacket, preview_correction, ready_for_release,
-    revert_correction, revise_review,
+    CorrectionProposal,
+    ReviewPacket,
+    preview_correction,
+    ready_for_release,
+    revert_correction,
+    revise_review,
 )
 from application.litigation.unified_review import (
-    BriefRepresentation, ObservationReview, ReviewDisposition, SourceScope,
-    VerificationError, run_unified_check, verification_record,
+    BriefRepresentation,
+    ObservationReview,
+    ReviewDisposition,
+    SourceScope,
+    VerificationError,
+    run_unified_check,
+    verification_record,
 )
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 

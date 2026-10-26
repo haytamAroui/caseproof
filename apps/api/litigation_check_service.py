@@ -11,16 +11,26 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
+from application.litigation.library import EvidencePreview
 from application.litigation.matter_policy import (
-    CurrentMatterGrant, CurrentOrganizationGrant, MatterPermission, authorize_matter,
+    CurrentMatterGrant,
+    CurrentOrganizationGrant,
+    MatterPermission,
+    authorize_matter,
 )
 from application.litigation.unified_review import (
-    BriefRepresentation, SourceScope, VerificationRun, run_unified_check,
+    BriefRepresentation,
+    SourceScope,
+    VerificationRun,
+    run_unified_check,
 )
-from application.litigation.library import EvidencePreview
 from apps.api.access_control import (
-    AccessFailure, AccessRejected, BearerIdentityVerifier, IdentityServiceUnavailable,
-    InvalidBearer, VerifiedSubject,
+    AccessFailure,
+    AccessRejected,
+    BearerIdentityVerifier,
+    IdentityServiceUnavailable,
+    InvalidBearer,
+    VerifiedSubject,
 )
 from domains.disputes.exhibits import ExhibitRegister
 

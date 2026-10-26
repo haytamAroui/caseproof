@@ -22,7 +22,6 @@ from application.litigation.brief_checks import (
 from application.litigation.factual_values import (
     FactAssertion,
     FactObservation,
-    FactState,
     compare_fact,
 )
 from application.litigation.library import EvidencePreview
