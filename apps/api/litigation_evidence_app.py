@@ -44,7 +44,8 @@ def create_evidence_app(service: EvidenceReader | None = None) -> FastAPI:
     async def denied(request: Request, exc: AccessRejected) -> JSONResponse:
         return JSONResponse({"error": exc.code.value}, status_code=exc.http_status)
 
-    @app.exception_handler((ExtractionError, VaultError))
+    @app.exception_handler(ExtractionError)
+    @app.exception_handler(VaultError)
     async def unavailable(request: Request, exc: Exception) -> JSONResponse:
         return JSONResponse({"error": "evidence_unavailable"}, status_code=503)
 
