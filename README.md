@@ -1,6 +1,6 @@
 # CaseProof — Belgian litigation writing and evidence review
 
-**Principal roadmap:** [Belgian litigation workflow and build plan](docs/ROADMAP.md). It supersedes the finance-first product order in older README/roadmap material; historical ADRs remain architecture records. The repository code has not yet completed this pivot and the litigation product is not production-ready. See [verified implementation status and release blockers](docs/STATUS.md).
+**Product workflow:** [Complete lawyer journey](docs/PRODUCT_WORKFLOW.md). **Principal roadmap:** [Belgian litigation workflow and build plan](docs/ROADMAP.md). It supersedes the finance-first product order in older README/roadmap material; historical ADRs remain architecture records. The repository code has not yet completed this pivot and the litigation product is not production-ready. See [verified implementation status and release blockers](docs/STATUS.md).
 
 ## Product
 
