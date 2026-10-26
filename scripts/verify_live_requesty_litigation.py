@@ -70,6 +70,10 @@ class SmokeLiteralPolicy:
     ) -> tuple[str, str]:
         if signal != "amount_mentioned" or slot != signal or kind != "synthetic_legal_note":
             return "rejected", "probe_schema_or_kind_mismatch"
+        # This probe tests exact scalar extraction, not merely whether the
+        # model echoed a full source sentence containing the expected number.
+        if not re.fullmatch(r"\d{1,6}[.,]\d{2}", value):
+            return "rejected", "probe_non_scalar_amount"
         if value not in quote:
             return "rejected", "probe_value_not_in_exact_quote"
         if not re.search(r"\b(?:betaling|paiement|payment)\b", quote, re.IGNORECASE):
@@ -126,7 +130,7 @@ def evaluate_fixture(fixture: Fixture, provider: ExtractionProvider) -> dict[str
              if a.state == "validated" and a.signal == "amount_mentioned"
              and a.start is not None and a.end is not None
              and a.quote == req.sources[0].content[a.start:a.end]
-             and fixture.expected_value in a.value
+             and fixture.expected_value == a.value
              and a.source_id == req.sources[0].source_id]
     counts: dict[str, int] = {}
     for atom in report.atoms:
@@ -176,15 +180,16 @@ def run_probe(provider: ExtractionProvider) -> dict[str, Any]:
         # Unexpected Python/programming exceptions intentionally fail the workflow
         # with a sanitized status at the entrypoint; no unsafe automatic retries.
         rows.append(row)
-        if row["status"] != "pass":
-            break
+        # Paid response usage must be counted even when the extraction quality
+        # fails; unknown cost must never be reported as a verified zero charge.
         cost = row.get("reported_usd")
         if cost is None:
             budget_state = "cost_telemetry_unavailable"
-            break
-        spent += Decimal(cost)
-        if spent > MAX_REPORTED_USD:
-            budget_state = "reported_cost_cap_exceeded"
+        else:
+            spent += Decimal(cost)
+            if spent > MAX_REPORTED_USD:
+                budget_state = "reported_cost_cap_exceeded"
+        if row["status"] != "pass" or budget_state != "reported_under_cap":
             break
     ok = len(rows) == len(FIXTURES) and all(r["status"] == "pass" for r in rows)
     ok = ok and budget_state == "reported_under_cap"
@@ -196,7 +201,7 @@ def run_probe(provider: ExtractionProvider) -> dict[str, Any]:
         "max_model_calls": MAX_CALLS,
         "max_output_tokens_per_call": MAX_OUTPUT_TOKENS,
         "model_calls_reserved": guarded.calls,
-        "reported_total_usd": str(spent),
+        "reported_total_usd": str(spent) if budget_state != "cost_telemetry_unavailable" else None,
         "cost_gate": budget_state,
         "quality_gate": "pass" if ok else "not_passed",
         "legal_decision": "not_assessed",
