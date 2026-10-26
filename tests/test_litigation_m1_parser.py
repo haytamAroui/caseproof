@@ -147,10 +147,10 @@ def test_docx_nested_textbox_is_rejected_before_creating_fabricated_passages():
 def test_docx_footnotes_and_endnotes_keep_tabs_and_breaks_verbatim():
     for kind in ("footnotes", "endnotes"):
         xml = (
-            '<w:root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-            '<w:p><w:r><w:t>Alpha</w:t><w:tab/><w:t>Beta</w:t>'
-            '<w:br/><w:t>Gamma</w:t><w:cr/><w:t>Delta</w:t></w:r></w:p></w:root>'
-        ).encode()
+            b'<w:root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            b'<w:p><w:r><w:t>Alpha</w:t><w:tab/><w:t>Beta</w:t>'
+            b'<w:br/><w:t>Gamma</w:t><w:cr/><w:t>Delta</w:t></w:r></w:p></w:root>'
+        )
         raw = make_docx(extras=[(f"word/{kind}.xml", xml)])
         source = make_source(raw)
         parsed = restore(
@@ -162,9 +162,9 @@ def test_docx_footnotes_and_endnotes_keep_tabs_and_breaks_verbatim():
 
 def test_docx_textbox_inside_note_is_also_rejected():
     note = (
-        '<w:root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-        '<w:p><w:txbxContent><w:p><w:r><w:t>Separate</w:t></w:r></w:p>'
-        '</w:txbxContent></w:p></w:root>'
-    ).encode()
+        b'<w:root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        b'<w:p><w:txbxContent><w:p><w:r><w:t>Separate</w:t></w:r></w:p>'
+        b'</w:txbxContent></w:p></w:root>'
+    )
     with pytest.raises(ExtractionError, match="docx_textboxes_unsupported"):
         parse_bytes(make_docx(extras=[("word/footnotes.xml", note)]), DOCX_MIME)
