@@ -19,3 +19,9 @@ Reports only sanitized candidate counts, source-anchor correctness, gold-value p
 Model success on these three fixtures does not establish legal veracity, semantic recall, authorized production access, Auth/RLS, permanent storage, durable review, professional validation or customer readiness. Synthetic CI does not validate a live provider; only a completed manual run can do that.
 
 Scope: scripts/verify_live_requesty_litigation.py and apps/api/requesty_extraction.py.
+
+## Safe failure diagnostics (Oct 26, 2026)
+
+Manual run 40339738662 failed with `outcome_unknown` after one attempted Requesty request; this does **not** establish an invalid key or a free call. The Requesty adapter now reports only allowlisted, privacy-safe cause codes in a failed fixture's `provider_diagnostic`: e.g. `requesty_http_503`, `requesty_transport_dns`, `requesty_transport_tls`, `requesty_transport_timeout`, `requesty_model_identity_mismatch`, `requesty_invalid_response_envelope`.
+
+These codes never include raw response bodies, bearer keys, quotes, headers or external exception text. Network/5xx outcomes remain potentially charged and are never automatically retried. Check Requesty's usage/telemetry before dispatching another smoke test. This code change does not automatically rerun the failed model test, and previous receipts cannot be retroactively diagnosed.
