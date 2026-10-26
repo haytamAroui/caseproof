@@ -173,7 +173,7 @@ def check_brief_references(
         row = matched_preview.row
         if row.status != "ready" or row.warnings or not row.representation_id or not matched_preview.spans:
             observations.append(_note(reference, CitationCheckState.INCOMPLETE_EXTRACTION,
-                                      exhibit_id=resolved.exhibit_id, matched_preview=matched_preview))
+                                      exhibit_id=resolved.exhibit_id, preview=matched_preview))
             continue
         # Derived representation text must have source-linked bounds.
         if any(
@@ -204,7 +204,7 @@ def check_brief_references(
         else:
             state = CitationCheckState.QUOTE_NOT_FOUND
         observations.append(_note(
-            reference, state, exhibit_id=resolved.exhibit_id, matched_preview=matched_preview,
+            reference, state, exhibit_id=resolved.exhibit_id, preview=matched_preview,
             span=matches[0] if len(matches) == 1 else None,
         ))
     all_obs = tuple(observations)
