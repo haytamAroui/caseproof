@@ -86,3 +86,10 @@ def test_manual_uncited_entry_is_preserved_when_another_entry_changes():
     old = ExhibitRegister(1, (entry(), manual))
     changed = old.revise(expected_revision=1, entries=(replace(entry(), display_label="Stuk 2"), manual))
     assert old.entries[1] == changed.entries[1] == manual
+
+
+def test_label_whitespace_does_not_create_false_unresolved_reference():
+    exhibit = entry(label="  Stuk 1  ", aliases=(" Pièce 1 ",))
+    register = ExhibitRegister(1, (exhibit,))
+    assert register.resolve("Stuk 1").state == MappingState.CONFIRMED
+    assert register.resolve("Pièce 1").state == MappingState.CONFIRMED

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from application.documents.catalog import StoredDocument
 from application.documents.intake import CapturedDocument
 from application.extraction.contracts import ExtractionError
 from application.litigation.library import EvidenceIndexer, EvidenceInventory, EvidencePreview
@@ -21,7 +22,6 @@ from apps.api.access_control import (
     CaseAccessService,
     CaseAction,
 )
-from apps.api.authenticated_document_intelligence import StoredDocument
 from apps.api.evidence_vault_protocol import VaultCoordinator, VaultScope
 
 

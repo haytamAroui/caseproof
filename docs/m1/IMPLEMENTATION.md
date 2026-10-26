@@ -1,6 +1,6 @@
 # M1 — Evidence Library combined implementation PR (PIV-02–06)
 
-**State:** internal synthetic/reference slice. **Not M1 customer-ready completion.** No public route or real confidential upload is enabled. Principal authority remains [ROADMAP](../ROADMAP.md) and [workflow](../PRODUCT_WORKFLOW.md). M0 remains on main; finance and sector-neutral kernel contracts retained.
+**State:** internal synthetic/reference slice. **Architecture audit:** [PIV-02–06 task-by-task results](HEXAGONAL_AUDIT.md). **Not M1 customer-ready completion.** No public route or real confidential upload is enabled. Principal authority remains [ROADMAP](../ROADMAP.md) and [workflow](../PRODUCT_WORKFLOW.md). M0 remains on main; finance and sector-neutral kernel contracts retained.
 
 ## Integrated path delivered in this PR
 

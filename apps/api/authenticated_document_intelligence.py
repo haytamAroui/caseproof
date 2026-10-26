@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from application.documents.catalog import StoredDocument
 from application.documents.intake import (
     CapturedDocument,
     DocumentIntelligence,
@@ -20,14 +21,6 @@ from application.documents.intake import (
 from application.extraction.contracts import ClaimSlot, ExtractionConfig, ExtractionError, Scope
 from apps.api.access_control import AuthorizedCase, CaseAccessService, CaseAction
 from apps.api.evidence_vault_protocol import VaultCoordinator, VaultScope
-from packages.evidence_kernel.domain.source_versions import SourceVersion
-
-
-@dataclass(frozen=True)
-class StoredDocument:
-    source_id: str
-    original: SourceVersion
-    intent_id: UUID
 
 
 class CaseDocuments(Protocol):

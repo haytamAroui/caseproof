@@ -93,3 +93,10 @@ def test_unknown_human_gold_label_rejected(corpus):
     by_id(changed, "FR_VAT_07")["expected"]["human_review_labels"] = ["court_ready"]
     with pytest.raises(ValueError, match="unknown human label"):
         validate(changed)
+
+
+def test_language_declaration_cannot_silently_drop_english(corpus):
+    changed = copy.deepcopy(corpus)
+    changed["allowed_languages"] = ["nl", "fr", "mixed"]
+    with pytest.raises(ValueError, match="language declaration required"):
+        validate(changed)

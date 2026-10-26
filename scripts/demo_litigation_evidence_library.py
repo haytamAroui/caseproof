@@ -16,12 +16,12 @@ from packages.evidence_kernel.domain.source_versions import SourceVersion
 
 def main() -> None:
     corpus = json.loads(
-        (Path(__file__).resolve().parents[1] / "evals/litigation/m0_corpus_v1.json").read_text(
+        (Path(__file__).resolve().parents[1] / "evals/litigation/m0_corpus_v2.json").read_text(
             encoding="utf-8"
         )
     )
     samples = [next(item for item in corpus["cases"] if item["id"] == i) for i in (
-        "NL_CLEAN_01", "FR_CLEAN_02", "FR_SCAN_05"
+        "NL_CLEAN_01", "FR_CLEAN_02", "EN_CLEAN_15", "FR_SCAN_05"
     )]
     documents = []
     excluded_unprocessed = []

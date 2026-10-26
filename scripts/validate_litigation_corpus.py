@@ -44,6 +44,8 @@ def validate(data: dict) -> dict:
     provenance = data["provenance"]
     if provenance["label_status"] != "author_supplied_unadjudicated" or "synthetic" not in provenance["rights"]:
         raise ValueError("rights/label qualifications absent")
+    if data.get("allowed_languages") != ["nl", "fr", "en", "mixed"]:
+        raise ValueError("NL/FR/EN/mixed language declaration required")
     cases = data["cases"]
     if not isinstance(cases, list) or len(cases) < 10:
         raise ValueError("expected at least 10 distinct scenarios")
@@ -63,7 +65,7 @@ def validate(data: dict) -> dict:
             raise ValueError(f"{case_id}: unknown cohort")
         if not case["brief_text"]:
             raise ValueError(f"{case_id}: missing brief")
-        if not isinstance(case["citation"]["pdf_page"], int) or case["citation"]["pdf_page"] <= 0:
+        if type(case["citation"]["pdf_page"]) is not int or case["citation"]["pdf_page"] <= 0:
             raise ValueError(f"{case_id}: invalid citation pdf page")
         seen_versions = set()
         source_ids = set()
@@ -73,10 +75,10 @@ def validate(data: dict) -> dict:
                 raise ValueError(f"{case_id}: duplicate source/version/page")
             seen_versions.add(identity)
             source_ids.add(source["source_id"])
-            if not isinstance(source["pdf_page"], int) or source["pdf_page"] <= 0:
+            if type(source["pdf_page"]) is not int or source["pdf_page"] <= 0:
                 raise ValueError(f"{case_id}: invalid source pdf page")
             if source["printed_page"] is not None and (
-                not isinstance(source["printed_page"], int) or source["printed_page"] <= 0
+                type(source["printed_page"]) is not int or source["printed_page"] <= 0
             ):
                 raise ValueError(f"{case_id}: invalid printed page")
             if len([source["label"], *source["aliases"]]) != len(set([source["label"], *source["aliases"]])):

@@ -108,3 +108,11 @@ def test_docx_tracked_changes_never_claim_complete_or_legal_truth():
     source = make_source(buf.getvalue())
     parsed = restore("edited", source, LimitedDocumentParser().parse(source), source.ingested_at)
     assert "docx_tracked_changes_require_review" in parsed.warnings
+
+
+def test_docx_unprocessed_header_has_explicit_completeness_warning():
+    raw = make_docx(extras=[("word/header1.xml", b"synthetic header placeholder")])
+    source = make_source(raw)
+    parsed = restore("header", source, LimitedDocumentParser().parse(source), source.ingested_at)
+    assert "docx_headers_footers_comments_unprocessed" in parsed.warnings
+    assert parsed.evidence.complete is False

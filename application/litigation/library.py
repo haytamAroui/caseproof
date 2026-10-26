@@ -5,7 +5,9 @@ Vault composition. It neither uploads customer bytes nor authenticates actors.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from application.documents.contracts import DocumentParser, ParsedDocument, restore
 from application.documents.intake import CapturedDocument
@@ -83,8 +85,9 @@ def page_inventory(parsed: ParsedDocument) -> tuple[PageState, ...]:
 class EvidenceIndexer:
     """Internal processing: parsed source text is never an authorization token."""
 
-    def __init__(self, parser: DocumentParser) -> None:
+    def __init__(self, parser: DocumentParser, *, clock: Callable[[], datetime] | None = None) -> None:
         self.parser = parser
+        self.clock = clock or (lambda: datetime.now(UTC))
 
     @staticmethod
     def _captured(doc: CapturedDocument) -> None:
@@ -93,7 +96,7 @@ class EvidenceIndexer:
 
     def _parse(self, doc: CapturedDocument) -> ParsedDocument:
         self._captured(doc)
-        return restore(doc.source_id, doc.source, self.parser.parse(doc.source), doc.source.ingested_at)
+        return restore(doc.source_id, doc.source, self.parser.parse(doc.source), self.clock())
 
     @staticmethod
     def _row(doc: CapturedDocument, parsed: ParsedDocument | None) -> EvidenceRow:
@@ -129,7 +132,7 @@ class EvidenceIndexer:
             rows.append(self._row(doc, parsed))
         rows_t = tuple(rows)
         return EvidenceInventory(
-            rows_t, all(row.status == "ready" for row in rows_t),
+            rows_t, bool(rows_t) and all(row.status == "ready" for row in rows_t),
             sum(row.status == "failed" for row in rows_t),
             sum(row.status == "partial" for row in rows_t),
         )

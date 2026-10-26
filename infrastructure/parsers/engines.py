@@ -83,6 +83,7 @@ def parse_pdf(raw: bytes) -> dict[str, Any]:
             raise ExtractionError("active_pdf_page_unsupported")
         if page.get("/Annots"):
             builder.warnings.add("pdf_annotations_unprocessed")
+            builder.warnings.add(f"pdf_annotations_unprocessed:page:{i}")
         resources = page.get("/Resources", {})
         if hasattr(resources, "get_object"):
             resources = resources.get_object()
@@ -279,6 +280,14 @@ def parse_docx(raw: bytes) -> dict[str, Any]:
                     builder.add(contents, "docx_note", f"docx:{kind}:paragraph:{i}")
             if any(name.startswith("word/media/") for name in names):
                 builder.warnings.add("docx_images_require_review")
+            if any(name.startswith(("word/header", "word/footer", "word/comments")) for name in names):
+                builder.warnings.add("docx_headers_footers_comments_unprocessed")
+            if any(name.startswith("customXml/") for name in names):
+                builder.warnings.add("docx_custom_xml_unprocessed")
+            if any(el.tag in {_W + "instrText", _W + "fldChar"} for el in body.iter()):
+                builder.warnings.add("docx_fields_require_review")
+            if any(el.tag == _W + "txbxContent" for el in body.iter()):
+                builder.warnings.add("docx_textboxes_require_review")
     except (zipfile.BadZipFile, EOFError, OSError):
         raise ExtractionError("docx_archive_rejected") from None
     builder.warnings.add("docx_layout_page_numbers_unverified")

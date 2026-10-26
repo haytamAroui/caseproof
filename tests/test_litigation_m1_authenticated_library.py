@@ -180,3 +180,23 @@ def test_unknown_document_is_sanitized_and_does_not_return_text():
     with pytest.raises(AccessRejected) as exc:
         service.preview(bearer="m1-synthetic-fixture", case_id=CASE, source_id="unknown")
     assert exc.value.http_status == 404
+
+
+def test_empty_library_is_not_a_fully_processed_dossier():
+    service, _, _, catalog, _ = fixture()
+    catalog.records = ()
+    result = get_inventory(service)
+    assert result.rows == ()
+    assert result.complete is False
+
+
+def test_parsing_timestamp_is_not_falsely_backdated_to_source_ingestion():
+    from application.documents.intake import CapturedDocument
+
+    _, _, _, catalog, _ = fixture()
+    parsed_at = NOW + timedelta(days=1)
+    parsed = EvidenceIndexer(
+        LimitedDocumentParser(), clock=lambda: parsed_at
+    )._parse(CapturedDocument("first", catalog.original))
+    assert parsed.evidence.representation.created_at == parsed_at
+    assert parsed.evidence.source.ingested_at == NOW

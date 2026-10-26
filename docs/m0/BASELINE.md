@@ -27,7 +27,7 @@ No duplicate backlog in CORE/LIT/AP, prior Belgian audit or research notes. Assi
 | Synthetic reviewer/draft pack | `apps/web/review/`, `application/review/`, `application/dossiers/` | Suggestions/draft export only, not release/filing or litigation workbench | review/output; PIV-08/14–16 |
 | Matters and restricted case grants | baseline case-access model | Current org-wide authorization does NOT demonstrate private same-org matters | application access; PIV-02 |
 | Exhibit registry, citation/draft graph, legal brief check | no integrated authoritative litigation route | Not implemented; no semantic/law correctness claims | disputes/application; PIV-06/07/09 |
-| NL/FR case search and Word citation loop | no `apps/word_addin/` | Not implemented; lexical/performance unmeasured | retrieval/Word; PIV-10/11 |
+| NL/FR/EN case search and Word citation loop | no `apps/word_addin/` | Not implemented; lexical/performance unmeasured | retrieval/Word; PIV-10/11 |
 | Legal authority verification, procedural/court readiness | no approved local authority service | Out of initial factual scope; unverified law refs stay unchecked | qualified legal owner; PIV-17/18 |
 | Hosted sharing, actual filing and receipts | no authorized integration | Not implemented. Export ≠ filing. | application/ops; PIV-15/18 |
 | PIV-01 corpus/protocol | `evals/litigation/m0_corpus_v1.json`, `scripts/validate_litigation_corpus.py` in this PR | Newly authored synthetic/gold-data baseline; cannot prove accuracy | evaluation; PIV-01 |
@@ -50,3 +50,8 @@ No duplicate backlog in CORE/LIT/AP, prior Belgian audit or research notes. Assi
 - **Not delivered:** independent legal gold review, genuine in-court or customer datasets, measured lawyer task times, product smoke journey, signed user→DB proof, private cloud Storage, production implementation.
 - **Owner/qualified reviewer needed:** confirm initial civil/commercial matter profile and confidential matter isolation policy; approve actual task gold answers/benchmark protocol before sales comparisons; verify all Belgium-specific claims independently.
 - **Next:** PIV-02/03/04 contracts and first authenticated, preserved, deterministic intake slice. Do not enable customer uploads as a shortcut.
+
+
+## Language scope correction (M0 follow-up)
+
+The product target is **NL/FR/EN**, including UI, supported document workflows, matter search/query language and available output templates. The prior M0 corpus `m0_corpus_v1.json` remains immutable historical test data. `m0_corpus_v2.json` adds separately labeled original English clean/adversarial examples and a mixed NL/FR/EN case. This is **scope and fixture coverage, not implemented translation, OCR, Word or legal correctness**. All three language cohorts require human gold adjudication and comparable benchmarks.

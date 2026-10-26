@@ -108,7 +108,7 @@ class ExhibitRegister:
         _page(pdf_page, "PDF page")
         matches = [
             entry for entry in self.entries
-            if key in (entry.display_label.casefold(), *(alias.casefold() for alias in entry.aliases))
+            if key in (entry.display_label.strip().casefold(), *(alias.strip().casefold() for alias in entry.aliases))
         ]
         if not matches:
             return ExhibitResolution(MappingState.UNRESOLVED)

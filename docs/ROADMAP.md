@@ -37,7 +37,7 @@
 
 | Milestone | User outcome | Packets and exit evidence |
 |---|---|---|
-| **M0 — Product and quality baseline** | One authoritative scope, contracts, owners and NL/FR clean/adversarial corpus | PIV-00–01; clean cases can return no findings; capability dispositions and limitations recorded |
+| **M0 — Product and quality baseline** | One authoritative scope, contracts, owners and NL/FR/EN clean/adversarial corpus | PIV-00–01; clean cases can return no findings; capability dispositions and limitations recorded |
 | **M1 — Evidence library** | Import, preserve, inspect and organize a dossier without an LLM | PIV-02–06; real auth/matter policy, immutable bytes, parser lineage, page status and confirmed exhibit mappings |
 | **M2 — Check and correct** | Check a supplied brief, inspect source context, correct a draft and produce a review report | PIV-07–09 plus correction/minimum output slice; deterministic path works; unresolved scope is visible |
 | **M3 — Write with evidence** | Complete Word selection → retrieve → inspect → cite → edit/undo → recheck loop | PIV-10–11; supported-host and document-integrity tests; no semantic-model prerequisite |
@@ -50,7 +50,7 @@ Milestones are acceptance outcomes, not calendar estimates. The “1–3 person-
 ## PIV-00–20 authoritative backlog
 
 - **PIV-00:** superseding product ADR, active instructions, current status matrix and compatibility plan. Preserve ADR-0011's architecture decisions; supersede finance-first sequencing.
-- **PIV-01:** rights-cleared NL/FR and mixed-language litigation corpus with clean controls, quote/context variants, dates/amounts, aliases, scans, page offsets and gold labels; fixed, versioned competitive task benchmarks against manual Word/PDF, with authorized competitor comparisons only.
+- **PIV-01:** rights-cleared NL/FR/EN and mixed-language litigation corpus with clean controls, quote/context variants, dates/amounts, aliases, scans, page offsets and gold labels; fixed, versioned competitive task benchmarks against manual Word/PDF, with authorized competitor comparisons only.
 - **PIV-02:** authenticated production API, explicit matter access (including same-organization restricted matters if required), scoped jobs and legacy/demo isolation.
 - **PIV-03:** reviewed production persistence and source custody: immutable bytes, graph/review/job records, audit, recovery and retention.
 - **PIV-04:** provider-independent deterministic intake/index/check jobs; page-level completeness and typed warnings; reconcile all file, job, checkpoint and export budgets; capture dossier dimensions and observed/estimated unit economics.
@@ -59,7 +59,7 @@ Milestones are acceptance outcomes, not calendar estimates. The “1–3 person-
 - **PIV-07:** versioned briefs, assertions and citation graph connecting draft references to resolved exhibits, source versions and locations.
 - **PIV-08:** accessible source/reviewer workbench; fix dirty-export, contradiction-filter and save-versus-refresh defects; show partial and failed scope.
 - **PIV-09:** deterministic quote, reference, date/amount and citation-format observations. Keep exact fidelity separate from candidate alignment and legal conclusions.
-- **PIV-10:** matter-scoped lexical evidence retrieval with measured NL/FR keyword and paraphrase-query performance; evaluate recall/coverage separately from relation correctness. Broader conceptual-search claims require demonstrated retrieval results. Assess optional semantic support separately under PIV-12.
+- **PIV-10:** matter-scoped lexical evidence retrieval with measured NL/FR/EN keyword and paraphrase-query performance; evaluate recall/coverage separately from relation correctness. Broader conceptual-search claims require demonstrated retrieval results. Assess optional semantic support separately under PIV-12.
 - **PIV-11:** Word add-in citation loop with safe range revalidation, formatting/footnote/tracked-change handling, undo and host capability checks.
 - **PIV-12:** separately evaluated optional semantic support/opponent assessment (including Requesty proposals) with counterevidence scope, abstention, model/prompt lineage, evaluation and unknown-outcome recovery. Semantic retrieval, if proposed, requires its own evaluation and decision record. Not a prerequisite for M3.
 - **PIV-13:** later evidence-linked timelines, tables, narrative drafting, summaries, question answering and hearing preparation; every material generated statement remains linked or marked unsupported.
@@ -110,7 +110,7 @@ This inventory records scope decisions for all 42 capabilities in the product re
 | F31 | Dynamic exhibits after edits | Launch M4; deletion, reordering and frozen prior exports tested |
 | F32 | Hyperlinked briefs/letters/motions | Launch supported brief outputs; other templates separately scoped |
 | F33 | Secure courtesy copies | Launch M4 with recipient controls |
-| F34 | Interactive examples | Launch synthetic NL/FR demo |
+| F34 | Interactive examples | Launch synthetic NL/FR/EN demo |
 | F35 | Cite Check Report | Launch M2 draft, M4 release; scope/version/dispositions explicit |
 | F36 | Opponent PDF-to-Word conversion | Later/unresolved fidelity work; original-PDF review does not depend on conversion |
 | F37 | Retrieve uncited counterevidence | Launch scoped search M3; no exhaustive discovery claim |
@@ -154,7 +154,7 @@ Seed these disputed statements as **pending source review**, not established fac
 
 ### Competitive task benchmark (PIV-01, PIV-20)
 
-Compare against a documented manual Word/PDF baseline using a fixed task protocol and versioned, rights-cleared representative dossiers: Dutch, French and mixed-language; clean controls and known issues; scans and clean PDFs; varied dossier sizes. Tasks cover date and email acceptance, a cited amount with VAT and role basis, reference repair after exhibit replacement, and production of a reviewed linked output. Record correctness of sources and outputs, total elapsed time including setup/review/cleanup, false positives, assistance, errors and breakage. Compare Alice, Nexa and Kleos only with authorized access; mark unavailable or untested products as untested. Never invent benchmark results.
+Compare against a documented manual Word/PDF baseline using a fixed task protocol and versioned, rights-cleared representative dossiers: Dutch, French, English and mixed-language; clean controls and known issues; scans and clean PDFs; varied dossier sizes. Tasks cover date and email acceptance, a cited amount with VAT and role basis, reference repair after exhibit replacement, and production of a reviewed linked output. Record correctness of sources and outputs, total elapsed time including setup/review/cleanup, false positives, assistance, errors and breakage. Compare Alice, Nexa and Kleos only with authorized access; mark unavailable or untested products as untested. Never invent benchmark results.
 
 ### Maintained court profiles (PIV-17, PIV-18)
 
