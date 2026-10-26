@@ -151,7 +151,11 @@ def test_manual_workflow_never_leaks_requesty_key_or_auth_admin_to_pr():
     assert j["steps"][0]["with"] == {"ref": "main", "persist-credentials": False}
     env = next(s["env"] for s in j["steps"] if "env" in s)
     assert env["CASEPROOF_REQUESTY_API_KEY"] == "$" + "{{ secrets.CASEPROOF_REQUESTY_API_KEY }}"
-    assert env["CASEPROOF_EXTRACTION_MODEL"] == "$" + "{{ vars.CASEPROOF_EXTRACTION_MODEL }}"
+    # Only the configured shorthand is qualified; other explicit routes pass through.
+    assert env["CASEPROOF_EXTRACTION_MODEL"] == (
+        "$" + "{{ vars.CASEPROOF_EXTRACTION_MODEL == 'mistral-small-2603' "
+        "&& 'mistral/mistral-small-2603' || vars.CASEPROOF_EXTRACTION_MODEL }}"
+    )
     assert "AUTH_ADMIN" not in str(workflow)
     assert j["steps"][-1]["with"]["retention-days"] <= 7
 
