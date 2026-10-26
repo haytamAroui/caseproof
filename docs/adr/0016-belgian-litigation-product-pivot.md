@@ -6,7 +6,7 @@
 
 ## Decision and intended customer outcome
 
-Focus the next CaseProof product on Belgian lawyers reviewing civil/commercial briefs against an exhibit record. Deliver: authenticate/open matter → preserve and inventory evidence → confirm Stuk/Pièce mappings → write with evidence in Word/web → check own/opponent draft → inspect/resolve/correct → review exact revision → produce linked reports, brief and exhibit bundle → share/human handoff. Dutch and French are initial working languages; source language and output language are distinct.
+Focus the next CaseProof product on Belgian lawyers reviewing civil/commercial briefs against an exhibit record. Deliver: authenticate/open matter → preserve and inventory evidence → confirm Stuk/Pièce mappings → write with evidence in Word/web → check own/opponent draft → inspect/resolve/correct → review exact revision → produce linked reports, brief and exhibit bundle → share/human handoff. Dutch (NL), French (FR) and English (EN) are equal product languages for UI, search, evidence workflow and supported outputs. Matter source language, editor language, UI language and output language remain independent; readiness per language must be measured.
 
 The product is **not** currently implemented. The evidence/kernel and finance prototypes are reusable reference components, not proof of end-to-end litigation production readiness. Competitive product evidence supports investigation of a category, **not** a conclusion about Belgian willingness to pay or feature parity.
 
@@ -41,7 +41,7 @@ Deployment prerequisites remain: PIV-02 genuine Auth and matter permissions; PIV
 
 ## Implementation order and reversibility
 
-Begin with **PIV-00 status/contract/claims inventory** and **PIV-01 rights-cleared synthetic Dutch/French corpus plus fixed competitive manual benchmark**. Then agree PIV-02–04 contracts, build M1–M4 workflow, defer optional semantic breadth (M5) and procedural connectors (M6). No time estimate is an approval.
+Begin with **PIV-00 status/contract/claims inventory** and **PIV-01 rights-cleared synthetic Dutch/French/English corpus plus fixed competitive manual benchmark**. Then agree PIV-02–04 contracts, build M1–M4 workflow, defer optional semantic breadth (M5) and procedural connectors (M6). No time estimate is an approval.
 
 Rollback: revert M0 docs/corpus/script/tests only. No runtime behavior, SQL, policy, external service, budgets or user data change. A later pilot must use a new reviewed ADR/PR for consequential decisions or installed production migrations.
 
@@ -50,5 +50,5 @@ Rollback: revert M0 docs/corpus/script/tests only. No runtime behavior, SQL, pol
 - The principal roadmap and this ADR no longer conflict with active README/STATUS instructions; historical records remain historical.
 - Code-observed versus design-only capabilities, gates and owners are explicit in [M0 baseline](../m0/BASELINE.md).
 - [Claims register](../m0/CLAIMS_REGISTER.md) prevents unsupported external assertions.
-- Versioned synthetic [corpus](../../evals/litigation/m0_corpus_v1.json), [benchmark protocol](../m0/BENCHMARK_PROTOCOL.md), executable validator and adversarial tests are included. Fixture validation is **not** litigation product quality validation.
+- Versioned synthetic [current v2 corpus](../../evals/litigation/m0_corpus_v2.json) (with original v1 retained), [benchmark protocol](../m0/BENCHMARK_PROTOCOL.md), executable validator and adversarial tests are included. Fixture validation is **not** litigation product quality validation.
 - Required CI must run on PR HEAD. No automatic merging or release authorization.

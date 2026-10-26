@@ -2,7 +2,7 @@
 
 **Purpose:** define the complete lawyer-facing workflow that the principal roadmap implements. This is a proposed product contract, not a statement that these screens or capabilities exist in the current application.
 
-**Primary user:** a Belgian lawyer preparing, checking or reviewing a civil/commercial brief and its exhibit bundle. The first supported languages are Dutch and French; English may appear in source documents. Product UI language, source language and output language are separate settings.
+**Primary user:** a Belgian lawyer preparing, checking or reviewing a civil/commercial brief and its exhibit bundle. The three product languages are **Dutch (NL), French (FR) and English (EN)** for the UI, searches, evidence workflows and supported outputs. Product UI language, source language, document language and output language are separate settings; they may differ in the same matter. Language support is a product target, not a claim of implemented translations or measured retrieval quality.
 
 ## Product outcome
 
@@ -70,7 +70,7 @@ The lawyer selects a factual sentence or phrase, opens “Find evidence,” and 
 
 **System:** records the citation edge from this draft revision/assertion to the resolved exhibit, source version and anchor. Retrieval rank is labelled as relevance ordering, not truth probability. An empty result is a valid outcome with its search scope and unindexed/failed material visible.
 
-**Retrieval promise:** launch with evidence retrieval whose Dutch and French keyword and paraphrase-query performance is measured on the rights-cleared corpus. Do not imply proven broad conceptual-search equivalence from a lexical baseline. Broader conceptual-search claims depend on demonstrated retrieval results. Semantic retrieval, if proposed, is a separately evaluated capability; semantic support assessment remains optional under PIV-12 and is not a prerequisite for the deterministic workflow.
+**Retrieval promise:** launch with evidence retrieval whose Dutch, French and English keyword and paraphrase-query performance is measured on the rights-cleared corpus. Do not imply proven broad conceptual-search equivalence from a lexical baseline. Broader conceptual-search claims depend on demonstrated retrieval results. Semantic retrieval, if proposed, is a separately evaluated capability; semantic support assessment remains optional under PIV-12 and is not a prerequisite for the deterministic workflow.
 
 **Word safety:** before insertion, the add-in checks that the selected range still matches the captured document revision/context. If the text moved or another editor changed it, the add-in stops and asks the lawyer to reselect or review a refreshed proposal. It preserves formatting, lists, footnotes and tracked changes; the operation is reversible.
 
@@ -161,7 +161,7 @@ Court-profile guidance is versioned and shows the court/division/chamber, docume
 
 ## Product success measures
 
-Measure task completion on representative NL/FR dossiers through the competitive benchmark and adoption protocol in [ROADMAP.md](ROADMAP.md):
+Measure task completion on representative NL/FR/EN and mixed-language dossiers through the competitive benchmark and adoption protocol in [ROADMAP.md](ROADMAP.md):
 - compare manual Word/PDF with authorized, tested products on fixed tasks; record source/output correctness, total time including setup/review/cleanup, false positives, assistance, errors and breakage;
 - first complete task, second task on an actual matter, repeat use within a defined window, false-warning review time and abandonment reasons;
 - maintain separate invited/access, registered, trained, active and paying cohorts;

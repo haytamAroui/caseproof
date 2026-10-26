@@ -19,9 +19,9 @@ def by_id(data, name):
 
 def test_original_synthetic_corpus_has_all_language_and_negative_controls(corpus):
     result = validate(corpus)
-    assert result["case_count"] >= 10
-    assert result["clean_controls"] >= 2
-    assert set(result["languages"]) == {"nl", "fr", "mixed"}
+    assert result["case_count"] >= 19
+    assert result["clean_controls"] >= 3
+    assert set(result["languages"]) == {"nl", "fr", "en", "mixed"}
     assert result["human_accuracy_measured"] is False
     assert result["production_workflow_measured"] is False
 
@@ -92,4 +92,26 @@ def test_unknown_human_gold_label_rejected(corpus):
     changed = copy.deepcopy(corpus)
     by_id(changed, "FR_VAT_07")["expected"]["human_review_labels"] = ["court_ready"]
     with pytest.raises(ValueError, match="unknown human label"):
+        validate(changed)
+
+
+def test_language_declaration_cannot_silently_drop_english(corpus):
+    changed = copy.deepcopy(corpus)
+    changed["allowed_languages"] = ["nl", "fr", "mixed"]
+    with pytest.raises(ValueError, match="language declaration required"):
+        validate(changed)
+
+def test_english_and_trilingual_cases_are_required_and_author_labeled(corpus):
+    assert literal_state(by_id(corpus, "EN_CLEAN_15")) == "match"
+    assert by_id(corpus, "EN_CLEAN_15")["expected"]["human_review_labels"] == []
+    assert literal_state(by_id(corpus, "EN_QUOTE_16")) == "mismatch"
+    assert literal_state(by_id(corpus, "EN_AMBIGUOUS_17")) == "ambiguous"
+    assert literal_state(by_id(corpus, "EN_SCAN_18")) == "unavailable"
+    assert literal_state(by_id(corpus, "MIX_TRI_19")) == "match"
+
+
+def test_english_language_cohort_cannot_silently_disappear(corpus):
+    changed = copy.deepcopy(corpus)
+    changed["cases"] = [c for c in changed["cases"] if c["language"] != "en"]
+    with pytest.raises(ValueError, match="missing language cohort"):
         validate(changed)
