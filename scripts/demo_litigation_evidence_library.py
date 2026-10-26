@@ -24,12 +24,14 @@ def main() -> None:
         "NL_CLEAN_01", "FR_CLEAN_02", "FR_SCAN_05"
     )]
     documents = []
+    excluded_unprocessed = []
     for sample in samples:
         src = sample["sources"][0]
-        # Simulated page state is NOT OCR validation. Input is original authored fixture text.
-        raw = (src["text"] or "").encode("utf-8")
-        if not raw:
-            raw = b"Representation unavailable in synthetic scenario."
+        # Never invent stand-in original bytes for unavailable scans.
+        if src["representation_status"] != "indexed_text" or src["text"] is None:
+            excluded_unprocessed.append(src["source_id"])
+            continue
+        raw = src["text"].encode("utf-8")
         captured = SourceVersion(
             src["source_id"], src["version"], sha256(raw).hexdigest(), raw,
             datetime(2026, 10, 26, tzinfo=UTC), "text/plain",
@@ -50,6 +52,7 @@ def main() -> None:
         "real_auth": False,
         "customer_storage": False,
         "ocr_evaluated": False,
+        "excluded_unprocessed_source_ids": excluded_unprocessed,
         "inventory": [
             {"source_id": row.source_id, "status": row.status, "sha256": row.original_sha256,
              "warnings": row.warnings}
