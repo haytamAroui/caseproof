@@ -27,7 +27,7 @@ def source() -> SourceVersion:
 
 
 def test_ocr_word_geometry_and_lineage_is_explicit():
-    data = HEADER + b"5\t12\t20\t100\t12\t76.5\tWelkom\n"
+                HEADER + b"5\t10\t20\t40\t12\t83.5\tWelkom\n"
     result = parse_tsv(data, width=400, height=500)
     assert result[0].text == "Welkom"
     assert result[0].confidence == "76.5"
