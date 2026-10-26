@@ -21,7 +21,10 @@ class Scripted:
         atoms = []
         if self.mode != "empty":
             for value in case.expected:
-                quote = next(line for line in case.content.split(". ") if value in line)
+                quote = next(
+                    part for line in case.content.splitlines()
+                    for part in line.split(". ") if value in part
+                )
                 atoms.append({
                     "entity_id": "E1", "source_id": src["id"], "quote": quote,
                     "statement": "Synthetic literal", "signal": "amount_mentioned",
