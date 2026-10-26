@@ -9,6 +9,8 @@
 
 **M0 implementation packet:** See [ADR 0016](adr/0016-belgian-litigation-product-pivot.md), [pinned capability/gate matrix](m0/BASELINE.md), [external claims register](m0/CLAIMS_REGISTER.md), [fixed manual task benchmark](m0/BENCHMARK_PROTOCOL.md), and [original synthetic evaluation corpus](../evals/litigation/README.md). These are M0 evidence artifacts, **not** claims of approved legal gold labels, benchmarked accuracy, complete PIV-01 real-format coverage or production readiness.
 
+**M2 backend engineering packet:** [M2 engineering acceptance gates](m2/ENGINEERING_ACCEPTANCE.md) and [stacked PR #71](https://github.com/haytamAroui/caseproof/pull/71). Its deterministic factual-check implementation and tests do NOT close M1 production integration or authorize customer uploads. The M2-A/B/C gates remain distinct.
+
 **M1 integrated development slice:** [Implementation evidence](m1/IMPLEMENTATION.md) for PIV-02–06 (merged PR #62), with expanded completion work in [PR #63](https://github.com/haytamAroui/caseproof/pull/63). **Backend-first milestones and tracked tasks:** [M1 Backend Exit Contract](m1/BACKEND_EXIT_CONTRACT.md). M1 is not customer-ready merely because synthetic/disposable tests pass; a frontend or lawyer UI is **not required** to verify the M1 backend.
 
 ## Product workflow
