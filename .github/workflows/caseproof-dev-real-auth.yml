@@ -1,0 +1,29 @@
+# Deliberately manual and main-only: real credentials must NEVER run on PR code.
+# Proves signed Supabase Auth sessions only, not case RLS/storage or M1-B.
+name: CaseProof dev real Auth smoke
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: caseproof-dev-real-auth-smoke
+  cancel-in-progress: false
+jobs:
+  real-auth:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.11'
+      - name: Verify dedicated development Auth sessions and tamper rejection
+        env:
+          CASEPROOF_LIVE_AUTH_TEST: 'YES'
+          CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+          CASEPROOF_DEV_AUTH_A_EMAIL: ${{ secrets.CASEPROOF_DEV_AUTH_A_EMAIL }}
+          CASEPROOF_DEV_AUTH_A_PASSWORD: ${{ secrets.CASEPROOF_DEV_AUTH_A_PASSWORD }}
+          CASEPROOF_DEV_AUTH_B_EMAIL: ${{ secrets.CASEPROOF_DEV_AUTH_B_EMAIL }}
+          CASEPROOF_DEV_AUTH_B_PASSWORD: ${{ secrets.CASEPROOF_DEV_AUTH_B_PASSWORD }}
+        run: uv run --locked python -m scripts.verify_s2_006_live_auth
