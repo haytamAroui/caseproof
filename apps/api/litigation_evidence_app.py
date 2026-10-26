@@ -7,6 +7,7 @@ approval. An unconfigured service fails closed.
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import Any
 from typing import Protocol
 
 from fastapi import FastAPI, Header, Request
@@ -54,7 +55,7 @@ def create_evidence_app(service: EvidenceReader | None = None) -> FastAPI:
         return JSONResponse({"error": "invalid_request"}, status_code=422)
 
     @app.get("/v2/matters/{case_id}/evidence")
-    def inventory(case_id: str, authorization: str | None = Header(default=None)) -> dict:
+    def inventory(case_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         if service is None:
             return {"status": "unavailable", "enabled": False}
         token = _token(authorization)
