@@ -7,8 +7,7 @@ approval. An unconfigured service fails closed.
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
-from typing import Protocol
+from typing import Any, Protocol
 
 from fastapi import FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
