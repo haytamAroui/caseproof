@@ -172,8 +172,8 @@ def _date_value(token: str) -> date | None:
                 return None
             return date(year, month, day)
         day_text, month_text, year_text = token.lower().split()
-        month = _MONTHS.get(month_text)
-        return date(int(year_text), month, int(day_text)) if month is not None else None
+        month_name_number = _MONTHS.get(month_text)
+        return date(int(year_text), month_name_number, int(day_text)) if month_name_number is not None else None
     except (TypeError, ValueError):
         return None
 
