@@ -12,7 +12,7 @@ Run one **deterministic, no-LLM check** against a **versioned own/opponent brief
 
 | M2 gate | Exit acceptance | Current status |
 |---|---|---|
-| **M2-A — engineering contracts & fixture end-to-end** | Typed versioned brief/ref/claim and exact source anchors; quote-free alias resolution, NL/FR/EN date/amount roles, conservative abstention on ambiguous value; reproducible coverage+snapshot report, reviewer decisions and correction/undo/recheck contract; injectable headless API with fail-closed private grants; regression + static + disposable Postgres CI | **Implementation in PR #71; verify exact PR-head CI before marking PASS** |
+| **M2-A — engineering contracts & fixture end-to-end** | Typed versioned brief/ref/claim and exact source anchors; quote-free alias resolution, NL/FR/EN date/amount roles, conservative abstention on ambiguous value; reproducible coverage+snapshot report, reviewer decisions and correction/undo/recheck contract; injectable headless API with fail-closed private grants; regression + static + disposable Postgres CI | **ENGINEERING PASS at tested code commit `57486b394149eb8756f15840c766fcb77d5454c7`** — 1,246 Python tests, Ruff, strict mypy, architecture, synthetic M2 demonstration, disposable PostgreSQL RLS/CAS/audit/recovery and canonical migration integrity successful; security/live gates not implied. |
 | **M2-B — durable authenticated integrated backend** | Real signed users, verified RLS/private source custody, persisted immutable brief graph, durable versioned run+findings+review audit transaction, recovery/idempotency, actual DOCX/PDF/OCR quality and index denominator, cross-process restart | **OPEN** — depends on M1-B #37/#38/#64–68, plus DB-backed PIV-07–09 persistence |
 | **M2-C — product/court-facing release** | Real reviewer/Word UX, usability/localization, outputs/recipient controls, closed-environment evidence, legal rule authority and privacy approval | **DEFERRED** to M3–M6 release lanes |
 
@@ -35,6 +35,13 @@ Run one **deterministic, no-LLM check** against a **versioned own/opponent brief
 - Correction version CAS, stale range/undo, reviewer rationale and observation mapping; no legal release permission.
 - Signed-session mock and rejected foreign/revoked same-org private matter; missing action and changed grants never query/return evidence. These are **contract tests only**, not a genuine Supabase login or live RLS claim.
 - Full existing kernel/finance regression retained, Python 3.11 Ruff/myPy/architecture and CI disposable PostgreSQL concurrency/audit unchanged.
+
+## Pinned M2-A CI receipts
+
+- [Kernel boundary + M2 headless demo (run 40318846921)](https://github.com/haytamAroui/caseproof/actions/runs/40318846921): architecture job **SUCCESS**, **1,246 tests passed (2 warnings)**, Ruff, all strict mypy groups, synthetic M2 demo, existing reviewer demo; PostgreSQL job **SUCCESS** including CAS/RLS/recovery checks.
+- [Canonical migration integrity (run 40318846915)](https://github.com/haytamAroui/caseproof/actions/runs/40318846915): **SUCCESS**.
+- The verified candidate code commit is `57486b394149eb8756f15840c766fcb77d5454c7`. Documentation-only updates may change HEAD; **recheck required PR HEAD before merging**.
+- **Only M2-A synthetic/backend engineering acceptance is established**. No real Supabase Auth/RLS/Storage test has been executed by this PR. No database schema applied, no UI released, no legal-opinion approval, no merge.
 
 ## Remaining work after M2-A
 
