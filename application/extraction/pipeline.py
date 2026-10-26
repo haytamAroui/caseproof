@@ -59,7 +59,11 @@ polarity: affirmative|negative|conditional|alleged|unknown.
 relation: supports|contradicts|qualifies|inconclusive.
 quote must be a verbatim nonempty substring of the indicated full representation.
 start is optional zero-based Unicode codepoint offset in that representation, never bytes.
-value is a verbatim scalar string within quote. Use only provided signal/slot vocabulary.
+value is a verbatim scalar string within quote, never the entire sentence or a currency-prefixed amount.
+For amounts, copy only the numeric token and preserve decimal punctuation; do not normalize its formatting.
+Copy entity_id from authorized_boundaries (or focus_entity), source_id from sources.id,
+slot from claim_slots.slot_id, and signal from signals exactly. Never invent or translate identifiers.
+Use a quote that includes the scalar and the surrounding event wording, not just the numeric token.
 Do not turn negation, conditional wording, allegations, legal commentary or missing data into observed facts.
 Do not guess absent amounts, entities, evidence or completeness. Empty arrays if no candidates.
 Discovery entities/relationships are proposals only; do not supply confirmed/approved/confidence flags.
