@@ -8,7 +8,20 @@ Read-only Supabase inspection found **zero** real Auth users, organization membe
 
 **Consequence:** Existing green M1-A/M2-A engineering tests do **not** establish authenticated M1-B or M2-B. Do not use client-confidential data, authorize uploads or claim professional-secrecy protection. No real migrations, storage resources or test users were added by this audit.
 
-## Provision two REAL dev-only users, without SQL shortcuts
+## Option A — automatic ephemeral users (recommended; no password storage)
+
+The manual GitHub Actions workflow now supports `mode: ephemeral` and uses the **supported Supabase Auth Admin API** to create **two distinct confirmed disposable users** with reserved `@example.com` test emails and cryptographically generated 36-byte random passwords. Passwords stay in runner memory only; they are **not** stored in GitHub secrets, code, job outputs, files, logs or chat. The existing genuine password sign-in/remote JWT verification/tampered-signature probe then runs, and the action **deletes both users in a `finally` cleanup**. A cleanup failure fails the job and requires manual inspection of the Supabase Auth dashboard.
+
+**Two secure GitHub Actions secrets are still necessary; this connector cannot create repository secrets:**
+
+- `CASEPROOF_DEV_PUBLISHABLE_KEY`: active `sb_publishable_` API key of **caseproof-dev**, not another project.
+- `CASEPROOF_DEV_AUTH_ADMIN_KEY`: **server-side** CaseProof dev Auth-admin-capable key, preferably a new dedicated `sb_secret_` key or an appropriately scoped legacy service-role key if required by the GoTrue Admin API. **Never expose this key to frontend, PR workflows, logs or external services.**
+
+After a human reviews and merges PR #72, visit **GitHub → caseproof → Settings → Secrets and variables → Actions** and configure both. Then run **Actions → CaseProof dev real Auth smoke → Run workflow → main → mode: ephemeral**. It provisions, checks, and attempts to delete users in one workflow. **Do not store test-user passwords as literal YAML or repository secrets**; the workflow generates them when needed.
+
+This verifies actual signed Auth logins only. It does NOT fix the existing organization-wide RLS, create matter grants, enable private storage or make M1-B/M2-B production-ready.
+
+## Option B — two manually provisioned test users
 
 1. Open the [CaseProof dev Supabase Auth Users dashboard](https://supabase.com/dashboard/project/ldwmocpxwskvhoojndrd/auth/users) (**verify** the project name is `caseproof-dev`). Use **Authentication → Users → Add user** and the supported manual create-user / invitation flow available in that dashboard. Provision **two different** test identities using email addresses you control (A: reviewer, B: same-organization ungranted reviewer); use strong distinct passwords and confirm both addresses through Supabase Auth's supported flow. If invitation flow is used, follow it to set passwords. Do not create passwords/rows through `auth.users` SQL.
 2. In GitHub `haytamAroui/caseproof` use **Settings → Secrets and variables → Actions** and create these **repository or protected environment secrets** for the reviewed main branch only (never put these secrets in source code, issues, chat, CI logs or `.env` in git):
