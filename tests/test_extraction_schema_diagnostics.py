@@ -5,7 +5,9 @@ import pytest
 
 from application.extraction.pipeline import SYSTEM, check_atom
 from scripts.verify_live_requesty_litigation import (
-    FIXTURES, SmokeLiteralPolicy, request_for,
+    FIXTURES,
+    SmokeLiteralPolicy,
+    request_for,
 )
 
 REQ = request_for(FIXTURES[0])
