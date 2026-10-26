@@ -100,7 +100,7 @@ def parse_tsv(raw: bytes, *, width: int, height: int) -> tuple[OCRWord, ...]:
 def _run(command: list[str], *, timeout: int) -> None:
     try:
         completed = subprocess.run(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            command, capture_output=True,
             timeout=timeout, check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -131,7 +131,8 @@ class LocalPDFOCR:
             or any(language not in LANGUAGES for language in languages)
         ):
             raise OCRUnavailable("unsupported_ocr_languages")
-        if self.rasterizer is None or self.recognizer is None:
+        rasterizer, recognizer = self.rasterizer, self.recognizer
+        if rasterizer is None or recognizer is None:
             raise OCRUnavailable("ocr_binaries_not_installed")
         try:
             reader = PdfReader(io.BytesIO(source.content), strict=True)
@@ -148,7 +149,7 @@ class LocalPDFOCR:
             prefix = root / "page"
             _run(
                 [
-                    self.rasterizer, "-f", str(page_number),
+                    rasterizer, "-f", str(page_number),
                     "-l", str(page_number), "-singlefile", "-r",
                     str(RASTER_DPI), "-png", str(raw_pdf), str(prefix),
                 ],
@@ -161,7 +162,7 @@ class LocalPDFOCR:
                 raise OCRUnavailable("ocr_raster_missing") from None
             if not 24 <= len(png) <= 12 * 1024 * 1024:
                 raise OCRUnavailable("ocr_raster_budget")
-            if png[:16] != b"\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\x0dIHDR":
+            if png[:8] != bytes((137, 80, 78, 71, 13, 10, 26, 10)) or png[12:16] != b"IHDR":
                 raise OCRUnavailable("ocr_png_invalid")
             width, height = struct.unpack(">II", png[16:24])
             if not 0 < width <= 5000 or not 0 < height <= 6500:
@@ -171,8 +172,8 @@ class LocalPDFOCR:
             output = root / "page"
             _run(
                 [
-                    self.recognizer, str(png_path), str(output),
-                    "-l", "+".join(LANGUAGES[l] for l in languages), "tsv",
+                    recognizer, str(png_path), str(output),
+                    "-l", "+".join(LANGUAGES[language] for language in languages), "tsv",
                 ],
                 timeout=20,
             )

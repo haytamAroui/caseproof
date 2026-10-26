@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
+from domains.disputes.exhibits import ExhibitEntry, ExhibitRegister
 
 
 class ExhibitConfirmationError(ValueError):
