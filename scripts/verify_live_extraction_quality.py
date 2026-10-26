@@ -106,6 +106,8 @@ def evaluate_case(case: QualityCase, provider: ExtractionProvider) -> dict[str, 
     transport_ok = len(report.telemetry) == 1 and not any(
         f["reason"] != "zero_atoms_unresolved" for f in report.failures
     )
+    negative_control = not expected
+    abstained = negative_control and transport_ok and not validated
     reasons: dict[str, int] = {}
     for atom in report.atoms:
         if atom.state != "validated":
@@ -116,11 +118,32 @@ def evaluate_case(case: QualityCase, provider: ExtractionProvider) -> dict[str, 
         "case_id": case.case_id, "language": case.language, "category": case.category,
         "status": "pass" if transport_ok and missed == 0 and unexpected == 0 else "fail",
         "successful_response": transport_ok,
+        "negative_control": negative_control, "abstained": abstained,
         "expected_count": len(expected), "matched_count": matched,
         "missed_count": missed, "unexpected_validated_count": unexpected,
         "validated_count": len(validated), "candidate_reason_counts": reasons,
         "reported_usd": cost,
     }
+
+
+def summarize(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, int]]:
+    """Aggregate-only breakdown so a failure shows which category or language caused it."""
+    out: dict[str, dict[str, int]] = {}
+    for r in rows:
+        s = out.setdefault(r[key], {
+            "cases": 0, "passed": 0, "expected": 0, "matched": 0,
+            "missed": 0, "unexpected_validated": 0,
+            "negative_controls": 0, "abstentions": 0,
+        })
+        s["cases"] += 1
+        s["passed"] += r["status"] == "pass"
+        s["expected"] += r["expected_count"]
+        s["matched"] += r["matched_count"]
+        s["missed"] += r["missed_count"]
+        s["unexpected_validated"] += r["unexpected_validated_count"]
+        s["negative_controls"] += r["negative_control"]
+        s["abstentions"] += r["abstained"]
+    return out
 
 
 def run_quality(provider: ExtractionProvider) -> dict[str, Any]:
@@ -159,6 +182,10 @@ def run_quality(provider: ExtractionProvider) -> dict[str, Any]:
         "coverage_complete": complete,
         "expected_count_evaluated": expected, "matched_count": matched,
         "unexpected_validated_count": unexpected,
+        "negative_controls_evaluated": sum(r["negative_control"] for r in rows),
+        "abstention_count": sum(r["abstained"] for r in rows),
+        "by_category": summarize(rows, "category"),
+        "by_language": summarize(rows, "language"),
         "literal_recall": matched / expected if expected else None,
         "literal_precision": matched / (matched + unexpected) if matched + unexpected else None,
         "quality_gate": "pass" if complete and cost_gate == "reported_under_cap"
