@@ -70,6 +70,8 @@ The lawyer selects a factual sentence or phrase, opens “Find evidence,” and 
 
 **System:** records the citation edge from this draft revision/assertion to the resolved exhibit, source version and anchor. Retrieval rank is labelled as relevance ordering, not truth probability. An empty result is a valid outcome with its search scope and unindexed/failed material visible.
 
+**Retrieval promise:** launch with evidence retrieval whose Dutch and French keyword and paraphrase-query performance is measured on the rights-cleared corpus. Do not imply proven broad conceptual-search equivalence from a lexical baseline. Broader conceptual-search claims depend on demonstrated retrieval results. Semantic retrieval, if proposed, is a separately evaluated capability; semantic support assessment remains optional under PIV-12 and is not a prerequisite for the deterministic workflow.
+
 **Word safety:** before insertion, the add-in checks that the selected range still matches the captured document revision/context. If the text moved or another editor changed it, the add-in stops and asks the lawyer to reselect or review a refreshed proposal. It preserves formatting, lists, footnotes and tracked changes; the operation is reversible.
 
 **States:** no selection, searching, partial index, results, no matches, source unavailable, citation ready, selection changed, inserted, undone.
@@ -136,6 +138,8 @@ The lawyer chooses recipients and access scope for a hosted copy, with expiry an
 
 Submission and receipt capture are separate actions. A real filing integration requires its own authorization and uncertain-outcome recovery. A receipt is recorded only when an actual external receipt is observed and bound to the submitted artifact.
 
+Court-profile guidance is versioned and shows the court/division/chamber, document type, source and passage, effective date, last verification date, owner, and whether each item is mandatory or recommended. Show scope, expiry and any conflict or unavailable source. A stale or unknown profile is labelled unverified and cannot certify court readiness or impose a national rejection rule. Technical bundle validation and procedural readiness are separate statuses; both remain subject to professional review.
+
 **Done when:** the recipient sees only authorized materials, or the lawyer has downloaded the intended package for the existing filing process. The matter records prepared, shared, submitted and receipt-confirmed as distinct states.
 
 ## Cross-cutting failure and recovery behavior
@@ -152,21 +156,19 @@ Submission and receipt capture are separate actions. A real filing integration r
 | Source/draft changed during review | Mark dependent checks stale; preserve the review history; block stale release |
 | Permission revoked | Deny subsequent reads/search/share; invalidate caches; explain access loss without exposing source metadata |
 | Export fails validation | Keep prior output intact; report failed artifact; do not mark ready |
+| Court profile is stale, conflicting or unavailable | Mark procedural guidance unverified; explain the profile gap; do not claim court readiness or apply a national rejection rule |
 | Clean check | Show checked scope and “no confirmed issue found”; never award an all-record correctness badge |
 
 ## Product success measures
 
-Measure task completion on representative NL/FR dossiers rather than demo error-catching:
-- time from import to confirmed exhibit map;
-- percentage of in-scope references resolved, with ambiguity and abstention counted separately;
-- retrieval recall against labelled passages and false-positive review burden;
-- share of corrections accepted, rejected or edited by lawyers;
-- document round-trip integrity (citations, formatting, footnotes, links, numbering);
-- time to partner review and repeat use;
-- partial/failure visibility, recovery success, and unauthorized-access rejection;
-- cost, latency and processing limits by dossier profile.
+Measure task completion on representative NL/FR dossiers through the competitive benchmark and adoption protocol in [ROADMAP.md](ROADMAP.md):
+- compare manual Word/PDF with authorized, tested products on fixed tasks; record source/output correctness, total time including setup/review/cleanup, false positives, assistance, errors and breakage;
+- first complete task, second task on an actual matter, repeat use within a defined window, false-warning review time and abandonment reasons;
+- maintain separate invited/access, registered, trained, active and paying cohorts;
+- track cost per completed reviewed dossier, with observed values distinct from estimates and unavailable unit costs left null;
+- retain existing measures for reference resolution, labelled-passage recall, correction outcomes, round-trip integrity, partial/failure recovery and access rejection.
 
-Each metric includes denominator, corpus and run version. No metric is advertised as legal accuracy without a validated evaluation design.
+Use privacy-safe operational metadata; no customer document content enters telemetry. Each measure names its denominator, corpus/task protocol and version. No metric is advertised as legal accuracy without a validated evaluation design.
 
 ## Implementation mapping
 
@@ -183,4 +185,4 @@ This workflow is implemented through the principal PIV backlog in [ROADMAP.md](R
 | Belgian advisories, filing handoff and connectors | PIV-17–19 |
 | Onboarding, operations and release evidence | PIV-20 |
 
-PIV-00/01 establish the scope, owners, evaluation corpus and clean-case controls before integrated delivery. Customer documents remain gated on the applicable security, custody, persistence and operations evidence in ROADMAP.md.
+PIV-00/01 establish the scope, owners, claims register, rights-cleared evaluation corpus, fixed competitive task protocol and clean-case controls before integrated delivery. PIV-20 adds cost and repeat-use evidence. No customer document content is collected as telemetry. Customer documents remain gated on the applicable security, custody, persistence and operations evidence in ROADMAP.md.
