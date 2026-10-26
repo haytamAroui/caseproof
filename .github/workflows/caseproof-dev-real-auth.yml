@@ -1,53 +1,87 @@
-# Manual/main-only: privileged Auth API access MUST NOT run on pull requests.
-# Generated passwords stay in runner memory and are never printed/stored.
-name: CaseProof dev real Auth smoke
-on:
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: "ephemeral (Admin API: create, sign in, verify, delete) or existing two-users"
-        type: choice
-        default: ephemeral
-        required: true
-        options:
-          - ephemeral
-          - existing
-permissions:
-  contents: read
-concurrency:
-  group: caseproof-dev-real-auth-smoke
-  cancel-in-progress: false
-jobs:
-  ephemeral-auth:
-    if: github.ref == 'refs/heads/main' && inputs.mode == 'ephemeral'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          python-version: '3.11'
-      - name: Create, test and delete two confirmed CaseProof dev Auth users
-        env:
-          CASEPROOF_EPHEMERAL_AUTH_TEST: 'YES'
-          CASEPROOF_DEV_PUBLISHABLE_KEY: \${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
-          CASEPROOF_DEV_AUTH_ADMIN_KEY: \${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
-        run: uv run --locked python -m scripts.verify_dev_ephemeral_auth
-  existing-users:
-    if: github.ref == 'refs/heads/main' && inputs.mode == 'existing'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          python-version: '3.11'
-      - name: Verify two explicitly configured CaseProof dev user sessions
-        env:
-          CASEPROOF_LIVE_AUTH_TEST: 'YES'
-          CASEPROOF_DEV_PUBLISHABLE_KEY: \${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
-          CASEPROOF_DEV_AUTH_A_EMAIL: \${{ secrets.CASEPROOF_DEV_AUTH_A_EMAIL }}
-          CASEPROOF_DEV_AUTH_A_PASSWORD: \${{ secrets.CASEPROOF_DEV_AUTH_A_PASSWORD }}
-          CASEPROOF_DEV_AUTH_B_EMAIL: \${{ secrets.CASEPROOF_DEV_AUTH_B_EMAIL }}
-          CASEPROOF_DEV_AUTH_B_PASSWORD: \${{ secrets.CASEPROOF_DEV_AUTH_B_PASSWORD }}
-        run: uv run --locked python -m scripts.verify_s2_006_live_auth
+{
+  "name": "CaseProof dev real Auth smoke",
+  "on": {
+    "workflow_dispatch": {
+      "inputs": {
+        "mode": {
+          "description": "Choose ephemeral or existing confirmed accounts",
+          "type": "choice",
+          "default": "ephemeral",
+          "required": true,
+          "options": [
+            "ephemeral",
+            "existing"
+          ]
+        }
+      }
+    }
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "concurrency": {
+    "group": "caseproof-dev-real-auth-smoke",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "ephemeral-auth": {
+      "if": "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof' && inputs.mode == 'ephemeral' }}",
+      "environment": "caseproof-dev-live-auth",
+      "runs-on": "ubuntu-latest",
+      "timeout-minutes": 10,
+      "steps": [
+        {
+          "uses": "actions/checkout@v4",
+          "with": {
+            "ref": "main",
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Check trusted runner Python",
+          "run": "python3 -c 'import sys; assert sys.version_info >= (3, 11)'"
+        },
+        {
+          "name": "CaseProof protected dev ephemeral Auth smoke",
+          "env": {
+            "CASEPROOF_EPHEMERAL_AUTH_TEST": "YES",
+            "CASEPROOF_DEV_PUBLISHABLE_KEY": "${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}",
+            "CASEPROOF_DEV_AUTH_ADMIN_KEY": "${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}"
+          },
+          "run": "python3 -m scripts.verify_dev_ephemeral_auth"
+        }
+      ]
+    },
+    "existing-users": {
+      "if": "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof' && inputs.mode == 'existing' }}",
+      "environment": "caseproof-dev-live-auth",
+      "runs-on": "ubuntu-latest",
+      "timeout-minutes": 10,
+      "steps": [
+        {
+          "uses": "actions/checkout@v4",
+          "with": {
+            "ref": "main",
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Check trusted runner Python",
+          "run": "python3 -c 'import sys; assert sys.version_info >= (3, 11)'"
+        },
+        {
+          "name": "CaseProof protected dev existing Auth smoke",
+          "env": {
+            "CASEPROOF_LIVE_AUTH_TEST": "YES",
+            "CASEPROOF_DEV_PUBLISHABLE_KEY": "${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}",
+            "CASEPROOF_DEV_AUTH_A_EMAIL": "${{ secrets.CASEPROOF_DEV_AUTH_A_EMAIL }}",
+            "CASEPROOF_DEV_AUTH_A_PASSWORD": "${{ secrets.CASEPROOF_DEV_AUTH_A_PASSWORD }}",
+            "CASEPROOF_DEV_AUTH_B_EMAIL": "${{ secrets.CASEPROOF_DEV_AUTH_B_EMAIL }}",
+            "CASEPROOF_DEV_AUTH_B_PASSWORD": "${{ secrets.CASEPROOF_DEV_AUTH_B_PASSWORD }}"
+          },
+          "run": "python3 -m scripts.verify_s2_006_live_auth"
+        }
+      ]
+    }
+  }
+}
