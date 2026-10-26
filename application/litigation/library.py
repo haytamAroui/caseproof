@@ -6,7 +6,6 @@ Vault composition. It neither uploads customer bytes nor authenticates actors.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 
 from application.documents.contracts import DocumentParser, ParsedDocument, restore
 from application.documents.intake import CapturedDocument

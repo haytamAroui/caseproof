@@ -96,8 +96,6 @@ def test_pdf_each_empty_page_gets_explicit_ocr_unavailable_status():
 def test_docx_tracked_changes_never_claim_complete_or_legal_truth():
     raw = make_docx(main="Texte initial")
     # Replace a text-run node with a tracked insertion in the tiny synthetic XML.
-    from zipfile import ZipFile, ZIP_STORED
-
     with ZipFile(BytesIO(raw)) as archive:
         main = archive.read("word/document.xml")
     modified = main.replace(b"<w:r><w:t>", b"<w:ins><w:r><w:t>").replace(

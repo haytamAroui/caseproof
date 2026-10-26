@@ -78,10 +78,11 @@ class Vault:
     def read(self, *, scope, intent_id):
         self.reads += 1
         assert str(scope.org_id) == ORG and str(scope.case_id) == CASE
-        assert intent_id == self.catalog.records[0].intent_id
+        record = self.catalog.records[0]
+        assert intent_id == record.intent_id
         if self.on_read is not None:
             self.on_read(self.reads)
-        return b"tampered" if self.tamper else self.catalog.records[0].original.content
+        return b"tampered" if self.tamper else record.original.content
 
 
 def fixture():
