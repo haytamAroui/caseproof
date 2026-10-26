@@ -50,5 +50,5 @@ Rollback: revert M0 docs/corpus/script/tests only. No runtime behavior, SQL, pol
 - The principal roadmap and this ADR no longer conflict with active README/STATUS instructions; historical records remain historical.
 - Code-observed versus design-only capabilities, gates and owners are explicit in [M0 baseline](../m0/BASELINE.md).
 - [Claims register](../m0/CLAIMS_REGISTER.md) prevents unsupported external assertions.
-- Versioned synthetic [corpus](../../evals/litigation/m0_corpus_v1.json), [benchmark protocol](../m0/BENCHMARK_PROTOCOL.md), executable validator and adversarial tests are included. Fixture validation is **not** litigation product quality validation.
+- Versioned synthetic [current v2 corpus](../../evals/litigation/m0_corpus_v2.json) (with original v1 retained), [benchmark protocol](../m0/BENCHMARK_PROTOCOL.md), executable validator and adversarial tests are included. Fixture validation is **not** litigation product quality validation.
 - Required CI must run on PR HEAD. No automatic merging or release authorization.

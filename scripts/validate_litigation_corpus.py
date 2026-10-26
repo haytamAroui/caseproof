@@ -1,4 +1,4 @@
-"""Validate original synthetic M0 NL/FR litigation gold candidate fixtures.
+"""Validate original synthetic M0 NL/FR/EN litigation gold candidate fixtures.
 
 This tests corpus integrity only, not litigation product inference accuracy.
 No network, provider, customer data or production side effects.
@@ -11,7 +11,7 @@ import unicodedata
 from collections import Counter
 from pathlib import Path
 
-DEFAULT_CORPUS = Path(__file__).resolve().parents[1] / "evals/litigation/m0_corpus_v1.json"
+DEFAULT_CORPUS = Path(__file__).resolve().parents[1] / "evals/litigation/m0_corpus_v2.json"
 STATES = {"match", "mismatch", "ambiguous", "unavailable", "unresolved", "not_applicable"}
 
 
@@ -39,7 +39,7 @@ def literal_state(case: dict) -> str:
 
 
 def validate(data: dict) -> dict:
-    if data.get("schema_version") != "caseproof-litigation-gold-v1":
+    if data.get("schema_version") != "caseproof-litigation-gold-v2":
         raise ValueError("unknown corpus schema")
     provenance = data["provenance"]
     if provenance["label_status"] != "author_supplied_unadjudicated" or "synthetic" not in provenance["rights"]:
@@ -58,7 +58,7 @@ def validate(data: dict) -> dict:
         if not isinstance(case_id, str) or not case_id or case_id in ids:
             raise ValueError("case id missing/duplicate")
         ids.add(case_id)
-        if case["language"] not in {"nl", "fr", "mixed"}:
+        if case["language"] not in {"nl", "fr", "en", "mixed"}:
             raise ValueError(f"{case_id}: unsupported language")
         languages[case["language"]] += 1
         if case["cohort"] not in {"clean", "review", "adversarial"}:
@@ -111,7 +111,7 @@ def validate(data: dict) -> dict:
             if actual != "match" or expected["human_review_labels"]:
                 raise ValueError(f"{case_id}: clean control is not clean")
         observed[actual] += 1
-    if not {"nl", "fr", "mixed"} <= set(languages) or clean < 2:
+    if not {"nl", "fr", "en", "mixed"} <= set(languages) or clean < 3:
         raise ValueError("missing language cohort or clean controls")
     for state in ("match", "mismatch", "ambiguous", "unavailable", "unresolved"):
         if not observed[state]:

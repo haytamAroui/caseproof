@@ -9,7 +9,7 @@
 3. **Model-free processing (PIV-04):** `EvidenceIndexer` inventories up to 32 preserved sources with independent ready/partial/failed flags, no inference dependencies, no source text leaked in listing. One corrupt/unsupported document is explicitly marked failed without losing other rows. The preview path must pass fresh authorization and returns bounded parser-produced locators.
 4. **Bounded PDF/DOCX (PIV-05):** existing isolated Linux parser gains restrained DOCX text paragraphs/notes (safe ZIP entry/path/size/ratio/active/external checks) and page-specific PDF blank/visual warnings. Physical PDF pages are **1-based** in UI, internal parser block page indices 0-based. Text-only DOCX cannot prove rendered Word pagination; `page_unmapped` is explicit; scans are `needs_ocr_or_review`, not imaginary OCR. No image transcription, rendered geometry, DOCX layout correctness, malware attestation or external conversion.
 5. **Exhibit registration (PIV-06):** pure immutable domain register with stable exhibit IDs, aliases, independent printed/PDF/bundle pages, ambiguous/unresolved/suggested/confirmed decisions and revision-CAS proposal. Multiple entries claiming a Stuk/Pièce label cannot auto-resolve. This does not install authorized persisted register-write transactions or exhibit/communication/filing proof.
-6. **Synthetic developer journey:** `uv run --locked python -m scripts.demo_litigation_evidence_library`. Uses independently authored M0 corpus text **only**, not scanned/image-backed source. Result labels `real_auth:false`, `customer_storage:false`, `release_authorized:false`.
+6. **Synthetic developer journey:** `uv run --locked python -m scripts.demo_litigation_evidence_library`. Uses independently authored M0 v2 corpus text **only**, not scanned/image-backed source. Result labels `real_auth:false`, `customer_storage:false`, `release_authorized:false`.
 
 ## Integration and security gates
 
@@ -26,9 +26,14 @@
 
 ## Test and threat assumptions
 
-- Positive: clean Dutch/French UTF-8, alias pinpoint, mixed source previews, bounded DOCX paragraphs and notes.
+- Positive: clean Dutch/French/English UTF-8, alias pinpoint, mixed source previews, bounded DOCX paragraphs and notes.
 - Negative: cross-tenant/foreign, missing action, revocation during parsing, source/catalog change, unavailable/mismatched Vault, duplicate source labels, ZIP-slip, macros, embedded objects, external relationship, unknown PDF text, page mismatch.
 - Fixture doubles and worker tests do **not** prove that production Supabase Auth/Storage have been exercised.
 - CI is required on PR HEAD: `uv run --locked pytest -q`, `uv run --locked ruff check .`, architecture, mypy partitions, disposable PostgreSQL/recovery, browser, plus `uv run --locked python -m scripts.demo_litigation_evidence_library`. Record actual results; do not assert green in advance.
 
 **Next:** PIV-02 signed DB/matter authorization and PIV-03 production Vault integration and persisted exhibit CAS under separate human security/schema approval. Then integrate inventory workbench and actual private DOCX/PDF samples.
+
+
+## NL/FR/EN scope and evidence
+
+Dutch, French and English are product languages for the UI, evidence workflow/search and supported outputs; source, UI and output may differ. M0 v2 contains English clean, mismatch, ambiguous, unprocessed-scan and tri-language fixtures. This remains synthetic evidence only. No actual language-specific production UI, semantic retrieval results or approved human translations were delivered in M1.
