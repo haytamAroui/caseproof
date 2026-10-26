@@ -55,7 +55,7 @@ _UNCERTAINTY = ("peut-être", "waarschijnlijk", "perhaps", "possibly",
 _BASIS_MARKERS = ("htva", "ttc", "tva", "btw", "vat", "excl.", "incl.",
                   "hors taxe", "inclusief", "exclusief", "gross", "net", "brut")
 _MONEY = re.compile(
-    r"(?<![\w])(?:€\s*|EUR\s*)(?:\d{1,3}(?:[ .]\d{3})+(?:[,.]\d{2})?|\d+(?:[,.]\d{2})?)(?![\w])",
+    r"(?<![\w])(?:€\s*|EUR\s*)(?:\d{1,3}(?:[ .,]\d{3})+(?:[,.]\d{2})?|\d+(?:[,.]\d{2})?)(?![\w,.])",
     re.IGNORECASE,
 )
 _DATE = re.compile(
@@ -91,6 +91,8 @@ class FactAssertion:
     text_end: int
     kind: FactKind
     role: FactRole
+    language: str = "fr"
+    source_language: str = "fr"
 
     def __post_init__(self) -> None:
         if not all(type(s) is str and 0 < len(s) <= 160 for s in (self.claim_id, self.reference_id)):
@@ -102,6 +104,8 @@ class FactAssertion:
             raise FactError("validated assertion text bounds required")
         if not isinstance(self.kind, FactKind) or not isinstance(self.role, FactRole):
             raise FactError("typed fact kind and explicitly assigned role required")
+        if self.language not in {"fr", "nl", "en"} or self.source_language not in {"fr", "nl", "en"}:
+            raise FactError("explicit NL/FR/EN language required for numeric representation")
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,21 +125,25 @@ class FactObservation:
     explanation: str
 
 
-def _extract(text: str, kind: FactKind) -> list[tuple[str, int, int, Decimal | date | None]]:
+def _extract(text: str, kind: FactKind, language: str) -> list[tuple[str, int, int, Decimal | date | None]]:
     pattern = _MONEY if kind is FactKind.MONEY else _DATE
     result: list[tuple[str, int, int, Decimal | date | None]] = []
     for match in pattern.finditer(text):
         token = match.group(0)
-        value: Decimal | date | None = _money_value(token) if kind is FactKind.MONEY else _date_value(token)
+        value: Decimal | date | None = _money_value(token, language) if kind is FactKind.MONEY else _date_value(token)
         result.append((token, match.start(), match.end(), value))
     return result
 
 
-def _money_value(token: str) -> Decimal | None:
+def _money_value(token: str, language: str) -> Decimal | None:
     raw = re.sub(r"^(?:€|EUR)\s*", "", token, flags=re.IGNORECASE).replace(" ", "")
-    # One 3-digit trailing separator is ambiguous (14,500 == 14.5 or 14500).
-    if re.fullmatch(r"\d+[,.]\d{3}", raw):
-        return None
+    # The three-digit grouping separator requires an explicit locale;
+    # unsupported mixed forms never silently guess 14,500 == 14.5.
+    if re.fullmatch(r"\d{1,3}(?:[.,]\d{3})+", raw):
+        grouping = "," if language == "en" else "."
+        if grouping not in raw or raw.count(grouping) != raw.count(",") + raw.count("."):
+            return None
+        raw = raw.replace(grouping, "")
     if "." in raw and "," in raw:
         sep = "." if raw.rfind(".") > raw.rfind(",") else ","
         other = "," if sep == "." else "."
@@ -228,7 +236,7 @@ def compare_fact(
     ):
         raise FactError("invalid verified source span")
 
-    claim_tokens = _extract(assertion.text, assertion.kind)
+    claim_tokens = _extract(assertion.text, assertion.kind, assertion.language)
     if len(claim_tokens) != 1 or claim_tokens[0][3] is None or not _safe_context(assertion.text, assertion.role):
         return obs(FactState.NEEDS_CONTEXT, "assertion_value_or_role_ambiguous")
     claim_token, _, _, claim_value = claim_tokens[0]
@@ -243,7 +251,7 @@ def compare_fact(
         passage = preview.text[start:end]
         if not _safe_context(passage, assertion.role):
             continue
-        for token, a, b, val in _extract(passage, assertion.kind):
+        for token, a, b, val in _extract(passage, assertion.kind, assertion.source_language):
             if val is not None:
                 possibilities.append((token, start + a, start + b, val, passage))
     if len(possibilities) != 1:
