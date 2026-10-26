@@ -20,6 +20,7 @@ class DraftCheckError(ValueError):
 
 class CitationCheckState(StrEnum):
     EXACT_MATCH = "exact_match"
+    NO_QUOTATION = "reference_checked_no_quotation"
     QUOTE_NOT_FOUND = "quote_not_found"
     REFERENCE_UNRESOLVED = "reference_unresolved"
     REFERENCE_AMBIGUOUS = "reference_ambiguous"
@@ -33,16 +34,19 @@ class CitationCheckState(StrEnum):
 class DraftReference:
     reference_id: str
     exhibit_label: str
-    exact_quote: str
+    exact_quote: str | None
     pdf_page: int | None = None
 
     def __post_init__(self) -> None:
-        for value in (self.reference_id, self.exhibit_label, self.exact_quote):
+        for value in (self.reference_id, self.exhibit_label):
             if type(value) is not str or not value.strip():
                 raise DraftCheckError("nonempty bounded draft reference required")
         if (
             len(self.reference_id) > 128 or len(self.exhibit_label) > 160
-            or len(self.exact_quote) > 4000
+            or (self.exact_quote is not None and (
+                type(self.exact_quote) is not str or not self.exact_quote.strip()
+                or len(self.exact_quote) > 4000
+            ))
         ):
             raise DraftCheckError("reference text exceeds bounds")
         if self.pdf_page is not None and (
@@ -182,6 +186,12 @@ def check_brief_references(
             for start, end, _, _ in matched_preview.spans
         ):
             raise DraftCheckError("invalid representation span boundaries")
+        if reference.exact_quote is None:
+            observations.append(_note(
+                reference, CitationCheckState.NO_QUOTATION,
+                exhibit_id=resolved.exhibit_id, preview=matched_preview,
+            ))
+            continue
         # A confirmed mapping to physical page N does not permit matching
         # a quote on a different page when the draft omits a page number.
         expected_pdf_page = reference.pdf_page if reference.pdf_page is not None else page.pdf_page
