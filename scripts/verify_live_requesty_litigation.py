@@ -20,9 +20,9 @@ from application.extraction.contracts import (
     ClaimSlot,
     EntityScope,
     ExtractionConfig,
+    ExtractionError,
     ExtractionProvider,
     ExtractionRequest,
-    ExtractionError,
     OutcomeUnknown,
     ProviderReply,
 )
