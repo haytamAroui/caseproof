@@ -113,9 +113,9 @@ def main() -> None:
         raise AssertionError("failed cleanup partially removed fixture")
     if _run(
         f"select public.caseproof_dev_fixture_cleanup('{run}','{foreign}');",
-        env, should_pass=False,
-    ) != "":
-        raise AssertionError("foreign fixture actor cleanup unexpectedly succeeded")
+        env,
+    ) != "f":
+        raise AssertionError("foreign fixture actor cleanup should be an idempotent miss")
     if _count(env, "cases") != 1:
         raise AssertionError("foreign actor deleted a fixture")
 
