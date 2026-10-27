@@ -171,6 +171,16 @@ def main() -> None:
     _not_installed(env)
     _run("drop policy m2_attack_allow_every_case on caseproof.cases", env)
 
+    # An attacker can add a policy on CASES named like a DOCUMENT policy.
+    # A global name allowlist would incorrectly accept this true policy.
+    _run(
+        "create policy m1_private_document_read on caseproof.cases "
+        "for select to authenticated using(true)", env,
+    )
+    _run(candidate, env, should_pass=False)
+    _not_installed(env)
+    _run("drop policy m1_private_document_read on caseproof.cases", env)
+
     # Existing Auth identity must trigger a migration/backfill review.
     user = uuid4()
     _run(
