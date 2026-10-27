@@ -89,7 +89,7 @@ def test_signed_metadata_to_storage_real_paths_and_recheck(
     assert library().read(**args()) == DATA
     assert [r[0] for r in requests] == ["GET", "GET", "GET"]
     assert "caseproof_private_source_versions" in requests[0][1]
-    assert "/storage/v1/object/caseproof-originals-dev/" in requests[1][1]
+    assert "/storage/v1/object/authenticated/caseproof-originals-dev/" in requests[1][1]
     assert requests[0][3]["Authorization"] == "Bearer signed-jwt-fixture"
     assert requests[1][3]["Authorization"] == "Bearer signed-jwt-fixture"
     assert requests[2][1] == requests[0][1]
