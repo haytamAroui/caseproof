@@ -35,18 +35,21 @@ create table caseproof._m2_brief_versions (
 
 create table caseproof._m2_brief_references (
     org_id uuid not null, case_id uuid not null, brief_id uuid not null,
-    version_id uuid not null, reference_id text not null
+    version_id uuid not null, reference_order integer not null check(reference_order >= 0),
+    reference_id text not null
         check(length(reference_id) between 1 and 128),
     exhibit_label text not null check(length(exhibit_label) between 1 and 160),
     exact_quote text,
     pdf_page integer check(pdf_page between 1 and 100000),
     primary key(org_id,case_id,brief_id,version_id,reference_id),
+    unique(org_id,case_id,brief_id,version_id,reference_order),
     foreign key(org_id,case_id,brief_id,version_id)
         references caseproof._m2_brief_versions(org_id,case_id,brief_id,version_id)
 );
 create table caseproof._m2_brief_assertions (
     org_id uuid not null, case_id uuid not null, brief_id uuid not null,
     version_id uuid not null,
+    claim_order integer not null check(claim_order >= 0),
     claim_id text not null check(length(claim_id) between 1 and 160),
     reference_id text not null,
     text_start integer not null check(text_start >= 0),
@@ -57,6 +60,7 @@ create table caseproof._m2_brief_assertions (
     language text not null check(language in ('nl','fr','en')),
     source_language text not null check(source_language in ('nl','fr','en')),
     primary key(org_id,case_id,brief_id,version_id,claim_id),
+    unique(org_id,case_id,brief_id,version_id,claim_order),
     foreign key(org_id,case_id,brief_id,version_id,reference_id)
         references caseproof._m2_brief_references(
             org_id,case_id,brief_id,version_id,reference_id)
