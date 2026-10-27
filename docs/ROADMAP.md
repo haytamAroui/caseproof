@@ -59,14 +59,20 @@ engineering behavior **only**. M2-B production remains OPEN.
 [M1-B private RLS proposal #86](https://github.com/haytamAroui/caseproof/pull/86)
 is **merged as a code candidate**, replacing legacy org-wide SELECT
 policies only in its isolated disposable RLS tests; it is NOT
-applied to the live database. [PR #87](https://github.com/haytamAroui/caseproof/pull/87)
-adds a bearer-verified least-privilege private-matter read path and
-an explicitly opt-in manual dev workflow proving three actual signed
-Supabase Auth identities against disposable private PostgreSQL RLS.
-Even a successful manual run is **not** a live Supabase DB role/matter
-deployment. Real DB signed-user acceptance, an approved schema/grant
-migration, private Storage, full PDF/DOCX/OCR fidelity, live session
-revocation and human security approval are still OPEN.
+applied to the live database. [PR #87](https://github.com/haytamAroui/caseproof/pull/87) is
+**merged**: bearer-verified least-privilege private-matter read port and
+an **opt-in, protected** workflow that *can* test three genuinely signed
+Supabase-dev Auth identities against disposable private PostgreSQL RLS.
+That manual workflow has **not** been executed, and even a successful
+run would NOT prove live database integration. [PR #88](https://github.com/haytamAroui/caseproof/pull/88)
+provides an **unapplied single-transaction candidate** to install the
+exact-matter grant relation on the currently empty caseproof-dev foundation
+and atomically replace legacy org-wide read policies. Standalone disposable
+CI tests rollback on rogue RLS policies or nonempty Auth/data, private
+same-org/foreign-org denial, and real non-BYPASSRLS SQL reads.
+Real DB signed-user acceptance, independently approved audited grant writes,
+an approved canonical dev migration, private Storage, PDF/DOCX/OCR fidelity,
+live session revocation and human security signoff are still OPEN.
 See [security gate](m1/PRIVATE_RLS_AUTH_GATE.md) and [milestone #69](https://github.com/haytamAroui/caseproof/issues/69).
 
 Milestones are acceptance outcomes, not calendar estimates. The “1–3 person-weeks” estimate is withdrawn.
