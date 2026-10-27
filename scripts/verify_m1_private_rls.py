@@ -25,7 +25,8 @@ class Fixture:
     version: UUID
 
 
-def seed(*, org: UUID | None = None, read_evidence: bool = True,\n         actor_id: UUID | None = None) -> Fixture:
+def seed(*, org: UUID | None = None, read_evidence: bool = True,
+         actor_id: UUID | None = None) -> Fixture:
     scope, actor, case, document, version = (
         org or uuid4(), actor_id or uuid4(), uuid4(), uuid4(), uuid4(),
     )
