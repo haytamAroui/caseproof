@@ -49,6 +49,21 @@
 
 **Backend-first delivery rule:** The full workflow above describes the final product; it does not require browser/Word screens to finish the M1 backend. Use [M1-A contract freeze → M1-B headless integrated backend → M1-C release approval](m1/BACKEND_EXIT_CONTRACT.md). Once M1-A's authorization choice and ports are frozen, isolated M2 checking/correction code and tests may proceed **in parallel with** M1-B infrastructure completion. M1-B and M1-C remain release blockers. Neither CI alone nor an unmerged PR declares M1 finished. The canonical PIV-02–06 task tracking is [#37](https://github.com/haytamAroui/caseproof/issues/37), [#38](https://github.com/haytamAroui/caseproof/issues/38), [#64](https://github.com/haytamAroui/caseproof/issues/64)–[#68](https://github.com/haytamAroui/caseproof/issues/68).
 
+**2026-10-27 backend engineering receipt:** M2-B disposable packets
+[#82](https://github.com/haytamAroui/caseproof/pull/82)–[#85](https://github.com/haytamAroui/caseproof/pull/85)
+are **merged**: source-bound immutable check runs and review ledger,
+versioned original-bound legal brief graphs, protected private-matter
+checking composition, and durable reviewed correction/recheck with
+transactional review/permission fences. Their CI proves disposable
+engineering behavior **only**. M2-B production remains OPEN.
+[M1-B private RLS proposal #86](https://github.com/haytamAroui/caseproof/pull/86)
+replaces legacy organization-wide SELECT rules with default-private
+matter-grant predicates and role-level isolation tests; it is NOT
+applied to the live database. Live signed-user acceptance, user
+provisioning, least-privilege runtime role, M1 private Storage, full
+PDF/DOCX/OCR positional fidelity, and human security approval are OPEN.
+See [security gate](m1/PRIVATE_RLS_AUTH_GATE.md) and [milestone #69](https://github.com/haytamAroui/caseproof/issues/69).
+
 Milestones are acceptance outcomes, not calendar estimates. The “1–3 person-weeks” estimate is withdrawn.
 
 ## PIV-00–20 authoritative backlog

@@ -116,3 +116,5 @@ jobs:
         run: uv run --locked python -m scripts.verify_m2_private_check_composition
       - name: Verify durable M2 correction plan, immutable source replay and recheck
         run: uv run --locked python -m scripts.verify_m2_disposable_corrections
+      - name: Verify default-private case, evidence and grant RLS under disposable authenticated role
+        run: uv run --locked python -m scripts.verify_m1_private_rls
