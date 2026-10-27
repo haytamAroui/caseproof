@@ -31,3 +31,9 @@ The development-only, **loopback-guarded** `apps/api/litigation_development_app.
 The new `tests/test_signed_supabase_source_library.py` validates database→Storage same-bearer request choreography, missing/foreign version masking, digest/length verification and revocation between requests. `tests/test_litigation_signed_original_live_routes.py` tests the actual FastAPI route injection, direct signed read/upload and denial behavior.
 
 These paths constitute a **wired dev integration**, not proof of a **positive remote user** uploading a real document: that awaits actor-audited server-side organization/matter/version fixture issuance and a genuine signed positive E2E run against the live project.
+
+## Upload permission correction — applied on live dev
+
+Code review identified that `organization_members.actions` cannot contain `evidence:upload`. A second reviewed, additive migration `20261027204343_caseproof_m1_storage_upload_action_correction` was **applied via Supabase MCP**. The final Storage insert policy requires org `case:read` + `evidence:read`, together with exact-matter `case:read` + `evidence:upload`, matching the installed action catalog. The originally installed migration file is retained unchanged for historical migration replay; the correction is the next canonical migration.
+
+The protected real signed-user negative probe tests that an ungranted upload is denied. Downloading its absent object also fails, but cannot prove SELECT isolation against an **existing** private object. Do not credit it as that acceptance. The positive readback and cross-user existing-object denial remain a dedicated acceptance gate.
