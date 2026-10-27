@@ -301,9 +301,34 @@ class DisposableBriefGraphStore:
         org, actor, case, logical = (
             _uuid(org_id), _uuid(actor_id), _uuid(case_id), _uuid(brief_id),
         )
+        keys = (org, case, logical)
+        # Preflight: authorize the actor and obtain a provisional source
+        # identity, then release ALL locks before asking Vault to read bytes.
         with self._connect() as conn:
+            self._authorize(conn, org, case, actor)
+            pre_head = conn.execute(
+                "select version_id from caseproof._m2_brief_heads "
+                "where org_id=%s and case_id=%s and brief_id=%s",
+                keys,
+            ).fetchone()
+            if pre_head is None or pre_head[0] is None:
+                raise BriefGraphConflict("unknown or empty brief graph")
+            pre_version = pre_head[0] if version_id is None else _uuid(version_id)
+            source = conn.execute(
+                "select document_id,document_version_id,vault_intent_id,"
+                "original_sha256 from caseproof._m2_brief_versions "
+                "where org_id=%s and case_id=%s and brief_id=%s and version_id=%s",
+                (*keys, pre_version),
+            ).fetchone()
+            if source is None:
+                raise BriefGraphConflict("unknown pinned original")
+        pre_binding = VerifiedBriefBinding(source[0], source[1], source[2])
+        self._verified_bytes(org=org, case=case, binding=pre_binding,
+                             expected_sha=source[3])
+        with self._connect() as conn:
+            # Reauthorize after Vault verification; final source/check linkage
+            # is locked and cannot silently drift while rehydrating the graph.
             case_rev, exhibit_rev = self._authorize(conn, org, case, actor)
-            keys = (org, case, logical)
             head = conn.execute(
                 "select revision,version_id from caseproof._m2_brief_heads "
                 "where org_id=%s and case_id=%s and brief_id=%s for share",
@@ -328,6 +353,9 @@ class DisposableBriefGraphStore:
             )):
                 raise BriefGraphConflict("brief snapshot stale or absent")
             binding = VerifiedBriefBinding(row[1], row[2], row[3])
+            if (version != pre_version or binding != pre_binding
+                    or row[4] != source[3]):
+                raise BriefGraphConflict("pinned source changed during byte read")
             self._source(conn, org=org, case=case, binding=binding, expected_sha=row[4])
             refs = conn.execute(
                 "select reference_id,exhibit_label,exact_quote,pdf_page "
