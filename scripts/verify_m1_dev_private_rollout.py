@@ -77,6 +77,16 @@ def main() -> None:
         raise RuntimeError("only fresh disposable database allowed")
     _run("begin;\n" + SCHEMA_BOOTSTRAP + MIGRATION.read_text() + "\ncommit;", env)
     proposed = INSTALL.read_text(encoding="utf-8")
+    original_policy = (
+        ROOT / "db/proposals/PIV-M1_default_private_rls_candidate.sql"
+    ).read_text(encoding="utf-8")
+    reviewed_body = (
+        original_policy.split("\\nbegin;", 1)[1]
+        .rsplit("\\ncommit;", 1)[0]
+        .strip()
+    )
+    if reviewed_body not in proposed:
+        raise AssertionError("atomic installer drifted from reviewed #86 policy body")
 
     # Unexpected permissive RLS policy: rollout must roll back entirely.
     _run(
@@ -86,6 +96,20 @@ def main() -> None:
     _run(proposed, env, should_pass=False)
     _assert_not_installed(env)
     _run("drop policy m1_attack_allow_every_case on caseproof.cases", env)
+
+    # A permissive membership policy is also forbidden: subject inventories
+    # must remain private, not just cases and source versions.
+    _run(
+        "create policy m1_attack_read_all_members on "
+        "caseproof.organization_members for select "
+        "to authenticated using (true);", env,
+    )
+    _run(proposed, env, should_pass=False)
+    _assert_not_installed(env)
+    _run(
+        "drop policy m1_attack_read_all_members on "
+        "caseproof.organization_members", env,
+    )
 
     # Existing genuine/synthetic users: requires a reviewed backfill, never
     # silently flip policy on a nonempty installed instance.
