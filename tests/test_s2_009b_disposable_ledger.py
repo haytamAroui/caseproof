@@ -82,6 +82,7 @@ def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
         "20261027195451_caseproof_m1_signed_invoker_read_views.sql",
             "20261027202734_caseproof_m1_private_originals_storage.sql",
             "20261027204343_caseproof_m1_storage_upload_action_correction.sql",
+            "20261027214851_caseproof_m1_dev_live_positive_fixture_rpc.sql",
     }
     assert not (ROOT / "apps/api/vault_repository.py").exists()
     assert "evidence_vault_protocol" not in (ROOT / "apps/api/main.py").read_text()
