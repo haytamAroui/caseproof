@@ -7,12 +7,14 @@ synthetic only, never a proof of genuine Supabase RLS or real PDF/OCR quality.
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from datetime import timedelta
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
+from application.litigation.brief_checks import CitationCheckState, DraftReference
 from application.litigation.exhibit_confirmation import serialized_entries
 from apps.api.access_control import AccessRejected
 from apps.api.disposable_litigation_brief_graph import DisposableBriefGraphStore
@@ -167,6 +169,54 @@ class M2CheckCompositionTests(unittest.TestCase):
                 "select count(*) from caseproof._m2_check_runs where case_id=%s",
                 (self.f.scope.case_id,),
             ).fetchone()[0], 0)
+
+    def test_page_scoped_exact_quote_without_page_provenance_is_incomplete(self):
+        # The literal quote is present, but text/plain carries no authoritative
+        # physical PDF page. It MUST NOT become a definitive mismatch.
+        confirmed = (
+            ExhibitEntry(
+                "stuk-1", "Stuk 1", (
+                    ExhibitPage(
+                        str(new_binding(self.evidence).document_id),
+                        str(self.evidence.version),
+                        pdf_page=1, printed_page=1,
+                    ),
+                ), confirmed=True,
+            ),
+        )
+        encoded = serialized_entries(confirmed)
+        with connect() as conn:
+            conn.execute(
+                "select * from caseproof._m1_disposable_confirm_exhibits("
+                "%s,%s,%s,2,%s::jsonb,%s)",
+                (self.f.actor, self.f.scope.case_id, uuid4(),
+                 encoded.decode("utf-8"), sha256(encoded).hexdigest()),
+            ).fetchone()
+        next_original = add_verified_version(self.root, self.f, self.f.data)
+        new_id = uuid4()
+        rep = normalize(next_original, new_id)
+        ref = DraftReference("ref-1", "Stuk 1", EVIDENCE.decode(), 1)
+        rep = replace(rep, brief=replace(rep.brief, references=(ref,)))
+        self.graph.publish(
+            org_id=self.f.scope.org_id, actor_id=self.f.actor,
+            brief_id=self.brief_id, binding=new_binding(next_original),
+            representation=rep, document_role="own_draft",
+            request_id=uuid4(), expected_revision=1,
+        )
+        run = self.check(version=str(new_id))
+        self.assertEqual(run.declared, run.incomplete)
+        self.assertEqual(run.processed, ())
+        self.assertEqual(
+            run.citation_observations[0].state,
+            CitationCheckState.INCOMPLETE_EXTRACTION,
+        )
+        self.assertNotEqual(
+            run.citation_observations[0].state,
+            CitationCheckState.QUOTE_NOT_FOUND,
+        )
+        # Byte-identical, no-physical-page check must remain conservative
+        # even if the draft reference itself omits a physical page.
+        self.assertEqual(run.exhibit_revision, 3)
 
     def test_dangerous_original_is_not_mistaken_for_verified_quote(self):
         # A change to the untrusted brief is not an alternative verified source.
