@@ -189,3 +189,42 @@ def test_legacy_org_wide_grant_cannot_substitute_for_case_grant():
     with pytest.raises(AccessRejected):
         service.check(bearer="signed-dev-fixture", case_id=CASE, brief_version_id=DRAFT)
     assert store.load_calls == 0
+
+class FakeRunPublisher:
+    def __init__(self):
+        self.calls = []
+        self.broken = False
+
+    def publish(self, *, org_id: str, actor_id: str, run) -> bool:
+        self.calls.append((org_id, actor_id, run.snapshot_hash))
+        if self.broken:
+            raise RuntimeError("synthetic database outage")
+        return True
+
+
+def test_optional_run_publisher_uses_verified_actor_after_fresh_scope_check():
+    service, _, store = rig()
+    publisher = FakeRunPublisher()
+    service.publisher = publisher
+    run = service.check(bearer="signed-dev-fixture",
+                        case_id=CASE, brief_version_id=DRAFT)
+    assert publisher.calls == [(ORG, ACTOR, run.snapshot_hash)]
+    store.snapshot_current = False
+    with pytest.raises(AccessRejected) as error:
+        service.check(bearer="signed-dev-fixture",
+                      case_id=CASE, brief_version_id=DRAFT)
+    assert error.value.http_status == 503
+    assert publisher.calls == [(ORG, ACTOR, run.snapshot_hash)]
+
+
+def test_optional_publisher_failure_withheld_and_no_unsafe_fallback():
+    service, _, store = rig()
+    publisher = FakeRunPublisher()
+    publisher.broken = True
+    service.publisher = publisher
+    with pytest.raises(AccessRejected) as error:
+        service.check(bearer="signed-dev-fixture",
+                      case_id=CASE, brief_version_id=DRAFT)
+    assert error.value.http_status == 503
+    assert store.load_calls == 1
+    assert len(publisher.calls) == 1
