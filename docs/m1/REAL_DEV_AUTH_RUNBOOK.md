@@ -33,6 +33,33 @@ This verifies actual signed Auth logins only. It does NOT fix the existing organ
 3. From **GitHub Actions → CaseProof dev real Auth smoke → Run workflow → main**, run the manual workflow. It calls the existing `scripts/verify_s2_006_live_auth.py`: signs in to the **pinned dev project** with both users; makes the server verify two signed sessions and checks a tampered JWT signature is rejected. It logs **only a pass/fail receipt**, not token, subject or email. The job is manual, verifies the trusted repository and `refs/heads/main`, explicitly selects the protected environment, and checks out `main`. Verify that the environment itself restricts deployment to **main only**, too.
 4. If the action fails, inspect the high-level failure category only; do **not** print JWTs, passwords, provider JSON, or full requests. Check both emails are confirmed and credential names/keys match. The script refuses legacy JWT anon keys and privileged secret keys by design. Rotate these disposable passwords after tests.
 
+## Option C — three real signed users against a restricted disposable private-matter database
+
+After review and merge of [PR #87](https://github.com/haytamAroui/caseproof/pull/87),
+run **Actions → M1-B dev signed Auth to private disposable RLS (manual only) →
+Run workflow → main**. This job uses the **same protected**
+`caseproof-dev-live-auth` environment as Option A and only the two
+environment-only secrets already listed above. It automatically provisions
+**three** confirmed temporary CaseProof-dev Auth users, signs all three in
+through HTTPS, verifies remote signed sessions and rejects a tampered JWT,
+and tests their genuine Auth subject IDs against a local disposable
+non-BYPASSRLS PostgreSQL login with default-private matter RLS. A and B
+are members of the same org but different matters; C is from another org.
+It tests real original-version metadata read, cross-matter denial,
+organization/evidence permission revocation, owner-role rejection, and
+transaction-local claim cleanup. The test deletes all three remote Auth
+users in `finally`, failing if cleanup is incomplete.
+
+**Critical distinction:** The Auth signatures are real, but the database
+matter fixture is **local ephemeral PostgreSQL**, not the real
+`caseproof-dev` database. This action does **not** install any migration,
+grant, Storage policy or user-matter mapping on the live project.
+Successful results are an Auth+local-RLS integration receipt, **not**
+actual remote Supabase private-matter acceptance or M1-B completion.
+
+Detailed threat model, test logic and remaining gates:
+[SIGNED_PRIVATE_RUNTIME_PACKET](SIGNED_PRIVATE_RUNTIME_PACKET.md).
+
 ## Gates this DOES and DOES NOT satisfy
 
 | Gate | Successful result establishes | Still separately open |
