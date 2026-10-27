@@ -9,15 +9,6 @@ from scripts.verify_m1_signed_postgrest_views import VIEWS, verify_signed_read_v
 def test_genuinely_signed_empty_view_result_contract() -> None:
     visited: list[tuple[str, str]] = []
 
-    def get(*, view: str, key: str, token: str) -> tuple[int, object]:
-        assert key == "test-publishable"
-        visited.append((view, token))
-        if token.endswith("altered"):
-            return 401, None
-        return 200, []
-
-    # Tampering helper modifies the token signature, not the suffix. Exercise
-    # status branches below via a distinct fake view client instead.
     def accepted(*, view: str, key: str, token: str) -> tuple[int, object]:
         assert key == "test-publishable"
         visited.append((view, token))
