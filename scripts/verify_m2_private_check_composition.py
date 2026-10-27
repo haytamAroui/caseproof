@@ -6,7 +6,6 @@ synthetic only, never a proof of genuine Supabase RLS or real PDF/OCR quality.
 """
 from __future__ import annotations
 
-import json
 import unittest
 from datetime import timedelta
 from hashlib import sha256
@@ -33,7 +32,6 @@ from scripts.verify_s2_002_database import _env
 from scripts.verify_vault_integration import connect, coordinator
 from scripts.extraction_fixtures import NOW
 
-BASIC_BRIEF = b"De betaling van EUR 14500 was op 12 mei 2026."
 EVIDENCE = b"De betaling van EUR 12500 was op 22 mei 2026."
 
 
