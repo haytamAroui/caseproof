@@ -1,0 +1,75 @@
+{
+  "name": "M1-B dev signed Auth to private disposable RLS (manual only)",
+  "on": {
+    "workflow_dispatch": {}
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "concurrency": {
+    "group": "caseproof-m1b-ephemeral-private-auth",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "verify": {
+      "if": "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof' }}",
+      "environment": "caseproof-dev-live-auth",
+      "runs-on": "ubuntu-latest",
+      "timeout-minutes": 15,
+      "services": {
+        "postgres": {
+          "image": "postgres:17",
+          "env": {
+            "POSTGRES_DB": "caseproof_s2_ci",
+            "POSTGRES_USER": "postgres",
+            "POSTGRES_PASSWORD": "caseproof_ephemeral_ci"
+          },
+          "ports": [
+            "5432:5432"
+          ],
+          "options": "--health-cmd \"pg_isready -U postgres -d caseproof_s2_ci\" --health-interval 5s --health-timeout 5s --health-retries 8"
+        }
+      },
+      "env": {
+        "CASEPROOF_DISPOSABLE_DB": "YES",
+        "PGHOST": "127.0.0.1",
+        "PGPORT": "5432",
+        "PGDATABASE": "caseproof_s2_ci",
+        "PGUSER": "postgres",
+        "PGPASSWORD": "caseproof_ephemeral_ci"
+      },
+      "steps": [
+        {
+          "uses": "actions/checkout@v7.0.1",
+          "with": {
+            "ref": "main",
+            "persist-credentials": false
+          }
+        },
+        {
+          "uses": "astral-sh/setup-uv@v10.3.2",
+          "with": {
+            "enable-cache": true
+          }
+        },
+        {
+          "name": "Check trusted Python and pinned localhost database",
+          "run": "python3 -c 'import sys; assert sys.version_info >= (3, 11)' && sudo apt-get update -qq && sudo apt-get install -y postgresql-client"
+        },
+        {
+          "name": "Build and test isolated foundation, M1 reviewer grants, current private policies",
+          "run": "uv run --locked python -m scripts.verify_s2_002_database && uv run --locked python -m scripts.verify_m1_disposable_exhibits && uv run --locked python -m scripts.verify_m1_private_rls"
+        },
+        {
+          "name": "Verify 3 real signed dev Auth sessions against least-privilege local PostgreSQL RLS",
+          "env": {
+            "CASEPROOF_M1_REAL_PRIVATE_TEST": "YES",
+            "CASEPROOF_DEV_PUBLISHABLE_KEY": "${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}",
+            "CASEPROOF_DEV_AUTH_ADMIN_KEY": "${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}"
+          },
+          "run": "uv run --locked python -m scripts.verify_m1_ephemeral_signed_private"
+        }
+      ]
+    }
+  }
+}
