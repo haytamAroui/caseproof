@@ -43,8 +43,9 @@ def run_signed_m1_m2(
     *,
     signin: SupabasePasswordSignin,
     verifier: SupabaseAuthUserVerifier,
+    synthetic_only: bool = False,
 ) -> None:
-    """One real signed A/B/C trio drives both M1 private RLS and persisted M2."""
+    """One checked A/B/C trio drives M1 private RLS and persisted M2."""
     if len(credentials) != 3:
         raise AssertionError("three signed users required")
     sessions = tuple(signin.sign_in(c) for c in credentials)
@@ -72,7 +73,8 @@ def run_signed_m1_m2(
     # Actual local non-BYPASSRLS login, exact-case matter grants, own version,
     # same-org ungranted case, foreign-org case and permission revocation.
     verify_three_subjects(tokens=tokens, subjects=subjects, verifier=verifier)
-    print("PASS 1/5: three genuine Supabase signed sessions + private M1 RLS")
+    print("PASS 1/5: " + ("three synthetic local sessions" if synthetic_only else
+                           "three real Supabase Auth sessions") + " + private M1 RLS")
 
     # Reuse the real original-byte Vault, versioned brief, confirmation and
     # deterministic M2 fixture, then ADD the verified signed subjects as
