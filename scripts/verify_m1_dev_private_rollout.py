@@ -81,8 +81,8 @@ def main() -> None:
         ROOT / "db/proposals/PIV-M1_default_private_rls_candidate.sql"
     ).read_text(encoding="utf-8")
     reviewed_body = (
-        original_policy.split("\\nbegin;", 1)[1]
-        .rsplit("\\ncommit;", 1)[0]
+        original_policy.split("\nbegin;", 1)[1]
+        .rsplit("\ncommit;", 1)[0]
         .strip()
     )
     if reviewed_body not in proposed:
