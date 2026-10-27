@@ -5,7 +5,14 @@ This is a development-only Word integration spike. It connects a task pane to a 
 ## Run locally
 
 1. Create a local development certificate and key for `localhost` (including a `localhost` subject alternative name). Trust the certificate in the OS/browser used by Word. Never commit the key or use this certificate for production.
-2. From the repository root, run the server bound to loopback:
+2. Install and build the client once, then start the synthetic server from the repository root:
+
+   ```sh
+   npm ci --prefix apps/word_addin
+   npm --prefix apps/word_addin run build
+   ```
+
+   Run the server bound to loopback:
 
    ```sh
    uv run --locked uvicorn apps.word_addin.demo_app:app --host 127.0.0.1 --port 3000 --ssl-certfile /path/to/localhost-cert.pem --ssl-keyfile /path/to/localhost-key.pem --no-proxy-headers
@@ -22,3 +29,9 @@ This is a development-only Word integration spike. It connects a task pane to a 
 - `ReadWriteDocument` is required for the synthetic edit. Do not sideload this add-in into confidential or opponent-original documents. No production release is authorized by this spike.
 
 See `docs/m3/WORD_INTEGRATION_ACCEPTANCE.md` for the full product acceptance contract.
+
+## Development sign-in integration
+
+The task pane also includes a Supabase OAuth/PKCE sign-in candidate adapted from Vaquill. It loads the pinned SDK through a locally built bundle and stores its session and PKCE verifier in an ephemeral in-memory storage instance. To exercise it on an independently configured development origin, that origin must serve the bundled client, same-origin search API and `caseproof-public-config.json` containing only `projectUrl` and `publishableKey` (an `sb_publishable_` key). Secret and service-role keys must never be supplied. The server and callback must use HTTPS; `auth-callback.html` must be in the Supabase redirect allowlist and the selected identity provider must be enabled. The current implementation supports standard `*.supabase.co` project domains and Google OAuth only.
+
+The included manifest and `demo_app.py` run synthetic mode, not a live CaseProof backend. Live authentication and private-matter integration have not been exercised, no customer use is authorized, and live citation editing remains disabled. Real deployment also needs approved origin/manifest configuration, validated Office dialog behavior, session revocation tests and independent security review. Use separate development users and synthetic files.

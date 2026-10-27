@@ -43,8 +43,15 @@ jobs:
         run: uv run --locked mypy --explicit-package-bases application/litigation/exhibit_confirmation.py infrastructure/persistence apps/api/restricted_case_repository.py apps/api/litigation_evidence_app.py infrastructure/parsers/pdf_ocr.py
       - name: Verify synthetic M1 evidence-library journey
         run: uv run --locked python -m scripts.demo_litigation_evidence_library
-      - name: Test Word task pane contract
-        run: node --test apps/word_addin/taskpane.test.cjs
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - name: Install Word client dependencies
+        run: npm ci --prefix apps/word_addin --ignore-scripts
+      - name: Build and test Word client
+        run: |
+          npm --prefix apps/word_addin run build
+          npm --prefix apps/word_addin test
       - name: Verify reviewer browser journey
         env:
           CASEPROOF_BROWSER_LOG_SCREENSHOT: "YES"

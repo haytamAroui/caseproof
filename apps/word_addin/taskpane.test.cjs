@@ -25,7 +25,7 @@ function setup(options = {}) {
   const provider = { mode: options.mode || 'synthetic', caseId: 'case', briefVersionId: 'draft', getBearer: async () => 'signed-token' };
   const context = {
     document: { getElementById: id => elements[id], createElement: () => element() },
-    window: { caseproofSession: options.noSession ? null : provider },
+    window: { caseproofSession: options.noSession ? null : provider, addEventListener() {} },
     Office: { HostType: { Word: 'Word' }, context: { requirements: { isSetSupported: () => true } },
       onReady(fn) { fn({ host: 'Word' }); } },
     Word: { run: fn => {

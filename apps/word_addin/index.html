@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="taskpane.css">
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
   <script defer src="demo-session.js"></script>
+  <script defer src="dist/live-auth.js"></script>
+  <script defer src="auth/live-ui.js"></script>
   <script defer src="taskpane.js"></script>
 </head>
 <body>
@@ -15,6 +17,14 @@
     <p class="eyebrow">CaseProof · development</p>
     <h1>Find evidence</h1>
     <p class="notice">Development only. Use synthetic documents. Word-host and confidential-data acceptance are pending.</p>
+    <section id="live-session" aria-labelledby="session-heading">
+      <h2 id="session-heading">Matter access</h2>
+      <label for="matter-id">Matter ID</label><input id="matter-id" autocomplete="off">
+      <label for="brief-id">Brief version ID</label><input id="brief-id" autocomplete="off">
+      <button id="login" disabled>Sign in</button>
+      <button id="logout" disabled>Sign out</button>
+      <p id="session-status" role="status" aria-live="polite">Sign in with the configured account.</p>
+    </section>
     <p>Select an assertion in Word, then search the current matter.</p>
     <label for="query">Words to find</label>
     <input id="query" type="search" maxlength="120" autocomplete="off">

@@ -10,6 +10,13 @@
   let busy = false;
   let uncertain = false;
   let generation = 0;
+  window.addEventListener('caseproof:session-ended', () => {
+    generation += 1;
+    result.hidden = true;
+    hitsView.replaceChildren();
+    selectionView.textContent = '';
+    status.textContent = 'Signed out. Sign in again to search.';
+  });
 
   // Supplied in memory by an authenticated host composition, not document XML.
   // No provider is installed in this spike; it must never be mocked as real auth.

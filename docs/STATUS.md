@@ -138,3 +138,8 @@ An unmounted search adapter reads only a version-pinned M2 private-matter bundle
 ## M3 synthetic Word citation development
 
 The development task pane and localhost-only synthetic API support selecting a unique body passage, searching a synthetic matter, viewing a bounded text excerpt and inserting a uniquely mapped exhibit citation. The synthetic client rechecks source search and document body/selection before insertion, and blocks retries following an unknown outcome. Automated tests use a mocked Word host; no real Office host, save/reopen, coauthoring, tracked changes, actual signed session, private source viewer or authorized live edit has been verified. Body-text comparison is not atomic compare-and-swap. M3 remains open and confidential documents must not be used.
+
+
+## Word authentication adaptation candidate
+
+The PR adds a Vaquill-derived Office dialog/PKCE adapter, public-key-only Supabase SDK composition with in-memory storage, an opt-in development sign-in form, and a bounded DOCX slice reader. It has mock Office tests and a real SDK PKCE URL test, not a real Word host or real Supabase login. The API remains unmounted and live citation editing is disabled; see `apps/word_addin/README.md`.
