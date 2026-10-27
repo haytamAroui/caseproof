@@ -172,6 +172,27 @@ def verify_three_subjects(
         AccessFailure.SERVICE_UNAVAILABLE,
     )
 
+    # The login must fail closed if its effective grants become writable or
+    # an RLS table loses protection. Roll each mutation back even on failure.
+    with connect() as admin:
+        admin.execute("grant update on caseproof.cases to caseproof_m1_reader")
+        try:
+            admin.commit()
+            _must_mask(lambda: reader.read_case(bearer=tokens[0], case_id=str(a.case)),
+                       AccessFailure.SERVICE_UNAVAILABLE)
+        finally:
+            admin.execute("revoke update on caseproof.cases from caseproof_m1_reader")
+            admin.commit()
+        admin.execute("alter table caseproof.cases disable row level security")
+        try:
+            admin.commit()
+            _must_mask(lambda: reader.read_case(bearer=tokens[0], case_id=str(a.case)),
+                       AccessFailure.SERVICE_UNAVAILABLE)
+        finally:
+            admin.execute("alter table caseproof.cases enable row level security")
+            admin.commit()
+    reader.read_case(bearer=tokens[0], case_id=str(a.case))
+
     # Effective RLS subject is SET LOCAL and disappears at COMMIT even
     # when the very same physical DB connection gets a second transaction.
     with reader_connection() as conn:
