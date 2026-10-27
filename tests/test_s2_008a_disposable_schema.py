@@ -61,7 +61,10 @@ def test_disposable_guard_and_cloud_verification_wiring() -> None:
 
 
 def test_no_installed_migration_or_prod_route() -> None:
-    assert len(list((ROOT / "supabase/migrations").glob("*.sql"))) == 1
+    assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} == {
+        "20261022001009_caseproof_tenant_foundation.sql",
+        "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
+    }
     assert "S2-008a_disposable_representation_anchor_graph.sql" not in (
         ROOT / "apps/api/main.py"
     ).read_text(encoding="utf-8")

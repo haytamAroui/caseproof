@@ -166,6 +166,9 @@ def test_all_new_code_is_unwired_and_migration_unchanged() -> None:
     app = (root / "apps/api/main.py").read_text(encoding="utf-8")
     assert "postgres_evidence_reader" not in app
     assert "/v2/" not in app
-    assert len(list((root / "supabase/migrations").glob("*.sql"))) == 1
+    assert {p.name for p in (root / "supabase/migrations").glob("*.sql")} == {
+        "20261022001009_caseproof_tenant_foundation.sql",
+        "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
+    }
     workflow = (root / ".github/workflows/kernel-boundary.yml").read_text()
     assert "scripts.verify_s2_008a3_reader" in workflow

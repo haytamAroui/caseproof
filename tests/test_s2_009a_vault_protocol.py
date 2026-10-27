@@ -419,4 +419,7 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
     assert "service_role" not in source  # never invokes privileged storage access
     assert "evidence_vault_protocol" not in app
     assert "/v2/" not in app
-    assert len(list((root / "supabase/migrations").glob("*.sql"))) == 1
+    assert {p.name for p in (root / "supabase/migrations").glob("*.sql")} == {
+        "20261022001009_caseproof_tenant_foundation.sql",
+        "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
+    }

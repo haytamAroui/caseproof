@@ -354,4 +354,7 @@ def test_does_not_wire_database_or_enable_approval_api() -> None:
     assert "evidence_locator_codec" not in app
     assert "supabase" not in code
     assert "sqlalchemy" not in code
-    assert len(list((root / "supabase/migrations").glob("*.sql"))) == 1
+    assert {p.name for p in (root / "supabase/migrations").glob("*.sql")} == {
+        "20261022001009_caseproof_tenant_foundation.sql",
+        "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
+    }
