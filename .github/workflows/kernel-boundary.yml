@@ -31,6 +31,8 @@ jobs:
         run: uv run --locked mypy --explicit-package-bases domains/disputes application/litigation apps/api/authenticated_evidence_library.py
       - name: Type check M2 headless private-matter API
         run: uv run --locked mypy --explicit-package-bases apps/api/litigation_check_service.py apps/api/litigation_check_app.py
+      - name: Type check M2 disposable review persistence
+        run: uv run --locked mypy --explicit-package-bases apps/api/disposable_litigation_review_ledger.py
       - name: Verify synthetic M2 factual-check through correction and recheck
         run: uv run --locked python -m scripts.demo_litigation_m2
       - name: Type check M1 completion candidate adapters
@@ -106,3 +108,5 @@ jobs:
         run: uv run --locked python -m scripts.verify_review_integration
       - name: Verify worker leases, checkpoint fences and process recovery
         run: uv run --locked python -m scripts.verify_worker_integration
+      - name: Verify M2 immutable check runs and reviewer CAS on real disposable PostgreSQL
+        run: uv run --locked python -m scripts.verify_m2_disposable_runs
