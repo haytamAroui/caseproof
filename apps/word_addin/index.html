@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CaseProof synthetic spike</title>
+  <link rel="stylesheet" href="taskpane.css">
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script defer src="taskpane.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">CaseProof · development</p>
+    <h1>Inspect evidence</h1>
+    <p class="notice">Synthetic demonstration only. Do not use confidential documents.</p>
+    <p>Select a sentence in Word to preview a fixed example citation.</p>
+    <button id="inspect" disabled>Inspect selection</button>
+    <p id="status" role="status" aria-live="polite">Waiting for Word…</p>
+    <section id="result" hidden aria-labelledby="result-title">
+      <h2 id="result-title">Selection and example source</h2>
+      <p class="label">Selected text</p><blockquote id="selection"></blockquote>
+      <p class="label">Synthetic source · page 1</p>
+      <blockquote>De betaling is vastgesteld op 1 maart 2026.</blockquote>
+      <p>Example citation: <strong>Stuk 1, p. 1 / Pièce 1, p. 1</strong></p>
+      <p>This example is not matched against your selection. Insertion and source retrieval are not available.</p>
+    </section>
+  </main>
+</body>
+</html>
