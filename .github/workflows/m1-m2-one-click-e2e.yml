@@ -78,6 +78,12 @@ jobs:
           CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
           CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
         run: uv run --locked python -m scripts.verify_m1_live_signed_storage
+      - name: LIVE authorized original - real signed user upload, readback, existing-file denial, revoke and cleanup
+        env:
+          CASEPROOF_DEV_LIVE_POSITIVE: "YES"
+          CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+          CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+        run: uv run --locked python -m scripts.verify_m1_live_positive_original
       - name: Summarize what was actually tested
         if: always()
         run: |
@@ -89,7 +95,9 @@ jobs:
             echo '- Mainline backend check, review, correction/recheck: verified in isolated PostgreSQL.'
             echo '- Signed bearer → scoped private case → verified source → persisted M2 review: signed step.'
             echo '- Real private Supabase Storage: signed ungranted uploads denied; absent-object reads denied. Existing-object denial and authorized upload/readback are not tested.'
-            echo '- No remote DB admin DSN, CA PEM, Storage customer object or M2 live migration.'
+            echo '- LIVE M1 signed PostgREST/Storage positive upload+readback, existing-object denial and revocation: required green step.'
+            echo '- LIVE M2 schema installed but the M2 checker/review/correction run is still disposable PostgreSQL, not live Supabase.'
+            echo '- No remote DB admin DSN, CA PEM, or customer original used.'
             echo '- This check does **not** establish M1/M2 live dev completion or release approval.'
             echo '- Each step must be green; read the failed step in Actions for precise gaps.'
           } >> "$GITHUB_STEP_SUMMARY"
