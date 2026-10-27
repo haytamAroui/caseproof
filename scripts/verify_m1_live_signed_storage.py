@@ -2,8 +2,9 @@
 
 Manual-only; reuses existing protected Auth environment secrets. Provisions and
 deletes three confirmed users. With zero stored matters/grants in caseproof-dev,
-all three MUST be denied attempted upload and original download. Demonstrates
-real Storage API auth/RLS denial and bucket availability, NOT positive custody.
+all three MUST be denied attempted upload, while downloading the absent
+synthetic object also fails. Downloading a missing object is NOT a proof of
+existing-object SELECT isolation or positive custody.
 """
 from __future__ import annotations
 
@@ -58,7 +59,8 @@ def verify_signed_denial(
             pass
         else:
             raise AssertionError("ungranted user could download private original")
-    print("LIVE_SIGNED_SUPABASE_STORAGE_NO_GRANT_UPLOAD_DOWNLOAD_DENIED")
+    print("LIVE_SIGNED_SUPABASE_STORAGE_NO_GRANT_UPLOAD_DENIED")
+    print("MISSING_OBJECT_DOWNLOAD_DENIED_NOT_EXISTING_OBJECT_RLS_PROOF")
 
 
 def main() -> int:
