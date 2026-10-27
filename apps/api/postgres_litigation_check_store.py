@@ -170,7 +170,8 @@ class PostgresPrivateMatterCheckStore:
         return CustodySource(document, version, intent, sha, media)
 
     def _preview(self, *, access: PrivateMatterAccess,
-                 source: CustodySource) -> EvidencePreview:
+                 source: CustodySource,
+                 require_page_lineage: bool = False) -> EvidencePreview:
         try:
             raw = self._read_original(
                 UUID(access.org_id), UUID(access.case_id), source.intent_id,
@@ -182,7 +183,7 @@ class PostgresPrivateMatterCheckStore:
             raise PrivateCheckStoreError("verified source bytes changed")
         warnings: tuple[str, ...]
         spans: tuple[tuple[int, int, str, int | None], ...]
-        if source.media_type == "text/plain":
+        if source.media_type == "text/plain" and not require_page_lineage:
             try:
                 content = raw.decode("utf-8", errors="strict")
             except UnicodeDecodeError:
@@ -195,8 +196,12 @@ class PostgresPrivateMatterCheckStore:
             ).hexdigest()
             spans = ((0, len(content), "identity_utf8", None),)
         else:
-            # Zero chance a PDF image or DOCX is mistaken for checked text.
-            status, warnings = "partial", ("parser_lineage_not_integrated",)
+            # Page-scoped quotes cannot be disproved by unpaginated UTF-8
+            # bytes. Without an independently verified physical page map a
+            # missing match is UNKNOWN, never QUOTE_NOT_FOUND.
+            reason = ("page_lineage_unverified" if require_page_lineage
+                      else "parser_lineage_not_integrated")
+            status, warnings = "partial", (reason,)
             content, parser_id, rep, spans = "", None, None, ()
         row = EvidenceRow(
             str(source.document_id), str(source.document_id),
@@ -232,9 +237,29 @@ class PostgresPrivateMatterCheckStore:
         }))
         if not declared or len(declared) > 32:
             raise PrivateCheckStoreError("bounded confirmed source universe required")
-        previews = tuple(self._preview(access=access, source=self._source(
-            access=access, source_id=source_id, version_id=version_id,
-        )) for source_id, version_id in declared)
+        # Physical page requests require verified page provenance. A page
+        # number printed on a label is not a PDF/source-page index. Conservative
+        # fallback: if a reference requests a PDF page but its precise source
+        # cannot be independently established, the entire declared universe
+        # remains incomplete rather than publishing false quote mismatches.
+        requested_physical_page = any(
+            reference.pdf_page is not None
+            for reference in graph.representation.brief.references
+        )
+        page_scoped = {
+            (page.source_id, page.version_id)
+            for entry in register.entries for page in entry.pages
+            if entry.confirmed and page.pdf_page is not None
+        }
+        previews = tuple(self._preview(
+            access=access,
+            source=self._source(
+                access=access, source_id=source_id, version_id=version_id,
+            ),
+            require_page_lineage=(
+                requested_physical_page or (source_id, version_id) in page_scoped
+            ),
+        ) for source_id, version_id in declared)
         return CheckBundle(graph.representation, register, previews, SourceScope(declared))
 
     def still_current(
