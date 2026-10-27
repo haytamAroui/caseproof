@@ -289,7 +289,7 @@ class BriefGraphTests(unittest.TestCase):
             )
         with self.assertRaises(BriefGraphConflict):
             self.load()
-        self.assertTrue(self.load(require_current=False).is_current)
+        self.assertFalse(self.load(require_current=False).is_current)
 
     def test_audit_failure_rolls_back_and_immutable_history(self):
         class FailAuditConnection:
