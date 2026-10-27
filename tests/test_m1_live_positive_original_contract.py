@@ -39,5 +39,6 @@ def test_genuinely_live_manual_only_with_existing_two_secrets() -> None:
     assert "environment: caseproof-dev-live-auth" in WORKFLOW
     assert "secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY" in WORKFLOW
     assert "secrets.CASEPROOF_DEV_PUBLISHABLE_KEY" in WORKFLOW
-    assert "PGHOST" not in WORKFLOW and "POSTGRES_PASSWORD" not in WORKFLOW
+    assert "CASEPROOF_DEV_DB_ADMIN_DSN" not in WORKFLOW
+    assert "CASEPROOF_DEV_DB_CA_PEM" not in WORKFLOW
     assert "LIVE_M2_CHECK_REVIEW_CORRECTION_NOT_RUN_IN_THIS_WORKFLOW" in (ROOT / "scripts/verify_m1_live_positive_original.py").read_text()
