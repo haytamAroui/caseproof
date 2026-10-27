@@ -18,14 +18,23 @@ from uuid import UUID, uuid4
 from psycopg.errors import ObjectNotInPrerequisiteState
 
 from application.litigation.brief_checks import DraftReference, VersionedBrief
-from application.litigation.factual_values import FactAssertion, FactKind, FactRole
-from application.litigation.unified_review import BriefRepresentation
+from application.litigation.factual_values import FactAssertion, FactKind, FactRole, FactState
+from application.litigation.library import EvidencePreview, EvidenceRow
+from application.litigation.unified_review import (
+    BriefRepresentation,
+    ObservationReview,
+    ReviewDisposition,
+    SourceScope,
+    run_unified_check,
+)
 from apps.api.disposable_litigation_brief_graph import (
     BriefGraphConflict,
     DisposableBriefGraphStore,
     VerifiedBriefBinding,
 )
+from apps.api.disposable_litigation_review_ledger import DisposableM2ReviewLedger
 from apps.api.evidence_vault_protocol import VaultScope
+from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 from scripts.verify_m2_disposable_runs import fixture
 from scripts.verify_s2_002_database import _env, _run
 from scripts.verify_vault_integration import Fixture, begin, connect, coordinator
@@ -140,6 +149,55 @@ class BriefGraphTests(unittest.TestCase):
                 "where version_id=%s", (self.version_id,),
             ).fetchone()[0]
         self.assertEqual((references, assertions), (1, 1))
+
+    def test_restored_graph_to_check_to_durable_review(self):
+        self.publish()
+        restored = self.load()
+        source_id = str(self.binding.document_id)
+        version_id = str(self.binding.document_version_id)
+        row = EvidenceRow(
+            source_id, source_id, version_id, sha256(self.f.data).hexdigest(),
+            "text/plain", "ready", "fixture-utf8-v1", "rep-1", (), (),
+        )
+        preview = EvidencePreview(
+            row, self.f.data.decode("utf-8"),
+            ((0, len(self.f.data.decode("utf-8")), "identity_utf8", None),),
+        )
+        register = ExhibitRegister(1, (
+            ExhibitEntry(
+                "exhibit-1", "Stuk 1",
+                (ExhibitPage(source_id, version_id, printed_page=1),),
+                confirmed=True,
+            ),
+        ))
+        run = run_unified_check(
+            representation=restored.representation,
+            register=register, previews=(preview,),
+            source_scope=SourceScope(((source_id, version_id),)),
+            authorized_case_id=str(self.f.scope.case_id),
+            authorized_register_revision=1,
+        )
+        self.assertEqual(run.factual_observations[0].state, FactState.MATCH)
+        ledger = DisposableM2ReviewLedger(connect)
+        self.assertTrue(ledger.publish(
+            org_id=self.f.scope.org_id, actor_id=self.f.actor, run=run,
+        ))
+        decision = ObservationReview(
+            "fact:money-1", str(self.f.actor),
+            ReviewDisposition.CONFIRMED,
+            "Synthetic reviewer confirmed source-level value alignment",
+        )
+        recorded, replay = ledger.record(
+            org_id=self.f.scope.org_id, actor_id=self.f.actor, run=run,
+            request_id=uuid4(), expected_revision=0, decision=decision,
+        )
+        self.assertFalse(replay)
+        self.assertEqual(recorded.revision, 1)
+        self.assertFalse(recorded.customer_release_authorized)
+        readback = DisposableM2ReviewLedger(connect).state(
+            org_id=self.f.scope.org_id, actor_id=self.f.actor, run=run,
+        )
+        self.assertEqual(readback.packet, recorded.packet)
 
     def test_request_replay_and_stale_revision_fail_closed(self):
         request = uuid4()
