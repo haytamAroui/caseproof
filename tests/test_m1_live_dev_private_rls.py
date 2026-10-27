@@ -40,7 +40,7 @@ def test_real_database_probe_requires_all_protected_main_guards() -> None:
     "host,user,port,expected",
     [
         (f"db.{PROJECT_REF}.supabase.co", "postgres", "5432", "direct"),
-        (f"aws-0-eu-central-1.pooler.supabase.com",
+        ("aws-0-eu-central-1.pooler.supabase.com",
          f"postgres.{PROJECT_REF}", "5432", "pool"),
     ],
 )
@@ -64,8 +64,8 @@ def test_accepts_only_pinned_project_and_session_mode(
         f"postgresql://postgres:pw@db.{PROJECT_REF}.supabase.co:5432/not-postgres",
         f"postgresql://postgres:pw@db.{PROJECT_REF}.supabase.co:5432/postgres?options=-csearch_path%3Dpublic",
         f"postgresql://postgres:pw@db.{PROJECT_REF}.supabase.co:5432/postgres?sslmode=disable",
-        f"postgresql://postgres:pw@db.notcaseproof.supabase.co:5432/postgres",
-        f"postgresql://postgres.badproject:pw@aws-0-eu-central-1.pooler.supabase.com:5432/postgres",
+        "postgresql://postgres:pw@db.notcaseproof.supabase.co:5432/postgres",
+        "postgresql://postgres.badproject:pw@aws-0-eu-central-1.pooler.supabase.com:5432/postgres",
     ],
 )
 def test_rejects_unpinned_or_insecure_database_connections(uri: str) -> None:
