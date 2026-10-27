@@ -32,7 +32,7 @@ jobs:
       - name: Type check M2 headless private-matter API
         run: uv run --locked mypy --explicit-package-bases apps/api/litigation_check_service.py apps/api/litigation_check_app.py
       - name: Type check M2 review, brief, private composition and correction lifecycle
-        run: uv run --locked mypy --explicit-package-bases apps/api/disposable_litigation_review_ledger.py apps/api/disposable_litigation_brief_graph.py apps/api/postgres_litigation_check_store.py apps/api/disposable_litigation_corrections.py
+        run: uv run --locked mypy --explicit-package-bases apps/api/disposable_litigation_review_ledger.py apps/api/disposable_litigation_brief_graph.py apps/api/postgres_litigation_check_store.py apps/api/disposable_litigation_corrections.py apps/api/signed_private_matter_reader.py
       - name: Verify synthetic M2 factual-check through correction and recheck
         run: uv run --locked python -m scripts.demo_litigation_m2
       - name: Type check M1 completion candidate adapters
@@ -118,3 +118,7 @@ jobs:
         run: uv run --locked python -m scripts.verify_m2_disposable_corrections
       - name: Verify default-private case, evidence and grant RLS under disposable authenticated role
         run: uv run --locked python -m scripts.verify_m1_private_rls
+      - name: Verify Auth-bound reader under actual least-privilege PostgreSQL login
+        env:
+          CASEPROOF_M1_LOCAL_ROLE_TEST: "YES"
+        run: uv run --locked python -m scripts.verify_m1_signed_private_reader
