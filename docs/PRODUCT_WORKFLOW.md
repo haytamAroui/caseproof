@@ -1,6 +1,6 @@
 # CaseProof — Belgian litigation product workflow
 
-**Purpose:** define the complete lawyer-facing workflow that the principal roadmap implements. This is a proposed product contract, not a statement that these screens or capabilities exist in the current application.
+**Purpose:** define the **frozen Clearbrief-class, Word-first Belgian lawyer workflow** implemented by the authoritative [ROADMAP.md](ROADMAP.md). This is a target/acceptance contract, not a claim that the screens or live capabilities exist. On 2026-10-27, `main@eb289e8` has no `apps/word_addin/` and the synthetic web reviewer is not a released litigation product. [42-feature actual-state ledger](FEATURE_DELIVERY_MATRIX.md).
 
 **Primary user:** a Belgian lawyer preparing, checking or reviewing a civil/commercial brief and its exhibit bundle. The three product languages are **Dutch (NL), French (FR) and English (EN)** for the UI, searches, evidence workflows and supported outputs. Product UI language, source language, document language and output language are separate settings; they may differ in the same matter. Language support is a product target, not a claim of implemented translations or measured retrieval quality.
 
@@ -9,6 +9,14 @@
 A lawyer can import a brief and its evidence, confirm which files correspond to which Stuk/Pièce references, find and inspect source passages, insert evidence citations while drafting, run a scoped check, resolve or correct findings, hand the exact version to a reviewer, and deliver a navigable brief and exhibit package. When the brief or evidence changes, the product identifies the affected work and requires the appropriate recheck.
 
 The product reports what it checked and what it could not check. “No issue found” means no issue was found within the declared and processed scope; it never means that all facts are true or all evidence was discovered. **Commercial wedge:** the *first integrated checker* verifies cited-exhibit existence, quotation fidelity **when quotations exist**, and carefully aligned date/amount claims in **one** headless pass, including cases with **zero quotations**. Its result is an auditable review record, not a statement of professional certification or court readiness. See [source/competitor audit](research/BELGIAN_WEDGE_FEEDBACK_AUDIT_2026-10-26.md).
+
+## Commercial workflow vs backend slices
+
+**M1/M2 technical slice:** code/CI can demonstrate verified source-bound citations, type-checked factual differences and a durable reviewer history **headlessly**. It can inform the UX and a controlled benchmark, but **must not be sold as a substitute for the end-to-end Clearbrief-class application**.
+
+**Initial complete product target (M1–M4, not all F01–F42):** one signed Belgian lawyer creates an authorized matter, stores actual originals, confirms exhibits, **works inside Microsoft Word** to find evidence and add inspectable Stuk/Pièce citations, checks/corrects/reviews the document, and receives **validated DOCX/PDF, dynamic exhibits, verification report and controlled handoff**. Timelines, generalized document Q&A, US legal research/TOA and court filing integrations are later or separately authorized.
+
+**Early Office spike:** develop a synthetic Word selection/search/preview/insert/save/undo/reopen thin path in parallel with M1-B/M2-B to verify API/editor compatibility. This is a **non-production contract spike**, not a shortcut around signed private access. [M3 host and accessibility requirements](m3/WORD_INTEGRATION_ACCEPTANCE.md); [M4 real-byte and delivery requirements](m4/DELIVERY_ACCEPTANCE.md).
 
 ## Main navigation
 
@@ -20,7 +28,7 @@ The product reports what it checked and what it could not check. “No issue fou
 6. **Outputs** — reports, linked briefs, exhibit indexes/bundles and recipient shares.
 7. **Matter settings** — roles, language, citation format, retention and model eligibility.
 
-The Word task pane exposes the contextual subset: selection, evidence suggestions, source inspection, citation insertion, correction preview, recheck status and open-in-web actions. Both clients use the same server-owned matter graph and permissions.
+The **Word task pane is a mandatory first-product client**, not a future optional extra. It exposes the contextual subset: selection, evidence suggestions, source inspection, citation insertion, correction preview, recheck status and open-in-web actions. Both clients use the same server-owned matter graph and permissions.
 
 ## End-to-end journey
 
@@ -70,13 +78,13 @@ The lawyer selects a factual sentence or phrase, opens “Find evidence,” and 
 
 **System:** records the citation edge from this draft revision/assertion to the resolved exhibit, source version and anchor. Retrieval rank is labelled as relevance ordering, not truth probability. An empty result is a valid outcome with its search scope and unindexed/failed material visible.
 
-**Retrieval promise:** launch with evidence retrieval whose Dutch, French and English keyword and paraphrase-query performance is measured on the rights-cleared corpus. Do not imply proven broad conceptual-search equivalence from a lexical baseline. Broader conceptual-search claims depend on demonstrated retrieval results. Semantic retrieval, if proposed, is a separately evaluated capability; semantic support assessment remains optional under PIV-12 and is not a prerequisite for the deterministic workflow.
+**Retrieval promise:** launch with evidence retrieval whose Dutch, French and English keyword and paraphrase-query performance is measured on the rights-cleared corpus. This first search path is **PIV-10 evidence retrieval**; it is not a claim that the separately evaluated PIV-12 **opponent-wide uncited-page discovery** is complete. Do not imply proven broad conceptual-search equivalence from a lexical baseline. Broader conceptual-search claims depend on demonstrated retrieval results. Semantic retrieval, if proposed, is a separately evaluated capability; semantic support assessment remains optional under PIV-12 and is not a prerequisite for the deterministic workflow.
 
-**Word safety:** before insertion, the add-in checks that the selected range still matches the captured document revision/context. If the text moved or another editor changed it, the add-in stops and asks the lawyer to reselect or review a refreshed proposal. It preserves formatting, lists, footnotes and tracked changes; the operation is reversible.
+**Word safety:** this is an actual supported Microsoft Word host with an installable task pane, not a web-only editor pretending to be Word. Before insertion, the add-in checks that the selected range still matches the captured document revision/context. If the text moved or another editor changed it, the add-in stops and asks the lawyer to reselect or review a refreshed proposal. It preserves formatting, lists, footnotes and tracked changes; the operation is reversible.
 
 **States:** no selection, searching, partial index, results, no matches, source unavailable, citation ready, selection changed, inserted, undone.
 
-**Done when:** the lawyer can reopen the inserted pinpoint and inspect the same source version from Word or web.
+**Done when:** in a **real tested Word host**, the lawyer can reopen the inserted pinpoint and inspect the same immutable source version from Word or web; a changed selection, expired token or second insert request does not silently damage the file. The saved DOCX is reopened and checked for citation/footnote/format integrity. [Host matrix and failure tests](m3/WORD_INTEGRATION_ACCEPTANCE.md).
 
 ### 5. Check own or opponent brief
 
@@ -131,7 +139,7 @@ The lawyer chooses exhibit order policy (fixed register or first citation) and c
 
 **States:** dirty draft, stale review, scope confirmation, queued, rendering, validating, ready, failed, superseded.
 
-**Done when:** the output manifest identifies exact input versions, policy/check versions, review events, exclusions and limitations. A hash is an integrity aid, not proof of source authenticity or legal correctness.
+**Done when:** the output manifest identifies exact input versions, policy/check versions, review events, exclusions and limitations. **Generated DOCX, PDF, index and exhibit bundle bytes have been reopened and hyperlinks/page maps independently validated**, including changed and uncited retained exhibits. A hash is an integrity aid, not proof of source authenticity or legal correctness. [M4 artifact proof](m4/DELIVERY_ACCEPTANCE.md).
 
 ### 9. Share or hand off for filing
 
@@ -142,6 +150,21 @@ Submission and receipt capture are separate actions. A real filing integration r
 Court-profile guidance is versioned and shows the court/division/chamber, document type, source and passage, effective date, last verification date, owner, and whether each item is mandatory or recommended. Show scope, expiry and any conflict or unavailable source. A stale or unknown profile is labelled unverified and cannot certify court readiness or impose a national rejection rule. Technical bundle validation and procedural readiness are separate statuses; both remain subject to professional review.
 
 **Done when:** the recipient sees only authorized materials, or the lawyer has downloaded the intended package for the existing filing process. The matter records prepared, shared, submitted and receipt-confirmed as distinct states.
+
+## Minimum complete launch demonstration (one real integrated outcome)
+
+These are **one contiguous user journey**, not seven isolated green fixture tests. After appropriate **approved security and confidentiality** gates, record in staging:
+
+1. Genuine signed private-matter owner and second differently granted teammate; verify isolation and revocation.
+2. Real rights-cleared mixed NL/FR/EN clean PDF/DOCX and scanned exhibit corpus, byte hashes, failures and page denominator.
+3. Human-confirmed Stuk/Pièce aliases and physically resolvable source pages; new immutable draft version.
+4. **Word:** select draft sentence → search matter sources → inspect original with context → insert precise citation → save/reopen DOCX and reopen citation source.
+5. **Check:** one unified zero-quote capable run over references, literal quotations and same-role dates/amounts; clean case legitimately passes with no findings, incomplete pages show unknown.
+6. Human inspect/reject/confirm, preview correction, apply/undo, recheck affected assertions; stale review and source replacement blocked from release.
+7. Human-approved current manifest → **actual link-validated DOCX/PDF, dynamic exhibit index/bundle and Verification Run Record** → authorized download/recipient share and independent process restart.
+8. A second task on the matter, measured lawyer effort and access/revocation negatives; record full receipt, document versions and benchmark denominator.
+
+If a row cannot be completed, mark the **whole product demonstration incomplete**. A successful headless M2 program still counts as engineering progress, not a successful commercial launch. No filing receipt or legal certificate is inferred.
 
 ## Cross-cutting failure and recovery behavior
 
@@ -180,6 +203,18 @@ Measure task completion on representative NL/FR/EN and mixed-language dossiers t
 - retain existing measures for reference resolution, labelled-passage recall, correction outcomes, round-trip integrity, partial/failure recovery and access rejection; add **quote-free brief performance**, same-role value-mismatch precision, falsely matched dates/units, actionable finding yield, reviewer seconds per alert, zero-findings clean controls, and manually measured opponent uncited-page retrieval recall. Compare with [Hublex](https://hublex.be/en/conclusions-check) + manual Word/PDF + authorized Alice where feasible, without claiming no local competitors.
 
 Use privacy-safe operational metadata; no customer document content enters telemetry. Each measure names its denominator, corpus/task protocol and version. No metric is advertised as legal accuracy without a validated evaluation design.
+
+## Delivery evidence per interface
+
+The web workspace is useful for matter inventory, PDF/source inspection, reviewer assignment and outputs. It **must not substitute** for the M3 native Word experience in acceptance. An M2 headless JSON report is not the reviewed M4 DOCX/PDF verification deliverable. Preserve this distinction in screenshots, demos and sales copy.
+
+| User-facing result | Required proof | Gate |
+|---|---|---|
+| Private case and uploaded sources | Signed users, exact-case grants, private custody, real PDF/DOCX/OCR, resumable jobs | M1-B/C |
+| Factual check and human review | Scoped source-bound NL/FR/EN results, readable original, historical decisions, durable undo/recheck | M2-B |
+| Word evidence writing | Real supported Office host, selected range freshness, lookup, preview, pinpoint insert, saved DOCX roundtrip | M3 |
+| Dynamic final package | Correct frozen aliases/order/page maps, linked DOCX/PDF/index/bundle and validated reread | M4 |
+| Customer delivery | Genuine permission, review state, recipient redaction/expiry, audit/receipt and repeat-use measurement | M4/PIV-20 |
 
 ## Implementation mapping
 

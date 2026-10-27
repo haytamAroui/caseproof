@@ -1,6 +1,6 @@
 # CaseProof — Belgian litigation writing and evidence review
 
-**Product workflow:** [Complete lawyer journey](docs/PRODUCT_WORKFLOW.md). **Principal roadmap:** [Belgian litigation workflow and build plan](docs/ROADMAP.md). It supersedes the finance-first product order in older README/roadmap material; historical ADRs remain architecture records. The repository code has not yet completed this pivot and the litigation product is not production-ready. See [verified implementation status and release blockers](docs/STATUS.md).
+**Product decision:** build a **Clearbrief-class Microsoft Word evidence-writing, factual-checking and dynamic-exhibit delivery workflow for Belgian lawyers**, not a standalone M2 fact checker or a finance product. **Principal roadmap:** [M0–M6 full product scope](docs/ROADMAP.md). **Product workflow:** [complete lawyer journey](docs/PRODUCT_WORKFLOW.md). **All 42 feature states:** [Clearbrief delivery ledger](docs/FEATURE_DELIVERY_MATRIX.md). **Word acceptance:** [M3](docs/m3/WORD_INTEGRATION_ACCEPTANCE.md). **Real document release:** [M4](docs/m4/DELIVERY_ACCEPTANCE.md). It supersedes the finance-first product order in older README/roadmap material; historical ADRs remain architecture records. The repository code has not yet completed this pivot and the litigation product is not production-ready. See [verified implementation status and release blockers](docs/STATUS.md).
 
 
 ## M0 — Belgian litigation pivot baseline (PIV-00/01)
@@ -27,7 +27,7 @@ uv run --locked python -m scripts.demo_litigation_evidence_library
 
 CaseProof's target product is a Belgian evidence-linked workspace for lawyers to write with evidence, check their own or an opponent's brief against the exhibit bundle, review and correct findings, and deliver source-linked work. The initial factual-evidence workflow does not claim automatic legal-authority verification. The existing sector-neutral Evidence Kernel remains the foundation; the implementation plan uses `domains/disputes/`. AZComply is independent.
 
-The product's desired outcome is a reviewed, source-linked legal work product, not generic legal AI chat. A correct quotation from a document is **not** proof of document authenticity or factual truth.
+The **first complete sellable workflow requires M1–M4 together**: authentic private matter, preserved evidence, a real Word task pane for inspecting/inserting Stuk/Pièce sources, scoped checking and human correction, then dynamic exhibits, validated linked DOCX/PDF and reviewed delivery. M2 headless checking is an engineering proof, **not the finished app**. The product's desired outcome is a reviewed, source-linked legal work product, not generic legal AI chat. A correct quotation from a document is **not** proof of document authenticity or factual truth.
 
 ## Existing implementation (finance/reference workflow)
 
@@ -49,7 +49,7 @@ uv run --locked python scripts/check_architecture.py
 
 Cloud CI also tests disposable PostgreSQL 17 transaction and tenant-isolation invariants; review the actual [GitHub Actions results](https://github.com/haytamAroui/caseproof/actions) for the SHA being assessed.
 
-The root `MEMORY.md` and `docs/STATUS.md` are handoff aids, not trust authorities. `CONSTITUTION.md` and owner-controlled release gates still apply. Real Auth, private Storage, a safe /v2 app and an invoice/PO reviewer journey are outstanding.
+The root `MEMORY.md` and `docs/STATUS.md` are handoff aids, not trust authorities. `CONSTITUTION.md` and owner-controlled security/release gates still apply. **Belgian litigation M1-B/M2-B remain live-integration OPEN** (genuine private Auth→DB, private Storage, real OCR and durable reviewer processing); **M3 Word and M4 linked deliverables are not implemented**. Earlier invoice/PO workflows remain compatibility/reference code, **not** the current delivery objective.
 
 ## Source layout
 

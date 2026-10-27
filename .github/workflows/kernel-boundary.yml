@@ -13,6 +13,8 @@ jobs:
           python-version: '3.11'
       - name: Verify architecture boundaries
         run: uv run --locked python scripts/check_architecture.py
+      - name: Verify Clearbrief 42-feature roadmap and M3/M4 product contracts
+        run: uv run --locked python -m scripts.check_clearbrief_roadmap
       - name: Run unit tests
         run: uv run --locked pytest -q
       - name: Ruff check
