@@ -44,8 +44,8 @@ def _contract_bytes(candidate: str) -> None:
             raise AssertionError("combined candidate missing bounded source")
         segment = candidate.split(start, 1)[1].split(stop, 1)[0].strip()
         source = path.read_text(encoding="utf-8")
-        source = re.sub(r"^begin;\\s*$", "", source, count=1, flags=re.M)
-        source = re.sub(r"^commit;\\s*$", "", source, count=1, flags=re.M)
+        source = re.sub(r"^begin;\s*$", "", source, count=1, flags=re.M)
+        source = re.sub(r"^commit;\s*$", "", source, count=1, flags=re.M)
         source = source.strip()
         if segment != source:
             raise AssertionError("combined M2 candidate diverges from disposable source")
