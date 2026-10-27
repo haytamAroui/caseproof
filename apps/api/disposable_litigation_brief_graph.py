@@ -181,6 +181,13 @@ class DisposableBriefGraphStore:
             raise BriefGraphConflict("typed immutable graph command required")
         case = _uuid(representation.brief.case_id)
         version = _uuid(representation.brief.version_id)
+        # Hashing the caller's raw spelling would make a valid persisted
+        # graph unrecoverable when the reader reconstructs canonical UUIDs.
+        # Reject noncanonical spellings instead of silently changing source
+        # identity or normalizing a security-sensitive caller value.
+        if (representation.brief.case_id != str(case)
+                or representation.brief.version_id != str(version)):
+            raise BriefGraphConflict("canonical case/version UUID spelling required")
         graph_sha = _graph_identity(logical, binding, representation, document_role)
         if not representation.text or len(representation.text.encode("utf-8")) > 480000:
             raise BriefGraphConflict("bounded nonempty representation required")
