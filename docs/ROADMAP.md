@@ -9,7 +9,7 @@
 
 **M0 implementation packet:** See [ADR 0016](adr/0016-belgian-litigation-product-pivot.md), [pinned capability/gate matrix](m0/BASELINE.md), [external claims register](m0/CLAIMS_REGISTER.md), [fixed manual task benchmark](m0/BENCHMARK_PROTOCOL.md), and [original synthetic evaluation corpus](../evals/litigation/README.md). These are M0 evidence artifacts, **not** claims of approved legal gold labels, benchmarked accuracy, complete PIV-01 real-format coverage or production readiness.
 
-**M2 backend engineering packet:** [M2 engineering acceptance gates](m2/ENGINEERING_ACCEPTANCE.md) and [stacked PR #71](https://github.com/haytamAroui/caseproof/pull/71). Its deterministic factual-check implementation and tests do NOT close M1 production integration or authorize customer uploads. The M2-A/B/C gates remain distinct.
+**M2 backend engineering packet:** [M2 engineering acceptance gates](m2/ENGINEERING_ACCEPTANCE.md), [merged M2-A PR #71](https://github.com/haytamAroui/caseproof/pull/71), and merged disposable persistence/recheck #82–85. Their implementation and CI do **not** close live M1-B or M2-B integration, authorize customer uploads or substitute for M3 Word/M4 delivery. The M2-A/B/C acceptance gates remain distinct.
 
 **M1 integrated development slice:** [Implementation evidence](m1/IMPLEMENTATION.md) for PIV-02–06 (merged #62–63), and merged *candidate-only* #86–88. [M1 Backend Exit Contract](m1/BACKEND_EXIT_CONTRACT.md) governs backend completion; passing disposable CI does not demonstrate live Supabase RLS/Auth or confidential custody. An M1 backend exit does not require finished Word/browser screens; **a sellable Clearbrief-class product does**.
 
