@@ -52,7 +52,16 @@ def repository(material):
     return repo
 
 
-@pytest.mark.parametrize("kind", list(ReviewKind))
+@pytest.mark.parametrize(
+    "kind",
+    [
+        ReviewKind.RETAIN,
+        ReviewKind.REJECT,
+        ReviewKind.CORRECT,
+        ReviewKind.QUALIFY,
+        ReviewKind.REQUEST_EVIDENCE,
+    ],
+)
 def test_each_review_action_is_separate_unapproved_revision(material, kind):
     snapshot, docs = material
     repo = repository(material)

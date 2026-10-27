@@ -9,7 +9,8 @@ from uuid import UUID
 
 from application.documents.contracts import ParsedDocument
 from application.dossiers.pack import build_pack
-from application.extraction.contracts import ExtractionError, Scope
+from application.extraction.analysis import confirmed_boundaries_from_audit
+from application.extraction.contracts import ExtractionError, ExtractionRequest, Scope
 from application.review.contracts import ReviewCommand, ReviewRepository, ReviewSnapshot
 from apps.api.access_control import AuthorizedCase, CaseAccessService, CaseAction
 
@@ -60,6 +61,31 @@ class AuthenticatedReviewWorkbench:
         actor = UUID(context.subject_id)
         self.repository.publish(material.snapshot, actor)
         return self.repository.record(material.snapshot.scope, actor, command)
+
+    def reviewed_scope(
+        self, *, bearer: str, case_id: str, request: ExtractionRequest
+    ) -> ExtractionRequest:
+        """New-run entity scope derived exclusively from audited, authenticated review."""
+
+        context, material = self._current(bearer, case_id)
+        scope = Scope(UUID(context.org_id), UUID(context.case_id))
+        if request.scope != scope:
+            raise ExtractionError("requested extraction case differs from authenticated case")
+        actor = UUID(context.subject_id)
+        self.repository.publish(material.snapshot, actor)
+        state = self.repository.state(scope, actor)
+        evidence = material.snapshot.data["extraction"]["discoveries"]
+        reviewed_hashes = {
+            e["audit_hash"]
+            for e in state["events"]
+            if e.get("actor_id") and e.get("command", {}).get("kind") in {"confirm_boundary", "reject_boundary"}
+        }
+        return confirmed_boundaries_from_audit(
+            request,
+            tuple(evidence),
+            state,
+            authorize=lambda _scope, ref: _scope == scope and ref in reviewed_hashes,
+        )
 
     def export(self, *, bearer: str, case_id: str) -> tuple[bytes, str]:
         context, material = self._current(bearer, case_id)

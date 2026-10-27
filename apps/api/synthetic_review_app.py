@@ -46,7 +46,7 @@ class ReviewInput(BaseModel):
 def memory_demo() -> tuple[AuthenticatedReviewWorkbench, str]:
     from datetime import timedelta
 
-    snapshot, documents = demo_material()
+    snapshot, documents = demo_material(boundary_review=True)
 
     class Verifier:
         def verify_bearer(self, token: str) -> VerifiedSubject:

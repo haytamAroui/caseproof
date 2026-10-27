@@ -20,6 +20,7 @@ from application.review.contracts import (
     ReviewKind,
     ReviewSnapshot,
     event_digest,
+    validate_command,
 )
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
@@ -255,6 +256,27 @@ def verify_pack(raw: bytes, *, expected_manifest: str | None = None) -> dict[str
         ]:
             raise ExtractionError("source location mapping changed")
         resolved += 1
+    # Independently reconstruct the proposed entity citations from preserved bytes.
+    for discovery in extraction["discoveries"]:
+        if discovery.get("category") != "entities" or discovery.get("state") != "proposed":
+            continue
+        proposal = discovery["proposal"]
+        src = documents.get(proposal["source_id"])
+        start = discovery["start"]
+        if (
+            src is None
+            or type(start) is not int
+            or start < 0
+            or src.evidence.content[start : start + len(proposal["quote"])] != proposal["quote"]
+            or digest(proposal) != discovery["id"]
+        ):
+            raise ExtractionError("unverifiable boundary proposal in pack")
+    from uuid import UUID
+
+    from application.extraction.contracts import Scope
+
+    org, case_id = case["scope"].split(":")
+    snapshot = ReviewSnapshot(Scope(UUID(org), UUID(case_id)), manifest["snapshot_hash"], canonical(case))
     previous = ZERO_HASH
     events = state["events"]
     if len(events) > 1000:
@@ -262,9 +284,7 @@ def verify_pack(raw: bytes, *, expected_manifest: str | None = None) -> dict[str
     request_ids = set()
     for revision, event in enumerate(events, 1):
         c = event["command"]
-        from uuid import UUID
-
-        ReviewCommand(
+        command = ReviewCommand(
             UUID(c["request_id"]),
             c["snapshot_hash"],
             c["expected_revision"],
@@ -273,6 +293,8 @@ def verify_pack(raw: bytes, *, expected_manifest: str | None = None) -> dict[str
             c["note"],
             c["correction"],
         )
+        if command.snapshot_hash == snapshot.snapshot_hash:
+            validate_command(snapshot, command)
         if (
             event["revision"] != revision
             or c["expected_revision"] != revision - 1
