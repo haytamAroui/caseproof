@@ -1,0 +1,88 @@
+name: CaseProof M1 + M2 one-click signed E2E
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: caseproof-m1b-ephemeral-private-auth
+  cancel-in-progress: false
+
+jobs:
+  end-to-end:
+    name: Signed Auth → private matter → Vault → check → review → revoke
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: caseproof-dev-live-auth
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: caseproof_s2_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: caseproof_ephemeral_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caseproof_s2_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 8
+    env:
+      CASEPROOF_DISPOSABLE_DB: "YES"
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: caseproof_s2_ci
+      PGUSER: postgres
+      PGPASSWORD: caseproof_ephemeral_ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: M1 and S2 foundation, exhibit/grant schema and persistent Vault
+        run: |
+          set -euo pipefail
+          uv run --locked python -m scripts.verify_s2_002_database
+          uv run --locked python -m scripts.verify_m1_disposable_exhibits
+          CASEPROOF_S2_007_SYNTHETIC=YES uv run --locked python -m scripts.verify_s2_007_disposable_tenancy
+          uv run --locked python -m scripts.verify_s2_004_database
+          uv run --locked python -m scripts.verify_s2_008a_database
+          uv run --locked python -m scripts.verify_s2_008a3_reader
+          uv run --locked python -m scripts.verify_s2_009b_database
+          uv run --locked python -m scripts.verify_vault_integration
+      - name: M2 versioned brief, persisted checks, review and correction/recheck
+        run: |
+          set -euo pipefail
+          uv run --locked python -m scripts.verify_m2_disposable_runs
+          uv run --locked python -m scripts.verify_m2_brief_graph
+          uv run --locked python -m scripts.verify_m2_private_check_composition
+          uv run --locked python -m scripts.verify_m2_disposable_corrections
+          uv run --locked python -m scripts.verify_m1_private_rls
+      - name: Three genuine ephemeral Supabase dev identities drive signed M1 and persisted M2
+        env:
+          CASEPROOF_M1M2_E2E: "YES"
+          CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+          CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+        run: |
+          set -euo pipefail
+          uv run --locked python -m scripts.verify_m1_m2_signed_e2e
+      - name: Summarize what was actually tested
+        if: always()
+        run: |
+          {
+            echo '## CaseProof M1+M2 protected development acceptance'
+            echo ''
+            echo '- Real confirmed Supabase dev Auth users: created during signed step, deleted in finally.'
+            echo '- Actual Postgres/Vault/M2 data: isolated disposable GitHub runner only.'
+            echo '- Mainline backend check, review, correction/recheck: verified in isolated PostgreSQL.'
+            echo '- Signed bearer → scoped private case → verified source → persisted M2 review: signed step.'
+            echo '- No remote DB admin DSN, CA PEM, Storage customer object or M2 live migration.'
+            echo '- This check does **not** establish M1/M2 live dev completion or release approval.'
+            echo '- Each step must be green; read the failed step in Actions for precise gaps.'
+          } >> "$GITHUB_STEP_SUMMARY"
