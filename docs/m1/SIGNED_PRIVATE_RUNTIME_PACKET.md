@@ -2,7 +2,7 @@
 
 **27 October 2026 | Candidate (not deployed) | CaseProof dev only**
 
-This packet follows [ADR-0017 default-private legal matters](../architecture/ADR-0017.md),
+This packet follows [ADR-0017 default-private legal matters](../adr/0017-default-private-litigation-matters.md),
 [PR #86's reviewed policy proposal](../../db/proposals/PIV-M1_default_private_rls_candidate.sql)
 and [M1 security acceptance gate](PRIVATE_RLS_AUTH_GATE.md).
 
