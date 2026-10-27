@@ -17,12 +17,14 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from apps.api.signed_supabase_originals import (
-    OriginalRef, PrivateStorageDenied, SignedOriginalsStorage,
+    OriginalRef,
+    PrivateStorageDenied,
+    SignedOriginalsStorage,
 )
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
-from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin, PROJECT_REF, ISSUER
+from scripts.verify_dev_ephemeral_auth import ISSUER, PROJECT_REF, GoTrueDevAdmin
 from scripts.verify_m1_ephemeral_signed_private import ephemeral_private_probe
 
 HOST = f"{PROJECT_REF}.supabase.co"
