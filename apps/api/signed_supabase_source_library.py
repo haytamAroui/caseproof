@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from apps.api.signed_supabase_originals import (
-    BUCKET,
     MAX_BYTES,
     MIME,
     OriginalRef,
@@ -27,7 +26,9 @@ PROJECT_HOST = "ldwmocpxwskvhoojndrd.supabase.co"
 MAX_METADATA_BYTES = 8192
 
 
-def _uuid(raw: str) -> UUID:
+def _uuid(raw: object) -> UUID:
+    if not isinstance(raw, str):
+        raise PrivateStorageDenied("Masked or malformed source identifier")
     try:
         value = UUID(raw)
     except (TypeError, AttributeError, ValueError):
@@ -93,7 +94,7 @@ class SignedSourceLibrary:
             raise PrivateStorageDenied("Source version not uniquely authorized") from None
         obj: dict[str, object] = rows[0]
         try:
-            org_id = _uuid(obj["org_id"])  # type: ignore[arg-type]
+            org_id = _uuid(obj["org_id"])
             refs = tuple(_uuid(obj[k]) for k in ("case_id", "document_id", "version_id"))
             digest = obj["original_sha256_hex"]
             mime = obj["media_type"]
