@@ -89,7 +89,7 @@ def _check_schema(env: dict[str, str]) -> None:
 
 
 def _immutable_check(env: dict[str, str]) -> None:
-    org, actor, case, doc, version, snapshot = (uuid4() for _ in range(6))
+    org, actor, case, doc, version = (uuid4() for _ in range(5))
     payload = "[]"
     digest = "a" * 64
     other = "b" * 64
