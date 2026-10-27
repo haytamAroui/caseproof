@@ -170,6 +170,7 @@ class DisposableBriefGraphStore:
         self, *, org_id: UUID, actor_id: UUID, brief_id: UUID,
         binding: VerifiedBriefBinding, representation: BriefRepresentation,
         document_role: str, request_id: UUID, expected_revision: int,
+        commit_guard: Callable[[Any, int, int], None] | None = None,
     ) -> BriefWriteReceipt:
         org, actor, logical, request = (
             _uuid(org_id), _uuid(actor_id), _uuid(brief_id), _uuid(request_id),
@@ -203,6 +204,12 @@ class DisposableBriefGraphStore:
             case_rev, exhibit_rev = self._authorize(conn, org, case, actor)
             self._source(conn, org=org, case=case, binding=binding,
                          expected_sha=representation.brief.sha256_hex)
+            # Optional trusted application check executed AFTER reauthorizing
+            # and locking the case/grants/source, in this same commit transaction.
+            # Corrections use it to lock their reviewer snapshot and reject
+            # revocation or changed decisions BEFORE mutating the brief head.
+            if commit_guard is not None:
+                commit_guard(conn, case_rev, exhibit_rev)
             keys = (org, case, logical)
             conn.execute(
                 "insert into caseproof._m2_brief_heads(org_id,case_id,brief_id) "
