@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from ipaddress import ip_address
 
-from fastapi import FastAPI, Header, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
@@ -18,11 +18,14 @@ from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
 from apps.api.litigation_original_reader import AuthorizedOriginalReader
 from apps.api.litigation_search_app import create_litigation_search_app
+from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
+from apps.api.signed_supabase_source_library import SignedSourceLibrary
 
 
 def create_litigation_development_app(
     *, checker: AuthorizedLitigationChecker | None = None,
     originals: AuthorizedOriginalReader | None = None,
+    signed_originals: SignedSourceLibrary | None = None,
 ) -> FastAPI:
     app = FastAPI(title="CaseProof loopback development", docs_url=None, redoc_url=None, openapi_url=None)
     # One shared checker ensures search and check use the same trust boundary.
@@ -65,5 +68,54 @@ def create_litigation_development_app(
             "X-CaseProof-Original-SHA256": item.sha256_hex,
             "X-CaseProof-Original-Media-Type": item.media_type,
         })
+
+
+    @app.get("/dev/signed/matters/{case_id}/documents/{document_id}/versions/{version_id}/original")
+    def signed_original(case_id: str, document_id: str, version_id: str,
+                        authorization: str | None = Header(default=None)) -> Response:
+        if signed_originals is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            data = signed_originals.read(
+                bearer=_token(authorization), case_id=case_id,
+                document_id=document_id, version_id=version_id,
+            )
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return Response(
+            content=data, media_type="application/octet-stream",
+            headers={"Content-Disposition": "attachment; filename=caseproof-original"},
+        )
+
+    @app.put("/dev/signed/matters/{case_id}/documents/{document_id}/versions/{version_id}/original",
+             status_code=201)
+    async def signed_original_upload(
+        case_id: str, document_id: str, version_id: str, request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> Response:
+        if signed_originals is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        bearer = _token(authorization)
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in request.stream():
+            total += len(chunk)
+            if total > MAX_BYTES:
+                raise HTTPException(status_code=413, detail="Original exceeds size limit")
+            chunks.append(chunk)
+        if total == 0:
+            raise HTTPException(status_code=422, detail="Empty original")
+        try:
+            signed_originals.put_once(
+                bearer=bearer, case_id=case_id, document_id=document_id,
+                version_id=version_id, data=b"".join(chunks),
+            )
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return Response(status_code=201)
 
     return app

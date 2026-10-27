@@ -4,10 +4,12 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from typing import Protocol
+from uuid import UUID
 
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.litigation_check_service import AuthorizedLitigationChecker, PrivateMatterAccess
 from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
+from apps.api.signed_supabase_originals import OriginalRef, SignedOriginalsStorage
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +26,10 @@ class OriginalPort(Protocol):
 class AuthorizedOriginalReader:
     """Read originals only from the server-owned, confirmed source snapshot."""
 
-    def __init__(self, checker: AuthorizedLitigationChecker, originals: OriginalPort) -> None:
+    def __init__(
+        self, checker: AuthorizedLitigationChecker,
+        originals: OriginalPort | SignedOriginalsStorage,
+    ) -> None:
         self.checker = checker
         self.originals = originals
 
@@ -49,7 +54,21 @@ class AuthorizedOriginalReader:
             matches = [p for p in bundle.previews if (p.row.source_id, p.row.version_id) == key]
             if len(matches) != 1:
                 raise AccessRejected(AccessFailure.RESOURCE_MASKED)
-            original = self.originals.read(access=scope, source_id=source_id, version_id=version_id)
+            # For the live Supabase backend, reuse the verified caller's JWT
+            # against Storage RLS and derive the path ONLY from the trusted,
+            # already source-bound evidence preview and current scope.
+            if isinstance(self.originals, SignedOriginalsStorage):
+                row = matches[0].row
+                original_ref = OriginalRef(
+                    UUID(scope.org_id), UUID(scope.case_id), UUID(row.document_id),
+                    UUID(row.version_id), row.original_sha256, row.media_type,
+                )
+                payload = self.originals.get_verified(original_ref, bearer)
+                original = Original(payload, row.original_sha256, row.media_type)
+            else:
+                original = self.originals.read(
+                    access=scope, source_id=source_id, version_id=version_id,
+                )
             if (not isinstance(original, Original) or type(original.data) is not bytes
                     or not 0 < len(original.data) <= 5_242_880
                     or original.media_type not in {"application/pdf", "text/plain"}
