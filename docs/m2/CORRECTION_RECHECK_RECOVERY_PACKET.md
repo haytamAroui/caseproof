@@ -18,6 +18,12 @@ migration, and no binding authenticated real reviewer deployment.
    separate immutable source and document version in the Vault. This packet
    supports only identity-normalized UTF-8 text/plain; genuine DOCX editing
    and source page coordinates remain blocked pending parser integration.
+   **Freshness constraint:** preserving an additional source may increment
+   the case revision. The user must rerun the original check and record a
+   fresh human disposition **after** source preservation and **before** the
+   correction plan. The acceptance fixture deliberately pre-stages its
+   synthetic corrected sources before publishing the reviewed old run. A
+   source added after that run is a negative test and must invalidate it.
 5. An append-only `_m2_correction_plans` prepare row freezes the proposal,
    fresh source/version IDs, expected brief/review revisions, graph digest
    and authorization snapshot; same request UUID + different data is denied.
