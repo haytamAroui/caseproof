@@ -21,6 +21,7 @@ from apps.api.evidence_vault_protocol import VaultScope
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
 from apps.api.postgres_litigation_check_store import PostgresPrivateMatterCheckStore
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage
+from scripts.extraction_fixtures import NOW
 from scripts.verify_document_intake_integration import SyntheticVerifier
 from scripts.verify_m2_brief_graph import (
     add_verified_version,
@@ -30,7 +31,6 @@ from scripts.verify_m2_brief_graph import (
 from scripts.verify_m2_disposable_runs import fixture
 from scripts.verify_s2_002_database import _env
 from scripts.verify_vault_integration import connect, coordinator
-from scripts.extraction_fixtures import NOW
 
 EVIDENCE = b"De betaling van EUR 12500 was op 22 mei 2026."
 
