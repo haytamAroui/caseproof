@@ -30,7 +30,7 @@ def test_fixture_is_unique_and_only_reserved_real_auth_users() -> None:
 def test_cleanup_requires_storage_api_not_sql_object_delete() -> None:
     assert "remove original through Storage API before DB cleanup" in SQL
     assert "delete from storage.objects" not in SQL.lower()
-    assert "/storage/v1/object/caseproof-originals-dev" in live._admin_http.__code__.co_consts
+    assert "/storage/v1/object/caseproof-originals-dev" in (ROOT / "scripts/verify_m1_live_positive_original.py").read_text()
     assert live.DIGEST == __import__("hashlib").sha256(live.FIXTURE).hexdigest()
 
 
