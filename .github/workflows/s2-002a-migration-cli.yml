@@ -37,22 +37,8 @@ jobs:
           from pathlib import Path
 
           def normalize(source: str) -> str:
-              source = re.sub(r'(^|\\n)begin;\\s*\\n', '\\n', source, count=1, flags=re.I)
-              source = re.sub(r'\\ncommit;\\s*
-      - name: Cross-check with pinned official Supabase CLI
-        run: |
-          set -euo pipefail
-          npx --yes supabase@2.121.0 --version
-          npx --yes supabase@2.121.0 migration new --help >/dev/null
-          scratch="$(mktemp -d)"
-          cp db/proposals/S2-002_tenant_foundation.sql "$scratch/source.sql"
-          (
-            cd "$scratch"
-            npx --yes supabase@2.121.0 migration new caseproof_tenant_foundation < source.sql
-            cmp source.sql supabase/migrations/*_caseproof_tenant_foundation.sql
-          )
-          echo 'S2-002A_CANONICAL_MIGRATION_VERIFIED'
-, '\\n', source, count=1, flags=re.I)
+              source = re.sub(r'(^|\n)begin;\s*\n', '\n', source, count=1, flags=re.I)
+              source = re.sub(r'\ncommit;\s*$', '\n', source, count=1, flags=re.I)
               return source
 
           for path, proposal in (
