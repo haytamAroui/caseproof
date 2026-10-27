@@ -15,7 +15,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from application.litigation.review_cycle import (
@@ -238,13 +238,16 @@ class DisposableCorrectionCoordinator:
 
     @staticmethod
     def _plan(conn: Any, ctx: _Verified, cmd: CorrectionCommand) -> tuple[Any, ...] | None:
-        return conn.execute(
-            "select actor_id,input_sha,new_version_id,graph_sha,"
-            "expected_brief_revision,expected_review_revision "
-            "from caseproof._m2_correction_plans "
-            "where org_id=%s and case_id=%s and brief_id=%s and request_id=%s",
-            DisposableCorrectionCoordinator._keys(ctx, cmd),
-        ).fetchone()
+        return cast(
+            tuple[Any, ...] | None,
+            conn.execute(
+                "select actor_id,input_sha,new_version_id,graph_sha,"
+                "expected_brief_revision,expected_review_revision "
+                "from caseproof._m2_correction_plans "
+                "where org_id=%s and case_id=%s and brief_id=%s and request_id=%s",
+                DisposableCorrectionCoordinator._keys(ctx, cmd),
+            ).fetchone(),
+        )
 
     def prepare(
         self, *, bearer: str, brief_id: UUID, command: CorrectionCommand,
