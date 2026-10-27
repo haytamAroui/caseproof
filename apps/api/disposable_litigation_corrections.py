@@ -122,21 +122,25 @@ class DisposableCorrectionCoordinator:
     ) -> _Verified:
         case = _uuid(command.original_run.case_id)
         brief = _uuid(brief_id)
+        phase = "verify_bearer"
         try:
             # Both verifications are server-side. No actor/org/tenant input may
             # be furnished independently of the bearer.
             subject = self._checker._verified(bearer)
+            phase = "authorize_matter"
             scope = self._checker._scope(subject, str(case))
             actor, org = _uuid(subject.subject_id), _uuid(scope.org_id)
             if command.proposal.actor_id != str(actor):
                 raise CorrectionConflict("reviewer identity mismatch")
             # Old version can be superseded on replay; the immutable old
             # check is still required to match its exact persisted payload.
+            phase = "load_old_graph"
             old = self._graph.load(
                 org_id=org, actor_id=actor, case_id=case, brief_id=brief,
                 version_id=_uuid(command.original_run.brief_version_id),
                 require_current=False,
             )
+            phase = "load_review"
             state = self._ledger.state(
                 org_id=org, actor_id=actor, run=command.original_run,
             )
@@ -159,6 +163,7 @@ class DisposableCorrectionCoordinator:
                     or old.representation.brief.sha256_hex
                     != hashlib.sha256(old.representation.text.encode()).hexdigest()):
                 raise CorrectionConflict("only an exact verified text-only draft may be revised")
+            phase = "preview_change"
             correction = preview_correction(
                 run=command.original_run,
                 text=old.representation.text, proposal=command.proposal,
@@ -173,6 +178,7 @@ class DisposableCorrectionCoordinator:
                     or next_rep.parser_id != "fixture-utf8-v1"
                     or old.representation.parser_id != "fixture-utf8-v1"):
                 raise CorrectionConflict("unverified corrected source or stale normalized text")
+            phase = "hash_new_graph"
             graph_sha = _graph_identity(brief, command.new_binding, next_rep, "own_draft")
             plan_sha = _digest({
                 "request": str(command.request_id),
@@ -189,6 +195,7 @@ class DisposableCorrectionCoordinator:
                     command.new_binding.intent_id,
                 )),
             })
+            phase = "verify_new_bytes"
             self._graph._verified_bytes(
                 org=org, case=case, binding=command.new_binding,
                 expected_sha=next_rep.brief.sha256_hex,
@@ -196,8 +203,13 @@ class DisposableCorrectionCoordinator:
             return _Verified(org, case, actor, brief, correction, plan_sha, graph_sha)
         except CorrectionConflict:
             raise
-        except Exception:
-            raise CorrectionConflict("current private review or evidence unavailable") from None
+        except Exception as exc:
+            # Diagnostic contains no source data or identifiers; it only
+            # identifies the failed trust-boundary step in disposable CI.
+            raise CorrectionConflict(
+                f"current private review or evidence unavailable "
+                f"({phase}:{type(exc).__name__})"
+            ) from None
 
     @staticmethod
     def _authorize(conn: Any, ctx: _Verified) -> None:
