@@ -11,7 +11,6 @@ import http.client
 import json
 import os
 import sys
-from collections.abc import Callable
 from typing import Protocol
 
 from apps.api.access_control import InvalidBearer
