@@ -123,3 +123,8 @@ SQL remains disposable, routes unmounted, sources synthetic and inference script
 ## Word synthetic spike (development branch)
 
 A read-only Word task pane can display a selected passage next to a fixed synthetic example. It has no authentication, evidence retrieval, insertion or API integration and has not been tested in a Word host. It does not close M3 or the M1/M2 live integration gates. See `apps/word_addin/README.md`.
+
+
+## M2 bounded source preview candidate
+
+An opt-in internal check-store adapter can derive PDF/DOCX previews from verified original bytes using the existing bounded parser and evidence indexer. The default remains unchanged; DOCX physical pages remain unverified and parser warnings retain partial coverage. This is disposable engineering only, not signed-user/live database, OCR, Word, or M1/M2 release acceptance. No customer data or production routes are authorized.
