@@ -86,6 +86,7 @@ def test_http_error_no_retry_and_no_raw_error_leak(monkeypatch, status, exceptio
     with pytest.raises(exception) as error:
         call(RequestyProvider(api_key="synthetic", model=MODEL))
     assert len(captured) == 1 and "secret raw" not in str(error.value)
+    assert str(error.value) == f"requesty_http_{status}"
 
 
 @pytest.mark.parametrize("error", [TimeoutError("private"), URLError("private"), OSError("private")])
@@ -141,3 +142,22 @@ def test_no_implicit_model_default(monkeypatch):
         monkeypatch.delenv(key, raising=False)
     with pytest.raises(ExtractionError):
         RequestyProvider.from_environment()
+
+
+def test_url_transport_error_categories_hide_untrusted_exception_details(monkeypatch):
+    import socket
+    import ssl
+
+    cases = (
+        (URLError(socket.gaierror(-3, "private DNS info")), "requesty_transport_dns"),
+        (URLError(ssl.SSLError("private TLS info")), "requesty_transport_tls"),
+        (URLError(TimeoutError("private timeout")), "requesty_transport_timeout"),
+        (URLError("private URL detail"), "requesty_transport_other"),
+        (OSError("private socket detail"), "requesty_transport_other"),
+    )
+    for error, expected in cases:
+        install(monkeypatch, error=error)
+        with pytest.raises(OutcomeUnknown) as caught:
+            call(RequestyProvider(api_key="synthetic", model=MODEL))
+        assert str(caught.value) == expected
+        assert "private" not in str(caught.value)

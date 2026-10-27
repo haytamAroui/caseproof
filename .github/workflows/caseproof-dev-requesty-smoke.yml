@@ -1,0 +1,54 @@
+{
+  "name": "CaseProof dev Requesty trilingual extraction smoke",
+  "on": {
+    "workflow_dispatch": {}
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "concurrency": {
+    "group": "caseproof-dev-requesty-model-smoke",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "live-requesty": {
+      "if": "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof' }}",
+      "environment": "caseproof-dev-model",
+      "runs-on": "ubuntu-latest",
+      "timeout-minutes": 5,
+      "steps": [
+        {
+          "uses": "actions/checkout@v7.0.1",
+          "with": {
+            "ref": "main",
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Check trusted runner Python",
+          "run": "python3 -c 'import sys; assert sys.version_info >= (3, 11)'"
+        },
+        {
+          "name": "Run Requesty NL FR EN synthetic anchored extraction",
+          "env": {
+            "CASEPROOF_LIVE_REQUESTY_TEST": "YES",
+            "CASEPROOF_REQUESTY_API_KEY": "${{ secrets.CASEPROOF_REQUESTY_API_KEY }}",
+            "CASEPROOF_EXTRACTION_MODEL": "${{ vars.CASEPROOF_EXTRACTION_MODEL == 'mistral-small-2603' && 'mistral/mistral-small-2603' || vars.CASEPROOF_EXTRACTION_MODEL }}"
+          },
+          "run": "python3 -m scripts.verify_live_requesty_litigation\npython3 -m scripts.verify_live_extraction_quality"
+        },
+        {
+          "name": "Upload non-sensitive model evaluation receipt",
+          "if": "${{ always() }}",
+          "uses": "actions/upload-artifact@v7.0.2",
+          "with": {
+            "name": "requesty-dev-smoke-receipt",
+            "path": "requesty-smoke-result.json\nrequesty-quality-result.json",
+            "if-no-files-found": "ignore",
+            "retention-days": 7
+          }
+        }
+      ]
+    }
+  }
+}

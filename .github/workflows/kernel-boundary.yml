@@ -7,12 +7,14 @@ jobs:
   architecture:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: '3.11'
       - name: Verify architecture boundaries
         run: uv run --locked python scripts/check_architecture.py
+      - name: Verify Clearbrief 42-feature roadmap and M3/M4 product contracts
+        run: uv run --locked python -m scripts.check_clearbrief_roadmap
       - name: Run unit tests
         run: uv run --locked pytest -q
       - name: Ruff check
@@ -29,6 +31,18 @@ jobs:
         run: uv run --locked mypy --explicit-package-bases application/runtime infrastructure/execution apps/worker apps/api/extraction_scheduler.py
       - name: Type check governed accounting and opt-in Requesty evaluation
         run: uv run --locked mypy --explicit-package-bases domains/finance/factual_reconciliation.py scripts/run_topology_comparison.py
+      - name: Type check M1 litigation reference modules
+        run: uv run --locked mypy --explicit-package-bases domains/disputes application/litigation apps/api/authenticated_evidence_library.py
+      - name: Type check M2 headless private-matter API
+        run: uv run --locked mypy --explicit-package-bases apps/api/litigation_check_service.py apps/api/litigation_check_app.py
+      - name: Type check M2 review, brief, private composition and correction lifecycle
+        run: uv run --locked mypy --explicit-package-bases apps/api/disposable_litigation_review_ledger.py apps/api/disposable_litigation_brief_graph.py apps/api/postgres_litigation_check_store.py apps/api/disposable_litigation_corrections.py apps/api/signed_private_matter_reader.py
+      - name: Verify synthetic M2 factual-check through correction and recheck
+        run: uv run --locked python -m scripts.demo_litigation_m2
+      - name: Type check M1 completion candidate adapters
+        run: uv run --locked mypy --explicit-package-bases application/litigation/exhibit_confirmation.py infrastructure/persistence apps/api/restricted_case_repository.py apps/api/litigation_evidence_app.py infrastructure/parsers/pdf_ocr.py
+      - name: Verify synthetic M1 evidence-library journey
+        run: uv run --locked python -m scripts.demo_litigation_evidence_library
       - name: Verify reviewer browser journey
         env:
           CASEPROOF_BROWSER_LOG_SCREENSHOT: "YES"
@@ -37,7 +51,7 @@ jobs:
         run: uv run --locked python scripts/check_review_ui.py
       - name: Save synthetic browser evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: synthetic-review-browser
           path: /tmp/caseproof-review-browser
@@ -71,8 +85,8 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: caseproof_ephemeral_ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: '3.11'
       - name: Install PostgreSQL test client
@@ -80,6 +94,7 @@ jobs:
       - name: Run PostgreSQL RLS, concurrent CAS and audit-failure negative tests
         run: |
           uv run --locked python scripts/verify_s2_002_database.py
+          uv run --locked python -m scripts.verify_m1_disposable_exhibits
           CASEPROOF_S2_007_SYNTHETIC=YES uv run --locked python -m scripts.verify_s2_007_disposable_tenancy
           uv run --locked python -m scripts.verify_s2_004_database
           uv run --locked python -m scripts.verify_s2_008a_database
@@ -97,3 +112,17 @@ jobs:
         run: uv run --locked python -m scripts.verify_review_integration
       - name: Verify worker leases, checkpoint fences and process recovery
         run: uv run --locked python -m scripts.verify_worker_integration
+      - name: Verify M2 immutable check runs and reviewer CAS on real disposable PostgreSQL
+        run: uv run --locked python -m scripts.verify_m2_disposable_runs
+      - name: Verify M2 original-byte-bound immutable brief graph, CAS and audit rollback
+        run: uv run --locked python -m scripts.verify_m2_brief_graph
+      - name: Verify private-matter check composition through persisted review
+        run: uv run --locked python -m scripts.verify_m2_private_check_composition
+      - name: Verify durable M2 correction plan, immutable source replay and recheck
+        run: uv run --locked python -m scripts.verify_m2_disposable_corrections
+      - name: Verify default-private case, evidence and grant RLS under disposable authenticated role
+        run: uv run --locked python -m scripts.verify_m1_private_rls
+      - name: Verify Auth-bound reader under actual least-privilege PostgreSQL login
+        env:
+          CASEPROOF_M1_LOCAL_ROLE_TEST: "YES"
+        run: uv run --locked python -m scripts.verify_m1_signed_private_reader

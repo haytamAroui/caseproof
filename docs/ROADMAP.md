@@ -1,79 +1,236 @@
-# ExceptionDesk — execution roadmap (finance first)
+# CaseProof — Belgian litigation writing and review roadmap
 
-**Current status:** Stage 1 reference kernel merged; Stage 2 disposable integration proofs merged through PR #35, but no production-ready customer workflow. Consult [verified status](STATUS.md) before using this roadmap. **Product:** one Belgium-first B2B finance operations platform. **Launch workflow:** supplier invoice versus purchase order mismatch. **Second workflow:** CaseProof dispute dossiers after finance validation. Historical CaseProof-only roadmap is superseded by this file; historical ADRs remain reference.
+**Status:** authoritative, **active product delivery roadmap** (product target and acceptance criteria, NOT completed software); reviewed on **2026-10-27** against `main@eb289e867c18c8c1cf8b645a809ce56dd7f5bc61` (merged PR #88). Supersedes finance-first delivery sequencing and competing plans without deleting historical ADRs. This roadmap does not authorize production routes, SQL deployment, customer data processing, legal approval, publication or filing.
 
-| ID | Priority | Work | Acceptance |
-|---|---|---|---|
-| EXD-001 | P0 | Kernel immutable source claims, provenance and finance reconciliation | Pure Python tests pass; no sector imports in kernel; mismatch is a review finding |
-| EXD-002 | P0 | Secure tenant-scoped upload, hash, version, source offsets and PDF/UBL intake | Cross-tenant denial; source references resolve; malformed/oversized files fail safely |
-| EXD-003 | P0 | Structured invoice/PO extraction and deterministic source-quote verification | Unsupported quotes rejected; field schema and prompt versions stored; AI output cannot approve |
-| EXD-004 | P0 | Review UI/API, idempotent audit events, approved resolution and export | User traces findings to sources and approves/rejects; retry does not duplicate decisions |
-| EXD-005 | P1 | CaseProof factual dispute dossier module | Reuses original evidence and review history; verified chronology; human-approved export |
-| EXD-006 | P1 | ERP/Peppol/UBL import and exception inbox | Pilot integration tested with real-world sanitized formats |
-| EXD-007 | P1 | Security/privacy/tenancy hardening and paid pilot | DPA, threat model, retention, tenant tests, measured customer outcome |
-| EXD-008 | P2 | Independent kernel packaging and other sector packs | Only after two proven domain consumers and stable contracts |
+**Frozen commercial product reference: Clearbrief-class end-to-end litigation work in Microsoft Word, adapted for Belgium.** Build the complete lawyer workflow: organize a private matter; ingest and inspect original sources; find and insert precise evidence citations **inside Word**; check own/opponent writing; review/correct/recheck; generate **dynamic exhibits, linked DOCX/PDF, a verification report and an authorized deliverable**. NL/FR/EN support, `Stuk/Pièce` and Belgian practice/local constraints are product requirements. We learn from and benchmark Clearbrief rather than claiming product-feature, US legal-database or commercial parity. **Commercial verification:** [Belgian legal/market feedback audit](research/BELGIAN_WEDGE_FEEDBACK_AUDIT_2026-10-26.md) rejects unsupported exclusivity, pricing, procedural-sanction and confidentiality claims and freezes a unified deterministic M2 factual-reference wedge.
 
-## Frozen architecture and revised delivery tracks (ADR 0011)
+**Implementation truth (2026-10-27):** legacy architecture/code-audit observations were pinned to `7c27e4f` and remain historical. Current `main@eb289e8` includes merged M1 foundation (#62–63), M2 deterministic checker (#71), durable/disposable M2 packets (#82–85), and **unapplied** private Auth/RLS candidates (#86–88). M2-A fixture engineering passed; M1-B and M2-B genuine signed-user + private source integration and all M3/M4 final-client outputs remain **OPEN**. `apps/word_addin/` is absent; `apps/api/litigation_check_app.py` is not mounted by the dev-only API, and `apps/web/review` is a synthetic ExceptionDesk workbench. No compliant live litigation release is implied. [Feature-by-feature engineering vs launch state](FEATURE_DELIVERY_MATRIX.md).
 
-**Architecture:** [accepted target ADR 0011](adr/0011-architecture-freeze-and-first-finance-slice.md), not a production authorization. One hexagonal modular monolith, pure sector-neutral Evidence Kernel, a deterministic finance domain, application-controlled intake/review/workflow, and infrastructure ports. **Do not restart Stage 1, introduce generic DomainPack/EvidenceState, split microservices or build a recursive agent engine before a paid-workflow baseline.**
 
-**Track A — secure platform release gates:** #5 protected merge owner verification → [#37 genuine Auth+least-privilege tenant DB](https://github.com/haytamAroui/caseproof/issues/37) → [#38 private immutable source bytes](https://github.com/haytamAroui/caseproof/issues/38) → [#39 persisted evidence + authorized review](https://github.com/haytamAroui/caseproof/issues/39) → S2-010 bounded worker recovery. Work may overlap where trusted dependencies are preserved. Disposable fixtures do NOT satisfy live security gates.
+**M0 implementation packet:** See [ADR 0016](adr/0016-belgian-litigation-product-pivot.md), [pinned capability/gate matrix](m0/BASELINE.md), [external claims register](m0/CLAIMS_REGISTER.md), [fixed manual task benchmark](m0/BENCHMARK_PROTOCOL.md), and [original synthetic evaluation corpus](../evals/litigation/README.md). These are M0 evidence artifacts, **not** claims of approved legal gold labels, benchmarked accuracy, complete PIV-01 real-format coverage or production readiness.
 
-**Track B — parallel synthetic product:** [#40 deterministic invoice/PO flow](https://github.com/haytamAroui/caseproof/issues/40): synthetic UBL + PO parsing, golden financial fixtures, candidate findings with versioned source references, reviewer workbench prototype, reproducible report template. No customer data or mock approvals become production writes.
+**M2 backend engineering packet:** [M2 engineering acceptance gates](m2/ENGINEERING_ACCEPTANCE.md), [merged M2-A PR #71](https://github.com/haytamAroui/caseproof/pull/71), and merged disposable persistence/recheck #82–85. Their implementation and CI do **not** close live M1-B or M2-B integration, authorize customer uploads or substitute for M3 Word/M4 delivery. The M2-A/B/C acceptance gates remain distinct.
 
-**Join gate:** one real signed-in reviewer completes private intake → typed source reference → exact cited mismatch → versioned coverage → explicitly authorized disposition → atomic audit/receipt → export. This supersedes treating all Stage 2 infrastructure as a blocking prerequisite for beginning *synthetic-only* Stage 3 engineering.
+**M1 integrated development slice:** [Implementation evidence](m1/IMPLEMENTATION.md) for PIV-02–06 (merged #62–63), and merged *candidate-only* #86–88. [M1 Backend Exit Contract](m1/BACKEND_EXIT_CONTRACT.md) governs backend completion; passing disposable CI does not demonstrate live Supabase RLS/Auth or confidential custody. An M1 backend exit does not require finished Word/browser screens; **a sellable Clearbrief-class product does**.
 
-**Contract gates fixed before connecting v2:** [installed-vs-proposed action catalog](../contracts/action_catalog.v1.json), [canonical architecture identifiers](../contracts/architecture_baseline_v1.json). Current /v2 approval scopes are **not installed**; PDF coordinates are exact decimal strings and sheet kind is `sheet_range`. Same-org case reads are membership+action wide, not case-assigned. KRN-101 is the new source lineage and /v1 is legacy development-only.
+## Product identity and distinct acceptance gates
 
-## Customer validation in parallel
-Interview 8–12 Belgian accounts-payable/finance operations buyers. Determine invoice volumes, existing ERP exception workflows, investigation time, repeated cases and actual willingness to pay. Do not assume per-pack price or Gulf expansion.
+**One product; no pivot.** The **principal reference is Clearbrief's whole evidence-linked Word drafting, cite checking and output workflow**, not a standalone quote checker, Falcon-style lawyer service, invoice exception desk or general-purpose legal agent. Adapt for Belgian practitioners rather than copying US court/legal database assumptions. No Belgian competitor's existence invalidates the model; compete on measurable, usable task outcomes.
 
-## Definition of done
-Executable tests and reproducible results, source traceability, tenant isolation before production, human decisions audited, no fabricated legal/financial conclusions, no autonomous external actions.
+- **Engineering slice (M1/M2):** secure dossier groundwork, one integrated deterministic citation/quote/same-role value check, persistent review/correction. This is a testable capability **and a potential guided demonstration**, **not the promised commercial product**. Model-free by default.
+- **Minimum complete sellable product target (M1–M4 together):** genuine signed private matter → original PDF/DOCX/scans → confirmed `Stuk/Pièce` register → Word source search/inspect/insert → own/opponent brief checking → human correction/recheck → dynamic index/bundle and real linked DOCX/PDF/report → controlled reviewed delivery. The Word workflow and validated deliverables are **mandatory**, not optional polish.
+- **Expansion (M5/M6):** richer cited analysis, tables/timelines, authority/procedural profiles, integrations after separately documented need, lawful source rights, quality and cost. Deferred US-specific features do **not** constitute silent Clearbrief parity.
+- **Commercial acceptance:** demonstrate completed tasks with representative NL/FR/EN materials, total time including human checking, false alerts, fees, and a second task/return use; pilot under approved confidentiality controls. Pricing/Falcon service-model observations are hypotheses, never new product direction.
 
-## Stage gates — v3 trust-contract amendment (proposed; finance-first remains authoritative)
-- **Stage 0 — Foundation:** Python modular reference and CI exist. Positive runs on `main` and forbidden-import negative control PR #4 were **actually verified** by 2026-10-22. Owner-controlled branch protection remains **unverified** (issue #5); CI passing is not permission to bypass CONSTITUTION C13/C25.
-- **Stage 1 — Evidence integrity:** KRN-101 immutable passage/version model; KRN-102 typed anchors; KRN-103 citation resolution vs quote/value fidelity; KRN-104 finding-to-evidence support links; KRN-105 promotion gate; KRN-106 issue/source coverage ledger; KRN-107 provenance integration; KRN-108 adversarial tests; KRN-109 versioned API contracts. Stage 1 reference implementation is in-memory, not durable.
-- **Stage 2 — Durable infrastructure:** tenant-scoped persistence, atomic state+audit, object storage, idempotency, crash recovery and authorization.
-- **Stage 3 — Sellable invoice/PO exception workflow:** PDF/UBL intake, typed extraction, deterministic Decimal reconciliation, source viewer, contradiction queue, human review and export. Deliver a usable deterministic pilot without agents.
-- **Stage 4 — Optional bounded orchestration:** one-level planner/worker execution, explicit coverage, checkpoints, budgets and escalation; only after benchmark evidence of value.
-- **Stage 5 — Evaluation and paid pilot:** independent kernel invariant suite, finance golden corpus, agent comparative benchmark if adopted, security and customer outcome gates. Invariant tests begin in Stage 1, not Stage 5.
-- **Stage 6 — Conditional expansion:** dispute dossiers and sector packs after validated customer demand; independent kernel packaging after two consumers.
+[Full lawyer transitions and failure states](PRODUCT_WORKFLOW.md) · [42-feature implementation ledger](FEATURE_DELIVERY_MATRIX.md) · [M3 Word acceptance](m3/WORD_INTEGRATION_ACCEPTANCE.md) · [M4 release/artifact acceptance](m4/DELIVERY_ACCEPTANCE.md).
 
-### Stage 2 — merged reference slices and remaining integration (verified 2026-10-22)
+## Product workflow
 
-**Design reference:** [ADR 0010](adr/0010-stage2-native-durability.md). The purpose is to preserve KRN-101–109's trust contracts in a **new, independent CaseProof implementation**, learning from earlier engineering experience without copying external product code, database schemas, roles or runtime dependencies.
+1. **Set up and access a matter.** Authenticate the user, enforce organization and matter permissions, and create a case workspace.
+2. **Import and preserve the record.** Store immutable originals; parse supported PDFs, DOCX and other declared formats; show per-file and per-page processing, OCR and failures.
+3. **Confirm the exhibit register.** Map stable internal exhibit identities to Stuk/Pièce labels, aliases, annexes, versions and printed/PDF/bundle page numbers. Keep communication and filing records distinct from inventory.
+4. **Write with evidence.** In Word, select an assertion, search the authorized record, inspect exact source context, and insert a citation. A web workspace uses the same application contracts and graph.
+5. **Check a draft.** Resolve citations, flag exact quote/value discrepancies and ambiguous references, retrieve possible counterevidence, and present semantic/context observations as proposals. A clean case may produce zero confirmed problems.
+6. **Review and correct.** Assign a reviewer or apply the configured solo-practice policy. Preview version-bound corrections, revalidate the live document, apply reversibly, then recheck affected assertions.
+7. **Deliver.** Freeze the checked scope and exact artifact version; generate a review report, linked brief, exhibit index and bundle; share with selected recipients under explicit access rules. Filing remains a separate human handoff unless an authorized integration is implemented.
 
-| Slice | Verified state on `main` | Production exit / remaining gate |
+## Architecture and boundaries
+
+- Keep the sector-neutral kernel in `packages/evidence_kernel/`: immutable source identity, typed anchors, exact fidelity, assessments, declared-scope coverage and provenance. It does not parse/OCR, call models, interpret Belgian procedure, authenticate reviewers or transact production storage.
+- Use **only `domains/disputes/`** for Belgian litigation models and rules. Do not create a parallel `domains/litigation/` authority.
+- Put use cases in the existing application contexts, with litigation orchestration under `application/litigation/` where needed. Keep storage, OCR, retrieval, identity and rendering in infrastructure.
+- Use **`apps/word_addin/`** as the sole proposed Word-client path. `apps/web/` and Word call the same authenticated application API. Mutable Word ranges are editor references, not source evidence anchors.
+- Keep finance modules and tests as a compatibility consumer. Do not mass-rename them or weaken kernel/security contracts.
+- Inference is optional and Requesty-only under the existing provider boundary. Deterministic intake, literal checking and search must work without model credentials. Model output proposes; application rules evaluate; authorized humans make consequential decisions.
+- Keep execution completion, source fidelity, semantic support, reviewer disposition, publication and external filing as separate states.
+
+## Dependency order and implementation milestones
+
+`PIV-00 → PIV-01 → agreed PIV-02–04 foundations → integrated litigation workflow`. Independent security, persistence and intake tracks may proceed in parallel after contracts are agreed. Synthetic work can use agreed interfaces while foundations mature. Confidential customer data must wait until applicable identity, matter isolation, source custody, persistence, recovery and operations gates are demonstrated.
+
+| Milestone | User outcome | Packets and exit evidence |
 |---|---|---|
-| S2-001 identity/case access | Merged deny-by-default boundary | No spoofable client tenant header as authority |
-| S2-002/002A foundational migration | Canonical seven-table `caseproof` development Supabase schema installed; disposable PG17 RLS/CAS/rollback CI | Genuine tenant identity and least-privilege deployed roles |
-| S2-003 Auth verifier | Merged independently checked Supabase `/user` verifier | Real signed-user and session-revocation proof; not automatically human approval |
-| S2-005 case reader | Merged read-only repository adapter, unwired to live pool | Authorized real DB connection, tenant and same-org case isolation |
-| S2-006 signed Auth probe | Merged manual-only authentic session verification tool | Two genuine development accounts, protected environment secrets and successful run |
-| S2-004 / PR #28 | **Merged disposable PostgreSQL** atomic observation/audit/idempotency proof | Real review-command writer, case/evidence heads and human authorization, `/v2` routes |
-| S2-007 / PR #29 | **Merged** synthetic PostgreSQL tenant-denial suite and protected manual genuine-Auth workflow | Real signed Auth→least-privilege runtime DB identity; A/B and revocation/pool proof |
-| S2-008 / PRs #30–33 | **Merged** graph design, **disposable** representation/anchor SQL, typed codec, read-only scoped JSONB reconstruction | Canonical graph migration; finding/link/assessment/coverage persistence, real object provenance and current-head gate |
-| S2-009a / PR #34 | **Merged** in-memory private Vault protocol: stable intents, put-once, SHA readback and unknown-commit reconciliation | Actual object store/scan/version identity and deployed authorized ledger |
-| S2-009b / PR #35 | **Merged disposable PostgreSQL** audited staged/verified/unavailable ledger with atomic CAS, idempotency and concurrent replay | Install reviewed migration, real Supabase private Storage, trusted byte proof and availability-head invalidation |
-| S2-010 | **Not implemented** | Persistent lease/worker restart, outbox replay, crash/timeout negatives and safe unknown outcomes |
+| **M0 — Product and quality baseline** | One authoritative scope, contracts, owners and NL/FR/EN clean/adversarial corpus | PIV-00–01; clean cases can return no findings; capability dispositions and limitations recorded |
+| **M1 — Evidence library** | Import, preserve, inspect and organize a dossier without an LLM | PIV-02–06; real auth/matter policy, immutable bytes, parser lineage, page status and confirmed exhibit mappings |
+| **M2 — Check and correct** | Run one scoped, headless **unified citation+quote+typed date/value** check on a versioned own/opponent brief (including **zero-quote** drafts); review/correct and export a verification run record | PIV-07–09; exact source/version/anchor, explicit unknown, reviewer and safe recheck; genuinely integrated signed staging acceptance still needed. **Not an independently complete commercial app**. |
+| **M3 — Write with evidence** | **Real Microsoft Word add-in**: select → retrieve → inspect original → preview/insert NL/FR Stuk/Pièce pinpoint → save/undo → recheck | PIV-10–11; real supported-host DOCX tests, coauthor/stale-range defenses, session/matter access, formatting/footnotes, version-safe insert and reopen evidence. [M3 exit](m3/WORD_INTEGRATION_ACCEPTANCE.md). Start **synthetic Word host spike in parallel with M1/M2** to de-risk contracts. |
+| **M4 — Review and deliver** | Lawyer completes the **full M1→M4 product journey**, from Word and checked sources to reviewed, linked outputs | PIV-14–16 and PIV-20; actual reopened DOCX/PDF/index/bundle bytes, dynamic exhibits after edits, source/page link validation, immutable manifest, distinct release/filing states, authenticated reviewer and recipient control. [M4 exit](m4/DELIVERY_ACCEPTANCE.md). |
+| **M5 — Deeper analysis** | Optional counterevidence semantics, chronology, tables, summaries and document questions | PIV-12–13; separately measured retrieval and model quality, abstention and costs |
+| **M6 — Belgian operations** | Reviewed procedural profiles, filing preparation/receipt capture and one justified connector | PIV-17–19; verified authorities, local profiles, actual integration entitlements and recovery |
 
-S2-004 **has been implemented as a production-disabled reference** with disposable DB tests. S2-007/008/009 references have also been implemented in development form; they are not a connected, authenticated customer workflow. A **real authorized promotion/approval API** depends on their integration plus trusted human attestation, aligned action permissions and effective-policy resolution. No `/v2` customer route is authorized by a green unit test or by creation of these docs.
+**Backend-first delivery rule:** The full workflow above is the **frozen commercial product**, not a promise that the early checker is a market-ready substitute. It does not require browser/Word screens to finish the M1 backend. Use [M1-A contract freeze → M1-B headless integrated backend → M1-C release approval](m1/BACKEND_EXIT_CONTRACT.md). Once M1-A's authorization choice and ports are frozen, isolated M2 checking/correction code and tests **and the early synthetic Word host integration spike** may proceed **in parallel with** M1-B infrastructure completion. Do **not** move a provisional Word range or model suggestion into a trusted source anchor. M1-B and M1-C remain release blockers. Neither CI alone nor an unmerged PR declares M1 finished. The canonical PIV-02–06 task tracking is [#37](https://github.com/haytamAroui/caseproof/issues/37), [#38](https://github.com/haytamAroui/caseproof/issues/38), [#64](https://github.com/haytamAroui/caseproof/issues/64)–[#68](https://github.com/haytamAroui/caseproof/issues/68).
 
+**2026-10-27 backend engineering receipt:** M2-B disposable packets
+[#82](https://github.com/haytamAroui/caseproof/pull/82)–[#85](https://github.com/haytamAroui/caseproof/pull/85)
+are **merged**: source-bound immutable check runs and review ledger,
+versioned original-bound legal brief graphs, protected private-matter
+checking composition, and durable reviewed correction/recheck with
+transactional review/permission fences. Their CI proves disposable
+engineering behavior **only**. M2-B production remains OPEN.
+[M1-B private RLS proposal #86](https://github.com/haytamAroui/caseproof/pull/86)
+is **merged as a code candidate**, replacing legacy org-wide SELECT
+policies only in its isolated disposable RLS tests; it is NOT
+applied to the live database. [PR #87](https://github.com/haytamAroui/caseproof/pull/87) is
+**merged**: bearer-verified least-privilege private-matter read port and
+an **opt-in, protected** workflow that *can* test three genuinely signed
+Supabase-dev Auth identities against disposable private PostgreSQL RLS.
+That manual workflow has **not** been executed, and even a successful
+run would NOT prove live database integration. [PR #88](https://github.com/haytamAroui/caseproof/pull/88)
+provides an **unapplied single-transaction candidate** to install the
+exact-matter grant relation on the currently empty caseproof-dev foundation
+and atomically replace legacy org-wide read policies. Standalone disposable
+CI tests rollback on rogue RLS policies or nonempty Auth/data, private
+same-org/foreign-org denial, and real non-BYPASSRLS SQL reads.
+Real DB signed-user acceptance, independently approved audited grant writes,
+an approved canonical dev migration, private Storage, PDF/DOCX/OCR fidelity,
+live session revocation and human security signoff are still OPEN.
+See [security gate](m1/PRIVATE_RLS_AUTH_GATE.md) and [milestone #69](https://github.com/haytamAroui/caseproof/issues/69).
 
-**Open repository administration gate:** [issue #5](https://github.com/haytamAroui/caseproof/issues/5). As of this audit, actual main-branch CI green, intentional architecture negative-control fail demonstrated, but owner-controlled merge protections **not verified**. Never merge negative-control PR #4. [`docs/STATUS.md`](STATUS.md) tracks actual evidence and release blockers.
+**Audited progression (2026-10-27):** M0 reference/contract engineering substantially exists; M1-A contract chosen under ADR-0017 but security approval OPEN; M1-B live identity/Storage/OCR/worker acceptance OPEN; M1-C authorized release OPEN. M2-A deterministic/fixture engineering passed; M2-B persisted disposable components merged but genuine secure end-to-end staging OPEN; M2-C product release OPEN. **M3 Word add-in and M4 litigation output/publishing journeys NOT IMPLEMENTED.** Later M5/M6 remain product plans. No percent-complete claim should convert these different stages into one misleading score.
 
-**Priority before more kernel prototypes:** [real signed Auth→tenant DB least privilege](https://github.com/haytamAroui/caseproof/issues/37); [real private stored source bytes and reviewed ledger](https://github.com/haytamAroui/caseproof/issues/38); [persisted evidence/coverage and human decisions](https://github.com/haytamAroui/caseproof/issues/39); then [a working invoice/PO discrepancy user journey](https://github.com/haytamAroui/caseproof/issues/40), not open-ended agent framework construction.
+**M1 next gate:** independently approve canonical private-matter migration and audited grant issuance; genuine signed-user→non-BYPASSRLS live dev acceptance; private immutable bytes and hardened full NL/FR/EN PDF/DOCX/OCR; durable headless intake/restart and human exhibit confirmation. PR #88's green **disposable** migration test did not apply SQL to live Supabase. **M2 next gate:** one signed-user, real-source, versioned draft→check→review→correction→recheck test and truthful missing-page/unknown coverage. **M3/M4 next work:** host spike and export/renderer contracts may start in parallel, but cannot bypass M1/M2 release security.
 
-**Stage 2 release gate:** real cryptographic Auth and runtime DB isolation; fine-grained kernel evidence persisted without lossy flattening; verified private original bytes and immutable parser lineage; authorization, snapshot and state+audit+receipt committed atomically; revocation, concurrent retries, audit-failure rollback, signed URL attacks and crash/restart demonstrated using appropriate real integrations. Unknowns remain blockers.
+Milestones are acceptance outcomes, not calendar estimates. The “1–3 person-weeks” estimate is withdrawn.
 
-**Stage 3 first outcome:** one finance reviewer can upload invoice+PO, inspect exact source evidence and incomplete/contradictory issues, record an action-scoped review and export a reproducible resolution package. Do not add general agents, new sectors or public legal-action endpoints to bypass the pilot outcome.
+## PIV-00–20 authoritative backlog
 
-### Updated EXD acceptance
-EXD-001 splits sector-neutral kernel tasks from finance reconciliation. EXD-002 requires versioned typed anchors and tenant-scoped citation resolution. EXD-003 checks extracted fields, fidelity, contradiction and source support separately. EXD-004 enforces authorization, promotion policies, idempotent review and immutable audit. EXD-005 requires reproducible dossier evidence manifests and unresolved-coverage disclosure. EXD-006 retains ERP/Peppol/UBL lineage. EXD-007 adds adversarial source, recovery and privacy tests. EXD-008 remains conditional. **EXD-009:** bounded orchestration only if measured benefit. **EXD-010:** independent rubric and deterministic evaluation harness.
+- **PIV-00:** superseding product ADR, active instructions, current status matrix and compatibility plan. Preserve ADR-0011's architecture decisions; supersede finance-first sequencing.
+- **PIV-01:** rights-cleared NL/FR/EN and mixed-language litigation corpus with clean controls, quote/context variants, dates/amounts, aliases, scans, page offsets and gold labels; fixed, versioned competitive task benchmarks against manual Word/PDF, with authorized competitor comparisons only.
+- **PIV-02:** authenticated production API, explicit matter access (including same-organization restricted matters if required), scoped jobs and legacy/demo isolation.
+- **PIV-03:** reviewed production persistence and source custody: immutable bytes, graph/review/job records, audit, recovery and retention.
+- **PIV-04:** provider-independent deterministic intake/index/check jobs; page-level completeness and typed warnings; reconcile all file, job, checkpoint and export budgets; capture dossier dimensions and observed/estimated unit economics.
+- **PIV-05:** bounded PDF geometry, OCR and DOCX representations with exact transformation lineage, resource limits and visible failure states.
+- **PIV-06:** confirmed exhibit registry with stable IDs, Stuk/Pièce aliases, annexes, page maps, ambiguity and separate communication records.
+- **PIV-07:** versioned briefs, assertions and citation graph connecting draft references to resolved exhibits, source versions and locations.
+- **PIV-08:** accessible source/reviewer workbench; fix dirty-export, contradiction-filter and save-versus-refresh defects; show partial and failed scope.
+- **PIV-09:** **one integrated, non-LLM factual-reference pass**, even if a brief has no quotations: confirmed Stuk/Pièce existence and exact page mapping; quote fidelity when quotes exist; **typed same-role** date, amount, percentage, units/currency and VAT-basis candidate comparison with exact anchors and explicit unknown/needs-context when semantics, amendments, multipliers or source completeness are ambiguous. Preserve clean zero-findings controls; never guarantee a flag. Keep source custody vs inventory vs proven communication vs actual filing separate. Exact lexical/value fidelity is not semantic truth or procedural exclusion.
+- **PIV-10:** matter-scoped lexical evidence retrieval with measured NL/FR/EN keyword and paraphrase-query performance; evaluate recall/coverage separately from relation correctness. Broader conceptual-search claims require demonstrated retrieval results. Assess optional semantic support separately under PIV-12.
+- **PIV-11:** Word add-in citation loop with safe range revalidation, formatting/footnote/tracked-change handling, undo and host capability checks.
+- **PIV-12:** separately evaluated optional semantic support and **opponent-wide uncited-page counterevidence discovery** across the authorized, disclosed and fully inventoried opponent bundle, with candidate source anchors, explanatory context, review-only dispositions, abstention, scope denominator and recall/precision benchmark. Never auto-generate an accusatory rebuttal or promote a 1987 decision to an automatic legal rule. Requesty-only model proposals, if enabled, carry model/prompt lineage and unknown-outcome recovery. Semantic retrieval requires its own evaluation; no dependency for the M2 deterministic pass.
+- **PIV-13:** later evidence-linked timelines, tables, narrative drafting, summaries, question answering and hearing preparation; every material generated statement remains linked or marked unsupported.
+- **PIV-14:** versioned DOCX/PDF/report/index/bundle outputs, dynamic exhibits, frozen manifests and reopen/link validation. Include an **accurately titled verification run record** (Verificatierapport / Rapport de vérification): audited scope and exclusions, timestamps, input/representation hashes, source-citation fidelity results, reviewer dispositions and version identifiers; **not** a guarantee of correctness, court-readiness, legal accreditation or a client-chargeable certificate.
+- **PIV-15:** published review copy and recipient access, redaction, expiry/revocation and immutable output versions.
+- **PIV-16:** authenticated review/release transactions with assignment, return-for-correction, change review, policy-specific solo/independent review, atomic audit and stale-snapshot rejection.
+- **PIV-17:** maintained, conditional Belgian court profiles and procedural advisories with court/division/chamber, document type, official authority/passage, publication/effective/verification dates, owner, mandatory-versus-recommended status, scope, expiry and conflict/unavailable behavior. Differentiate Article 740 **communication** from missing inventory/citation, Article 748bis procedural context from automatic forfeiture, and 1987 Cassation's properly submitted uncited evidence with adversarial rights. Lawyer review required before any rule assertion. No legal conclusion from missing inventory alone.
+- **PIV-18:** technical filing preflight, distinct from procedural readiness, plus receipt capture. Stale/unknown profiles cannot support court-ready claims or national rejection rules. Export is not submission; unknown external outcomes require reconciliation.
+- **PIV-19:** one selected document-system connector after customer usage, permissions and API access are verified.
+- **PIV-20:** ongoing deployment/operations, onboarding, monitoring, quotas, deletion/retention, backup/recovery, support, cancellation/export, competitive task benchmarks, dossier economics, adoption/repeat-use measurement and release readiness. Benchmark **manual Word/PDF + Hublex + Alice**, and the actually accessible corresponding features of **Clearbrief + Prudai/LEO** (plus other duly authorized competitors); distinguish advertised capability from independently exercised task. Do not treat Falcon's completed contract service or Plinto's finance-controls product as direct substitutes for the Belgian litigation Word workflow. Validate optional privacy-safe local/offline packaging separately from hosted secure custody; never certify a cloud environment as professionally closed merely from EU region or zero-retention claims. Research engagement-letter/client-charge arrangements with qualified bar/tax review before exposing any invoice line; test prices rather than assert €75–€150 per file.
 
-### Stage 1 exit criteria
-- Invalid/stale/cross-tenant anchors fail closed; matching quote never implies semantic truth.
-- No unsupported or unreviewed candidate becomes an approved conclusion; exception disposition cannot change support status.
-- Required source/issue coverage and exclusions are explicit; missing coverage blocks ordinary completion.
-- Tests for the above must be executed and documented before **Stage 1 implementation PRs** merge. PR #8 originated as a design-only contract proposal; subsequent KRN-101–109 implementation PRs are merged. That history does not authorize live v2 routes or durable approvals. Cloud CI evidence and owner-controlled release gates remain required by C13/C16/C25. Stage 2 owns durable transactional guarantees.
+## First measurable technical wedge — integrated deterministic checking (PIV-07–09; NOT standalone product release)
+
+**Priority change from [legal/market feedback audit](research/BELGIAN_WEDGE_FEEDBACK_AUDIT_2026-10-26.md):** do not ship quote-truncation detection as a standalone buyer-facing product. The **single scoped verification run** must jointly check confirmed exhibit alias/existence/page mapping, literal quotations if present, and confidently typed **same-role** dates/amounts/percentages with currency, VAT/units and temporal context. Source versions, exact anchors, corpus/processing coverage and reviewer dispositions must remain visible. Ambiguous value alignment is a review candidate or NOT_ASSESSED, not a deterministic proof of distortion.
+
+**Demo/CI acceptance:** NL/FR/EN quote-free and mixed-language cases, an actually clean case with zero warnings, wrong label and missing indexed exhibit versus proven communication kept separate, a same-role misstated numeric/date fact, VAT/net/gross and different-role decoys, page offsets, partial OCR and stale source/brief revisions. One headless pipeline/manifest/report on exact snapshots. Measure actionable errors, false-warning time and end-to-end review completion; never promise all samples produce findings. Historically PR #63 covered the literal reference foundation; **merged PR #71 now includes the conservative same-role date/amount/quote-free engine**, with durable **disposable** review, graph and recheck implementations in #82–85. [M2 #69](https://github.com/haytamAroui/caseproof/issues/69) remains OPEN for signed-user, full real-format/source custody and staging acceptance.
+
+**Privacy and commercial gate:** Offline model-free *prototype* is not a certified client-local product. Hosting region and vendor retention do not prove a bar-compliant closed environment. A neutral auditable verification run record is not an accredited \"certificate\" or approval to pass fees to clients. Hublex already checks local Belgian conclusions; compete on demonstrable deeper fidelity/context and defensible workflow performance, not unsupported monopoly or procedural-success claims.
+
+## Clearbrief feature dispositions
+
+This inventory preserves the **42 original Clearbrief capability dispositions** and is a scope plan, **not a feature-completeness score**. The canonical companion [42-feature delivery ledger](FEATURE_DELIVERY_MATRIX.md) records for **every F01–F42** the observed engineering state, gap and acceptance evidence at a pinned `main` SHA. “Later” is deferred after the full M4 workflow; “unresolved” requires license/rights/quality/scope decision before any marketing claim. Legal-source services and US court-specific features are not silently included in the Belgian launch.
+
+| ID | Capability | CaseProof disposition |
+|---|---|---|
+| F01 | Word task pane | Launch M3 |
+| F02 | Install/signup | Launch M3–M4 |
+| F03 | Enterprise deployment | Later M6 |
+| F04 | Subscription/seat activation | Launch M4; assisted operations allowed initially |
+| F05 | Practice-system PDF import | Later M6; choose one customer-used connector |
+| F06 | OCR/searchable scans | Launch M1, bounded and lineage-preserving |
+| F07 | Sentence-to-source suggestions | Launch M3 |
+| F08 | Insert factual citation | Launch M3 |
+| F09 | Factual citation analysis | Launch M2; deterministic first |
+| F10 | Legal citation analysis | Unresolved/later; detect and label unchecked, define authority levels separately |
+| F11 | Opponent filing review | Launch M2 factual workflow; semantic extensions later |
+| F12 | Judicial filing review | Out of scope for initial product |
+| F13 | Relevance/support scoring | Launch retrieval ranking; never present as correctness probability; semantic assessment later |
+| F14 | Formatting/substance flags | Launch defined citation-style and deterministic checks; semantic flags later |
+| F15 | Concept search | Launch evidence retrieval with measured NL/FR keyword and paraphrase-query performance; broader conceptual-search claims depend on demonstrated retrieval results |
+| F16 | Timelines | Later M5 |
+| F17 | Timeline-to-facts narrative | Later M5, source-linked and editable |
+| F18 | Medical timelines | Out of scope for initial product |
+| F19 | Timeline theme sorting | Later M5 |
+| F20 | Timeline filters | Later M5 |
+| F21 | Varied document formats | Launch bounded formats; publish support matrix, extensions later |
+| F22 | Large-source timeline processing | Later M5 with measured resource limits |
+| F23 | Deposition summaries | Later adapted to witness/expert material; no US-specific parity promise |
+| F24 | Summary depth/keywords | Later M5 |
+| F25 | Table Builder | Later M5, cell-level evidence links |
+| F26 | Ask My Docs | Later M5, scoped/cited answers and abstention |
+| F27 | HR investigation reports | Out of scope; distinct from litigation review report |
+| F28 | Leadership/legal handoff | Launch litigation reviewer handoff; HR workflow out of scope |
+| F29 | Table of Authorities | Later/unresolved; separate from exhibit index |
+| F30 | Exhibit generation | Launch M4 |
+| F31 | Dynamic exhibits after edits | Launch M4; deletion, reordering and frozen prior exports tested |
+| F32 | Hyperlinked briefs/letters/motions | Launch supported brief outputs; other templates separately scoped |
+| F33 | Secure courtesy copies | Launch M4 with recipient controls |
+| F34 | Interactive examples | Launch synthetic NL/FR/EN demo |
+| F35 | Cite Check Report | Launch M2 draft, M4 release; scope/version/dispositions explicit |
+| F36 | Opponent PDF-to-Word conversion | Later/unresolved fidelity work; original-PDF review does not depend on conversion |
+| F37 | Retrieve uncited counterevidence | Launch scoped search M3; no exhaustive discovery claim |
+| F38 | Cross-examination outline | Later M5 as source-linked hearing prep |
+| F39 | Generative/non-generative choice | Launch; deterministic workflow works without model credentials |
+| F40 | Local citation style/linking | Launch shared versioned profile across Word and outputs |
+| F41 | Lexis source access | Unresolved, excluded from launch pending license/territory decision |
+| F42 | Fastcase/vLex access | Unresolved, excluded from launch pending license/territory decision |
+
+## M3/M4 first-product acceptance and integration handoffs
+
+**Core parity is workflow parity, not 42-feature or US citation-database parity.** The initial sellable CaseProof must complete the lawyer's **Word → source → check → review → artifact** journey; optional timelines/Ask My Docs, US law database access and court filing can follow later without hiding their absence. No finished Word task pane, dynamic exhibit renderer or validated legal report is currently present on `main`.
+
+- **Early Word risk spike:** after M1-A contracts, build a real supported Office task pane using synthetic sources while private M1-B/secure M2-B work continues; test selection fingerprints, NL/FR citation preview, stable source anchors, Office host support, save/reopen, comments/tracked changes and undo. **This is not M3 done.** [M3 contract](m3/WORD_INTEGRATION_ACCEPTANCE.md).
+- **M2→M3:** `draft:check` output is tied to the exact draft/source/exhibit revision; Word must not trust transient editor offsets as source evidence, infer actor identity from document state, or reapply a lost-ACK edit without reconciliation.
+- **M3→M4:** one frozen verified draft/source/exhibit/reviewer manifest drives the DOCX, PDF, index, bundle and report; independently reopen real output bytes and click/check links, including duplicate Stuk/Pièce aliases, printed vs physical vs PDF pages, reordered and manually included uncited exhibits. [M4 contract](m4/DELIVERY_ACCEPTANCE.md).
+- **Reviewer and customer journey:** firm or solo policy explicitly named; action-specific publication distinct from read/check; NL/FR/EN source, UI and output language independent; keyboard/screen-reader acceptance; safe second-task onboarding. No court-readiness certificate, filing or customer-secret processing inferred from a synthetic report.
+- **Scope handoffs:** F37 **basic scoped retrieval** in M3 is not **opponent-wide uncited counterevidence analysis** in PIV-12/M5; F15 measured lexical retrieval is not unmeasured semantic concept search; F35 M2 **machine-readable technical run record** is not F35/M4 **human-reviewed linked publication report**. Explicitly surface limitations in the UI and benchmark.
+
+## Correction and change-propagation contract
+
+Every correction binds to the current brief revision, assertion, editor range/context fingerprint, source representation, check version and actor permissions.
+
+**Inspect → propose → preview → revalidate → apply/undo → invalidate → recheck.** Preview never mutates. Before applying, the client verifies the live range and server checks current source/draft/review versions. Stale selections and coauthor edits produce a conflict, not a blind overwrite. Apply is reversible and acknowledged; unknown acknowledgment is reconciled without duplicate edits. Only dependent checks/reviews/releases/outputs become stale; history and unaffected work remain available. Recheck produces a new recorded result and output version. Opponent originals remain untouched; edits go to an annotation, derivative or separate response draft.
+
+**CP-01 acceptance scenario:** review assertion A against exhibit E version V1 and freeze output O1. Replace E with V2 and edit A while a reviewer has the old packet open; retain unrelated exhibit U as a control. V1/anchors/O1 remain immutable; A's affected checks and review become stale; stale publication is rejected; unaffected U remains valid when out of scope; whole-record search becomes stale if its declared source universe changes. Reviewer sees the conflict. Recheck produces O2; O1 is marked superseded, never overwritten. Restart/lost acknowledgment does not duplicate edits or publication. Revoked access blocks new retrieval and hosted access; prior downloads cannot be remotely recalled.
+
+**DE-01 dynamic exhibits:** define register order versus first-citation order. Test repeated references, citation removal, body/table/footnote references, manually included uncited exhibits, annexes, alias renumbering and oversized single exhibits. Removing a citation never silently deletes manually included material. Word numbering, index, PDF bookmarks and page maps derive from one frozen graph revision. Reopen generated bytes and validate every link; prior exports remain frozen.
+
+## Review, legal scope and release gates
+
+Professional workflow: request review of a named version → assign reviewer or apply the configured solo policy → inspect → return specific issues → correct → inspect changes → release the exact artifact. A solo signoff must be labelled as solo policy, not independent review. Read-only access never grants mutation/publication authority. Reports disclose checked scope, exclusions, failed pages, unresolved items, dispositions, versions and reviewer identity.
+
+Legal-authority work has distinct levels: resolve a statute/decision; compare quotation to an identified version; propose relevance; verify later treatment/current status. The initial factual-evidence product does not promise these automatically. Legal references are marked unchecked when detected. PIV-17/19 must define licensed authoritative sources, jurisdiction, update/version policy, evaluation and professional oversight before expanding the promise. Procedural advisories and an authority list alone do not constitute legal citation verification.
+
+| Use level | Release condition |
+|---|---|
+| Synthetic development | PIV-00/01 contracts and fixtures; no customer documents; demo is labelled |
+| Confidential customer use | Relevant PIV-02–05 identity, matter isolation, private custody, persistent recovery, parser containment, retention/provider policy and PIV-20 evidence |
+| Recommendation review | Revision-bound issues, visible scope, history/CAS/idempotency; no implied legal approval |
+| Artifact publication | Exact current snapshot; action-specific authorization; atomic audit/receipt; validated links/redaction; recipient policy for hosted share |
+| External filing | Separate authorized integration or human handoff; receipt bound to artifact; unknown outcomes reconciled; export never means submitted |
+
+Quality thresholds are provisional until measured on PIV-01. Record denominators; separate reference resolution, retrieval recall, literal false positives, semantic quality, output round-trip integrity, reviewer effort, latency/resource use and permission/recovery failures. A clean case returning zero confirmed findings is a success condition.
+
+## Evidence, maintenance and commercial validation
+
+PIV-00 owns a claims register for material external claims in product, sales and roadmap material. Each entry records the claim, source and exact passage, publication/access dates, evidence type, supported scope, limitations, requirement, owner and status (**pending**, **approved**, **qualified** or **withdrawn**). Material claims may be used externally only when supported by approved entries. Keep withdrawn entries and their rationale as history; do not erase them.
+
+Seed these disputed statements as **pending source review**, not established facts: that the DPA native splitter destroys bookmarks; that Belgium has a universal 200-page filing limit; that existing products lack bundle creation (scope must account for products such as Kleos and e-Deposit); that EU hosting establishes professional-secrecy compliance; and that a reported Nexa firm count means paying active customers. Separate access, registration, training, activity, payment and retention metrics. Reject national inferences from local handling advice and unsupported compliance conclusions unless an approved source supports the exact scope.
+
+### Competitive task benchmark (PIV-01, PIV-20)
+
+Compare against a documented manual Word/PDF baseline using a fixed task protocol and versioned, rights-cleared representative dossiers: Dutch, French, English and mixed-language; clean controls and known issues; scans and clean PDFs; varied dossier sizes. Tasks cover date and email acceptance, a cited amount with VAT and role basis, reference repair after exhibit replacement, and production of a reviewed linked output. Record correctness of sources and outputs, total elapsed time including setup/review/cleanup, false positives, assistance, errors and breakage. Compare **Hublex's browser-local Belgian conclusions/inventory checks, Alice, Prudai/LEO and Clearbrief's comparable factual citation/Word/exhibit tasks** only with authorized access; use Nexa/Kleos where the task actually overlaps. Record product, host, plan and feature scope: advertised features are **not measured results**. Mark unavailable or untested products explicitly untested. The actual competitor and narrower feature scope must be disclosed; do not claim no Belgian competitor. Include a quote-free own/opponent brief, wrong-date and wrong-amount scenario, zero-warning clean control, and full reviewer time in each comparison. Never invent benchmark results.
+
+### Maintained court profiles (PIV-17, PIV-18)
+
+Each court profile records court/division/chamber, document type, official source and passage, publication and effective dates, last verification date and owner, whether an item is mandatory or recommended, scope, expiry and conflict/source-unavailable behavior. A stale or unknown profile cannot support a court-ready claim or a national rejection rule. Technical bundle validation is distinct from procedural readiness; neither alone asserts legal compliance. Do not populate a profile with unverified legal requirements.
+
+### Dossier economics and repeat use (PIV-04, PIV-05, PIV-10, PIV-12, PIV-20)
+
+Track dossier size/pages/languages and versioned observed or estimated costs for OCR, indexing, inference, export, storage, delivery, retries and human support; record cache/reuse. Define cost per completed, reviewed dossier as processing + indexing + inference + storage + export/delivery + retries + human support. Keep one-time setup separate from recurring cost. Represent unavailable unit costs as null, not zero, and label estimates as estimates.
+
+Measure first complete task, a second task on an actual matter, repeat use within a defined window, time spent reviewing false warnings and reasons for abandoned tasks. Keep invited/access, registered, trained, active and paying adoption cohorts distinct. Use privacy-safe operational metadata only; do not collect customer document content as telemetry. The release question is whether lawyers complete work more reliably with less total effort than their current workflow and return for another matter. Synthetic development and benchmark work can proceed before release gates; confidential customer benchmarks require the applicable release gates.
+
+## Historical and competing plans
+
+This roadmap supersedes finance-first sequencing in prior roadmap prose, including the old active text formerly in this file. Preserve historical ADRs and code audit records as dated evidence; update their status by reference, never rewrite old verification as current. The former standalone `CaseProof_Belgium_Code_Audit_and_Roadmap.md` is supporting pinned code-audit evidence, not a competing roadmap authority. Companion CORE/LIT/AP packet names map to PIV-00–20 and do not create a second backlog. The separate owner decision already adopted is authoritative: use `domains/disputes/`, sequence PIV-00 → PIV-01 → foundation contracts/intake, and do not revive the withdrawn estimate.
+
+**First build outcome (unchanged; mandatory M1–M4 user outcome):** one Belgian lawyer authenticates to a private matter; imports originals and confirms Stuk/Pièce; **inside Word** finds/inspects/inserts source support; checks and corrects own or opponent brief; receives human review; generates **actual link-validated DOCX/PDF, dynamically built exhibits and transparent verification report**; then downloads/shares a controlled reviewed artifact. Evidence or draft changes invalidate affected work and trigger safe recheck. [Word tests](m3/WORD_INTEGRATION_ACCEPTANCE.md) · [delivery tests](m4/DELIVERY_ACCEPTANCE.md).

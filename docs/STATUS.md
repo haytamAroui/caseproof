@@ -1,3 +1,17 @@
+# Current product direction — M1 backend-first, M2 may be developed in parallel — 2026-10-26
+
+**Principal source:** [Belgian litigation roadmap](ROADMAP.md) and [complete user workflow](PRODUCT_WORKFLOW.md). [ADR 0016](adr/0016-belgian-litigation-product-pivot.md) supersedes *finance-first product sequencing* only; sector-neutral Kernel, constitution, ADR-0011 architecture and finance compatibility remain unchanged. The snapshots below record historical engineering state; their finance-first action recommendations are no longer the active product order.
+
+**Current M1 delivery status:** [M1 Backend Exit Contract](m1/BACKEND_EXIT_CONTRACT.md) defines **M1-A contract freeze**, **M1-B integrated headless backend**, and **M1-C release approval**. M1-A/M1-B are OPEN; frontend and manual lawyer walkthrough are **not M1 backend prerequisites**. After M1-A action/matter semantics are frozen, M2 may begin on contract-tested fake data while hardening/storage/auth in M1-B proceeds. [PR #62](https://github.com/haytamAroui/caseproof/pull/62) merged; [PR #63](https://github.com/haytamAroui/caseproof/pull/63) remains open and CI-verified as an engineering candidate, not a production deployment.
+
+**Historical M1 PR #62 scope (now merged):** [implementation/gate matrix](m1/IMPLEMENTATION.md) and [hexagonal task audit](m1/HEXAGONAL_AUDIT.md). Authenticated *read-side* composition, deterministic preserved-source preview, bounded DOCX/text and PDF page warning labels, immutable versioned Stuk/Pièce mapping proposals and adversarial tests. This does not install matter-write grants, real Storage, customer upload, parser OCR, exhibit review persistence or public API. Keep M1 flagged IN PROGRESS until genuine signed Auth→DB, private custody/recovery and reviewer confirmation succeed. Do not mark M1 complete merely because synthetic CI passes.
+
+**M0 single-PR work:** PIV-00 owner/contract and code-status matrix ([BASELINE](m0/BASELINE.md)), unresolved public claims ([CLAIMS REGISTER](m0/CLAIMS_REGISTER.md)), and PIV-01 synthetic NL/FR/EN/mixed fixtures, validator/tests and pre-registered [BENCHMARK PROTOCOL](m0/BENCHMARK_PROTOCOL.md). No actual human/competitor benchmark, independently adjudicated gold, OCR scan evaluation, or Belgian legal opinion. Acceptance remains conditional on PR-head CI, scope review and evaluation-label adjudication.
+
+**Not implemented:** a production litigation web/Word journey, Stuk/Pièce register, authenticated matter authorization with restricted same-org scope, real confidential Storage, DOCX/OCR/filing integrations, release authority or linked legal bundles. These are PIV-02 onward. Open PR #57 remains an unmerged extraction candidate until separately reviewed; do not credit its changes to current main.
+
+---
+
 # CaseProof / ExceptionDesk — verified engineering status
 
 ## 2026-10-23 — Persisted exact text evidence increment
@@ -101,3 +115,11 @@ Default UI persistence is explicitly session memory; real PostgreSQL replay/rest
 Branch `feat/durable-extraction-worker`, based on open #55 HEAD `8ebcd60fd342ae09b9276520b2bafce47c62cee6`. Adds immutable source-referenced job plans, internal authenticated scheduling, disposable PostgreSQL database-time leases/heartbeats/attempts/events, transaction-bound checkpoint fencing, bounded retry/cancellation and source-to-review worker composition. [ADR 0015](adr/0015-leased-document-jobs.md), [data/test review](tasks/EI-004.md). Received replies replay under the original run; unresolved dispatches never retry automatically. Execution completion cannot approve evidence or legal/payment decisions.
 
 SQL remains disposable, routes unmounted, sources synthetic and inference scripted in tests. No provider/routing/dependency changes, live Requesty call, Kernel change, production migration, role grant or worker deployment. This is a recovery reference; real service identity/delegation, least-privilege Auth/DB, production Storage, accepted evidence/decision graph, external-effects outbox and customer outcome gates remain open. CI verification results will be recorded on the combined PR.
+
+
+**M0 language correction in PR #62:** NL / FR / EN are the equal product-language targets for UI, search/workflow and supported output; M0 v1 fixtures remain historical, while M0 v2 adds English and trilingual examples. This does not establish production translations, retrieval quality or approved benchmark results.
+
+
+## Word synthetic spike (development branch)
+
+A read-only Word task pane can display a selected passage next to a fixed synthetic example. It has no authentication, evidence retrieval, insertion or API integration and has not been tested in a Word host. It does not close M3 or the M1/M2 live integration gates. See `apps/word_addin/README.md`.

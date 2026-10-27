@@ -12,7 +12,7 @@ from uuid import UUID
 from packages.evidence_kernel.domain.source_versions import DerivedRepresentation, SourceVersion
 
 SCHEMA_VERSION = "caseproof-ei-v1"
-PROMPT_VERSION = "caseproof-qae-v1"
+PROMPT_VERSION = "caseproof-qae-v5"
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 
