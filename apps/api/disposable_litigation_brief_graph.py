@@ -388,5 +388,6 @@ class DisposableBriefGraphStore:
                 raise BriefGraphConflict("graph identity digest mismatch")
             return StoredBriefGraph(
                 logical, row[0], representation, binding, row[8], row[9],
-                version == current_version,
+                (version == current_version and row[10] == case_rev
+                 and row[11] == exhibit_rev),
             )
