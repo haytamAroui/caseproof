@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="TaskPaneApp">
   <Id>8d7292e7-799e-48f8-b42f-903ebf46c0e1</Id>
-  <Version>0.1.0.0</Version>
+  <Version>0.2.0.0</Version>
   <ProviderName>CaseProof</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="CaseProof synthetic spike"/>
-  <Description DefaultValue="Synthetic-only evidence inspection spike."/>
+  <Description DefaultValue="Synthetic-only evidence search and citation development spike."/>
   <Hosts><Host Name="Document"/></Hosts>
-  <DefaultSettings><SourceLocation DefaultValue="https://localhost:3000/index.html"/></DefaultSettings>
-  <Permissions>ReadDocument</Permissions>
+  <DefaultSettings><SourceLocation DefaultValue="https://localhost:3000/index.html?demo=1"/></DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
 </OfficeApp>

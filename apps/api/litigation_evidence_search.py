@@ -12,6 +12,31 @@ from dataclasses import dataclass
 from application.litigation.matter_policy import MatterPermission, authorize_matter
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.litigation_check_service import AuthorizedLitigationChecker, PrivateMatterAccess
+from domains.disputes.exhibits import ExhibitRegister, MappingState
+
+
+@dataclass(frozen=True, slots=True)
+class CitationCandidate:
+    exhibit_id: str
+    label: str
+    pdf_page: int
+
+
+def citation_candidate(register: ExhibitRegister, source_id: str, version_id: str,
+                       physical_page: int | None) -> CitationCandidate | None:
+    """Require a unique, confirmed label and exact physical page mapping."""
+    if physical_page is None:
+        return None
+    candidates = []
+    for entry in register.entries:
+        if not entry.confirmed:
+            continue
+        resolution = register.resolve(entry.display_label, pdf_page=physical_page)
+        if (resolution.state == MappingState.CONFIRMED and resolution.page is not None
+                and resolution.page.source_id == source_id
+                and resolution.page.version_id == version_id):
+            candidates.append(CitationCandidate(entry.exhibit_id, entry.display_label, physical_page))
+    return candidates[0] if len(candidates) == 1 else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +50,7 @@ class SearchHit:
     text: str
     start: int
     end: int
+    citation: CitationCandidate | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +135,8 @@ class AuthorizedEvidenceSearch:
                         row.source_id, row.version_id, row.representation_id,
                         row.original_sha256, locator, None if page_index is None else page_index + 1,
                         passage[left:right], start + left, start + right,
+                        citation_candidate(bundle.register, row.source_id, row.version_id,
+                                           None if page_index is None else page_index + 1),
                     ))
                     if len(hits) >= 20:
                         break

@@ -133,3 +133,8 @@ An opt-in internal check-store adapter can derive PDF/DOCX previews from verifie
 ## M3 private lexical search candidate
 
 An unmounted search adapter reads only a version-pinned M2 private-matter bundle, checks signed identity and both draft-check and evidence-read grants, returns bounded literal matches with representation and source identifiers, and revalidates access and snapshot before return. Partial or missing source coverage is disclosed. This is not connected to the Word task pane, does not insert citations, and is not live-authenticated acceptance or a production route. Search tests use synthetic identities.
+
+
+## M3 synthetic Word citation development
+
+The development task pane and localhost-only synthetic API support selecting a unique body passage, searching a synthetic matter, viewing a bounded text excerpt and inserting a uniquely mapped exhibit citation. The synthetic client rechecks source search and document body/selection before insertion, and blocks retries following an unknown outcome. Automated tests use a mocked Word host; no real Office host, save/reopen, coauthoring, tracked changes, actual signed session, private source viewer or authorized live edit has been verified. Body-text comparison is not atomic compare-and-swap. M3 remains open and confidential documents must not be used.

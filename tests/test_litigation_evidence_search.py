@@ -46,6 +46,7 @@ def test_exact_search_returns_source_offsets_and_no_false_coverage():
     assert hit.source_id == "s1" and hit.source_version_id == "v1"
     assert hit.text == "De betaling is vastgesteld."
     assert (hit.start, hit.end, hit.page) == (0, len(hit.text), 1)
+    assert hit.citation.label == "Stuk 1" and hit.citation.pdf_page == 1
 
 
 def test_unavailable_snapshot_and_revoked_permission_never_return_text():
@@ -105,3 +106,16 @@ def test_no_matches_is_a_valid_result():
     search, _ = search_rig()
     result = search.search(bearer="signed-dev-fixture", case_id=CASE, brief_version_id=DRAFT, query="unmatched")
     assert result.coverage == "complete" and result.hits == ()
+
+
+def test_ambiguous_or_unmapped_citations_are_not_suggested():
+    from apps.api.litigation_evidence_search import citation_candidate
+    from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
+    page = ExhibitPage("s1", "v1", 1)
+    register = ExhibitRegister(1, (
+        ExhibitEntry("e1", "Stuk 1", (page,), confirmed=True),
+        ExhibitEntry("e2", "Stuk 2", (page,), confirmed=True),
+    ))
+    assert citation_candidate(register, "s1", "v1", 1) is None
+    assert citation_candidate(register, "s1", "v1", None) is None
+    assert citation_candidate(register, "s1", "v2", 1) is None
