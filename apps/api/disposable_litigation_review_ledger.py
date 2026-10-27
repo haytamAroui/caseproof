@@ -143,7 +143,7 @@ class DisposableM2ReviewLedger:
             raise M2LedgerConflict("run payload, source or case snapshot changed")
         return encoded
 
-    def publish(self, *, org_id: UUID, actor_id: UUID,
+    def publish(self, *, org_id: UUID | str, actor_id: UUID | str,
                 run: VerificationRun) -> bool:
         """Store immutable check record; duplicate exact snapshot is replay."""
         if not isinstance(run, VerificationRun):
