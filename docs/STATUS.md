@@ -118,3 +118,7 @@ SQL remains disposable, routes unmounted, sources synthetic and inference script
 
 
 **M0 language correction in PR #62:** NL / FR / EN are the equal product-language targets for UI, search/workflow and supported output; M0 v1 fixtures remain historical, while M0 v2 adds English and trilingual examples. This does not establish production translations, retrieval quality or approved benchmark results.
+
+## M2 bounded source preview candidate
+
+An opt-in internal check-store adapter can derive PDF/DOCX previews from verified original bytes using the existing bounded parser and evidence indexer. The default remains unchanged; DOCX physical pages remain unverified and parser warnings retain partial coverage. This is disposable engineering only, not signed-user/live database, OCR, Word, or M1/M2 release acceptance. No customer data or production routes are authorized.
