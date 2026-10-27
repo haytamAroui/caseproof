@@ -9,6 +9,7 @@ import faulthandler
 import signal
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -198,6 +199,23 @@ class BriefGraphTests(unittest.TestCase):
             org_id=self.f.scope.org_id, actor_id=self.f.actor, run=run,
         )
         self.assertEqual(readback.packet, recorded.packet)
+
+    def test_noncanonical_case_and_version_uuid_rejected_without_persistence(self):
+        for candidate in (
+            replace(self.representation.brief,
+                    case_id=str(self.f.scope.case_id).upper()),
+            replace(self.representation.brief,
+                    version_id=self.version_id.hex),
+        ):
+            altered = replace(self.representation, brief=candidate)
+            with self.assertRaises(BriefGraphConflict):
+                self.publish(representation=altered)
+        with connect() as conn:
+            count = conn.execute(
+                "select count(*) from caseproof._m2_brief_versions "
+                "where brief_id=%s", (self.graph_id,),
+            ).fetchone()[0]
+        self.assertEqual(count, 0)
 
     def test_request_replay_and_stale_revision_fail_closed(self):
         request = uuid4()
