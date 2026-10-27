@@ -1,6 +1,8 @@
 # M1-B Security Gate — default-private matter RLS and real signed-user acceptance
 
-**2026-10-27 | Security review candidate | NOT applied to caseproof-dev**
+**2026-10-27 | Pre-deployment security proposal; later deployed to dev, with security acceptance still OPEN**
+
+> **Live update:** Exact M1 default-private installation was recorded in Supabase as migration `20261027160745` and verified read-only. [Live M1 deployment receipt](LIVE_DEV_PRIVATE_MIGRATION_RECEIPT_2026-10-27.md). The pre-migration state and proposed SQL passages below are historical context. Independent human review, the restricted app DB login and real signed-user live-db tests remain OPEN.
 
 This packet follows frozen **ADR-0017 default-private litigation matters**.
 It does not replace tenant-frozen ADR-0011's sector-neutral Evidence Kernel.
