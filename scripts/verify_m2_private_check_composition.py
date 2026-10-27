@@ -70,6 +70,12 @@ class M2CheckCompositionTests(unittest.TestCase):
             self.root, self.f,
         ).read(scope=VaultScope(org, case), intent_id=intent)
         self.graph = DisposableBriefGraphStore(connect, self.reader)
+        # Test-only extension: prepare candidate immutable originals before
+        # the original brief/check snapshot is frozen. Any later Vault
+        # ingestion correctly invalidates the case revision and old review.
+        prepublish = getattr(self, "_before_initial_graph_publish", None)
+        if prepublish is not None:
+            prepublish()
         self.graph.publish(
             org_id=self.f.scope.org_id, actor_id=self.f.actor,
             brief_id=self.brief_id, binding=new_binding(self.f),
