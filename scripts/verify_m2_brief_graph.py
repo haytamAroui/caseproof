@@ -6,7 +6,6 @@ No production migrations, signed user tokens or outbound model requests.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -25,7 +24,6 @@ from apps.api.disposable_litigation_brief_graph import (
     VerifiedBriefBinding,
 )
 from apps.api.evidence_vault_protocol import VaultScope
-from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 from scripts.verify_m2_disposable_runs import fixture
 from scripts.verify_s2_002_database import _env, _run
 from scripts.verify_vault_integration import Fixture, begin, connect, coordinator
@@ -231,14 +229,42 @@ class BriefGraphTests(unittest.TestCase):
             )
         with self.assertRaises(BriefGraphConflict):
             self.load()
-        self.assertFalse(self.load(require_current=False).is_current is False)
+        self.assertTrue(self.load(require_current=False).is_current)
 
-    def test_atomic_audit_rollback_and_immutable_history(self):
-        class FailedAudit(DisposableBriefGraphStore):
-            def _source(self, *args, **kwargs):
-                super()._source(*args, **kwargs)
+    def test_audit_failure_rolls_back_and_immutable_history(self):
+        class FailAuditConnection:
+            def __init__(self):
+                self.conn = connect()
 
-        # A foreign actor cannot even create an empty version.
+            def __enter__(self):
+                self.conn.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.conn.__exit__(*args)
+
+            def execute(self, sql, params=None):
+                if "insert into caseproof.audit_events(" in sql:
+                    raise RuntimeError("injected audit outage")
+                return self.conn.execute(sql, params)
+
+        failed = DisposableBriefGraphStore(
+            FailAuditConnection, self.store._read_original,
+        )
+        with self.assertRaises(RuntimeError):
+            failed.publish(
+                org_id=self.f.scope.org_id, actor_id=self.f.actor,
+                brief_id=self.graph_id, binding=self.binding,
+                representation=self.representation,
+                document_role="own_draft", request_id=uuid4(),
+                expected_revision=0,
+            )
+        with connect() as conn:
+            n = conn.execute(
+                "select count(*) from caseproof._m2_brief_versions "
+                "where brief_id=%s", (self.graph_id,),
+            ).fetchone()[0]
+        self.assertEqual(n, 0)
         with self.assertRaises(BriefGraphConflict):
             self.store.publish(
                 org_id=self.f.scope.org_id, actor_id=uuid4(),
