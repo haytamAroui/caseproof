@@ -25,9 +25,10 @@ class Fixture:
     version: UUID
 
 
-def seed(*, org: UUID | None = None, read_evidence: bool = True) -> Fixture:
+def seed(*, org: UUID | None = None, read_evidence: bool = True,
+         actor_id: UUID | None = None) -> Fixture:
     scope, actor, case, document, version = (
-        org or uuid4(), uuid4(), uuid4(), uuid4(), uuid4(),
+        org or uuid4(), actor_id or uuid4(), uuid4(), uuid4(), uuid4(),
     )
     actions = ["case:read"] + (["evidence:read"] if read_evidence else [])
     with connect() as conn:
