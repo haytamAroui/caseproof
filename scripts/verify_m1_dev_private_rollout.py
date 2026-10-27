@@ -17,7 +17,11 @@ from scripts.verify_m1_signed_private_reader import (
     verify_three_subjects,
 )
 from scripts.verify_s2_002_database import (
-    MIGRATION, PROPOSAL_PATH, SCHEMA_BOOTSTRAP, _env, _run,
+    MIGRATION,
+    PROPOSAL_PATH,
+    SCHEMA_BOOTSTRAP,
+    _env,
+    _run,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
