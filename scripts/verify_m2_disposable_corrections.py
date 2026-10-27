@@ -13,10 +13,7 @@ from uuid import UUID, uuid4
 
 from psycopg.errors import ObjectNotInPrerequisiteState
 
-from application.litigation.review_cycle import (
-    CorrectionProposal,
-    revert_correction,
-)
+from application.litigation.review_cycle import CorrectionProposal
 from application.litigation.unified_review import ObservationReview, ReviewDisposition
 from apps.api.disposable_litigation_corrections import (
     CorrectionCommand,
