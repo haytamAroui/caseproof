@@ -14,7 +14,6 @@ from __future__ import annotations
 import os
 import secrets
 import sys
-from collections.abc import Callable
 from typing import Protocol
 
 from apps.api.access_control import InvalidBearer
@@ -28,15 +27,16 @@ from apps.api.supabase_password_signin import (
     SupabasePasswordSignin,
 )
 from scripts.verify_dev_ephemeral_auth import (
-    GoTrueDevAdmin,
     ISSUER,
     PROJECT_REF,
+    GoTrueDevAdmin,
     UserAdmin,
 )
 from scripts.verify_m1_signed_private_reader import (
     _only_local,
     verify_three_subjects,
 )
+
 
 class ThreeSessionProbe(Protocol):
     def __call__(self, credentials: tuple[PasswordCredentials, ...]) -> None: ...
