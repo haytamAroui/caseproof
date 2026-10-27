@@ -1,6 +1,6 @@
 # M1 live positive Storage acceptance (development only)
 
-This adds a small **service-role-only SQL fixture issuer**, a protected manual GitHub workflow, and genuine verified signed-user Storage acceptance. It does not add permanent remote DB DSNs or access tokens.
+This adds a small **service-role-only SQL fixture issuer**, an added step in the existing protected manual GitHub workflow, and genuine verified signed-user Storage acceptance. It does not add permanent remote DB DSNs or access tokens.
 
 ## Trust and execution
 
@@ -18,7 +18,7 @@ This adds a small **service-role-only SQL fixture issuer**, a protected manual G
 5. Revoke A's exact grant via service-role-only RPC; A must fail actual GET of the existing object.
 6. Delete the original through Supabase **Storage API**; then exact SQL fixture rows; then Auth accounts in existing `finally` handler. Outputs separate stage receipts without secrets, users or paths.
 
-Run workflow manually on `main`: [CaseProof LIVE M1 authorized original](https://github.com/haytamAroui/caseproof/actions/workflows/m1-live-positive-original.yml).
+Run workflow manually on `main`: [CaseProof LIVE M1 authorized original](https://github.com/haytamAroui/caseproof/actions/workflows/m1-m2-one-click-e2e.yml).
 
 ## What it does NOT prove
 
