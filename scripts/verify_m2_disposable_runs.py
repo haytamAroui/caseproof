@@ -14,7 +14,7 @@ from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from threading import Barrier
+from threading import Barrier, Event
 from uuid import UUID, uuid4
 
 from psycopg.errors import ObjectNotInPrerequisiteState
@@ -220,6 +220,73 @@ class LedgerTests(unittest.TestCase):
         with self.assertRaises(M2LedgerConflict):
             self.save()
         self.assertEqual(counts(self.f)[0:2], (0, 0))
+
+    def test_organization_finding_permission_revocation_blocks_publish(self):
+        # A private matter draft:check grant alone is not sufficient to persist
+        # a check: ADR-0017 also requires current organization finding:write.
+        with connect() as conn:
+            conn.execute(
+                "update caseproof.organization_members "
+                "set actions=array['case:read','review:request']::text[] "
+                "where org_id=%s and user_id=%s",
+                (self.f.scope.org_id, self.f.actor),
+            )
+        with self.assertRaises(M2LedgerConflict):
+            self.repo.publish(
+                org_id=self.f.scope.org_id, actor_id=self.f.actor, run=self.run,
+            )
+        with connect() as conn:
+            conn.execute(
+                "update caseproof.organization_members "
+                "set actions=array['case:read','review:request','finding:write']::text[] "
+                "where org_id=%s and user_id=%s",
+                (self.f.scope.org_id, self.f.actor),
+            )
+        self.assertFalse(self.repo.publish(
+            org_id=self.f.scope.org_id, actor_id=self.f.actor, run=self.run,
+        ))
+
+    def test_concurrent_state_reader_observes_consistent_review_history(self):
+        # The reader pauses just after its SELECT of the review head.
+        # The writer must not append an event until the reader finishes
+        # reconstructing the revision-limited history in one transaction.
+        entered, resume = Event(), Event()
+
+        class PausingReader(DisposableM2ReviewLedger):
+            @staticmethod
+            def _events(conn, keys, run, expected_revision, expected_head):
+                entered.set()
+                if not resume.wait(3):
+                    raise AssertionError("reader did not resume")
+                return DisposableM2ReviewLedger._events(
+                    conn, keys, run, expected_revision, expected_head,
+                )
+
+        writer_started = Event()
+
+        def write():
+            writer_started.set()
+            return self.save()
+
+        def read():
+            return PausingReader(connect).state(
+                org_id=self.f.scope.org_id, actor_id=self.f.actor, run=self.run,
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            reader_future = pool.submit(read)
+            try:
+                self.assertTrue(entered.wait(3), "reader did not lock head")
+                writer_future = pool.submit(write)
+                self.assertTrue(writer_started.wait(3))
+                self.assertFalse(writer_future.done())
+            finally:
+                resume.set()
+            read_state = reader_future.result(timeout=5)
+            write_state, replay = writer_future.result(timeout=5)
+        self.assertEqual(read_state.revision, 0)
+        self.assertEqual(write_state.revision, 1)
+        self.assertFalse(replay)
 
     def test_source_destruction_and_run_mutation_withheld(self):
         with self.assertRaises(M2LedgerConflict):
