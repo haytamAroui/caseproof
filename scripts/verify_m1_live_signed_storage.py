@@ -13,7 +13,9 @@ import sys
 from uuid import uuid4
 
 from apps.api.signed_supabase_originals import (
-    OriginalRef, PrivateStorageDenied, SignedOriginalsStorage,
+    OriginalRef,
+    PrivateStorageDenied,
+    SignedOriginalsStorage,
 )
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
