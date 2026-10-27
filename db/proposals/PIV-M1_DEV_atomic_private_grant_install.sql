@@ -59,14 +59,21 @@ begin
         raise exception 'unexpected installed read policies; fail closed'
             using errcode='55000';
     end if;
+    -- A rogue permissive membership SELECT policy could expose private
+    -- account/organization identities even if case reads were restricted.
     if (
+        select count(*) from pg_policies
+        where schemaname='caseproof'
+          and tablename='organization_members'
+    ) <> 1 or (
         select count(*) from pg_policies
         where schemaname='caseproof'
           and tablename='organization_members'
           and policyname='own_active_membership_read'
           and cmd='SELECT'
+          and roles=array['authenticated']::name[]
     ) <> 1 then
-        raise exception 'own-membership RLS baseline missing'
+        raise exception 'unexpected own-membership RLS baseline'
             using errcode='55000';
     end if;
 end;
