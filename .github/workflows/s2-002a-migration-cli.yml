@@ -53,7 +53,11 @@ jobs:
                   raise SystemExit(f'Migration diverged from deployed reviewed SQL: {path}')
           print('M1_M2_DEPLOYED_MIGRATION_PAYLOADS_MATCH_PROPOSALS')
           PY
-          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 4
+          storage='supabase/migrations/20261027202734_caseproof_m1_private_originals_storage.sql'
+          test -f "$storage"
+          cmp "$storage" db/proposals/PIV-M1_DEV_private_originals_storage.sql
+          sha256sum "$storage" db/proposals/PIV-M1_DEV_private_originals_storage.sql
+          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 5
       - name: Cross-check with pinned official Supabase CLI
         run: |
           set -euo pipefail
