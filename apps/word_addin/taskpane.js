@@ -77,10 +77,17 @@
     busy = true;
     action.disabled = true;
     status.textContent = 'Rechecking evidence and document…';
+    const activeGeneration = generation;
+    const requireCurrentSession = () => {
+      if (window.caseproofSession !== provider || generation !== activeGeneration) {
+        throw new Error('The session changed. Search again.');
+      }
+    };
     let submitted = false;
     let succeeded = false;
     try {
       const fresh = await search(provider, query);
+      requireCurrentSession();
       if (fresh.case_id !== snapshot.case_id || fresh.brief_version_id !== snapshot.brief_version_id ||
           fresh.exhibit_revision !== snapshot.exhibit_revision ||
           !fresh.hits.some(candidate => identity(candidate) === identity(hit))) {
@@ -97,6 +104,7 @@
         selected.load('text');
         body.load('text');
         await context.sync();
+        requireCurrentSession();
         if (selected.text !== original.text || body.text !== original.documentText) {
           throw new Error('The document or selection changed. Search again.');
         }
@@ -134,6 +142,9 @@
       }
       const token = await provider.getBearer();
       if (typeof token !== 'string' || !token.trim() || token.length > 8192) throw new Error('Session expired.');
+      if (window.caseproofSession !== provider || generation !== activeGeneration) {
+        throw new Error('The session changed. Download cancelled.');
+      }
       const path = `/v2/matters/${encodeURIComponent(provider.caseId)}/briefs/${encodeURIComponent(provider.briefVersionId)}` +
         `/evidence/${encodeURIComponent(hit.source_id)}/versions/${encodeURIComponent(hit.source_version_id)}/original`;
       const response = await fetch(path, { credentials: 'omit', cache: 'no-store', redirect: 'error',
@@ -223,8 +234,9 @@
     try {
       const provider = session();
       const original = await capture();
+      if (current !== generation || window.caseproofSession !== provider) return;
       const data = await search(provider, query);
-      if (current !== generation) return;
+      if (current !== generation || window.caseproofSession !== provider) return;
       render(provider, query, original, data);
       status.textContent = 'Inspect the source passage before inserting a citation.';
     } catch (error) {

@@ -17,7 +17,7 @@ function setup(options = {}) {
   const elements = Object.fromEntries(['inspect', 'query', 'status', 'result', 'selection', 'coverage', 'hits']
     .map(id => [id, element()]));
   elements.query.value = 'betaling';
-  const state = { selected: 'The payment is due.', body: 'The payment is due.', writes: [], calls: 0, downloads: 0 };
+  const state = { selected: 'The payment is due.', body: 'The payment is due.', writes: [], calls: 0, downloads: 0, syncs: 0 };
   const original = Buffer.from('fixture-original');
   const originalHash = createHash('sha256').update(original).digest('hex');
   const hit = { source_id: 's1', source_version_id: 'v1', representation_id: 'r1',
@@ -25,14 +25,20 @@ function setup(options = {}) {
     text: '<script>evidence</script>', citation: { exhibit_id: 'e1', label: 'Stuk 1', pdf_page: 1 } };
   const response = { schema: 'caseproof-evidence-search-v1', case_id: 'case', brief_version_id: 'draft',
     exhibit_revision: 1, coverage: 'complete', omitted_sources: 0, hits: [hit] };
-  const provider = { mode: options.mode || 'synthetic', caseId: 'case', briefVersionId: 'draft', getBearer: async () => 'signed-token' };
+  let bearerCalls = 0;
+  const provider = { mode: options.mode || 'synthetic', caseId: 'case', briefVersionId: 'draft', getBearer: async () => {
+    bearerCalls++;
+    if (options.logoutDuringDownloadToken && bearerCalls === 2) state.endSession();
+    return 'signed-token';
+  } };
   const context = {
     document: { getElementById: id => elements[id], createElement: tag => {
       const node = element(); if (tag === 'a') node.click = () => { state.downloads++; }; return node;
     } },
     crypto: webcrypto, Blob, Uint8Array, setTimeout: fn => fn(),
     URL: { createObjectURL: () => 'blob:fixture', revokeObjectURL() {} },
-    window: { caseproofSession: options.noSession ? null : provider, addEventListener() {} },
+    window: { caseproofSession: options.noSession ? null : provider,
+      addEventListener(name, fn) { if (name === 'caseproof:session-ended') state.endSession = fn; } },
     Office: { HostType: { Word: 'Word' }, context: { requirements: { isSetSupported: () => true } },
       onReady(fn) { fn({ host: 'Word' }); } },
     Word: { run: fn => {
@@ -41,7 +47,11 @@ function setup(options = {}) {
         insertText(text) { state.writes.push(text); } };
       return fn({ document: { getSelection: () => range,
         body: { get text() { return state.body; }, load() {} } },
-        sync: async () => { if (options.unknown && state.writes.length > writesBefore) throw new Error('lost'); } });
+        sync: async () => {
+          state.syncs++;
+          if (options.logoutDuringInsert && state.syncs === 2) state.endSession();
+          if (options.unknown && state.writes.length > writesBefore) throw new Error('lost');
+        } });
     } },
     fetch: async (url, request) => {
       state.calls++;
@@ -85,6 +95,12 @@ test('changed exhibit revision or document prevents insertion', async () => {
   await action(stale).click();
   assert.equal(stale.state.writes.length, 0);
 });
+test('sign out during the final Word read prevents insertion', async () => {
+  const rig = await start({ logoutDuringInsert: true });
+  await action(rig).click();
+  assert.equal(rig.state.writes.length, 0);
+  assert.match(rig.elements.status.textContent, /session changed/i);
+});
 test('unknown edit outcome prevents duplicate retry', async () => {
   const rig = await start({ unknown: true });
   const button = action(rig);
@@ -119,4 +135,11 @@ test('original download verifies source hash and rejects tampered content', asyn
   await bad.elements.hits.children[0].children[3].click();
   assert.equal(bad.state.downloads, 0);
   assert.match(bad.elements.status.textContent, /integrity/);
+});
+test('sign out while obtaining download token sends no original request', async () => {
+  const rig = await start({ logoutDuringDownloadToken: true });
+  await rig.elements.hits.children[0].children[3].click();
+  assert.equal(rig.state.calls, 1);
+  assert.equal(rig.state.downloads, 0);
+  assert.match(rig.elements.status.textContent, /session changed/i);
 });
