@@ -1,0 +1,44 @@
+name: M1-B invoker-view signed PostgREST boundary candidate
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  invoker-rls:
+    name: PostgreSQL 17 invoker views - same-org privacy, revoke, owner bypass
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: caseproof_s2_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: caseproof_ephemeral_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caseproof_s2_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 8
+    env:
+      CASEPROOF_DISPOSABLE_DB: "YES"
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: caseproof_s2_ci
+      PGUSER: postgres
+      PGPASSWORD: caseproof_ephemeral_ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Security invoker read-view role/scope/revocation tests
+        run: uv run --locked python -m scripts.verify_m1_signed_invoker_view_rls
