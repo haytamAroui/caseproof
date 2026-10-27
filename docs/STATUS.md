@@ -122,7 +122,7 @@ SQL remains disposable, routes unmounted, sources synthetic and inference script
 
 ## Word synthetic spike (development branch)
 
-A read-only Word task pane can display a selected passage next to a fixed synthetic example. It has no authentication, evidence retrieval, insertion or API integration and has not been tested in a Word host. It does not close M3 or the M1/M2 live integration gates. See `apps/word_addin/README.md`.
+The Word development branch has progressed beyond its original read-only spike; the current synthetic search, citation, download and authentication candidates are described below. It has not been tested in a Word host and does not close M3 or the M1/M2 live integration gates. See `apps/word_addin/README.md`.
 
 
 ## M2 bounded source preview candidate
@@ -132,7 +132,7 @@ An opt-in internal check-store adapter can derive PDF/DOCX previews from verifie
 
 ## M3 private lexical search candidate
 
-An unmounted search adapter reads only a version-pinned M2 private-matter bundle, checks signed identity and both draft-check and evidence-read grants, returns bounded literal matches with representation and source identifiers, and revalidates access and snapshot before return. Partial or missing source coverage is disclosed. This is not connected to the Word task pane, does not insert citations, and is not live-authenticated acceptance or a production route. Search tests use synthetic identities.
+An unmounted search adapter reads only a version-pinned M2 private-matter bundle, checks signed identity and both draft-check and evidence-read grants, returns bounded literal matches with representation and source identifiers, and revalidates access and snapshot before return. Partial or missing source coverage is disclosed. It is connected to the synthetic Word development pane, not to a production route or live-authenticated matter. Search tests use synthetic identities.
 
 
 ## M3 synthetic Word citation development
@@ -148,3 +148,7 @@ The PR adds a Vaquill-derived Office dialog/PKCE adapter, public-key-only Supaba
 ## M1–M3 loopback composition candidate
 
 A loopback-only injected development app combines versioned factual checking, matter-scoped evidence search, and guarded original-byte download. Original reads require evidence permission, source inclusion, matching SHA-256 and a second authorization/snapshot check; responses are attachments and no-store. Disposable PostgreSQL acceptance uses synthetic identity and an owner fixture; it does not prove least-privilege live RLS, private Supabase Storage, real session revocation, Word-host behavior or customer readiness. The API is not mounted in `main.py`.
+
+## Genuine signed Auth to disposable RLS receipt
+
+[Manual run 40531773053](https://github.com/haytamAroui/caseproof/actions/runs/40531773053) passed on main commit `866158a51c780dad88a63d48769282f96addfc8a`: three real Supabase dev identities were signed in and tested against a least-privilege disposable PostgreSQL RLS fixture; the job reported cleanup of all ephemeral identities. Supabase MCP subsequently reported zero Auth users. This does not test the live project's private RLS or Storage, the PR branch's M2 composition, or an Office host. Read-only inspection still found the legacy organization-wide case/document policies and no M1 matter-grant or M2 brief tables. Independent review of the atomic dev policy switch remains required before installation.
