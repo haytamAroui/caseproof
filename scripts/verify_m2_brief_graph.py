@@ -5,13 +5,13 @@ No production migrations, signed user tokens or outbound model requests.
 """
 from __future__ import annotations
 
+import unittest
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Barrier
 from uuid import UUID, uuid4
-import unittest
 
 from psycopg.errors import ObjectNotInPrerequisiteState
 
