@@ -63,7 +63,7 @@ def fixture(root: Path):
             "insert into caseproof._m1_matter_grants("
             "org_id,case_id,user_id,role,permissions) "
             "values(%s,%s,%s,'reviewer',array['case:read','draft:check',"
-            "'review:request']::text[])",
+            "'review:request','exhibit:confirm']::text[])",
             (f.scope.org_id, f.scope.case_id, f.actor),
         )
         register_json = json.dumps({
