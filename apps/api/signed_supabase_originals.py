@@ -96,7 +96,8 @@ class SignedOriginalsStorage:
             or method not in ("POST", "GET")
         ):
             raise ValueError("Invalid signed-user Storage request")
-        path = "/storage/v1/object/" + BUCKET + "/" + quote(ref.path, safe="/")
+        prefix = "/storage/v1/object/authenticated/" if method == "GET" else "/storage/v1/object/"
+        path = prefix + BUCKET + "/" + quote(ref.path, safe="/")
         conn = http.client.HTTPSConnection(
             PROJECT_REF + ".supabase.co", timeout=self.timeout_seconds,
         )
