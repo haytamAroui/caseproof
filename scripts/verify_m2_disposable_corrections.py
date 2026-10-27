@@ -175,6 +175,66 @@ class DurableCorrectionTests(unittest.TestCase):
         self.assertEqual(self.count("_m2_correction_plans"), 1)
         self.assertEqual(self.count("_m2_correction_events"), 2)
 
+    def test_revoked_permissions_between_preflight_and_graph_commit_no_write(self):
+        cmd, _ = self.new_command()
+        self.prepare(cmd)
+        publish = self.graph.publish
+
+        def after_preflight(**kwargs):
+            # Change grants only once, in a different committed DB session.
+            # The earlier correction _inspect has already passed.
+            with connect() as conn:
+                conn.execute(
+                    "update caseproof._m1_matter_grants "
+                    "set permissions=array['case:read','draft:check']::text[] "
+                    "where org_id=%s and case_id=%s and user_id=%s",
+                    (self.f.scope.org_id, self.f.scope.case_id, self.f.actor),
+                )
+            return publish(**kwargs)
+
+        self.graph.publish = after_preflight
+        with self.assertRaises(CorrectionConflict):
+            self.apply(cmd)
+        self.assertEqual(self.count("_m2_correction_events"), 0)
+        with connect() as conn:
+            row = conn.execute(
+                "select revision,version_id from caseproof._m2_brief_heads "
+                "where org_id=%s and case_id=%s and brief_id=%s",
+                (self.f.scope.org_id, self.f.scope.case_id, self.brief_id),
+            ).fetchone()
+        self.assertEqual(row, (1, UUID(self.run.brief_version_id)))
+
+    def test_reviewer_decision_change_between_preflight_and_graph_commit_no_write(self):
+        cmd, _ = self.new_command()
+        self.prepare(cmd)
+        publish = self.graph.publish
+
+        def changed_decision(**kwargs):
+            # A second concurrent reviewer event replaces the confirmation
+            # after the correction coordinator's optimistic preflight.
+            self.ledger.record(
+                org_id=self.f.scope.org_id, actor_id=self.f.actor,
+                run=self.run, request_id=uuid4(), expected_revision=1,
+                decision=ObservationReview(
+                    "fact:money-1", str(self.f.actor),
+                    ReviewDisposition.DISMISSED,
+                    "Review reconsidered after candidate confirmation",
+                ),
+            )
+            return publish(**kwargs)
+
+        self.graph.publish = changed_decision
+        with self.assertRaises(CorrectionConflict):
+            self.apply(cmd)
+        self.assertEqual(self.count("_m2_correction_events"), 0)
+        with connect() as conn:
+            row = conn.execute(
+                "select revision from caseproof._m2_brief_heads "
+                "where org_id=%s and case_id=%s and brief_id=%s",
+                (self.f.scope.org_id, self.f.scope.case_id, self.brief_id),
+            ).fetchone()
+        self.assertEqual(row[0], 1)
+
     def test_revoked_review_permission_after_prepare_blocks_mutation(self):
         cmd, _ = self.new_command()
         self.prepare(cmd)
