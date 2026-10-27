@@ -5,6 +5,8 @@ No production migrations, signed user tokens or outbound model requests.
 """
 from __future__ import annotations
 
+import faulthandler
+import signal
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
@@ -309,8 +311,16 @@ def main() -> None:
     # Protect physical graph tables from PostgREST's authenticated role.
     _run("set role authenticated; select * from caseproof._m2_brief_versions;",
          _env(), should_pass=False)
-    suite = unittest.defaultTestLoader.loadTestsFromTestCase(BriefGraphTests)
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    # Fail fast with a meaningful traceback instead of consuming an entire
+    # GitHub Actions job if a fixture holds a database lock indefinitely.
+    faulthandler.dump_traceback_later(20, repeat=True)
+    signal.alarm(85)
+    try:
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(BriefGraphTests)
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
+    finally:
+        signal.alarm(0)
+        faulthandler.cancel_dump_traceback_later()
     if not result.wasSuccessful():
         raise SystemExit(1)
     print("M2_DISPOSABLE_BRIEF_GRAPH_CAS_SOURCE_RESTART_PASSED")
