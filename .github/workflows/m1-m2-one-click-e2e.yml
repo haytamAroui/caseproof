@@ -72,6 +72,12 @@ jobs:
         run: |
           set -euo pipefail
           uv run --locked python -m scripts.verify_m1_m2_signed_e2e
+      - name: Real Supabase dev Storage - 3 signed ungranted users must be denied
+        env:
+          CASEPROOF_DEV_LIVE_STORAGE_PROBE: "YES"
+          CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+          CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+        run: uv run --locked python -m scripts.verify_m1_live_signed_storage
       - name: Summarize what was actually tested
         if: always()
         run: |
