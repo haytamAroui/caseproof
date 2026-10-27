@@ -2,7 +2,7 @@
 
 **Runbook dated 2026-10-26** · project: `caseproof-dev` / `ldwmocpxwskvhoojndrd`, EU central. **Never use AZComply's Supabase project.**
 
-> **27 October 2026 deployment update:** The private matter grant migration `20261027160745` is now installed in `caseproof-dev`. The old zero-policy/private-grant inventory below is a **pre-migration snapshot**. See the [new live dev DB signed-user acceptance packet](LIVE_SIGNED_DEV_DB_ACCEPTANCE.md) for the protected actual-database test (not yet run), and the [live inspection receipt](LIVE_DEV_PRIVATE_MIGRATION_RECEIPT_2026-10-27.md) proposed in PR #94. M1 remains OPEN; no private original Storage or independent human security review is claimed.
+> **27 October 2026 deployment update:** Private-grant migration `20261027160745` is installed in `caseproof-dev`. The old organization-wide policy inventory below is a **pre-migration snapshot**, not current live state. The [Supabase MCP live read-only audit](MCP_LIVE_RLS_AUDIT_2026-10-27.md) verifies current deployed private policies without new database secrets. The preexisting protected three-real-Auth-users workflow still tests **disposable**, not live, PostgreSQL. M1-B and human security approval remain OPEN.
 
 ## Observed live state
 
