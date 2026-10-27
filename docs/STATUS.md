@@ -128,3 +128,8 @@ A read-only Word task pane can display a selected passage next to a fixed synthe
 ## M2 bounded source preview candidate
 
 An opt-in internal check-store adapter can derive PDF/DOCX previews from verified original bytes using the existing bounded parser and evidence indexer. The default remains unchanged; DOCX physical pages remain unverified and parser warnings retain partial coverage. This is disposable engineering only, not signed-user/live database, OCR, Word, or M1/M2 release acceptance. No customer data or production routes are authorized.
+
+
+## M3 private lexical search candidate
+
+An unmounted search adapter reads only a version-pinned M2 private-matter bundle, checks signed identity and both draft-check and evidence-read grants, returns bounded literal matches with representation and source identifiers, and revalidates access and snapshot before return. Partial or missing source coverage is disclosed. This is not connected to the Word task pane, does not insert citations, and is not live-authenticated acceptance or a production route. Search tests use synthetic identities.
