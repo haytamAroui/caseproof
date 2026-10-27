@@ -18,7 +18,7 @@ def test_bucket_stays_private_and_immutable() -> None:
 def test_corrected_action_contract_is_possible_for_real_organization_members() -> None:
     assert "drop policy caseproof_m1_original_put_once" in CORRECTED_SQL
     _, policy = CORRECTED_SQL.split("create policy caseproof_m1_original_put_once", 1)
-    _, policy = policy.split("do $verify$", 1)
+    policy, _ = policy.split("do $verify$", 1)
     assert "'case:read'=any(m.actions)" in policy
     assert "'evidence:read'=any(m.actions)" in policy
     assert "'evidence:upload'=any(g.permissions)" in policy
