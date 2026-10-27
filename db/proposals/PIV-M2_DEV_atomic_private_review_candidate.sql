@@ -41,9 +41,14 @@ begin
         select 1 from pg_policies where schemaname='caseproof'
           and tablename in ('cases','documents','document_versions','_m1_matter_grants')
           and cmd in ('SELECT','ALL')
-          and policyname not in ('m1_private_case_read',
-               'm1_private_document_read','m1_private_document_version_read',
-               'm1_own_private_grant_read')
+          and not (
+               (tablename='cases' and policyname='m1_private_case_read')
+            or (tablename='documents' and policyname='m1_private_document_read')
+            or (tablename='document_versions'
+                and policyname='m1_private_document_version_read')
+            or (tablename='_m1_matter_grants'
+                and policyname='m1_own_private_grant_read')
+          )
     ) then
         raise exception 'unexpected M1 RLS policy; M2 not installed'
             using errcode='42501';
