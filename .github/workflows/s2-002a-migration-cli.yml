@@ -32,7 +32,28 @@ jobs:
           test -f "$private"
           cmp "$private" db/proposals/PIV-M1_DEV_atomic_private_grant_install.sql
           sha256sum "$private" db/proposals/PIV-M1_DEV_atomic_private_grant_install.sql
-          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 2
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          def normalize(source: str) -> str:
+              source = re.sub(r'(^|\n)begin;\s*\n', '\n', source, count=1, flags=re.I)
+              source = re.sub(r'\ncommit;\s*$', '\n', source, count=1, flags=re.I)
+              return source
+
+          for path, proposal in (
+              ('20261027195417_caseproof_m2_dev_atomic_private_review.sql',
+               'PIV-M2_DEV_atomic_private_review_candidate.sql'),
+              ('20261027195451_caseproof_m1_signed_invoker_read_views.sql',
+               'PIV-M1_signed_invoker_read_api_candidate.sql'),
+          ):
+              actual = (Path('supabase/migrations') / path).read_text()
+              expected = normalize((Path('db/proposals') / proposal).read_text())
+              if actual != expected:
+                  raise SystemExit(f'Migration diverged from deployed reviewed SQL: {path}')
+          print('M1_M2_DEPLOYED_MIGRATION_PAYLOADS_MATCH_PROPOSALS')
+          PY
+          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 4
       - name: Cross-check with pinned official Supabase CLI
         run: |
           set -euo pipefail
