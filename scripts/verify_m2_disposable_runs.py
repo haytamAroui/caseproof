@@ -56,7 +56,7 @@ def fixture(root: Path):
         ).fetchone()[0]
         conn.execute(
             "update caseproof.organization_members "
-            "set actions=array['case:read','review:request']::text[] "
+            "set actions=array['case:read','finding:write','review:request']::text[] "
             "where org_id=%s and user_id=%s", (f.scope.org_id, f.actor),
         )
         conn.execute(
