@@ -196,6 +196,22 @@ def main() -> None:
     if _run(query, env) != "0":
         raise AssertionError("legacy permissive org-wide read policy still installed")
 
+    # An unexpected permissive policy must make a future rollout abort
+    # transactionally, not silently OR itself with the private restrictions.
+    _run(
+        "create policy m1_sabotage_orgwide_select on caseproof.cases "
+        "for select to authenticated using (true)", env,
+    )
+    try:
+        _run(SQL.read_text(encoding="utf-8"), env, should_pass=False)
+    finally:
+        _run(
+            "drop policy m1_sabotage_orgwide_select on caseproof.cases", env,
+        )
+    # No policies were silently left downgraded after the failed rollout.
+    if _run(query, env) != "0":
+        raise AssertionError("failed migration restored legacy org-wide policy")
+
     print("M1_PRIVATE_RLS_SAME_ORG_CASE_ISOLATION_ACTION_REVOKE_POOL_RESET_PASSED")
     print("Synthetic SQL JWT claim did NOT validate a real signed Auth session")
 
