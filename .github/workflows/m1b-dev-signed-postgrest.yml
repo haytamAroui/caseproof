@@ -1,0 +1,28 @@
+{
+  "name": "M1-B dev signed Auth to PostgREST private views (manual)",
+  "on": {"workflow_dispatch": {}},
+  "permissions": {"contents": "read"},
+  "concurrency": {"group": "caseproof-m1b-ephemeral-private-auth", "cancel-in-progress": false},
+  "jobs": {
+    "verify": {
+      "if": "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof' }}",
+      "environment": "caseproof-dev-live-auth",
+      "runs-on": "ubuntu-latest",
+      "timeout-minutes": 15,
+      "steps": [
+        {"uses": "actions/checkout@v7.0.1", "with": {"ref": "main", "persist-credentials": false}},
+        {"uses": "astral-sh/setup-uv@v10.3.2", "with": {"enable-cache": true}},
+        {"name": "Check offline security probe contract", "run": "uv run --locked pytest -q tests/test_m1_signed_postgrest_views.py"},
+        {
+          "name": "Check three real signed dev Auth users against the actual invoker views",
+          "env": {
+            "CASEPROOF_M1_SIGNED_REST_PROBE": "YES",
+            "CASEPROOF_DEV_PUBLISHABLE_KEY": "${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}",
+            "CASEPROOF_DEV_AUTH_ADMIN_KEY": "${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}"
+          },
+          "run": "uv run --locked python -m scripts.verify_m1_signed_postgrest_views"
+        }
+      ]
+    }
+  }
+}
