@@ -14,14 +14,19 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
+from fastapi.testclient import TestClient
+
 from application.litigation.brief_checks import CitationCheckState, DraftReference
 from application.litigation.exhibit_confirmation import serialized_entries
 from apps.api.access_control import AccessRejected
 from apps.api.disposable_litigation_brief_graph import DisposableBriefGraphStore
+from apps.api.disposable_litigation_original_store import DisposableOriginalStore
 from apps.api.disposable_litigation_review_ledger import DisposableM2ReviewLedger
 from apps.api.evidence_vault_protocol import VaultScope
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
+from apps.api.litigation_development_app import create_litigation_development_app
 from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
+from apps.api.litigation_original_reader import AuthorizedOriginalReader
 from apps.api.postgres_litigation_check_store import PostgresPrivateMatterCheckStore
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage
 from scripts.extraction_fixtures import NOW
@@ -121,6 +126,38 @@ class M2CheckCompositionTests(unittest.TestCase):
         )
         # Idempotent independent retry stores only the same snapshot once.
         self.assertEqual(self.check().snapshot_hash, check.snapshot_hash)
+
+    def test_composed_http_check_search_original_and_revocation(self):
+        with connect() as conn:
+            conn.execute(
+                "update caseproof.organization_members set actions=array_append(actions,'evidence:read') "
+                "where org_id=%s and user_id=%s", (self.f.scope.org_id, self.f.actor),
+            )
+            conn.execute(
+                "update caseproof._m1_matter_grants set permissions=array_append(permissions,'evidence:read') "
+                "where case_id=%s and user_id=%s", (self.f.scope.case_id, self.f.actor),
+            )
+        originals = AuthorizedOriginalReader(self.service, DisposableOriginalStore(self.store))
+        client = TestClient(create_litigation_development_app(checker=self.service, originals=originals),
+                            client=("127.0.0.1", 50000))
+        root = f"/v2/matters/{self.f.scope.case_id}/briefs/{self.brief_version}"
+        source = str(new_binding(self.evidence).document_id)
+        path = f"{root}/evidence/{source}/versions/{self.evidence.version}/original"
+        headers = {"Authorization": "Bearer synthetic-fixture-only"}
+        self.assertEqual(client.post(f"{root}/check", headers=headers).status_code, 200)
+        response = client.post(f"{root}/evidence/search", headers=headers, json={"query": "betaling"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["hits"][0]["source_id"], source)
+        original = client.get(path, headers=headers)
+        self.assertEqual(original.status_code, 200)
+        self.assertEqual(original.content, EVIDENCE)
+        with connect() as conn:
+            conn.execute(
+                "update caseproof._m1_matter_grants "
+                "set permissions=array_remove(permissions,'evidence:read'), revision=revision+1 "
+                "where case_id=%s and user_id=%s", (self.f.scope.case_id, self.f.actor),
+            )
+        self.assertEqual(client.get(path, headers=headers).status_code, 403)
 
     def test_private_search_reads_verified_source_and_rechecks_evidence_grant(self):
         with connect() as conn:

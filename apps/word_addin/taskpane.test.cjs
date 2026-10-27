@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
+const { webcrypto, createHash } = require('node:crypto');
 
 function element() {
   return { disabled: false, hidden: false, textContent: '', value: '', children: [],
@@ -16,15 +17,21 @@ function setup(options = {}) {
   const elements = Object.fromEntries(['inspect', 'query', 'status', 'result', 'selection', 'coverage', 'hits']
     .map(id => [id, element()]));
   elements.query.value = 'betaling';
-  const state = { selected: 'The payment is due.', body: 'The payment is due.', writes: [], calls: 0 };
+  const state = { selected: 'The payment is due.', body: 'The payment is due.', writes: [], calls: 0, downloads: 0 };
+  const original = Buffer.from('fixture-original');
+  const originalHash = createHash('sha256').update(original).digest('hex');
   const hit = { source_id: 's1', source_version_id: 'v1', representation_id: 'r1',
-    source_sha256: 'x'.repeat(64), locator: 'page:0', page: 1, start: 0, end: 25,
+    source_sha256: originalHash, locator: 'page:0', page: 1, start: 0, end: 25,
     text: '<script>evidence</script>', citation: { exhibit_id: 'e1', label: 'Stuk 1', pdf_page: 1 } };
   const response = { schema: 'caseproof-evidence-search-v1', case_id: 'case', brief_version_id: 'draft',
     exhibit_revision: 1, coverage: 'complete', omitted_sources: 0, hits: [hit] };
   const provider = { mode: options.mode || 'synthetic', caseId: 'case', briefVersionId: 'draft', getBearer: async () => 'signed-token' };
   const context = {
-    document: { getElementById: id => elements[id], createElement: () => element() },
+    document: { getElementById: id => elements[id], createElement: tag => {
+      const node = element(); if (tag === 'a') node.click = () => { state.downloads++; }; return node;
+    } },
+    crypto: webcrypto, Blob, Uint8Array, setTimeout: fn => fn(),
+    URL: { createObjectURL: () => 'blob:fixture', revokeObjectURL() {} },
     window: { caseproofSession: options.noSession ? null : provider, addEventListener() {} },
     Office: { HostType: { Word: 'Word' }, context: { requirements: { isSetSupported: () => true } },
       onReady(fn) { fn({ host: 'Word' }); } },
@@ -40,6 +47,13 @@ function setup(options = {}) {
       state.calls++;
       assert.ok(url.startsWith('/v2/matters/'));
       assert.equal(request.redirect, 'error');
+      if (!request.method) return { ok: true, headers: { get: name => ({
+        'X-CaseProof-Original-SHA256': originalHash, 'Content-Length': String(original.length),
+        'X-CaseProof-Original-Media-Type': 'text/plain',
+      })[name] }, arrayBuffer: async () => {
+        if (options.tampered) return Uint8Array.from(Buffer.alloc(original.length, 1)).buffer;
+        return Uint8Array.from(original).buffer;
+      } };
       return { ok: true, json: async () => options.changed && state.calls > 1 ?
         { ...response, exhibit_revision: 2 } : response };
     },
@@ -94,4 +108,15 @@ test('non-synthetic session cannot insert', async () => {
   assert.equal(action(rig).disabled, true);
   await action(rig).click();
   assert.equal(rig.state.writes.length, 0);
+});
+
+test('original download verifies source hash and rejects tampered content', async () => {
+  const good = await start();
+  await good.elements.hits.children[0].children[3].click();
+  assert.equal(good.state.downloads, 1);
+  assert.match(good.elements.status.textContent, /downloaded/);
+  const bad = await start({ tampered: true });
+  await bad.elements.hits.children[0].children[3].click();
+  assert.equal(bad.state.downloads, 0);
+  assert.match(bad.elements.status.textContent, /integrity/);
 });

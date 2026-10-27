@@ -143,3 +143,8 @@ The development task pane and localhost-only synthetic API support selecting a u
 ## Word authentication adaptation candidate
 
 The PR adds a Vaquill-derived Office dialog/PKCE adapter, public-key-only Supabase SDK composition with in-memory storage, an opt-in development sign-in form, and a bounded DOCX slice reader. It has mock Office tests and a real SDK PKCE URL test, not a real Word host or real Supabase login. The API remains unmounted and live citation editing is disabled; see `apps/word_addin/README.md`.
+
+
+## M1–M3 loopback composition candidate
+
+A loopback-only injected development app combines versioned factual checking, matter-scoped evidence search, and guarded original-byte download. Original reads require evidence permission, source inclusion, matching SHA-256 and a second authorization/snapshot check; responses are attachments and no-store. Disposable PostgreSQL acceptance uses synthetic identity and an owner fixture; it does not prove least-privilege live RLS, private Supabase Storage, real session revocation, Word-host behavior or customer readiness. The API is not mounted in `main.py`.

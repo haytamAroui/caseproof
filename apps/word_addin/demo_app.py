@@ -25,8 +25,8 @@ from application.litigation.matter_policy import (
 from application.litigation.unified_review import BriefRepresentation, SourceScope
 from apps.api.access_control import InvalidBearer, VerifiedSubject
 from apps.api.litigation_check_service import AuthorizedLitigationChecker, CheckBundle, PrivateMatterAccess
-from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
-from apps.api.litigation_search_app import create_litigation_search_app
+from apps.api.litigation_development_app import create_litigation_development_app
+from apps.api.litigation_original_reader import AuthorizedOriginalReader, Original
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 
 ACTOR = "synthetic-user"
@@ -64,7 +64,7 @@ class SyntheticStore:
         brief = VersionedBrief(CASE, BRIEF, digest, (DraftReference("reference", "Stuk 1", None, 1),))
         representation = BriefRepresentation(brief, raw.decode(), digest, "synthetic-demo", ())
         row = EvidenceRow("synthetic-source", "synthetic-document", "synthetic-v1", digest,
-                          "application/pdf", "ready", "synthetic-demo", "synthetic-representation", (), ())
+                          "text/plain", "ready", "synthetic-demo", "synthetic-representation", (), ())
         preview = EvidencePreview(row, raw.decode(), ((0, len(raw.decode()), "page:0", 0),))
         register = ExhibitRegister(1, (ExhibitEntry(
             "synthetic-exhibit", "Stuk 1", (ExhibitPage("synthetic-source", "synthetic-v1", 1),),
@@ -79,7 +79,17 @@ class SyntheticStore:
 service = AuthorizedLitigationChecker(
     verifier=SyntheticVerifier(), store=SyntheticStore(), issuer="synthetic-only", audience="authenticated",
 )
-app = create_litigation_search_app(AuthorizedEvidenceSearch(service))
+class SyntheticOriginals:
+    def read(self, *, access: PrivateMatterAccess, source_id: str, version_id: str) -> Original:
+        if access.case_id != CASE or (source_id, version_id) != ("synthetic-source", "synthetic-v1"):
+            raise ValueError("synthetic source unavailable")
+        data = b"De betaling van 250 euro is verschuldigd op 1 maart 2026."
+        return Original(data, sha256(data).hexdigest(), "text/plain")
+
+
+app = create_litigation_development_app(
+    checker=service, originals=AuthorizedOriginalReader(service, SyntheticOriginals()),
+)
 @app.middleware("http")
 async def local_only(request: Request, call_next):  # type: ignore[no-untyped-def]
     try:

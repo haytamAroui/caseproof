@@ -120,6 +120,52 @@
       if (!uncertain && !succeeded) action.disabled = false;
     }
   }
+  async function downloadOriginal(provider, snapshot, hit, action) {
+    if (busy || uncertain || action.disabled) return;
+    busy = true; action.disabled = true;
+    status.textContent = 'Checking original source…';
+    let objectUrl = null;
+    const activeGeneration = generation;
+    try {
+      if (provider.caseId !== snapshot.case_id || provider.briefVersionId !== snapshot.brief_version_id ||
+          typeof hit.source_id !== 'string' || typeof hit.source_version_id !== 'string' ||
+          typeof hit.source_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(hit.source_sha256)) {
+        throw new Error('The source selection is no longer valid.');
+      }
+      const token = await provider.getBearer();
+      if (typeof token !== 'string' || !token.trim() || token.length > 8192) throw new Error('Session expired.');
+      const path = `/v2/matters/${encodeURIComponent(provider.caseId)}/briefs/${encodeURIComponent(provider.briefVersionId)}` +
+        `/evidence/${encodeURIComponent(hit.source_id)}/versions/${encodeURIComponent(hit.source_version_id)}/original`;
+      const response = await fetch(path, { credentials: 'omit', cache: 'no-store', redirect: 'error',
+        headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error('The original is unavailable or access was revoked.');
+      const expected = response.headers.get('X-CaseProof-Original-SHA256');
+      const length = Number(response.headers.get('Content-Length'));
+      if (expected !== hit.source_sha256 || !Number.isFinite(length) || length < 1 || length > 5242880) {
+        throw new Error('The original does not match the selected source.');
+      }
+      const bytes = await response.arrayBuffer();
+      if (bytes.byteLength !== length) throw new Error('The original download is incomplete.');
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      const actual = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+      if (actual !== expected) throw new Error('The original failed its integrity check.');
+      if (window.caseproofSession !== provider || generation !== activeGeneration) {
+        throw new Error('The session changed. Download cancelled.');
+      }
+      const media = response.headers.get('X-CaseProof-Original-Media-Type');
+      if (!['application/pdf', 'text/plain'].includes(media)) throw new Error('Unsupported source type.');
+      // Do not automatically execute or embed an untrusted original.
+      objectUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+      const link = document.createElement('a');
+      link.href = objectUrl; link.download = media === 'application/pdf' ? 'caseproof-original.pdf' : 'caseproof-original.txt'; link.click();
+      status.textContent = 'Original downloaded. Check it against the displayed source.';
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : 'Could not download the original.';
+    } finally {
+      if (objectUrl) { const revoke = objectUrl; setTimeout(() => URL.revokeObjectURL(revoke), 1000); }
+      busy = false; action.disabled = false;
+    }
+  }
   function render(provider, query, original, data) {
     hitsView.replaceChildren();
     selectionView.textContent = original.text;
@@ -141,7 +187,10 @@
       action.textContent = 'Insert citation';
       action.disabled = !hit.citation || provider.mode !== 'synthetic';
       action.addEventListener('click', () => insert(provider, query, original, data, hit, action));
-      article.append(source, excerpt, action);
+      const download = document.createElement('button');
+      download.textContent = 'Download original';
+      download.addEventListener('click', () => downloadOriginal(provider, data, hit, download));
+      article.append(source, excerpt, action, download);
       hitsView.appendChild(article);
     }
     result.hidden = false;

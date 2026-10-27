@@ -11,6 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from fastapi.testclient import TestClient
 from psycopg.errors import ObjectNotInPrerequisiteState
 
 from application.litigation.review_cycle import CorrectionProposal
@@ -20,6 +21,9 @@ from apps.api.disposable_litigation_corrections import (
     CorrectionConflict,
     DisposableCorrectionCoordinator,
 )
+from apps.api.disposable_litigation_original_store import DisposableOriginalStore
+from apps.api.litigation_development_app import create_litigation_development_app
+from apps.api.litigation_original_reader import AuthorizedOriginalReader
 from scripts.verify_m2_brief_graph import add_verified_version, new_binding, normalize
 from scripts.verify_m2_private_check_composition import M2CheckCompositionTests
 from scripts.verify_s2_002_database import _env, _run
@@ -102,6 +106,44 @@ class DurableCorrectionTests(unittest.TestCase):
                 " where org_id=%s and case_id=%s and brief_id=%s",
                 (self.f.scope.org_id, self.f.scope.case_id, self.brief_id),
             ).fetchone()[0])
+
+    def test_loopback_journey_search_original_review_correct_and_recheck(self):
+        # The source originals and the initial reviewed result are prepared in
+        # setUp; all database, identity and document data here are synthetic.
+        with connect() as conn:
+            conn.execute(
+                "update caseproof.organization_members set actions=array_append(actions,'evidence:read') "
+                "where org_id=%s and user_id=%s", (self.f.scope.org_id, self.f.actor),
+            )
+            conn.execute(
+                "update caseproof._m1_matter_grants set permissions=array_append(permissions,'evidence:read') "
+                "where case_id=%s and user_id=%s", (self.f.scope.case_id, self.f.actor),
+            )
+        originals = AuthorizedOriginalReader(self.service, DisposableOriginalStore(self.store))
+        client = TestClient(create_litigation_development_app(checker=self.service, originals=originals),
+                            client=("127.0.0.1", 50000))
+        headers = {"Authorization": "Bearer synthetic-fixture-only"}
+        root = f"/v2/matters/{self.f.scope.case_id}/briefs/{self.brief_version}"
+        self.assertEqual(client.post(f"{root}/check", headers=headers).status_code, 200)
+        found = client.post(f"{root}/evidence/search", headers=headers, json={"query": "betaling"})
+        self.assertEqual(found.status_code, 200)
+        hit = found.json()["hits"][0]
+        source = hit["source_id"]
+        original = client.get(f"{root}/evidence/{source}/versions/{hit['source_version_id']}/original",
+                              headers=headers)
+        self.assertEqual(original.status_code, 200)
+        self.assertEqual(original.content, b"De betaling van EUR 12500 was op 22 mei 2026.")
+        command, _ = self.new_command()
+        self.assertEqual(self.prepare(command).stage, "prepared")
+        self.assertEqual(self.apply(command).stage, "graph_applied")
+        completed = self.recheck(command)
+        self.assertEqual(completed.stage, "rechecked")
+        new_version = command.new_representation.brief.version_id
+        new_root = f"/v2/matters/{self.f.scope.case_id}/briefs/{new_version}"
+        new_check = client.post(f"{new_root}/check", headers=headers)
+        self.assertEqual(new_check.status_code, 200)
+        self.assertEqual(new_check.json()["snapshot_hash"], completed.recheck_run_sha256)
+        self.assertNotEqual(new_check.json()["snapshot_hash"], self.run.snapshot_hash)
 
     def test_correct_persist_recheck_and_independent_restart(self):
         command, revised_text = self.new_command()
