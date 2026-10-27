@@ -28,7 +28,7 @@ from apps.api.live_auth_probe import _tamper_signature
 from apps.api.signed_private_matter_reader import APP_DB_ROLE, SignedPrivateMatterReader
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
-from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin, ISSUER, PROJECT_REF
+from scripts.verify_dev_ephemeral_auth import ISSUER, PROJECT_REF, GoTrueDevAdmin
 
 TEST_FLAG = "CASEPROOF_M1_LIVE_PRIVATE_DB_ACCEPTANCE"
 ADMIN_DSN = "CASEPROOF_DEV_DB_ADMIN_DSN"
@@ -440,7 +440,6 @@ def run() -> None:
             return _connect(dsn, str(path))
 
         def reader_conn() -> psycopg.Connection[object]:
-            settings = conninfo_to_dict(dsn)
             login = APP_DB_ROLE if connection_kind == "direct" else (
                 f"{APP_DB_ROLE}.{PROJECT_REF}"
             )
