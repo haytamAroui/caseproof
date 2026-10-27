@@ -2,6 +2,8 @@
 
 **Runbook dated 2026-10-26** · project: `caseproof-dev` / `ldwmocpxwskvhoojndrd`, EU central. **Never use AZComply's Supabase project.**
 
+> **27 October 2026 deployment update:** Private-grant migration `20261027160745` is installed in `caseproof-dev`. The old organization-wide policy inventory below is a **pre-migration snapshot**, not current live state. The [Supabase MCP live read-only audit](MCP_LIVE_RLS_AUDIT_2026-10-27.md) verifies current deployed private policies without new database secrets. The preexisting protected three-real-Auth-users workflow still tests **disposable**, not live, PostgreSQL. M1-B and human security approval remain OPEN.
+
 ## Observed live state
 
 Read-only Supabase inspection found **zero** real Auth users, organization memberships, cases, documents and document versions. The installed migration is only `20261022001009 caseproof_tenant_foundation`. Seven tables have RLS enabled, but installed **case/document/version SELECT predicates are organization-wide** and do not require the exact per-case private grant defined in **ADR-0017**; **no private Storage bucket** exists. Auditing and idempotency tables have RLS with no client policies (default deny), which the Security Advisor reports informationally.

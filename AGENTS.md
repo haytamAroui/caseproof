@@ -15,6 +15,14 @@ Read `CONSTITUTION.md`, [accepted architecture ADR 0011](docs/adr/0011-architect
 - CI is **available** on `main` as of 2026-10-22, but confirm every new HEAD. The intentional negative-control PR #4 failed specifically on forbidden finance→kernel import; **never merge it**.
 - **Owner-controlled branch protection is NOT verified**: GitHub rulesets endpoint returned none and branch protection query was inaccessible. `CONSTITUTION.md` C13/C16/C25 and [issue #5](https://github.com/haytamAroui/caseproof/issues/5) remain gates. Do not claim that CI success alone establishes enforced merge protection. No autonomous production deployment or override of review controls.
 
+## CaseProof Supabase dev access (owner direction, 2026-10-27)
+
+- For **live** `caseproof-dev` database work, use the **connected Supabase MCP**: `list_migrations`, `list_tables`, `execute_sql` for read-only verification, `get_advisors`, and `apply_migration` only for separately approved/reviewed migrations. Always pin project `ldwmocpxwskvhoojndrd`; never assume AZComply's project.
+- **Do not add or request PostgreSQL administrator DSNs, database passwords, CA PEM environment secrets, owner logins, or role-bypass credentials in GitHub Actions to replace Supabase MCP.** Use GitHub CI for disposable isolated PostgreSQL, automated code tests and the existing separately protected Supabase Auth smoke where appropriate.
+- MCP `execute_sql` is generally privileged; its catalog checks or manual `request.jwt.claim.sub` simulation are **not** genuine signed-user live-RLS acceptance. Do not claim that they are. An eventual live Auth→actual Postgres acceptance needs a designed, independently reviewed least-privilege runtime, not an admin secret workaround.
+- Do not create Auth identities by inserting into `auth.users` with SQL. The existing protected Auth API workflow may create temporary users and must delete them in a `finally` cleanup. Never expose credential values in repo, actions logs, files or chat.
+- Record what the MCP **actually verified** versus pending signed-user tests, grant issuance/revocation audits, private Storage, human security review and production approval. The read-only audit is `scripts/m1_live_mcp_readonly_audit.sql`; [receipt](docs/m1/MCP_LIVE_RLS_AUDIT_2026-10-27.md).
+
 ## Runtime security boundaries
 
 - `/v1/claims` is an **in-memory development adapter** with caller-chosen tenant header, not customer-safe authentication.
