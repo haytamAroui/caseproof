@@ -359,4 +359,5 @@ def test_does_not_wire_database_or_enable_approval_api() -> None:
         "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
         "20261027195417_caseproof_m2_dev_atomic_private_review.sql",
         "20261027195451_caseproof_m1_signed_invoker_read_views.sql",
+            "20261027202734_caseproof_m1_private_originals_storage.sql",
     }
