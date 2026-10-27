@@ -114,7 +114,10 @@ def test_no_new_live_route_or_staged_migration() -> None:
     assert "S2-004_disposable_observation.sql" not in (
         ROOT / "scripts/verify_s2_002_database.py"
     ).read_text(encoding="utf-8")
-    assert len(list((ROOT / "supabase/migrations").glob("*.sql"))) == 1
+    assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} == {
+        "20261022001009_caseproof_tenant_foundation.sql",
+        "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
+    }
 
 
 def test_ci_runs_real_disposable_postgres_function_proof() -> None:

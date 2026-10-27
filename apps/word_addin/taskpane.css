@@ -11,3 +11,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 button:focus-visible { outline: 3px solid #876600; outline-offset: 3px; }
 section { margin-top: 24px; padding: 16px; background: white; border: 1px solid #dce5e8; border-radius: 12px; }
 blockquote { margin: 0; padding: 8px 12px; border-left: 2px solid #dce5e8; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+label { display: block; margin-bottom: 6px; font-weight: 600; }
+input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px; margin-bottom: 12px; border: 1px solid #566f7c; border-radius: 8px; font: inherit; }
+input:focus-visible { outline: 3px solid #876600; outline-offset: 3px; }
+article { border-top: 1px solid #dce5e8; padding: 12px 0; }
+article button { margin-top: 12px; }

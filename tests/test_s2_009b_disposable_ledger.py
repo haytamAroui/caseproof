@@ -75,6 +75,9 @@ def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
     for gate in ("AUDIT_STAGE", "RECEIPT_STAGE", "VERIFICATION_FAILURE_ROLLBACK",
                  "UNAVAILABLE_FAILURE_ROLLBACK", "FORGED_RECEIPT"):
         assert gate in runner
-    assert len(list((ROOT / "supabase/migrations").glob("*.sql"))) == 1
+    assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} == {
+        "20261022001009_caseproof_tenant_foundation.sql",
+        "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
+    }
     assert not (ROOT / "apps/api/vault_repository.py").exists()
     assert "evidence_vault_protocol" not in (ROOT / "apps/api/main.py").read_text()

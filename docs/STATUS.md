@@ -122,9 +122,33 @@ SQL remains disposable, routes unmounted, sources synthetic and inference script
 
 ## Word synthetic spike (development branch)
 
-A read-only Word task pane can display a selected passage next to a fixed synthetic example. It has no authentication, evidence retrieval, insertion or API integration and has not been tested in a Word host. It does not close M3 or the M1/M2 live integration gates. See `apps/word_addin/README.md`.
+The Word development branch has progressed beyond its original read-only spike; the current synthetic search, citation, download and authentication candidates are described below. It has not been tested in a Word host and does not close M3 or the M1/M2 live integration gates. See `apps/word_addin/README.md`.
 
 
 ## M2 bounded source preview candidate
 
 An opt-in internal check-store adapter can derive PDF/DOCX previews from verified original bytes using the existing bounded parser and evidence indexer. The default remains unchanged; DOCX physical pages remain unverified and parser warnings retain partial coverage. This is disposable engineering only, not signed-user/live database, OCR, Word, or M1/M2 release acceptance. No customer data or production routes are authorized.
+
+
+## M3 private lexical search candidate
+
+An unmounted search adapter reads only a version-pinned M2 private-matter bundle, checks signed identity and both draft-check and evidence-read grants, returns bounded literal matches with representation and source identifiers, and revalidates access and snapshot before return. Partial or missing source coverage is disclosed. It is connected to the synthetic Word development pane, not to a production route or live-authenticated matter. Search tests use synthetic identities.
+
+
+## M3 synthetic Word citation development
+
+The development task pane and localhost-only synthetic API support selecting a unique body passage, searching a synthetic matter, viewing a bounded text excerpt and inserting a uniquely mapped exhibit citation. The synthetic client rechecks source search and document body/selection before insertion, and blocks retries following an unknown outcome. Automated tests use a mocked Word host; no real Office host, save/reopen, coauthoring, tracked changes, actual signed session, private source viewer or authorized live edit has been verified. Body-text comparison is not atomic compare-and-swap. M3 remains open and confidential documents must not be used.
+
+
+## Word authentication adaptation candidate
+
+The PR adds a Vaquill-derived Office dialog/PKCE adapter, public-key-only Supabase SDK composition with in-memory storage, an opt-in development sign-in form, and a bounded DOCX slice reader. It has mock Office tests and a real SDK PKCE URL test, not a real Word host or real Supabase login. The API remains unmounted and live citation editing is disabled; see `apps/word_addin/README.md`.
+
+
+## M1–M3 loopback composition candidate
+
+A loopback-only injected development app combines versioned factual checking, matter-scoped evidence search, and guarded original-byte download. Original reads require evidence permission, source inclusion, matching SHA-256 and a second authorization/snapshot check; responses are attachments and no-store. Disposable PostgreSQL acceptance uses synthetic identity and an owner fixture; it does not prove least-privilege live RLS, private Supabase Storage, real session revocation, Word-host behavior or customer readiness. The API is not mounted in `main.py`.
+
+## Genuine signed Auth to disposable RLS receipt
+
+[Manual run 40531773053](https://github.com/haytamAroui/caseproof/actions/runs/40531773053) passed on main commit `866158a51c780dad88a63d48769282f96addfc8a`: three real Supabase dev identities were signed in and tested against a least-privilege disposable PostgreSQL RLS fixture; the job reported cleanup of all ephemeral identities. On 2026-10-27, at the owner's explicit direction, migration `20261027160745_caseproof_m1_dev_atomic_private_grants` was applied to the empty `caseproof-dev` project. Read-only inspection confirmed the M1 grant table, RLS enabled, and replacement of legacy case/document policies. Independent human security review has not been verified. The M2 brief tables are absent. This does not test real signed users against the live database, live Storage, the PR branch's M2 composition, or an Office host.

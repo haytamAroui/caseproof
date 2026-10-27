@@ -90,14 +90,16 @@ It is **not** the final live remote signed Auth → live private DB E2E test.
 
 ## Remaining release gates
 
-The actual `caseproof-dev` project is still missing approved and installed
-M1 matter grants and M2 schemas; the last read-only inspection showed zero
-Auth users/members/matters. It must not receive real confidential matters
-before explicit human security review and reviewed M1 migration. Next:
+The owner directed installation of the M1 private grant migration on
+2026-10-27 in the empty `caseproof-dev` project. The live migration history
+records `20261027160745_caseproof_m1_dev_atomic_private_grants`, and read-only
+inspection confirmed the new grant table and private read policies. Independent
+human security review has not been verified; M2 schemas remain absent. No
+confidential matters are authorized. Next:
 
 1. Security approval for default-private RLS (including old policy removal,
    index impact and rollback) and dedicated restricted app login.
-2. Controlled migration to **caseproof-dev**, then create real dev
+2. Create real dev
    organization/matter grant fixtures with supported Auth/API provisioning
    and audit; run this reader against actual dev database with a restricted
    non-bypass login, not a test owner.

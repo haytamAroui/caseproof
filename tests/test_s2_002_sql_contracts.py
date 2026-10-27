@@ -122,7 +122,10 @@ def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> Non
     proposal = root / "db/proposals/S2-002_tenant_foundation.sql"
     assert migration.exists()
     assert migration.read_bytes() == proposal.read_bytes()
-    assert len(list((root / "supabase/migrations").glob("*.sql"))) == 1
+    assert {p.name for p in (root / "supabase/migrations").glob("*.sql")} == {
+        "20261022001009_caseproof_tenant_foundation.sql",
+        "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
+    }
     integration = (root / "scripts/verify_s2_002_database.py").read_text(
         encoding="utf-8"
     )

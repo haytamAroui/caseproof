@@ -124,6 +124,26 @@ class SignedPrivateMatterReader:
         ).fetchone()
         if owner is None or owner[0] is not False:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        # Reject inherited privileged or owning roles too: a login can SET ROLE
+        # even when its own pg_roles flags look safe. Verify the expected RLS
+        # tables exist and are enabled and the effective role is read-only.
+        unsafe = conn.execute(
+            "select "
+            "exists(select 1 from pg_roles r where r.oid <> (select oid from pg_roles "
+            "where rolname=current_user) and (r.rolsuper or r.rolbypassrls) "
+            "and pg_has_role(current_user,r.oid,'MEMBER')), "
+            "(select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace "
+            "where n.nspname='caseproof' and c.relname in "
+            "('cases','documents','document_versions','organization_members','_m1_matter_grants') "
+            "and c.relkind in ('r','p') and c.relrowsecurity), "
+            "exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace "
+            "where n.nspname='caseproof' and c.relname in "
+            "('cases','documents','document_versions','organization_members','_m1_matter_grants') "
+            "and (pg_has_role(current_user,c.relowner,'MEMBER') or "
+            "has_table_privilege(current_user,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES')))"
+        ).fetchone()
+        if unsafe is None or tuple(unsafe) != (False, 5, False):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         # Config is strictly LOCAL to the transaction and comes only from
         # the REMOTELY VERIFIED subject (never body/header/tenant metadata).
         conn.execute("select set_config('request.jwt.claim.sub',%s,true)", (actor,))

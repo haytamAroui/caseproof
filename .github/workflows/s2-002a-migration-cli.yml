@@ -6,6 +6,7 @@ on:
       - '.github/workflows/s2-002a-migration-cli.yml'
       - '.github/workflows/kernel-boundary.yml'
       - 'db/proposals/S2-002_tenant_foundation.sql'
+      - 'db/proposals/PIV-M1_DEV_atomic_private_grant_install.sql'
       - 'scripts/verify_s2_002_database.py'
       - 'docs/tasks/S2-002A.md'
   push:
@@ -27,7 +28,11 @@ jobs:
           test -f "$file"
           cmp "$file" db/proposals/S2-002_tenant_foundation.sql
           sha256sum "$file" db/proposals/S2-002_tenant_foundation.sql
-          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 1
+          private='supabase/migrations/20261027160745_caseproof_m1_dev_atomic_private_grants.sql'
+          test -f "$private"
+          cmp "$private" db/proposals/PIV-M1_DEV_atomic_private_grant_install.sql
+          sha256sum "$private" db/proposals/PIV-M1_DEV_atomic_private_grant_install.sql
+          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 2
       - name: Cross-check with pinned official Supabase CLI
         run: |
           set -euo pipefail
