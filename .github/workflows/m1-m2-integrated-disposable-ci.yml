@@ -1,0 +1,62 @@
+name: M1 + M2 integrated signed-boundary regression (disposable)
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  integrated:
+    name: Private Vault, M2 review, correction and signed-boundary integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: caseproof_s2_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: caseproof_ephemeral_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caseproof_s2_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 8
+    env:
+      CASEPROOF_DISPOSABLE_DB: "YES"
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: caseproof_s2_ci
+      PGUSER: postgres
+      PGPASSWORD: caseproof_ephemeral_ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Initialize full protected local backend
+        run: |
+          set -euo pipefail
+          uv run --locked python -m scripts.verify_s2_002_database
+          uv run --locked python -m scripts.verify_m1_disposable_exhibits
+          CASEPROOF_S2_007_SYNTHETIC=YES uv run --locked python -m scripts.verify_s2_007_disposable_tenancy
+          uv run --locked python -m scripts.verify_s2_004_database
+          uv run --locked python -m scripts.verify_s2_008a_database
+          uv run --locked python -m scripts.verify_s2_008a3_reader
+          uv run --locked python -m scripts.verify_s2_009b_database
+          uv run --locked python -m scripts.verify_vault_integration
+          uv run --locked python -m scripts.verify_m2_disposable_runs
+          uv run --locked python -m scripts.verify_m2_brief_graph
+          uv run --locked python -m scripts.verify_m2_private_check_composition
+          uv run --locked python -m scripts.verify_m2_disposable_corrections
+          uv run --locked python -m scripts.verify_m1_private_rls
+      - name: Exercise same M1-M2 bearer-check, private Vault, durable reviewer path with synthetic identities
+        env:
+          CASEPROOF_M1M2_FAKE_ONLY: "YES"
+        run: uv run --locked python -m scripts.verify_m1_m2_e2e_disposable
