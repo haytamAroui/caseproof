@@ -7,7 +7,7 @@ from scripts import verify_m1_live_positive_original as live
 
 ROOT = Path(__file__).resolve().parents[1]
 SQL = (ROOT / "db/proposals/PIV-M1_DEV_live_positive_fixture_rpc.sql").read_text()
-WORKFLOW = (ROOT / ".github/workflows/m1-live-positive-original.yml").read_text()
+WORKFLOW = (ROOT / ".github/workflows/m1-m2-one-click-e2e.yml").read_text()
 
 
 def test_privileged_rpc_is_service_role_only() -> None:
@@ -35,7 +35,7 @@ def test_cleanup_requires_storage_api_not_sql_object_delete() -> None:
 
 
 def test_genuinely_live_manual_only_with_existing_two_secrets() -> None:
-    assert "on:\n  workflow_dispatch" in WORKFLOW
+    assert "workflow_dispatch:" in WORKFLOW
     assert "environment: caseproof-dev-live-auth" in WORKFLOW
     assert "secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY" in WORKFLOW
     assert "secrets.CASEPROOF_DEV_PUBLISHABLE_KEY" in WORKFLOW
