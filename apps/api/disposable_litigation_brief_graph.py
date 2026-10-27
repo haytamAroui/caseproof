@@ -147,6 +147,17 @@ class DisposableBriefGraphStore:
         ).fetchall()
         if len(rows) != 1 or rows[0][0] != expected_sha:
             raise BriefGraphConflict("private immutable source/version unavailable")
+
+    def _verified_bytes(
+        self, *, org: UUID, case: UUID, binding: VerifiedBriefBinding,
+        expected_sha: str,
+    ) -> None:
+        """Never call Vault recovery under an open source/case row lock.
+
+        Missing/tampered Vault bytes may mark the intent unavailable, which is
+        itself a DB write. Call this strictly BETWEEN an initial authorization
+        transaction and the final reauthorization/lineage lock.
+        """
         try:
             raw = self._read_original(org, case, binding.intent_id)
         except Exception:
@@ -173,7 +184,15 @@ class DisposableBriefGraphStore:
         graph_sha = _graph_identity(logical, binding, representation, document_role)
         if not representation.text or len(representation.text.encode("utf-8")) > 480000:
             raise BriefGraphConflict("bounded nonempty representation required")
+        # First authorize WITHOUT retaining locks across Vault byte reads:
+        # Vault may atomically mark a corrupted original unavailable.
         with self._connect() as conn:
+            self._authorize(conn, org, case, actor)
+        self._verified_bytes(org=org, case=case, binding=binding,
+                             expected_sha=representation.brief.sha256_hex)
+        with self._connect() as conn:
+            # Reauthorize and re-check current verified Vault lineage under
+            # row locks immediately before the immutable graph transaction.
             case_rev, exhibit_rev = self._authorize(conn, org, case, actor)
             self._source(conn, org=org, case=case, binding=binding,
                          expected_sha=representation.brief.sha256_hex)
