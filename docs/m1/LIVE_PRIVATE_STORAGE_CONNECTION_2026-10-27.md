@@ -21,3 +21,13 @@ The path contract is `org_uuid/case_uuid/document_uuid/version_uuid/sha256_hex`.
 **Run:** After merging PR, choose [CaseProof M1 + M2 one-click signed E2E](https://github.com/haytamAroui/caseproof/actions/workflows/m1-m2-one-click-e2e.yml) → Run workflow → `main`. The extra live signed Storage denial step will run automatically using the existing `CASEPROOF_DEV_PUBLISHABLE_KEY` and `CASEPROOF_DEV_AUTH_ADMIN_KEY` protected environment secrets.
 
 Do not conflate read-only MCP policy inspection, local CI signed-auth tests, and genuine positive live database+Storage acceptance.
+
+## Live database-to-Storage application connection
+
+`apps/api/signed_supabase_source_library.py` resolves the document-version and expected hash/length through the **installed** `public.caseproof_private_source_versions` security-invoker view, **using the same signed user JWT** subsequently passed to the private Storage bucket. It uploads only exact matching bytes; on download it verifies SHA-256, expected byte length and immediately re-reads the signed metadata view to detect permission/version changes. The transport never accepts a caller-chosen org ID or SHA.
+
+The development-only, **loopback-guarded** `apps/api/litigation_development_app.py` now accepts the optional `signed_originals=SignedSourceLibrary(...)` dependency and exposes a signed original GET and bounded PUT under `/dev/signed/matters/{case_id}/documents/{document_id}/versions/{version_id}/original`. The separate existing version-bound evidence-original reader also accepts a signed Storage transport. Neither development route is mounted on the production `apps/api/main.py`.
+
+The new `tests/test_signed_supabase_source_library.py` validates database→Storage same-bearer request choreography, missing/foreign version masking, digest/length verification and revocation between requests. `tests/test_litigation_signed_original_live_routes.py` tests the actual FastAPI route injection, direct signed read/upload and denial behavior.
+
+These paths constitute a **wired dev integration**, not proof of a **positive remote user** uploading a real document: that awaits actor-audited server-side organization/matter/version fixture issuance and a genuine signed positive E2E run against the live project.
