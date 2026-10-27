@@ -61,7 +61,7 @@ def main() -> None:
     )
     run_signed_m1_m2(
         credentials, signin=FixtureSignIn(credentials, subjects),
-        verifier=FixtureVerifier(subjects),
+        verifier=FixtureVerifier(subjects), synthetic_only=True,
     )
     print("M1_M2_FULL_LOCAL_COMPOSITION_PASSED")
     print("SYNTHETIC_BEARERS_ONLY; NOT_SIGNED_SUPABASE_ACCEPTANCE")
