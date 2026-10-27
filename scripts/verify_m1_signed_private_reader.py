@@ -17,7 +17,10 @@ from uuid import UUID, uuid4
 import psycopg
 
 from apps.api.access_control import (
-    AccessFailure, AccessRejected, InvalidBearer, VerifiedSubject,
+    AccessFailure,
+    AccessRejected,
+    InvalidBearer,
+    VerifiedSubject,
 )
 from apps.api.signed_private_matter_reader import SignedPrivateMatterReader
 from scripts.verify_m1_private_rls import seed
