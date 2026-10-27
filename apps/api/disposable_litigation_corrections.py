@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Any, Callable
+from typing import Any
 from uuid import UUID, uuid4
 
 from application.litigation.review_cycle import (
@@ -318,13 +319,16 @@ class DisposableCorrectionCoordinator:
         # Both graph writes and this stage are independently transactionally
         # audited. An OUTCOME_UNKNOWN between them can be retried with the
         # same immutable graph version + request UUID (idempotent replay).
-        receipt = self._graph.publish(
-            org_id=ctx.org, actor_id=ctx.actor, brief_id=ctx.brief,
-            binding=command.new_binding,
-            representation=command.new_representation,
-            document_role="own_draft", request_id=command.request_id,
-            expected_revision=command.expected_brief_revision,
-        )
+        try:
+            receipt = self._graph.publish(
+                org_id=ctx.org, actor_id=ctx.actor, brief_id=ctx.brief,
+                binding=command.new_binding,
+                representation=command.new_representation,
+                document_role="own_draft", request_id=command.request_id,
+                expected_revision=command.expected_brief_revision,
+            )
+        except BriefGraphConflict:
+            raise CorrectionConflict("stale, revoked or unverified corrected graph") from None
         if (receipt.graph_sha256 != ctx.graph_sha
                 or receipt.version_id != _uuid(prepared.new_brief_version)):
             raise CorrectionConflict("source graph commit receipt inconsistent")
