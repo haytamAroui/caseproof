@@ -7,10 +7,10 @@ Actor IDs are SYNTHETIC in disposable CI: no signed-user claim.
 """
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from hashlib import sha256
-import json
 from typing import Any
 from uuid import UUID, uuid4
 
