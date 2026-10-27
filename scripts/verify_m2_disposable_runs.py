@@ -17,15 +17,21 @@ from tempfile import TemporaryDirectory
 from threading import Barrier
 from uuid import UUID, uuid4
 
+from psycopg.errors import ObjectNotInPrerequisiteState
+
 from application.litigation.brief_checks import DraftReference, VersionedBrief
 from application.litigation.factual_values import FactAssertion, FactKind, FactRole
 from application.litigation.library import EvidencePreview, EvidenceRow
 from application.litigation.unified_review import (
-    BriefRepresentation, ObservationReview, ReviewDisposition, SourceScope,
+    BriefRepresentation,
+    ObservationReview,
+    ReviewDisposition,
+    SourceScope,
     run_unified_check,
 )
 from apps.api.disposable_litigation_review_ledger import (
-    DisposableM2ReviewLedger, M2LedgerConflict,
+    DisposableM2ReviewLedger,
+    M2LedgerConflict,
 )
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 from scripts.verify_s2_002_database import _env, _run
@@ -254,14 +260,14 @@ class LedgerTests(unittest.TestCase):
         sql = ("set role authenticated; "
                "select * from caseproof._m2_check_runs;")
         _run(sql, env, should_pass=False)
-        with self.assertRaises(Exception):
+        with self.assertRaises(ObjectNotInPrerequisiteState):
             with connect() as conn:
                 conn.execute(
                     "update caseproof._m2_check_runs set brief_version_id='bad' "
                     "where case_id=%s", (self.f.scope.case_id,),
                 )
         self.save()
-        with self.assertRaises(Exception):
+        with self.assertRaises(ObjectNotInPrerequisiteState):
             with connect() as conn:
                 conn.execute(
                     "delete from caseproof._m2_review_events where case_id=%s",
