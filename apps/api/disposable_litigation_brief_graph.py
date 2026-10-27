@@ -304,7 +304,9 @@ class DisposableBriefGraphStore:
                 "where org_id=%s and case_id=%s and brief_id=%s and version_id=%s",
                 (*keys, version),
             ).fetchone()
-            if row is None or row[10] != case_rev or row[11] != exhibit_rev:
+            if row is None or (require_current and (
+                row[10] != case_rev or row[11] != exhibit_rev
+            )):
                 raise BriefGraphConflict("brief snapshot stale or absent")
             binding = VerifiedBriefBinding(row[1], row[2], row[3])
             self._source(conn, org=org, case=case, binding=binding, expected_sha=row[4])
