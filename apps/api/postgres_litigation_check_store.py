@@ -180,6 +180,8 @@ class PostgresPrivateMatterCheckStore:
         if (type(raw) is not bytes or len(raw) > 5_242_880
                 or hashlib.sha256(raw).hexdigest() != source.sha256_hex):
             raise PrivateCheckStoreError("verified source bytes changed")
+        warnings: tuple[str, ...]
+        spans: tuple[tuple[int, int, str, int | None], ...]
         if source.media_type == "text/plain":
             try:
                 content = raw.decode("utf-8", errors="strict")
