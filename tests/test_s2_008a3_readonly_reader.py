@@ -173,6 +173,7 @@ def test_all_new_code_is_unwired_and_migration_unchanged() -> None:
         "20261027195451_caseproof_m1_signed_invoker_read_views.sql",
             "20261027202734_caseproof_m1_private_originals_storage.sql",
             "20261027204343_caseproof_m1_storage_upload_action_correction.sql",
+            "20261027214851_caseproof_m1_dev_live_positive_fixture_rpc.sql",
     }
     workflow = (root / ".github/workflows/kernel-boundary.yml").read_text()
     assert "scripts.verify_s2_008a3_reader" in workflow

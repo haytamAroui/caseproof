@@ -68,6 +68,7 @@ def test_no_installed_migration_or_prod_route() -> None:
         "20261027195451_caseproof_m1_signed_invoker_read_views.sql",
             "20261027202734_caseproof_m1_private_originals_storage.sql",
             "20261027204343_caseproof_m1_storage_upload_action_correction.sql",
+            "20261027214851_caseproof_m1_dev_live_positive_fixture_rpc.sql",
     }
     assert "S2-008a_disposable_representation_anchor_graph.sql" not in (
         ROOT / "apps/api/main.py"

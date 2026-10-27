@@ -361,4 +361,5 @@ def test_does_not_wire_database_or_enable_approval_api() -> None:
         "20261027195451_caseproof_m1_signed_invoker_read_views.sql",
             "20261027202734_caseproof_m1_private_originals_storage.sql",
             "20261027204343_caseproof_m1_storage_upload_action_correction.sql",
+            "20261027214851_caseproof_m1_dev_live_positive_fixture_rpc.sql",
     }
