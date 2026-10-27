@@ -12,7 +12,7 @@ import os
 import sys
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psycopg
 
@@ -223,11 +223,9 @@ def verify_three_subjects(
 
 def run_synthetic() -> None:
     """CI acceptance WITHOUT claims about remote Auth or cloud database."""
-    ids = (
-        "11111111-1111-4111-8111-111111111111",
-        "22222222-2222-4222-8222-222222222222",
-        "33333333-3333-4333-8333-333333333333",
-    )
+    # Fresh IDs avoid collisions with preexisting disposable foundation
+    # Auth fixtures; never reuse the foundation's canonical three users.
+    ids = tuple(str(uuid4()) for _ in range(3))
     tokens = ("fixture-one", "fixture-two", "fixture-three")
     verify_three_subjects(
         tokens=tokens, subjects=ids,
