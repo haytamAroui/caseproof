@@ -34,7 +34,7 @@ jobs:
       - name: Type check M1 litigation reference modules
         run: uv run --locked mypy --explicit-package-bases domains/disputes application/litigation apps/api/authenticated_evidence_library.py
       - name: Type check M2 headless private-matter API
-        run: uv run --locked mypy --explicit-package-bases apps/api/litigation_check_service.py apps/api/litigation_check_app.py
+        run: uv run --locked mypy --explicit-package-bases apps/api/litigation_check_service.py apps/api/litigation_check_app.py apps/api/litigation_evidence_search.py apps/api/litigation_search_app.py
       - name: Type check M2 review, brief, private composition and correction lifecycle
         run: uv run --locked mypy --explicit-package-bases apps/api/disposable_litigation_review_ledger.py apps/api/disposable_litigation_brief_graph.py apps/api/postgres_litigation_check_store.py apps/api/disposable_litigation_corrections.py apps/api/signed_private_matter_reader.py
       - name: Verify synthetic M2 factual-check through correction and recheck
