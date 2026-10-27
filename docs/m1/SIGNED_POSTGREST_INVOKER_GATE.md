@@ -39,3 +39,9 @@ Sources: [Supabase Views — security_invoker](https://supabase.com/docs/guides/
 ## Explicitly not finished
 
 Approved human actor matter-grant issuance/audit, real signed Auth integration against these *live* views, actual private object Storage source readback, real PDF/DOCX/OCR, durable authenticated exhibit confirmation, M2 persisted correction/recheck and independent security review are still required. M1-B/M2-B and M1-C/M2-C cannot be marked complete based on this PR.
+
+## Protected real Auth smoke, after reviewed view installation
+
+The [manual protected GitHub workflow](../../.github/workflows/m1b-dev-signed-postgrest.yml) reuses only the existing protected environment's publishable key and Auth-admin key, provisions three genuine confirmed short-lived users through the supported Auth Admin API, signs them in, verifies each pinned issuer and rejects a tampered JWT. Then it makes HTTPS PostgREST **GET requests with their actual bearer tokens** to both invoker views. With the current intentionally empty dev database, all valid users should obtain **HTTP 200 with empty arrays** and a forged bearer must return 401/403. It deletes the three Auth users in `finally`. The workflow **fails** if the views are not deployed, user rows leak or Auth is misconfigured. No database DSN, CA PEM or owner-role password is needed.
+
+**Proof limitation:** A 200/empty-array check confirms correct signed-session traversal and missing-user denial, **not positive per-matter grants or Storage isolation**. For M1-B signoff, seed independently approved actor-grant fixtures using reviewed issuance and assert positive A1/A2/B1 matter/version isolation, revocation and full source readback in a later acceptance step. Never equate empty views with complete RLS acceptance.
