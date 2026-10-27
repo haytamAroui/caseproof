@@ -8,6 +8,7 @@ read login. It does not deploy to Supabase or forge real signed users.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import uuid4
 
 from scripts.verify_m1_private_rls import assert_counts, count, seed
@@ -18,8 +19,6 @@ from scripts.verify_m1_signed_private_reader import (
 from scripts.verify_s2_002_database import (
     MIGRATION, PROPOSAL_PATH, SCHEMA_BOOTSTRAP, _env, _run,
 )
-from scripts.verify_vault_integration import connect
-from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALL = ROOT / "db/proposals/PIV-M1_DEV_atomic_private_grant_install.sql"
