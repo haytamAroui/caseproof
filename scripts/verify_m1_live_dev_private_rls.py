@@ -14,6 +14,7 @@ import re
 import secrets
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -22,7 +23,7 @@ import psycopg
 from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
-from apps.api.access_control import AccessFailure, AccessRejected, InvalidBearer
+from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.live_auth_probe import _tamper_signature
 from apps.api.signed_private_matter_reader import APP_DB_ROLE, SignedPrivateMatterReader
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
@@ -173,6 +174,31 @@ def _drop_ephemeral_login(conn: psycopg.Connection[object]) -> None:
     conn.commit()
 
 
+def _assert_ephemeral_role(conn: psycopg.Connection[object]) -> None:
+    """Enforce read-only current role, inherited roles and installed RLS."""
+    observed = conn.execute(
+        "select current_user,session_user,"
+        "(select rolsuper or rolbypassrls from pg_roles where rolname=current_user),"
+        "pg_has_role(current_user,'authenticated','MEMBER'),"
+        "exists(select 1 from pg_roles r where (r.rolsuper or r.rolbypassrls)"
+        " and pg_has_role(current_user,r.oid,'MEMBER')),"
+        "(select count(*) from pg_class c join pg_namespace n "
+        "on n.oid=c.relnamespace where n.nspname='caseproof' "
+        "and c.relname in ('cases','documents','document_versions',"
+        "'_m1_matter_grants','organization_members') and c.relrowsecurity),"
+        "exists(select 1 from pg_class c join pg_namespace n "
+        "on n.oid=c.relnamespace where n.nspname='caseproof' "
+        "and c.relname in ('cases','documents','document_versions',"
+        "'_m1_matter_grants','organization_members') and "
+        "(pg_has_role(current_user,c.relowner,'MEMBER') or "
+        "has_table_privilege(current_user,c.oid,'INSERT,UPDATE,DELETE,"
+        "TRUNCATE,TRIGGER,REFERENCES')))"
+    ).fetchone()
+    if observed != (APP_DB_ROLE, APP_DB_ROLE, False, True, False, 5, False):
+        raise RuntimeError("ephemeral DB login has unexpected RLS/role authority")
+    conn.rollback()
+
+
 def _seed_fixtures(
     conn: psycopg.Connection[object], actors: tuple[UUID, UUID, UUID],
 ) -> tuple[Fixture, Fixture, Fixture]:
@@ -261,9 +287,7 @@ def _remove_fixtures(
     conn.commit()
 
 
-def _denied(run: object, code: AccessFailure) -> None:
-    if not callable(run):
-        raise AssertionError("expected a guarded read function")
+def _denied(run: Callable[[], object], code: AccessFailure) -> None:
     try:
         run()
     except AccessRejected as exc:
@@ -275,11 +299,10 @@ def _denied(run: object, code: AccessFailure) -> None:
 
 def _check_access(
     *, tokens: tuple[str, str, str], fixtures: tuple[Fixture, Fixture, Fixture],
-    verifier: SupabaseAuthUserVerifier, connect_reader: object,
-    connect_admin: object,
+    verifier: SupabaseAuthUserVerifier,
+    connect_reader: Callable[[], psycopg.Connection[object]],
+    connect_admin: Callable[[], psycopg.Connection[object]],
 ) -> None:
-    if not callable(connect_reader) or not callable(connect_admin):
-        raise AssertionError("connection factories missing")
     reader = SignedPrivateMatterReader(
         verifier=verifier, connection_factory=connect_reader, issuer=ISSUER,
     )
@@ -431,6 +454,8 @@ def run() -> None:
                 _live_preflight(conn)
                 _create_ephemeral_login(conn, password)
                 role_created = True
+            with reader_conn() as conn:
+                _assert_ephemeral_role(conn)
             credentials: list[PasswordCredentials] = []
             for _ in range(3):
                 email = f"{PREFIX}{secrets.token_hex(16)}@example.com"
@@ -453,7 +478,6 @@ def run() -> None:
                 fixtures=fixtures, verifier=verifier,
                 connect_reader=reader_conn, connect_admin=admin_conn,
             )
-            print("M1_DEV_REAL_SIGNED_USERS_TO_LIVE_PRIVATE_DB_RLS_PASSED")
         finally:
             # Remote Auth accounts reference membership FKs: remove DB first.
             if fixtures is not None:
@@ -477,6 +501,7 @@ def run() -> None:
                 raise RuntimeError(
                     "LIVE_DEV_CLEANUP_FAILED: manual dashboard investigation required"
                 ) from None
+    print("M1_DEV_REAL_SIGNED_USERS_TO_LIVE_PRIVATE_DB_RLS_PASSED")
     print("M1_DEV_EPHEMERAL_DB_AND_AUTH_FIXTURES_REMOVED")
     print("M1_C_HUMAN_SECURITY_APPROVAL_AND_STORAGE_M2_WORD_STILL_OPEN")
 
