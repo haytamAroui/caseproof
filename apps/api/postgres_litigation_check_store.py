@@ -3,9 +3,9 @@
 No public route, no live Supabase migration, no service-role bypass. Signed
 identity is checked by AuthorizedLitigationChecker, never by this repository.
 The trusted server DB session returns current org and per-matter permissions.
-Bytes come only from a separately verified Vault coordinator. The currently
-supported fast path is exact UTF-8 text/plain; PDF/DOCX is explicitly
-INCOMPLETE until its independent page/representation adapter is installed.
+Bytes come only from a separately verified Vault coordinator. The default fast path is exact UTF-8 text/plain. An explicitly supplied
+bounded indexer can derive PDF/DOCX previews; this is not live integration
+or proof of complete OCR, page fidelity, or confidential-data readiness.
 """
 from __future__ import annotations
 
@@ -13,10 +13,12 @@ import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from application.litigation.library import EvidencePreview, EvidenceRow
+from application.documents.intake import CapturedDocument
+from application.litigation.library import EvidenceIndexer, EvidencePreview, EvidenceRow
 from application.litigation.matter_policy import (
     CurrentMatterGrant,
     CurrentOrganizationGrant,
@@ -27,6 +29,7 @@ from application.litigation.unified_review import SourceScope
 from apps.api.disposable_litigation_brief_graph import DisposableBriefGraphStore
 from apps.api.litigation_check_service import CheckBundle, PrivateMatterAccess
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
+from packages.evidence_kernel.domain.source_versions import SourceVersion
 
 
 class PrivateCheckStoreError(ValueError):
@@ -50,10 +53,12 @@ class PostgresPrivateMatterCheckStore:
         connection_factory: Callable[[], Any],
         graph_store: DisposableBriefGraphStore,
         read_original: Callable[[UUID, UUID, UUID], bytes],
+        indexer: EvidenceIndexer | None = None,
     ) -> None:
         self._connect = connection_factory
         self._graph = graph_store
         self._read_original = read_original
+        self._indexer = indexer
 
     @staticmethod
     def _uuid(raw: str) -> UUID:
@@ -181,6 +186,33 @@ class PostgresPrivateMatterCheckStore:
         if (type(raw) is not bytes or len(raw) > 5_242_880
                 or hashlib.sha256(raw).hexdigest() != source.sha256_hex):
             raise PrivateCheckStoreError("verified source bytes changed")
+        # Explicitly injected bounded parser; source bytes and digest were checked
+        # above. A parsed representation is never a claim of source authenticity.
+        if self._indexer is not None and source.media_type in {
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }:
+            try:
+                # Required internal placeholder, not a recorded custody timestamp;
+                # the source identity derives from the verified bytes and version.
+                immutable = SourceVersion(
+                    str(source.document_id), str(source.version_id), source.sha256_hex,
+                    raw, datetime(1970, 1, 1, tzinfo=UTC), source.media_type,
+                )
+                preview = self._indexer.preview(CapturedDocument(str(source.document_id), immutable))
+            except Exception:
+                raise PrivateCheckStoreError("bounded source parsing failed") from None
+            # DOCX has no independently verified physical-page mapping.
+            if require_page_lineage and source.media_type != "application/pdf":
+                return EvidencePreview(
+                    EvidenceRow(
+                        preview.row.source_id, preview.row.document_id, preview.row.version_id,
+                        preview.row.original_sha256, preview.row.media_type, "partial",
+                        preview.row.parser_id, preview.row.representation_id, preview.row.pages,
+                        (*preview.row.warnings, "page_lineage_unverified"),
+                    ), preview.text, preview.spans,
+                )
+            return preview
         warnings: tuple[str, ...]
         spans: tuple[tuple[int, int, str, int | None], ...]
         if source.media_type == "text/plain" and not require_page_lineage:
