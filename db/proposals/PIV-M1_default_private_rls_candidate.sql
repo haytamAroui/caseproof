@@ -90,6 +90,31 @@ alter table caseproof.cases enable row level security;
 alter table caseproof.documents enable row level security;
 alter table caseproof.document_versions enable row level security;
 
+-- PostgreSQL ORs permissive policies. A stray owner/legacy policy would
+-- undermine this migration even if the new predicates are individually
+-- correct. Abort atomically rather than leave a false private-security claim.
+do $private_policy_gate$
+begin
+    if exists (
+        select 1 from pg_policies
+        where schemaname = 'caseproof'
+          and (
+              (tablename = 'cases' and policyname <> 'm1_private_case_read')
+              or (tablename = 'documents'
+                  and policyname <> 'm1_private_document_read')
+              or (tablename = 'document_versions'
+                  and policyname <> 'm1_private_document_version_read')
+              or (tablename = '_m1_matter_grants'
+                  and policyname <> 'm1_own_private_grant_read')
+          )
+          and cmd in ('SELECT', 'ALL')
+    ) then
+        raise exception 'unreviewed overlapping SELECT policy blocks private rollout'
+          using errcode = '42501';
+    end if;
+end;
+$private_policy_gate$;
+
 -- Explicit read-only API role grants. No authoring, exhibits write, audit or
 -- privileged evidence-kernel tables are exposed by this proposal.
 revoke all on caseproof.cases,caseproof.documents,
