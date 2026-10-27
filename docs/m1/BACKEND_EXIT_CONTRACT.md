@@ -16,6 +16,8 @@ Three independently reported gates:
 
 M1-A, M1-B and M1-C are NEVER interchangeable. A passing test suite on disposable PostgreSQL is NOT a production release, but the absence of a UI is NOT a technical blocker to backend development.
 
+> **Live update — 27 October 2026:** M1 default-private migration `20261027160745` **has been installed** on `caseproof-dev` and its policies/privileges verified read-only. The zero-user and "not installed" descriptions below are the *earlier* read-only snapshot. There are still zero Auth users/matters/grants and no `caseproof_m1_reader` runtime DB login; no genuine signed-user→live-DB acceptance or independent security review has occurred. See [live receipt](LIVE_DEV_PRIVATE_MIGRATION_RECEIPT_2026-10-27.md).
+
 ## Existing engineering evidence vs gaps
 
 **Observed on 2026-10-27:** merged #62–63 provide typed Evidence Kernel and dispute register, bounded deterministic PDF/DOCX extraction, audited exhibit CAS candidates, Poppler/Tesseract adapter with mock raster tests and disposable PostgreSQL CI. **Merged #86–88** add default-private exact case grant RLS proposal, verified-bearer non-BYPASSRLS reader and atomic empty-dev-schema candidate with rollback/deny tests. **None of those SQL proposals are installed on live Supabase.** No real signed-user→installed private DB→private Storage→genuine OCR→durable exhibit mapping acceptance exists. [#88 rollout packet](EXACT_DEV_PRIVATE_SCHEMA_ROLLOUT.md).
