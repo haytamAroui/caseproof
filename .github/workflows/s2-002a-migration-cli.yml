@@ -57,7 +57,11 @@ jobs:
           test -f "$storage"
           cmp "$storage" db/proposals/PIV-M1_DEV_private_originals_storage.sql
           sha256sum "$storage" db/proposals/PIV-M1_DEV_private_originals_storage.sql
-          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 5
+          correction='supabase/migrations/20261027204343_caseproof_m1_storage_upload_action_correction.sql'
+          test -f "$correction"
+          cmp "$correction" db/proposals/PIV-M1_DEV_storage_upload_action_correction.sql
+          sha256sum "$correction" db/proposals/PIV-M1_DEV_storage_upload_action_correction.sql
+          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 6
       - name: Cross-check with pinned official Supabase CLI
         run: |
           set -euo pipefail
