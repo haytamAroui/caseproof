@@ -57,11 +57,16 @@ checking composition, and durable reviewed correction/recheck with
 transactional review/permission fences. Their CI proves disposable
 engineering behavior **only**. M2-B production remains OPEN.
 [M1-B private RLS proposal #86](https://github.com/haytamAroui/caseproof/pull/86)
-replaces legacy organization-wide SELECT rules with default-private
-matter-grant predicates and role-level isolation tests; it is NOT
-applied to the live database. Live signed-user acceptance, user
-provisioning, least-privilege runtime role, M1 private Storage, full
-PDF/DOCX/OCR positional fidelity, and human security approval are OPEN.
+is **merged as a code candidate**, replacing legacy org-wide SELECT
+policies only in its isolated disposable RLS tests; it is NOT
+applied to the live database. [PR #87](https://github.com/haytamAroui/caseproof/pull/87)
+adds a bearer-verified least-privilege private-matter read path and
+an explicitly opt-in manual dev workflow proving three actual signed
+Supabase Auth identities against disposable private PostgreSQL RLS.
+Even a successful manual run is **not** a live Supabase DB role/matter
+deployment. Real DB signed-user acceptance, an approved schema/grant
+migration, private Storage, full PDF/DOCX/OCR fidelity, live session
+revocation and human security approval are still OPEN.
 See [security gate](m1/PRIVATE_RLS_AUTH_GATE.md) and [milestone #69](https://github.com/haytamAroui/caseproof/issues/69).
 
 Milestones are acceptance outcomes, not calendar estimates. The “1–3 person-weeks” estimate is withdrawn.
