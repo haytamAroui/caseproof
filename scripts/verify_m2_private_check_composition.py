@@ -21,6 +21,7 @@ from apps.api.disposable_litigation_brief_graph import DisposableBriefGraphStore
 from apps.api.disposable_litigation_review_ledger import DisposableM2ReviewLedger
 from apps.api.evidence_vault_protocol import VaultScope
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
+from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
 from apps.api.postgres_litigation_check_store import PostgresPrivateMatterCheckStore
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage
 from scripts.extraction_fixtures import NOW
@@ -120,6 +121,38 @@ class M2CheckCompositionTests(unittest.TestCase):
         )
         # Idempotent independent retry stores only the same snapshot once.
         self.assertEqual(self.check().snapshot_hash, check.snapshot_hash)
+
+    def test_private_search_reads_verified_source_and_rechecks_evidence_grant(self):
+        with connect() as conn:
+            conn.execute(
+                "update caseproof.organization_members set actions=array_append(actions,'evidence:read') "
+                "where org_id=%s and user_id=%s", (self.f.scope.org_id, self.f.actor),
+            )
+            conn.execute(
+                "update caseproof._m1_matter_grants set permissions=array_append(permissions,'evidence:read') "
+                "where case_id=%s and user_id=%s", (self.f.scope.case_id, self.f.actor),
+            )
+        search = AuthorizedEvidenceSearch(self.service)
+        args = {"bearer": "synthetic-fixture-only", "case_id": str(self.f.scope.case_id),
+                "brief_version_id": str(self.brief_version), "query": "betaling"}
+        found = search.search(**args)
+        self.assertEqual(found.coverage, "complete")
+        self.assertEqual(len(found.hits), 1)
+        self.assertEqual(found.hits[0].source_version_id, str(self.evidence.version))
+        self.assertIn("betaling", found.hits[0].text)
+        original = self.store.load_bundle
+        def revoke(**kwargs):
+            bundle = original(**kwargs)
+            with connect() as conn:
+                conn.execute(
+                    "update caseproof._m1_matter_grants "
+                    "set permissions=array_remove(permissions,'evidence:read'), revision=revision+1 "
+                    "where case_id=%s and user_id=%s", (self.f.scope.case_id, self.f.actor),
+                )
+            return bundle
+        self.store.load_bundle = revoke  # type: ignore[method-assign]
+        with self.assertRaises(AccessRejected):
+            search.search(**args)
 
     def test_signed_boundary_and_private_matter_denials(self):
         for case, bearer in (
