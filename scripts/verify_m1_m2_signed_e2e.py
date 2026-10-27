@@ -130,7 +130,7 @@ def run_signed_m1_m2(
             ).fetchone()[0]
         if stored != 1:
             raise AssertionError("signed-user M2 check not durable")
-        print("PASS 2/5: signed private Vault original -> pinned brief -> persisted check")
+        print("PASS 2/5: private Vault original -> pinned brief -> persisted check")
 
         for denied in (tokens[1], tokens[2]):
             _must_deny(
@@ -141,7 +141,7 @@ def run_signed_m1_m2(
             lambda: service.check(bearer=_tamper_signature(tokens[0]), **params),
             expected=(AccessFailure.AUTHENTICATION_REQUIRED,),
         )
-        print("PASS 3/5: same-org, foreign-org and forged signed session denied")
+        print("PASS 3/5: same-org, foreign-org and modified bearer denied")
 
         decision = ObservationReview(
             "fact:money-1", subjects[0], ReviewDisposition.NEEDS_INFORMATION,
@@ -158,7 +158,7 @@ def run_signed_m1_m2(
         )
         if recovered.revision != 1 or recovered.packet != state.packet:
             raise AssertionError("M2 review was not safely reopened")
-        print("PASS 4/5: signed reviewer disposition, audit and durable reopen")
+        print("PASS 4/5: authorized reviewer disposition, audit and durable reopen")
 
         with connect() as conn:
             conn.execute(
@@ -171,7 +171,7 @@ def run_signed_m1_m2(
             lambda: service.check(bearer=tokens[0], **params),
             expected=(AccessFailure.RESOURCE_MASKED, AccessFailure.PERMISSION_DENIED),
         )
-        print("PASS 5/5: revoked private grant denies next signed check")
+        print("PASS 5/5: revoked private grant denies next check")
     finally:
         case.doCleanups()
 
