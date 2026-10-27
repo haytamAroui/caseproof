@@ -2,6 +2,8 @@
 
 **Runbook dated 2026-10-26** · project: `caseproof-dev` / `ldwmocpxwskvhoojndrd`, EU central. **Never use AZComply's Supabase project.**
 
+> **27 October 2026 deployment update:** The private matter grant migration `20261027160745` is now installed in `caseproof-dev`. The old zero-policy/private-grant inventory below is a **pre-migration snapshot**. See the [new live dev DB signed-user acceptance packet](LIVE_SIGNED_DEV_DB_ACCEPTANCE.md) for the protected actual-database test (not yet run), and the [live inspection receipt](LIVE_DEV_PRIVATE_MIGRATION_RECEIPT_2026-10-27.md) proposed in PR #94. M1 remains OPEN; no private original Storage or independent human security review is claimed.
+
 ## Observed live state
 
 Read-only Supabase inspection found **zero** real Auth users, organization memberships, cases, documents and document versions. The installed migration is only `20261022001009 caseproof_tenant_foundation`. Seven tables have RLS enabled, but installed **case/document/version SELECT predicates are organization-wide** and do not require the exact per-case private grant defined in **ADR-0017**; **no private Storage bucket** exists. Auditing and idempotency tables have RLS with no client policies (default deny), which the Security Advisor reports informationally.
