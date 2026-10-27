@@ -1,6 +1,8 @@
 # M1-B — exact-dev-foundation private-grant installation packet
 
-**Status: SQL candidate + disposable CI. NOT deployed. October 27, 2026.**
+**Historical status: candidate + disposable CI before deployment (27 October 2026).**
+
+> **Current live update (27 October 2026):** The single-transaction M1 private-matter installer has since been **applied to `caseproof-dev`** as migration `20261027160745`. [See the live inspection receipt](LIVE_DEV_PRIVATE_MIGRATION_RECEIPT_2026-10-27.md). The inventory and deployment checklist *below* record the pre-application position, not today's live state. Genuine signed-user database acceptance and human security signoff remain OPEN.
 
 ## Live read-only inventory
 
