@@ -136,11 +136,15 @@ def verify_positive(
 
     run_id = str(uuid4())
     fixture_created = False
+    begin_attempted = False
     ref: OriginalRef | None = None
     cleanup_error: Exception | None = None
     storage = SignedOriginalsStorage(publishable)
     library = SignedSourceLibrary(storage)
     try:
+        # Even if the HTTPS response is lost after DB COMMIT, a scoped
+        # cleanup must still be attempted using our generated run ID.
+        begin_attempted = True
         d = _rpc(admin_key, "begin", {
             "p_run_id": run_id,
             "p_owner": actors[0],
@@ -180,13 +184,16 @@ def verify_positive(
         _denied(lambda: library.read(bearer=sessions[0].access_token, **args))
         print("LIVE 5/6: grant revoked, even owner loses access to EXISTING original")
     finally:
-        if fixture_created:
+        if begin_attempted:
             try:
                 if ref is not None:
                     _remove_original(admin_key, ref)
-                if _rpc(admin_key, "cleanup",
-                        {"p_run_id":run_id, "p_owner":actors[0]}) is not True:
+                cleaned = _rpc(admin_key, "cleanup",
+                               {"p_run_id": run_id, "p_owner": actors[0]})
+                if fixture_created and cleaned is not True:
                     raise LiveFixtureError("expected exact fixture not removed")
+                if cleaned not in (True, False):
+                    raise LiveFixtureError("invalid cleanup receipt")
             except Exception as e:
                 cleanup_error = e
         if cleanup_error is not None:
