@@ -1,6 +1,6 @@
 # M3 — Word evidence writing and citation loop: implementation and acceptance
 
-**Status (2026-10-27): planned, not implemented.** `apps/word_addin/` is absent on `main@eb289e8`. This document is an M3 acceptance contract subordinate to [the authoritative roadmap](../ROADMAP.md), [product workflow](../PRODUCT_WORKFLOW.md), [ADR-0017](../adr/0017-default-private-litigation-matters.md) and [CONSTITUTION](../../CONSTITUTION.md). It adds no separate backlog, authorizes no deployment and does not claim tested Word-host support.
+**Status: early read-only synthetic task-pane spike; M3 is not implemented.** The spike reads a selection and displays a fixed example; it does not insert citations or connect to the API. No Word host has yet been tested. This document is an M3 acceptance contract subordinate to [the authoritative roadmap](../ROADMAP.md), [product workflow](../PRODUCT_WORKFLOW.md), [ADR-0017](../adr/0017-default-private-litigation-matters.md) and [CONSTITUTION](../../CONSTITUTION.md). It adds no separate backlog, authorizes no deployment and does not claim tested Word-host support.
 
 ## Why Word is a launch requirement rather than a late accessory
 
