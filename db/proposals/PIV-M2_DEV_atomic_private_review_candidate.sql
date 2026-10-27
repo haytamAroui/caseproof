@@ -6,7 +6,6 @@ begin;
 do $gate$
 declare
     actual_policy_count integer;
-    m2_relations integer;
 begin
     if to_regclass('caseproof._m1_matter_grants') is null
         or to_regclass('caseproof.cases') is null
@@ -18,7 +17,7 @@ begin
     end if;
     if exists (
         select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
-        where n.nspname='caseproof' and c.relname like '\_m2\_%' escape '\'
+        where n.nspname='caseproof' and left(c.relname,4)='_m2_'
     ) then
         raise exception 'M2 schema already present; refuse blind retry'
             using errcode='55000';
@@ -359,7 +358,7 @@ begin
     select count(*) into relation_count
     from pg_class c join pg_namespace n on n.oid=c.relnamespace
     where n.nspname='caseproof'
-      and c.relkind in ('r','p') and c.relname like '\_m2\_%' escape '\';
+      and c.relkind in ('r','p') and left(c.relname,4)='_m2_';
     if relation_count<>11 then
         raise exception 'unexpected number of M2 private relations'
             using errcode='55000';
@@ -367,7 +366,7 @@ begin
     if exists (
       select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
       where n.nspname='caseproof' and c.relkind in ('r','p')
-        and c.relname like '\_m2\_%' escape '\'
+        and left(c.relname,4)='_m2_'
         and (
           not c.relrowsecurity
           or has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE')
