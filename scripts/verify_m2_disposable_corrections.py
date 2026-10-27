@@ -29,6 +29,18 @@ SQL = Path(__file__).resolve().parents[1] / "db/proposals/PIV-M2_disposable_corr
 
 
 class DurableCorrectionTests(unittest.TestCase):
+    def _before_initial_graph_publish(self) -> None:
+        # Synthetic corrections exist as separately preserved Vault artifacts
+        # before recording the reviewer check. Preserving an original AFTER
+        # a reviewed check increments the case revision and invalidates it.
+        text = self.f.data.decode("utf-8")
+        self.staged_sources = {}
+        for amount in ("€12501", "€12502"):
+            bytes_new = text.replace("€12500", amount).encode("utf-8")
+            self.staged_sources[amount] = add_verified_version(
+                self.root, self.f, bytes_new,
+            )
+
     def setUp(self) -> None:
         M2CheckCompositionTests.setUp(self)
         self.run = self._check()
@@ -54,7 +66,7 @@ class DurableCorrectionTests(unittest.TestCase):
         before = "€12500"
         begin = text.index(before)
         proposed = text[:begin] + new_amount + text[begin + len(before):]
-        source = add_verified_version(self.root, self.f, proposed.encode("utf-8"))
+        source = self.staged_sources[new_amount]
         normalized = normalize(source, uuid4())
         proposal = CorrectionProposal(
             "fact:money-1", str(self.f.actor), self.run.snapshot_hash,
@@ -182,6 +194,15 @@ class DurableCorrectionTests(unittest.TestCase):
                 "where brief_id=%s", (self.brief_id,),
             ).fetchone()[0]
         self.assertEqual(head, 1)
+
+    def test_source_staged_after_review_invalidates_old_case_snapshot(self):
+        # Fresh source custody touches the case revision. An old check and
+        # human disposition must not be quietly carried across that change.
+        cmd, _ = self.new_command()
+        add_verified_version(self.root, self.f, b"late unrelated case source")
+        with self.assertRaises(CorrectionConflict):
+            self.prepare(cmd)
+        self.assertEqual(self.count("_m2_correction_plans"), 0)
 
     def test_unreviewed_or_dismissed_candidate_cannot_prepare(self):
         cmd, _ = self.new_command()
