@@ -1,6 +1,6 @@
 # M1 live positive Storage acceptance (development only)
 
-This adds a small **service-role-only SQL fixture issuer**, an added step in the existing protected manual GitHub workflow, and genuine verified signed-user Storage acceptance. It does not add permanent remote DB DSNs or access tokens.
+Live dev fixture migration **`20261027214851_caseproof_m1_dev_live_positive_fixture_rpc` is installed and its three functions were verified as service-role-only via Supabase MCP**. This adds a small **service-role-only SQL fixture issuer**, an added step in the existing protected manual GitHub workflow, and genuine verified signed-user Storage acceptance. It does not add permanent remote DB DSNs or access tokens.
 
 ## Trust and execution
 
@@ -26,4 +26,4 @@ Run workflow manually on `main`: [CaseProof LIVE M1 authorized original](https:/
 - Word end-to-end and customer release are separate.
 - A passing PR check alone is not signed-user acceptance; only a green **protected workflow_dispatch** executing actual remote calls counts.
 
-The new fixture SQL is an explicit security-sensitive dev-only migration. Review the restricted RPC execution and cleanup ordering before installation/merge.
+The dev-only migration is already installed via MCP and committed under its canonical generated version. Independent security review remains required before customer release. The authorized positive test remains unrun pending the merge and manual protected workflow trigger.
