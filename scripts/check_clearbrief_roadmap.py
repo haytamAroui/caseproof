@@ -16,7 +16,7 @@ WORKFLOW = ROOT / "docs" / "PRODUCT_WORKFLOW.md"
 M3 = ROOT / "docs" / "m3" / "WORD_INTEGRATION_ACCEPTANCE.md"
 M4 = ROOT / "docs" / "m4" / "DELIVERY_ACCEPTANCE.md"
 
-FEATURE_ROW = re.compile(r"^\\| (F\\d{2}) \\| ([^|]+) \\|", re.MULTILINE)
+FEATURE_ROW = re.compile(r"^\| (F\d{2}) \| ([^|]+) \|", re.MULTILINE)
 EXPECTED = [f"F{i:02d}" for i in range(1, 43)]
 
 
