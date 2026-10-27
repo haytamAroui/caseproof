@@ -235,6 +235,60 @@ class DisposableCorrectionCoordinator:
         if len(row) != 1 or row[0][0] != "reviewer":
             raise CorrectionConflict("active per-matter reviewer privilege required")
 
+    def _commit_guard(
+        self, conn: Any, ctx: _Verified, command: CorrectionCommand,
+        case_rev: int, exhibit_rev: int,
+    ) -> None:
+        """Same-transaction fence for reviewer rights, review CAS and old run.
+
+        The graph store invokes this guard under its original case/grant and
+        verified-source row locks, immediately before changing the brief head.
+        A concurrent decision must acquire the review-head UPDATE lock,
+        which conflicts with the shared lock held until graph commit.
+        """
+        self._authorize(conn, ctx)
+        if exhibit_rev != command.original_run.exhibit_revision:
+            raise CorrectionConflict("exhibit changed before graph commit")
+        run = command.original_run
+        # Validate exact immutable reviewed input on the same locked
+        # case revision rather than trusting a previously loaded packet.
+        try:
+            self._ledger._verified_sources(
+                conn, org=ctx.org, case=ctx.case, run=run,
+            )
+            self._ledger._stored_payload(
+                conn, ctx.org, ctx.case, run, case_rev,
+            )
+            review_keys = (ctx.org, ctx.case, run.snapshot_hash)
+            head = conn.execute(
+                "select revision,event_sha from caseproof._m2_review_heads "
+                "where org_id=%s and case_id=%s and snapshot_sha=%s for share",
+                review_keys,
+            ).fetchone()
+            if head is None or head[0] != command.expected_review_revision:
+                raise CorrectionConflict("review changed before graph commit")
+            state = self._ledger._events(
+                conn, review_keys, run, int(head[0]), str(head[1]),
+            )
+        except M2LedgerConflict:
+            raise CorrectionConflict("review evidence changed before graph commit") from None
+        decision = next((
+            item for item in state.packet.decisions
+            if item.observation_id == command.proposal.observation_id
+        ), None)
+        if (decision is None
+                or decision.disposition is not ReviewDisposition.CONFIRMED):
+            raise CorrectionConflict("review confirmation withdrawn before graph commit")
+        # A correction graph cannot bypass its durable prepared command.
+        plan = self._plan(conn, ctx, command)
+        if (plan is None or plan[0] != ctx.actor
+                or plan[1] != ctx.plan_sha
+                or str(plan[2]) != command.new_representation.brief.version_id
+                or plan[3] != ctx.graph_sha
+                or plan[4] != command.expected_brief_revision
+                or plan[5] != command.expected_review_revision):
+            raise CorrectionConflict("prepared correction no longer matches")
+
     @staticmethod
     def _audit(
         conn: Any, ctx: _Verified, request_id: UUID,
@@ -348,6 +402,9 @@ class DisposableCorrectionCoordinator:
                 representation=command.new_representation,
                 document_role="own_draft", request_id=command.request_id,
                 expected_revision=command.expected_brief_revision,
+                commit_guard=lambda conn, case_rev, exhibit_rev: self._commit_guard(
+                    conn, ctx, command, case_rev, exhibit_rev,
+                ),
             )
         except BriefGraphConflict:
             raise CorrectionConflict("stale, revoked or unverified corrected graph") from None
