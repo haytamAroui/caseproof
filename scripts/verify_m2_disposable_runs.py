@@ -29,7 +29,7 @@ from apps.api.disposable_litigation_review_ledger import (
 )
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 from scripts.verify_s2_002_database import _env, _run
-from scripts.verify_vault_integration import begin, connect, coordinator, seed
+from scripts.verify_vault_integration import begin, connect, coordinator, ledger, seed
 
 SQL = Path(__file__).resolve().parents[1] / "db/proposals/PIV-M2_disposable_review_runs.sql"
 SOURCE = "De betaling van €12500 was op 22 mei 2026."
@@ -74,11 +74,11 @@ def fixture(root: Path):
     preview = EvidencePreview(
         EvidenceRow(str(doc), str(doc), str(f.version), f.digest,
                     "text/plain", "ready", "identity-utf8-v1", "rep-v1", (), ()),
-        SOURCE, ((0, len(SOURCE), "pdf", 0),),
+        SOURCE, ((0, len(SOURCE), "identity_utf8", None),),
     )
     register = ExhibitRegister(1, (
         ExhibitEntry("e1", "Stuk 1",
-                     (ExhibitPage(str(doc), str(f.version), 1),),
+                     (ExhibitPage(str(doc), str(f.version), printed_page=1),),
                      confirmed=True),
     ))
     assertions = (
@@ -89,7 +89,7 @@ def fixture(root: Path):
     )
     brief = VersionedBrief(str(f.scope.case_id), "draft-v1",
                            sha256(BRIEF.encode()).hexdigest(),
-                           (DraftReference("ref-1", "Stuk 1", None, 1),))
+                           (DraftReference("ref-1", "Stuk 1", None, None),))
     representation = BriefRepresentation(
         brief, BRIEF, sha256(BRIEF.encode()).hexdigest(), "fixture-utf8", assertions,
     )
@@ -221,11 +221,10 @@ class LedgerTests(unittest.TestCase):
                 org_id=self.f.scope.org_id, actor_id=self.f.actor,
                 run=replace(self.run, brief_version_id="substituted"),
             )
-        with connect() as conn:
-            conn.execute(
-                "update caseproof._s2_009b_vault_intents set state='unavailable' "
-                "where intent_id=%s", (self.f.intent,),
-            )
+        vault_ledger = ledger(self.f)
+        record = vault_ledger.get_scoped(self.f.scope, self.f.intent)
+        assert record is not None
+        vault_ledger.mark_unavailable(record, "missing")
         with self.assertRaises(M2LedgerConflict):
             self.save()
 
@@ -235,6 +234,7 @@ class LedgerTests(unittest.TestCase):
                 super()._audit(*args)
                 raise RuntimeError("injected audit rollback")
 
+        before = counts(self.f)
         with self.assertRaises(RuntimeError):
             FailedAudit(connect).record(
                 org_id=self.f.scope.org_id, actor_id=self.f.actor,
@@ -245,8 +245,8 @@ class LedgerTests(unittest.TestCase):
             org_id=self.f.scope.org_id, actor_id=self.f.actor,
             run=self.run,
         ).revision, 0)
-        # One earlier M1 exhibit audit event, no M2 review event.
-        self.assertEqual(counts(self.f), (0, 0, 2))  # M1 + verified Vault
+        # Failed audit and review must roll back to exactly the baseline.
+        self.assertEqual(counts(self.f), before)
 
     def test_no_client_role_access_or_mutation_of_history(self):
         # Table RLS has no policy; no API role can inspect its existence.
@@ -289,9 +289,6 @@ def recovery_probe(args: list[str]) -> None:
 
 def main() -> None:
     _env()  # Hard refusal outside localhost disposable CI.
-    if len(sys.argv) == 6 and sys.argv[1] == "--recover":
-        recovery_probe(sys.argv[2:5])
-        return
     if len(sys.argv) == 5 and sys.argv[1] == "--recover":
         recovery_probe(sys.argv[2:5])
         return
