@@ -34,7 +34,10 @@ from apps.api.disposable_litigation_brief_graph import (
     VerifiedBriefBinding,
     _graph_identity,
 )
-from apps.api.disposable_litigation_review_ledger import DisposableM2ReviewLedger
+from apps.api.disposable_litigation_review_ledger import (
+    DisposableM2ReviewLedger,
+    M2LedgerConflict,
+)
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
 
 
@@ -141,9 +144,13 @@ class DisposableCorrectionCoordinator:
                 require_current=False,
             )
             phase = "load_review"
-            state = self._ledger.state(
-                org_id=org, actor_id=actor, run=command.original_run,
-            )
+            try:
+                state = self._ledger.state(
+                    org_id=org, actor_id=actor, run=command.original_run,
+                )
+            except M2LedgerConflict as exc:
+                # M2LedgerConflict uses generic, source-free error categories.
+                raise CorrectionConflict(f"review snapshot unavailable: {exc}") from None
             if state.revision != command.expected_review_revision:
                 raise CorrectionConflict("review changed before correction")
             reviewed = next((
