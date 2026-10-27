@@ -72,17 +72,25 @@ class PrivateMatterCheckStore(Protocol):
         """Revalidate case/source/brief/register snapshot and active grants after check."""
 
 
+class CheckedRunPublisher(Protocol):
+    """Optional server-side durable sink; never receives HTTP asserted actor IDs."""
+
+    def publish(self, *, org_id: str, actor_id: str, run: VerificationRun) -> bool: ...
+
+
 class AuthorizedLitigationChecker:
     """App boundary; shipped only as an injectable testable port, not live API wiring."""
 
     def __init__(
         self, *, verifier: BearerIdentityVerifier, store: PrivateMatterCheckStore,
         issuer: str, audience: str, clock: Callable[[], datetime] | None = None,
+        publisher: CheckedRunPublisher | None = None,
     ) -> None:
         if not issuer or not audience:
             raise ValueError("trusted Supabase issuer and audience required")
         self.verifier = verifier
         self.store = store
+        self.publisher = publisher
         self.issuer = issuer
         self.audience = audience
         self.clock = clock or (lambda: datetime.now(UTC))
@@ -150,6 +158,12 @@ class AuthorizedLitigationChecker:
             current = self._scope(self._verified(bearer), case_id)
             if current != scope or not self.store.still_current(access=current, bundle=bundle):
                 raise MatterCheckUnavailable()
+            # Explicit opt-in only. The actual sink MUST recheck live grants,
+            # M1 exhibit head and verified source versions in its transaction.
+            # Publishing a run does not approve findings or legal conclusions.
+            if self.publisher is not None:
+                self.publisher.publish(org_id=scope.org_id, actor_id=subject.subject_id,
+                                       run=report)
             return report
         except AccessRejected:
             raise
