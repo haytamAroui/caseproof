@@ -70,7 +70,8 @@ class DisposableM2ReviewLedger:
                    action: str) -> tuple[int, int]:
         if action not in {"draft:check", "review:request"}:
             raise M2LedgerConflict("invalid review permission")
-        org_action = ["case:read"] if action == "draft:check" else ["case:read", "review:request"]
+        org_action = (["case:read", "finding:write"] if action == "draft:check"
+                      else ["case:read", "review:request"])
         row = conn.execute(
             "select c.case_revision,h.revision "
             "from caseproof.cases c "
@@ -229,7 +230,7 @@ class DisposableM2ReviewLedger:
             keys = (org, case, run.snapshot_hash)
             head = conn.execute(
                 "select revision,event_sha from caseproof._m2_review_heads "
-                "where org_id=%s and case_id=%s and snapshot_sha=%s",
+                "where org_id=%s and case_id=%s and snapshot_sha=%s for share",
                 keys,
             ).fetchone()
             if head is None:
