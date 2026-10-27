@@ -88,6 +88,7 @@ jobs:
             echo '- Actual Postgres/Vault/M2 data: isolated disposable GitHub runner only.'
             echo '- Mainline backend check, review, correction/recheck: verified in isolated PostgreSQL.'
             echo '- Signed bearer → scoped private case → verified source → persisted M2 review: signed step.'
+            echo '- Real private Supabase Storage: signed ungranted uploads denied; absent-object reads denied. Existing-object denial and authorized upload/readback are not tested.'
             echo '- No remote DB admin DSN, CA PEM, Storage customer object or M2 live migration.'
             echo '- This check does **not** establish M1/M2 live dev completion or release approval.'
             echo '- Each step must be green; read the failed step in Actions for precise gaps.'
