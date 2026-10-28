@@ -7,22 +7,37 @@ reviewed PostgreSQL schema. No approval, publication, filing or source editing.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
-from application.litigation.unified_review import ObservationReview, ReviewDisposition
-from apps.api.access_control import AccessFailure, AccessRejected
-from apps.api.litigation_check_service import AuthorizedLitigationChecker
+from application.litigation.review_cycle import ReviewPacket
+from application.litigation.unified_review import (
+    ObservationReview,
+    ReviewDisposition,
+    VerificationRun,
+)
+from apps.api.access_control import AccessFailure, AccessRejected, VerifiedSubject
+from apps.api.litigation_check_service import (
+    AuthorizedLitigationChecker,
+    CheckedRunPublisher,
+    PrivateMatterAccess,
+)
 
 
-class ReviewLedger(Protocol):
-    def state(self, *, org_id: UUID, actor_id: UUID, run: object) -> object: ...
+class ReviewState(Protocol):
+    revision: int
+    packet: ReviewPacket
+
+
+class ReviewLedger(CheckedRunPublisher, Protocol):
+    def state(
+        self, *, org_id: UUID, actor_id: UUID, run: VerificationRun,
+    ) -> ReviewState: ...
 
     def record(
-        self, *, org_id: UUID, actor_id: UUID, run: object,
+        self, *, org_id: UUID, actor_id: UUID, run: VerificationRun,
         request_id: UUID, expected_revision: int, decision: ObservationReview,
-    ) -> tuple[object, bool]: ...
-
+    ) -> tuple[ReviewState, bool]: ...
 
 @dataclass(frozen=True, slots=True)
 class ReviewCommand:
@@ -43,7 +58,9 @@ class SignedReviewWorkspace:
         self.checker = checker
         self.ledger = ledger
 
-    def _context(self, bearer: str, case_id: str, brief_version_id: str):
+    def _context(
+        self, bearer: str, case_id: str, brief_version_id: str,
+    ) -> tuple[VerifiedSubject, PrivateMatterAccess, VerificationRun]:
         subject = self.checker._verified(bearer)
         scope = self.checker._scope(subject, case_id)
         run = self.checker.check(
@@ -53,7 +70,7 @@ class SignedReviewWorkspace:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return subject, scope, run
 
-    def state(self, *, bearer: str, case_id: str, brief_version_id: str) -> dict:
+    def state(self, *, bearer: str, case_id: str, brief_version_id: str) -> dict[str, Any]:
         subject, scope, run = self._context(bearer, case_id, brief_version_id)
         try:
             state = self.ledger.state(
