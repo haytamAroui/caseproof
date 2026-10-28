@@ -69,12 +69,12 @@ class SignedLiveReview:
             )
             response = con.getresponse()
             status = response.status
-            raw = response.read(32769)
+            raw = response.read(262145)
         except (OSError, TimeoutError, http.client.HTTPException):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         finally:
             con.close()
-        if len(raw) > 32768:
+        if len(raw) > 262144:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         if status in (400, 401, 403, 404, 409):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
