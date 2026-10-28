@@ -483,13 +483,23 @@
     journey.busy=true;
     try{
       const caseId=journey.caseId || $("case-id").value.trim(),file=$("journey-file").files?.[0];
-      if(!UUID.test(caseId)||!file||file.size<1||file.size>1048576||
-         !file.name.toLowerCase().endsWith(".txt"))throw Error("invalid_data");
+      if(!UUID.test(caseId)||!file||file.size<1||file.size>5242880)
+        throw Error("invalid_data");
+      const ext=file.name.toLowerCase().split(".").pop();
+      const media=ext==="txt"?"text/plain":ext==="pdf"?"application/pdf":
+        ext==="docx"?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":null;
+      if(!media||(media==="text/plain"&&file.size>1048576)||
+         (file.type&&file.type!==media&&file.type!=="application/octet-stream"))
+        throw Error("invalid_data");
       await authenticate();
       if(generation!==state.generation)return;
       const bytes=new Uint8Array(await file.arrayBuffer());
       if(generation!==state.generation)return;
-      new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+      if(media==="text/plain")new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+      if(media==="application/pdf"&&
+         String.fromCharCode(...bytes.subarray(0,5))!=="%PDF-")throw Error("invalid_pdf");
+      if(media.endsWith("wordprocessingml.document")&&
+         String.fromCharCode(...bytes.subarray(0,4))!=="PK\\x03\\x04")throw Error("invalid_docx");
       const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",bytes));
       if(generation!==state.generation)return;
       const hex=Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("");
@@ -497,7 +507,7 @@
       if(journey.uploadIdentity!==identity){journey.uploadIdentity=identity;
         journey.registerRequest=crypto.randomUUID();journey.ingestRequest=crypto.randomUUID();}
       const reg=await api("/dev/live/matters/"+caseId+"/sources",{method:"POST",json:{
-        filename:file.name,sha256:hex,byte_length:bytes.length,media_type:"text/plain",
+        filename:file.name,sha256:hex,byte_length:bytes.length,media_type:media,
         request_id:journey.registerRequest}});
       if(generation!==state.generation)return;
       let binary="";for(let i=0;i<bytes.length;i+=8192)
@@ -513,8 +523,8 @@
       journey.uploadIdentity=null;journey.registerRequest=null;journey.ingestRequest=null;
       journey.caseId=caseId;journey.source=ingested;
       $("case-id").value=caseId;
-      journeyOutput("Verified original and immutable UTF-8 source representation.",ingested);
-    }catch(e){if(generation===state.generation)journeyOutput("TXT ingestion not confirmed. "+statusFor(e));}
+      journeyOutput("Verified original and immutable parser representation. Partial coverage and unconfirmed exhibits are not cite-ready.",ingested);
+    }catch(e){if(generation===state.generation)journeyOutput("Original ingestion not confirmed. "+statusFor(e));}
     finally{if(generation===state.generation)journey.busy=false;}
   }
   async function journeyBrief(event){
