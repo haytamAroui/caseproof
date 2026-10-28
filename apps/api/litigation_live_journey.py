@@ -83,9 +83,11 @@ class JourneyClient:
         ):
             raise ValueError('protected development admin key required')
         self._trusted_ingest_key = trusted_ingest_key
-        self._verifier = SupabaseAuthUserVerifier(
-            'ldwmocpxwskvhoojndrd',
-            HttpsSupabaseUserLookup('ldwmocpxwskvhoojndrd', publishable_key),
+        self._verifier = (
+            SupabaseAuthUserVerifier(
+                "ldwmocpxwskvhoojndrd",
+                HttpsSupabaseUserLookup("ldwmocpxwskvhoojndrd", publishable_key),
+            ) if trusted_ingest_key is not None else None
         )
         self.library = SignedSourceLibrary(SignedOriginalsStorage(publishable_key))
 
@@ -210,7 +212,7 @@ class JourneyClient:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         # Only trusted loopback API may promote a verified source. The actor
         # is established by GoTrue, NEVER accepted from request JSON.
-        if self._trusted_ingest_key is None:
+        if self._trusted_ingest_key is None or self._verifier is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
             actor = self._verifier.verify_bearer(bearer)
