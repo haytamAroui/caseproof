@@ -90,7 +90,7 @@ class SignedReviewWorkspace:
 
     def record(
         self, *, bearer: str, case_id: str, brief_version_id: str, command: ReviewCommand,
-    ) -> dict:
+    ) -> dict[str, Any]:
         subject, scope, run = self._context(bearer, case_id, brief_version_id)
         if command.snapshot_hash != run.snapshot_hash:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
