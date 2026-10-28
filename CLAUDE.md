@@ -10,11 +10,15 @@ Read `CONSTITUTION.md`, [architecture freeze ADR 0011](docs/adr/0011-architectur
 - Developer default for code: `uv run --locked pytest -q`, `uv run --locked python scripts/check_architecture.py`, relevant Ruff/mypy; run real cloud CI and affected Postgres security jobs before any merge.
 - Stage 2 `db/proposals` are disposable SQL fixtures, not production migrations. `/v1` is caller-tenant development API; `/v2` and true Auth-authorized approval remain unmounted. Never use synthetic credentials, manually set JWT claims, or elevated database roles as customer authentication.
 
-## Frozen design and next workflow
+## Current commercial scope, design and next workflow
+
+**ADR 0018 and docs/ROADMAP.md control product sequencing as of 2026-10-28.** Prior finance-first and Word-mandatory text in this file is historical. Build web-first Belgian pre-submission exhibit checking: signed DOCX/inventory/preserved PDF-scans → source+page identity → literal/typed checks with OCR abstention → human crop review → report/DOCX export. M3 is web reviewer, not Word. Word/MCP are future optional clients. No legal research, deadline automation, Book 8 sufficiency, broader Clearbrief parity or new vertical without owner-approved practitioner evidence.
+
+## Historical engineering invariants (still binding unless superseded below)
 
 No framework restart. Sector-neutral KRN-101 source/representation/anchor lineage is authoritative for new v2 source material, while v1 remains a development-only reference. Exact PDF decimal-string positions, `sheet_range` and explicit normalization are required by the draft API/codec tests. Uninstalled `finding:promote`/`conclusion:approve`/`exception:accept` are not equivalent to installed request grants.
 
-Build two tracks: real signed Auth/private Vault/atomic review under release gates, and a synthetic UBL invoice+PO parser/reviewer candidate/report experience in parallel. A candidate mismatch may precede semantic review; consequential approval cannot. Never infer same-org per-case assignment isolation that is not implemented.
+Current priority: real signed Auth/private source custody and web reviewer/export under release gates, plus synthetic/legal-file OCR and page-mapping tests. Prior UBL invoice+PO workflow is finance compatibility, not the active commercial product. A candidate mismatch may precede semantic review; consequential approval cannot. Never infer same-org per-case assignment isolation that is not implemented.
 
 ## Implementation routine
 
