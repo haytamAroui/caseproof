@@ -499,7 +499,8 @@
       if(media==="application/pdf"&&
          String.fromCharCode(...bytes.subarray(0,5))!=="%PDF-")throw Error("invalid_pdf");
       if(media.endsWith("wordprocessingml.document")&&
-         String.fromCharCode(...bytes.subarray(0,4))!=="PK\\x03\\x04")throw Error("invalid_docx");
+         (bytes[0]!==0x50||bytes[1]!==0x4b||bytes[2]!==0x03||bytes[3]!==0x04))
+        throw Error("invalid_docx");
       const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",bytes));
       if(generation!==state.generation)return;
       const hex=Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("");
