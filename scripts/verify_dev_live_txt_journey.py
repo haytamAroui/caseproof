@@ -31,7 +31,7 @@ DIGEST = hashlib.sha256(FIXTURE).hexdigest()
 
 
 def admin_rpc(key: str, name: str, args: dict[str, Any]) -> Any:
-    if name not in {"setup", "revoke", "cleanup"} or not (
+    if name not in {"setup", "revoke", "cleanup", "org_write"} or not (
         key.startswith("sb_secret_") or key.startswith("eyJ")
     ):
         raise LiveFixtureError("unsupported protected journey administrator")
@@ -209,10 +209,19 @@ def verify(
 
         claim = "125 EUR"
         statement = "The provided invoice states 125 EUR, which requires independent review."
-        authored = success(owner, "POST", f"/dev/live/matters/{case}/briefs", {
+        author_path = f"/dev/live/matters/{case}/briefs"
+        author_request = {
             "source_version_id": version, "text": statement,
             "quote": claim, "request_id": str(uuid4()),
-        })
+        }
+        if admin_rpc(admin_key, "org_write", {"p_run": run_id, "p_owner": actors[0],
+               "p_case": case, "p_enabled": False}) is not True:
+            raise LiveFixtureError("org-only write revoke unavailable")
+        denied(owner, "POST", author_path, author_request)
+        if admin_rpc(admin_key, "org_write", {"p_run": run_id, "p_owner": actors[0],
+               "p_case": case, "p_enabled": True}) is not True:
+            raise LiveFixtureError("org write regrant unavailable")
+        authored = success(owner, "POST", author_path, author_request)
         brief = str(UUID(authored["brief_version_id"]))
         base = f"/dev/live/matters/{case}/briefs/{brief}"
         checked = success(owner, "POST", base + "/check")
@@ -232,7 +241,7 @@ def verify(
         if committed.get("review_revision") != 1 or replay.get("replayed") is not True:
             raise LiveFixtureError("M2 review persistence, audit or replay failed")
         denied(owner, "POST", base + "/reviews", {**review, "request_id": str(uuid4())})
-        print("LIVE_TXT_5: authored brief, data-driven check and atomic signed M2 review")
+        print("LIVE_TXT_5: org-only write revocation enforced; authored brief, signed check/review")
 
         # A reviewed change is a NEW immutable authored brief revision. It
         # never overwrites the signed private source, original brief or review.
@@ -243,6 +252,12 @@ def verify(
         for outsider in outsiders:
             denied(outsider, "POST", base + "/corrections/preview", correction)
             denied(outsider, "POST", base + "/corrections/commit", correction)
+        admin_rpc(admin_key, "org_write", {"p_run": run_id, "p_owner": actors[0],
+            "p_case": case, "p_enabled": False})
+        denied(owner, "POST", base + "/corrections/preview", correction)
+        denied(owner, "POST", base + "/corrections/commit", correction)
+        admin_rpc(admin_key, "org_write", {"p_run": run_id, "p_owner": actors[0],
+            "p_case": case, "p_enabled": True})
         denied(owner, "POST", base + "/corrections/commit",
                {**correction, "snapshot_hash": "f" * 64})
         preview = success(owner, "POST", base + "/corrections/preview", correction)
@@ -281,7 +296,7 @@ def verify(
         new_saved = success(owner, "POST", new_base + "/reviews", new_review)
         if new_saved.get("review_revision") != 1:
             raise LiveFixtureError("corrected draft has no independent review")
-        print("LIVE_TXT_5A: reviewed correction preview, atomic CAS/replay, fresh mismatch and recheck")
+        print("LIVE_TXT_5A: org-only write revocation denied; correction CAS/replay, fresh recheck")
 
         old_pid = proc.pid
         _server_stop(proc)
