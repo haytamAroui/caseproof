@@ -116,10 +116,10 @@
     $("source-preview").textContent="Loading source preview…";
     state.selected=null;$("save-review").disabled=true;
     try {
-      const data=await api("/v2/matters/"+encodeURIComponent(state.caseId)+"/evidence/"+
-        encodeURIComponent(row.source_id));
+      const data=await api(path()+"/sources/"+encodeURIComponent(row.source_id));
       if(generation!==state.generation||seq!==state.previewSeq||state.selected!==null)return;
-      if(data.schema!=="caseproof-evidence-preview-v1" || data.row?.source_id!==row.source_id)
+      if(data.schema!=="caseproof-clearbrief-brief-source-preview-v1" || data.row?.source_id!==row.source_id ||
+        data.case_id!==state.caseId || data.brief_version_id!==state.briefId)
         throw Error("invalid_schema");
       const preview=$("source-preview");preview.replaceChildren();
       preview.append(el("strong",row.source_id));
@@ -217,10 +217,10 @@
     const current=()=>generation===state.generation && seq===state.previewSeq &&
       state.selected?.id===selectedId && !state.loading && state.session;
     try{
-      const d=await api("/v2/matters/"+encodeURIComponent(state.caseId)+"/evidence/"+
-        encodeURIComponent(row.source_id));
+      const d=await api(path()+"/sources/"+encodeURIComponent(row.source_id));
       if(!current())return;
-      if(d.schema!=="caseproof-evidence-preview-v1"||d.row?.source_id!==row.source_id)
+      if(d.schema!=="caseproof-clearbrief-brief-source-preview-v1"||d.row?.source_id!==row.source_id||
+        d.case_id!==state.caseId||d.brief_version_id!==state.briefId)
         throw Error("invalid_schema");
       $("source-preview").textContent=d.text||"Source has no available text representation.";
     }catch(error){if(current())$("source-preview").textContent=statusFor(error);}
@@ -265,9 +265,10 @@
       state.check=null;notice(statusFor(error),"danger");}
     if(generation!==state.generation)return;
     try {
-      const inv=await api("/v2/matters/"+encodeURIComponent(state.caseId)+"/evidence");
+      const inv=await api(path()+"/sources");
       if(generation===state.generation)
-        state.inventory=inv.schema==="caseproof-evidence-library-v1"?inv:null;
+        state.inventory=(inv.schema==="caseproof-clearbrief-brief-sources-v1" &&
+          inv.case_id===state.caseId && inv.brief_version_id===state.briefId)?inv:null;
     }catch{if(generation!==state.generation)return;state.inventory=null;}
     try {
       const review=await api(path()+"/review");
