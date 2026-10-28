@@ -1,6 +1,6 @@
 # Deferred Word companion — optional integration acceptance (not M3 or v1)
 
-**Status:** historic read-only task-pane spike/reference only; no accepted real Word-host round trip. **Decision 28 October 2026:** [ADR 0018](../adr/0018-pre-submission-verification-freeze.md) and [ROADMAP.md](../ROADMAP.md) replace the prior “M3 = Word” product acceptance. **M3 is the independent web reviewer.** This file is a conditional **M6 Word-channel integration contract**, and cannot block v1, M1–M5, the first pilot or an independent verify-review-export release.
+**Status:** historic read-only task-pane spike/reference only; optional Word channel is not v1 and not the M3 launch gate; no accepted real Word-host round trip. **Decision 28 October 2026:** [ADR 0018](../adr/0018-pre-submission-verification-freeze.md) and [ROADMAP.md](../ROADMAP.md) replace the prior “M3 = Word” product acceptance. **M3 is the independent web reviewer.** This file is a conditional **M6 Word-channel integration contract**, and cannot block v1, M1–M5, the first pilot or an independent verify-review-export release.
 
 The previous Word-first document remains available in [Git history](https://github.com/haytamAroui/caseproof/blob/486b239926b681d76e1e3f79d30e3dc7098ab6d8/docs/m3/WORD_INTEGRATION_ACCEPTANCE.md). The existing `apps/word_addin/` is preserved for potential reuse; neither its existence nor its successful synthetic tests establishes product readiness.
 
