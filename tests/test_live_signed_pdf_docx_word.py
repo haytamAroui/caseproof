@@ -49,6 +49,29 @@ def test_real_bounded_docx_text_is_not_fake_pagination() -> None:
     assert manifest["blocks"][0]["locator"] == "docx:body:paragraph:0"
 
 
+def test_scanned_pdf_is_explicitly_incomplete_not_verified() -> None:
+    from io import BytesIO
+
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=300, height=300)
+    output = BytesIO()
+    writer.write(output)
+    raw = output.getvalue()
+    content, manifest = parse_verified_original(
+        document_id=str(uuid4()), version_id=str(uuid4()), data=raw,
+        media_type="application/pdf",
+    )
+    assert content == ""
+    assert manifest["complete"] is False
+    assert manifest["coverage"] == "partial"
+    assert manifest["pages"] == [
+        {"pdf_page": 1, "status": "needs_ocr", "text_blocks": 0}
+    ]
+    assert "pdf_page_needs_ocr_or_review" in manifest["warnings"]
+
+
 @pytest.mark.parametrize(("data", "mime"), [
     (b"<html>125 EUR</html>", "application/pdf"),
     (b"not a zip", DOCX),
