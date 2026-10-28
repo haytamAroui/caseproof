@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -83,6 +84,8 @@ def test_signed_rpc_never_trusts_actor_organization_or_secret(monkeypatch):
     with pytest.raises(AccessRejected):
         api.call("signed-token", "delete", case_id=matter)
     with pytest.raises(AccessRejected):
+        api.call("signed-token", "ingest", case_id=matter)
+    with pytest.raises(AccessRejected):
         api.call("signed-token", "register", case_id="../other")
 
 
@@ -109,13 +112,17 @@ def test_ingestion_uses_verified_bytes_not_caller_text(monkeypatch):
         "apps.api.litigation_live_journey.http.client.HTTPSConnection",
         lambda *_args, **_kwargs: connection,
     )
-    api = JourneyClient("sb_publishable_test")
+    api = JourneyClient("sb_publishable_testing123", "sb_secret_internal_only")
+    api._verifier = SimpleNamespace(verify_bearer=lambda _bearer: SimpleNamespace(subject_id=str(uuid4())))
     api.library = Source("Résumé 125 EUR".encode())
     ids = [str(uuid4()) for _ in range(3)]
     output = api.ingest("signed-token", *ids, str(uuid4()))
     assert output == connection.reply.body
-    assert connection.sent[2]["p_action"] == "ingest"
-    assert base64.b64decode(connection.sent[2]["p_data"]["content_base64"]) == api.library.data
+    assert connection.sent[1] == "/rest/v1/rpc/caseproof_dev_ingest_verified"
+    assert connection.sent[2]["p_actor"]
+    assert base64.b64decode(connection.sent[2]["p_content_base64"]) == api.library.data
+    assert connection.sent[3]["apikey"] == "sb_secret_internal_only"
+    assert "Authorization" not in connection.sent[3]
     api.library = Source(b"\xff\xfe")
     with pytest.raises(AccessRejected):
         api.ingest("signed-token", *ids, str(uuid4()))
@@ -133,3 +140,32 @@ def test_live_routes_loopback_only_and_unconfigured_denied():
     assert remote.post(path, json=body).status_code == 403
     assert local.get("/dev/live/create-organizations").status_code == 503
     assert local.post(path, json={**body, "name": ""}).status_code == 422
+
+
+def test_client_cannot_self_certify_ingestion_without_server_key():
+    api = JourneyClient("sb_publishable_testing123")
+    api.library = Source(b"supported 125 EUR")
+    ids = [str(uuid4()) for _ in range(3)]
+    with pytest.raises(AccessRejected):
+        api.ingest("signed-token", *ids, str(uuid4()))
+
+
+def test_bad_verified_actor_fails_closed_before_service_write(monkeypatch):
+    from apps.api.access_control import InvalidBearer
+
+    class FailVerifier:
+        def verify_bearer(self, _token):
+            raise InvalidBearer("not signed")
+
+    connection = Connection()
+    monkeypatch.setattr(
+        "apps.api.litigation_live_journey.http.client.HTTPSConnection",
+        lambda *_args, **_kwargs: connection,
+    )
+    api = JourneyClient("sb_publishable_testing123", "sb_secret_internal_only")
+    api._verifier = FailVerifier()
+    api.library = Source(b"supported 125 EUR")
+    ids = [str(uuid4()) for _ in range(3)]
+    with pytest.raises(AccessRejected):
+        api.ingest("invalid", *ids, str(uuid4()))
+    assert connection.sent is None
