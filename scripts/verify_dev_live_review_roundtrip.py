@@ -17,6 +17,7 @@ import time
 from typing import Any
 from uuid import UUID, uuid4
 
+from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import OriginalRef, PrivateStorageDenied, SignedOriginalsStorage
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
@@ -165,6 +166,13 @@ def verify(
         if seeded.get("case_id") != case or seeded.get("original_sha256") != DIGEST:
             raise LiveFixtureError("live seeded graph and source mismatch")
         b = str(UUID(seeded["brief_version_id"]))
+        catalog = SignedMatterCatalog(publishable)
+        visible = catalog.list_matters(sessions[0].access_token)
+        if not any(item["case_id"] == case for item in visible):
+            raise LiveFixtureError("authorized existing matter absent from signed catalog")
+        for outsider in sessions[1:]:
+            if any(item["case_id"] == case for item in catalog.list_matters(outsider.access_token)):
+                raise LiveFixtureError("ungranted user enumerated existing matter")
         base = f"/dev/live/matters/{case}/briefs/{b}"
         proc = _server_start()
         print("LIVE_REVIEW_2: existing synthetic matter, signed Storage SHA256 and seeded brief")
@@ -228,6 +236,8 @@ def verify(
                 raise LiveFixtureError("ungranted actor wrote existing review")
         if _rpc(admin_key, "revoke", {"p_run_id": run_id, "p_owner": actors[0]}) is not True:
             raise LiveFixtureError("grant revoke failed")
+        if any(item["case_id"] == case for item in catalog.list_matters(fresh.access_token)):
+            raise LiveFixtureError("revoked user enumerated private matter")
         code, _ = _request(fresh.access_token, "GET", base + "/reviews/" + snapshot)
         if code == 200:
             raise LiveFixtureError("revoked owner reopened review")
