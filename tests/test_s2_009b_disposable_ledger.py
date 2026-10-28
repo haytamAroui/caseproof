@@ -91,6 +91,7 @@ def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
             "20261028081347_caseproof_dev_txt_review_binding.sql",
             "20261028081408_caseproof_dev_txt_revocation_cleanup.sql",
             "20261028081528_caseproof_dev_signed_create_org_discovery.sql",
+            "20261028082143_caseproof_dev_txt_cleanup_uuid_fix.sql",
     }
     assert not (ROOT / "apps/api/vault_repository.py").exists()
     assert "evidence_vault_protocol" not in (ROOT / "apps/api/main.py").read_text()
