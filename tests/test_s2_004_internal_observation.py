@@ -138,6 +138,7 @@ def test_no_new_live_route_or_staged_migration() -> None:
             "20261028110031_caseproof_dev_signed_reviewed_draft_correction.sql",
             "20261028110102_caseproof_dev_reversible_draft_cleanup.sql",
             "20261028110233_caseproof_dev_ordered_revised_brief_state.sql",
+            "20261028110604_caseproof_dev_correction_review_head_fence.sql",
     }
 
 
