@@ -23,13 +23,25 @@
 - The browser exposes the real creation and review operations, but the accepted automated live run proves the **server path**. No automated browser-host E2E acceptance is claimed.
 - The development authenticated `SECURITY DEFINER` RPCs require independent security review before any wider use.
 
-## Gates to sign off
+## Observed acceptance receipt — 28 October 2026
 
-1. Eight PR checks green, including new TXT signed-transport unit tests and migration inventory.
-2. Protected main-only run `[live-txt-acceptance]` succeeds, logs `LIVE_CREATED_MATTER_INGESTED_TXT_AUTHORED_REVIEW_COLD_RESTART_PASSED`.
-3. Independent Supabase MCP post-run query finds zero residue.
-4. Record exact run URL, merged main SHA, migration count and limitations. Mark **PASSED** only after this is observed.
+**Protected main [GitHub Actions run #40657265878](https://github.com/haytamAroui/caseproof/actions/runs/40657265878) — SUCCESS**, commit `a8fd5a85f4f4f49a8083f0da66eb815c1700b5d2`. All eight PR #114 checks green, including browser syntax, signed API contract tests, Ruff, mypy, migration inventory, kernel and disposable database regressions.
 
-## Observed acceptance receipt (28 October 2026)
+| Stage | Observed GitHub Actions receipt |
+| --- | --- |
+| `LIVE_TXT_1` | Three real confirmed signed GoTrue users |
+| `LIVE_TXT_2` | Signed **new** private matter, owner grant, atomic audit, replay and outsider denial |
+| `LIVE_TXT_3` | Signed immutable private Storage upload, SHA-256 readback, negative content and access tests |
+| `LIVE_TXT_4` | Strict UTF-8 TXT ingestion, immutable source representation/snapshot and idempotent retry |
+| `LIVE_TXT_5` | User-authored versioned brief, actual ingested-source quote check, persisted human M2 review/audit |
+| `LIVE_TXT_6` | Actual uvicorn stop/restart, fresh GoTrue sign-in, reopened source text, brief and persisted review |
+| `LIVE_TXT_7` | Same-org/foreign-org denial and post-revocation read/write/Storage denial |
+| `LIVE_TXT_8` | Scoped fixture, Storage object and journal cleanup |
+ 
+The runner printed `LIVE_CREATED_MATTER_INGESTED_TXT_AUTHORED_REVIEW_COLD_RESTART_PASSED`.
 
-SUCCESS: https://github.com/haytamAroui/caseproof/actions/runs/40657265878; 8 stages passed, all 19 cleanup counts zero, 16 migrations installed. Development server/API only, not browser-click acceptance; security review and remaining product milestones open.
+**Independent Supabase MCP cleanup readback:** All **19** checked categories were zero: `auth.users`, organizations, memberships, matters, private grants, documents, document versions, journey fixtures, journey operations, source snapshots, exhibit heads/events, brief versions/events, check runs, review events/receipts, audit events and private original objects.
+
+**Migration history:** **16** installed development migrations total; five new forward-only migrations with versions `20261028081227`, `20261028081347`, `20261028081408`, `20261028081528`, `20261028082143`.
+
+**Exact acceptance level:** Signed **server/API** journey against real PostgREST/Auth/Storage with cold-process persistence and independently verified zero residue. Real browser controls are implemented and the client code passed browser grammar/contract tests; the live acceptance did **not** automate browser clicks. No preseeded matter, document, source, representation, exhibit, brief, check or review was used in this run. Security review before wider deployment, full M1-B PDF/DOCX/OCR/exhibit confirmation, M2 correction/recheck, Word and final linked deliverables remain **OPEN**.
