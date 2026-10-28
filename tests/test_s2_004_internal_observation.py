@@ -125,6 +125,7 @@ def test_no_new_live_route_or_staged_migration() -> None:
             "20261028065430_caseproof_m1_private_exhibit_storage.sql",
             "20261028070156_caseproof_dev_signed_review_roundtrip.sql",
             "20261028070231_caseproof_dev_scoped_review_cleanup.sql",
+            "20261028071554_caseproof_dev_signed_review_security_hardening.sql",
     }
 
 
