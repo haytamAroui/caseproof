@@ -38,6 +38,12 @@ Use the existing milestone numbers for new *product outcomes*, clearly supersedi
 
 The web client and optional adapters must call the same signed application API and must not become independent evidence-verification engines. Avoid a new rich-text editor. The first usable product is measured by a completed review/export, not by a headless JSON report, a test dashboard or an Office task-pane prototype.
 
+## Post-freeze specification closure (no commercial pivot)
+
+The subsequent acceptance-only rules in [pre-M3 verification contract](../contracts/PRE_M3_VERIFICATION_SPEC.md) and [SEC-01–16 client-data security appendix](../security/PILOT_DATA_SECURITY_GATE.md) **clarify** the existing verification promise; they do not expand v1, reintroduce Word, grant data-use permission or supersede the freeze. Identity now includes `NOT_ASSESSED` for no usable inventory; fidelity adds `TRANSLATION_REVIEW_REQUIRED` for cross-language prose. OCR has a default isolated self-hosted processing boundary; explicit DOCX story-region denominators prevent a false completeness claim. The [roadmap's pre-M5 gates](../ROADMAP.md#pre-m5-hard-prerequisites--the-commercial-experiment-must-have-an-exit) specify the decision authorized by PROCEED, locale-aware same-role normalization, representative dossier page scale and a falsifiable data-security checklist.
+
+**These contracts are currently designed, not implemented, accepted or customer-authorized.** Actual M3 work and confidential pilots remain gated on corresponding evidence.
+
 ## Owner change-control rule
 
 Before altering this hypothesis: present **actual practitioner evidence** (frequency, baseline burden, correction success, price and re-use), the options and costs, changed milestone/test dependencies and privacy/legal consequences. Obtain an explicit owner decision; record a superseding ADR and modify both authoritative docs in one reviewed PR. **Competitor existence, marketing claims or strategic speculation alone are not a trigger.**
