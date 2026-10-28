@@ -428,7 +428,7 @@
   }
 
   // M1/M2 genuinely authored development journey; no browser-side fixture or fake source.
-  const journey = {caseId:"", source:null, brief:null, snapshot:null, observation:null, revision:0, pending:null, busy:false};
+  const journey = {caseId:"", source:null, brief:null, snapshot:null, observation:null, revision:0, pending:null, createRequest:null, briefRequest:null, uploadIdentity:null, registerRequest:null, ingestRequest:null, busy:false};
   function journeyOutput(message, value) {
     $("journey-result").textContent=message;
     if(value!==undefined)$("journey-state").textContent=JSON.stringify(value,null,2);
@@ -458,9 +458,11 @@
     try{
       if(!UUID.test(org)||!name)throw Error("invalid_data");
       await authenticate();
+      if(!journey.createRequest)journey.createRequest=crypto.randomUUID();
       const result=await api("/dev/live/matters",{method:"POST",json:{
-        org_id:org,name,request_id:crypto.randomUUID()}});
+        org_id:org,name,request_id:journey.createRequest}});
       if(!UUID.test(result.case_id))throw Error("invalid_schema");
+      journey.createRequest=null;
       journey.caseId=result.case_id;journey.source=null;journey.brief=null;
       journey.snapshot=null;journey.observation=null;journey.revision=0;journey.pending=null;
       $("case-id").value=result.case_id;
@@ -481,17 +483,21 @@
       new TextDecoder("utf-8",{fatal:true}).decode(bytes);
       const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",bytes));
       const hex=Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("");
+      const identity=caseId+":"+hex+":"+file.name;
+      if(journey.uploadIdentity!==identity){journey.uploadIdentity=identity;
+        journey.registerRequest=crypto.randomUUID();journey.ingestRequest=crypto.randomUUID();}
       const reg=await api("/dev/live/matters/"+caseId+"/sources",{method:"POST",json:{
         filename:file.name,sha256:hex,byte_length:bytes.length,media_type:"text/plain",
-        request_id:crypto.randomUUID()}});
+        request_id:journey.registerRequest}});
       let binary="";for(let i=0;i<bytes.length;i+=8192)
         binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
       const route="/dev/live/matters/"+caseId+"/sources/"+reg.document_id+"/"+reg.version_id;
       const uploaded=await api(route+"/upload",{method:"POST",json:{content_base64:btoa(binary)}});
       if(!uploaded.verified||uploaded.sha256!==hex)throw Error("unverified_upload");
-      const ingested=await api(route+"/ingest?request_id="+crypto.randomUUID(),{method:"POST"});
+      const ingested=await api(route+"/ingest?request_id="+journey.ingestRequest,{method:"POST"});
       if(ingested.original_sha!==hex||ingested.exhibit_confirmed!==false)
         throw Error("unverified_ingestion");
+      journey.uploadIdentity=null;journey.registerRequest=null;journey.ingestRequest=null;
       journey.caseId=caseId;journey.source=ingested;
       $("case-id").value=caseId;
       journeyOutput("Verified original and immutable UTF-8 source representation.",ingested);
@@ -512,9 +518,11 @@
       }
       const text=$("journey-draft").value,quote=$("journey-quote").value;
       if(!quote||!text.includes(quote)||!/[0-9]/.test(quote))throw Error("invalid_data");
+      if(!journey.briefRequest)journey.briefRequest=crypto.randomUUID();
       const result=await api("/dev/live/matters/"+caseId+"/briefs",{
-        method:"POST",json:{source_version_id:source.version_id,text,quote,request_id:crypto.randomUUID()}});
+        method:"POST",json:{source_version_id:source.version_id,text,quote,request_id:journey.briefRequest}});
       if(!UUID.test(result.brief_version_id))throw Error("invalid_schema");
+      journey.briefRequest=null;
       journey.caseId=caseId;journey.source=source;journey.brief=result;
       journey.snapshot=null;journey.revision=0;journey.pending=null;
       $("brief-id").value=result.brief_version_id;
@@ -585,7 +593,7 @@
     state.generation+=1;state.previewSeq+=1;
     if(!state.external)state.session?.clear?.();
     state.session=null;state.external=false;state.caseId="";state.briefId="";
-    Object.assign(journey,{caseId:"",source:null,brief:null,snapshot:null,observation:null,revision:0,pending:null,busy:false});
+    Object.assign(journey,{caseId:"",source:null,brief:null,snapshot:null,observation:null,revision:0,pending:null,createRequest:null,briefRequest:null,uploadIdentity:null,registerRequest:null,ingestRequest:null,busy:false});
     $("journey-state").textContent="";
     $("matter-options").replaceChildren();
     $("password").value="";$("signout").hidden=true;clearView();notice("Session ended. No credentials were saved.");
