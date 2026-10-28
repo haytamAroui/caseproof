@@ -76,6 +76,17 @@
           <button id="journey-review" type="submit">Save review</button>
         </form>
       </div>
+      <div class="journey-step">
+        <h3>5 / Correct and recheck</h3>
+        <p class="small">After saving the human review, preview an exact numeric claim edit. Commit creates a new immutable draft revision; it does not modify your original source or a Word document. Recheck and review the new draft separately.</p>
+        <label>Current reviewed phrase<input id="journey-correction-before" minlength="3" maxlength="100" value="125 EUR"></label>
+        <label>Replacement phrase<input id="journey-correction-after" minlength="3" maxlength="100" value="126 EUR"></label>
+        <div class="form-actions">
+          <button id="journey-correction-preview" class="secondary" type="button">Preview correction</button>
+          <button id="journey-correction-commit" type="button">Commit new draft revision</button>
+        </div>
+        <p class="small" id="journey-correction-diff" aria-live="polite">No reviewed correction preview yet.</p>
+      </div>
     </div>
     <div class="form-actions"><button id="journey-reopen" class="secondary" type="button">Reopen this matter from Supabase</button><p class="small">To reopen after refreshing, enter its matter UUID above. Tokens are never persisted in browser storage.</p></div>
     <div id="journey-result" class="notice" aria-live="polite">Sign in and find an authorized organization to begin.</div>
