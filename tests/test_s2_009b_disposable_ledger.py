@@ -84,8 +84,8 @@ def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
             "20261027204343_caseproof_m1_storage_upload_action_correction.sql",
             "20261027214851_caseproof_m1_dev_live_positive_fixture_rpc.sql",
             "20261028065430_caseproof_m1_private_exhibit_storage.sql",
-            "20261028080300_caseproof_dev_signed_review_roundtrip.sql",
-            "20261028081400_caseproof_dev_scoped_review_cleanup.sql",
+            "20261028070156_caseproof_dev_signed_review_roundtrip.sql",
+            "20261028070231_caseproof_dev_scoped_review_cleanup.sql",
     }
     assert not (ROOT / "apps/api/vault_repository.py").exists()
     assert "evidence_vault_protocol" not in (ROOT / "apps/api/main.py").read_text()
