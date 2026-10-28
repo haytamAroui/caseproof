@@ -25,7 +25,7 @@ class LiveReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     observation_id: str = Field(min_length=1, max_length=160)
-    request_id: UUID
+    request_id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     expected_revision: int = Field(ge=0, le=255)
     disposition: str = Field(pattern=r"^(confirmed_candidate|dismissed|needs_information)$")
     rationale: str = Field(min_length=1, max_length=2000)
@@ -131,7 +131,7 @@ def create_live_review_router(publishable_key: str | None) -> APIRouter:
     ) -> dict[str, Any]:
         return invoke(
             authorization, case_id, brief_version_id, "review",
-            p_snapshot=body.snapshot_hash, p_request=str(body.request_id),
+            p_snapshot=body.snapshot_hash, p_request=body.request_id,
             p_expected=body.expected_revision, p_observation=body.observation_id,
             p_disposition=body.disposition, p_rationale=body.rationale,
         )
