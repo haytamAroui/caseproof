@@ -45,12 +45,21 @@ def test_signed_library_and_preview_use_same_versioned_brief():
 def test_unconfigured_or_unverified_sources_fail_closed():
     app = TestClient(create_litigation_development_app(), client=("127.0.0.1", 50000))
     assert app.get(BASE, headers=HEADERS).status_code == 503
-    client, _ = _client()
+    client, store = _client()
     assert client.get(BASE).status_code == 401
     assert client.get(BASE, headers={"Authorization": "Bearer invalid"}).status_code == 401
     assert client.get(BASE + "/s2", headers=HEADERS).status_code == 404
     assert client.get(f"/v2/matters/foreign/briefs/{DRAFT}/sources",
                       headers=HEADERS).status_code == 404
+    # Generic fixture synthesizes every requested brief; pin the real one.
+    original = store.load_bundle
+
+    def pinned(**kwargs):
+        if kwargs["brief_version_id"] != DRAFT:
+            raise ValueError("unknown immutable brief version")
+        return original(**kwargs)
+
+    store.load_bundle = pinned
     assert client.get(f"/v2/matters/{CASE}/briefs/foreign/sources",
                       headers=HEADERS).status_code == 503
 
