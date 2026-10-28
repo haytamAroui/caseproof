@@ -20,6 +20,7 @@ from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
 from apps.api.litigation_original_reader import AuthorizedOriginalReader
 from apps.api.litigation_review_app import create_clearbrief_review_router
 from apps.api.litigation_review_workspace import SignedReviewWorkspace
+from apps.api.litigation_workspace_sources import create_clearbrief_sources_router
 from apps.api.litigation_search_app import create_litigation_search_app
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
@@ -38,6 +39,7 @@ def create_litigation_development_app(
     app.include_router(create_litigation_check_app(checker).router)
     app.include_router(create_litigation_search_app(AuthorizedEvidenceSearch(checker) if checker else None).router)
     app.include_router(create_evidence_app(evidence).router)
+    app.include_router(create_clearbrief_sources_router(checker))
     app.include_router(create_clearbrief_review_router(
         reviews if checker is not None and reviews is not None and reviews.checker is checker else None,
     ))
