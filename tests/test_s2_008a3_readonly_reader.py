@@ -190,6 +190,7 @@ def test_all_new_code_is_unwired_and_migration_unchanged() -> None:
             "20261028110031_caseproof_dev_signed_reviewed_draft_correction.sql",
             "20261028110102_caseproof_dev_reversible_draft_cleanup.sql",
             "20261028110233_caseproof_dev_ordered_revised_brief_state.sql",
+            "20261028110604_caseproof_dev_correction_review_head_fence.sql",
     }
     workflow = (root / ".github/workflows/kernel-boundary.yml").read_text()
     assert "scripts.verify_s2_008a3_reader" in workflow
