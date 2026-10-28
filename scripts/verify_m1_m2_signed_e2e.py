@@ -13,9 +13,12 @@ import sys
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from application.litigation.unified_review import ObservationReview, ReviewDisposition
+from fastapi.testclient import TestClient
+
 from apps.api.access_control import AccessFailure, AccessRejected, InvalidBearer
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
+from apps.api.litigation_development_app import create_litigation_development_app
+from apps.api.litigation_review_workspace import SignedReviewWorkspace
 from apps.api.live_auth_probe import _tamper_signature
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
@@ -143,22 +146,39 @@ def run_signed_m1_m2(
         )
         print("PASS 3/5: same-org, foreign-org and modified bearer denied")
 
-        decision = ObservationReview(
-            "fact:money-1", subjects[0], ReviewDisposition.NEEDS_INFORMATION,
-            "Synthetic verified private-source review; not legal approval",
-        )
-        state, replay = case.ledger.record(
-            org_id=case.f.scope.org_id, actor_id=a, run=run,
-            request_id=uuid4(), expected_revision=0, decision=decision,
-        )
-        if replay or state.revision != 1:
-            raise AssertionError("signed-reviewer decision not durable")
-        recovered = case.ledger.state(
-            org_id=case.f.scope.org_id, actor_id=a, run=run,
-        )
-        if recovered.revision != 1 or recovered.packet != state.packet:
-            raise AssertionError("M2 review was not safely reopened")
-        print("PASS 4/5: authorized reviewer disposition, audit and durable reopen")
+        def client() -> TestClient:
+            app = create_litigation_development_app(
+                checker=service, reviews=SignedReviewWorkspace(service, case.ledger),
+            )
+            return TestClient(app, client=("127.0.0.1", 50000))
+
+        endpoint = f"/v2/matters/{params['case_id']}/briefs/{params['brief_version_id']}/review"
+        headers = {"Authorization": "Bearer " + tokens[0]}
+        command = {
+            "snapshot_hash": run.snapshot_hash, "observation_id": "fact:money-1",
+            "request_id": str(uuid4()), "expected_revision": 0,
+            "disposition": "needs_information",
+            "rationale": "Synthetic verified private-source review; not legal approval",
+        }
+        with client() as first:
+            before = first.get(endpoint, headers=headers)
+            saved = first.post(endpoint, headers=headers, json=command)
+            replay = first.post(endpoint, headers=headers, json=command)
+            denied = first.get(endpoint, headers={"Authorization": "Bearer " + tokens[1]})
+            if (before.status_code != 200 or before.json()["revision"] != 0
+                    or saved.status_code != 200 or saved.json()["revision"] != 1
+                    or saved.json()["release_authorized"] is not False
+                    or replay.status_code != 200 or replay.json()["replayed"] is not True
+                    or denied.status_code not in (403, 404)):
+                raise AssertionError("signed HTTP review, replay or isolation failed")
+        # Recreate the loopback app to exercise a fresh request/composition.
+        # Persistence still lives in the disposable PostgreSQL ledger.
+        with client() as reopened:
+            recovered = reopened.get(endpoint, headers=headers)
+            if (recovered.status_code != 200 or recovered.json()["revision"] != 1
+                    or recovered.json()["decisions"][0]["observation_id"] != "fact:money-1"):
+                raise AssertionError("HTTP review was not safely reopened")
+        print("PASS 4/5: signed HTTP reviewer disposition, replay and durable reopen")
 
         with connect() as conn:
             conn.execute(
@@ -210,3 +230,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
