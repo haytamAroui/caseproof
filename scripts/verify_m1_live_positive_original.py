@@ -37,6 +37,14 @@ class LiveFixtureError(RuntimeError):
     """Never print provider payloads, JWTs, IDs or emails."""
 
 
+class LiveRevocationFailure(AssertionError):
+    """Fixed safe stage code, no token/path/user info in logs."""
+
+    def __init__(self, stage: str) -> None:
+        self.stage = stage
+        super().__init__(stage)
+
+
 def _admin_http(
     *, key: str, method: str, path: str, data: dict[str, Any] | None,
 ) -> tuple[int, Any]:
@@ -105,12 +113,12 @@ def _remove_original(key: str, ref: OriginalRef) -> None:
         raise LiveFixtureError("admin Storage cleanup failed")
 
 
-def _denied(op: Any) -> None:
+def _denied(op: Any, *, stage: str) -> None:
     try:
         op()
     except PrivateStorageDenied:
         return
-    raise AssertionError("ungranted or revoked actor could read an existing original")
+    raise LiveRevocationFailure(stage)
 
 
 def verify_positive(
@@ -174,14 +182,33 @@ def verify_positive(
         print("LIVE 3/6: real Storage upload and SHA-256-verified readback")
 
         for outsider in sessions[1:]:
-            _denied(lambda u=outsider: storage.get_verified(ref, u.access_token))
-            _denied(lambda u=outsider: library.read(bearer=u.access_token, **args))
+            _denied(
+                lambda u=outsider: storage.get_verified(ref, u.access_token),
+                stage="ungranted_direct_storage_still_readable",
+            )
+            _denied(
+                lambda u=outsider: library.read(bearer=u.access_token, **args),
+                stage="ungranted_signed_library_still_readable",
+            )
         print("LIVE 4/6: same-org ungranted and foreign-org users denied EXISTING original")
 
         if _rpc(admin_key,"revoke",{"p_run_id":run_id,"p_owner":actors[0]}) is not True:
-            raise AssertionError("grant revocation did not succeed")
-        _denied(lambda: storage.get_verified(ref, sessions[0].access_token))
-        _denied(lambda: library.read(bearer=sessions[0].access_token, **args))
+            raise LiveRevocationFailure("grant_revoke_rpc_failed")
+        print("LIVE REVOCATION: exact matter grant deactivated")
+        _denied(
+            lambda: library.source(bearer=sessions[0].access_token, **args),
+            stage="postgrest_source_still_readable_after_revoke",
+        )
+        print("LIVE REVOCATION: signed PostgREST source denied")
+        _denied(
+            lambda: storage.get_verified(ref, sessions[0].access_token),
+            stage="direct_storage_still_readable_after_revoke",
+        )
+        print("LIVE REVOCATION: fresh authenticated Storage GET denied")
+        _denied(
+            lambda: library.read(bearer=sessions[0].access_token, **args),
+            stage="signed_library_still_readable_after_revoke",
+        )
         print("LIVE 5/6: grant revoked, even owner loses access to EXISTING original")
     finally:
         if begin_attempted:
@@ -225,7 +252,8 @@ def main() -> int:
         print("LIVE_M2_CHECK_REVIEW_CORRECTION_NOT_RUN_IN_THIS_WORKFLOW")
         return 0
     except Exception as exc:
-        print(f"LIVE_M1_POSITIVE_FAILED: {type(exc).__name__}", file=sys.stderr)
+        stage = exc.stage if isinstance(exc, LiveRevocationFailure) else "unclassified"
+        print(f"LIVE_M1_POSITIVE_FAILED: {type(exc).__name__}: {stage}", file=sys.stderr)
         return 1
 
 
