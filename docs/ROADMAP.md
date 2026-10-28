@@ -33,6 +33,24 @@
 6. **Review and correct.** Assign a reviewer or apply the configured solo-practice policy. Preview version-bound corrections, revalidate the live document, apply reversibly, then recheck affected assertions.
 7. **Deliver.** Freeze the checked scope and exact artifact version; generate a review report, linked brief, exhibit index and bundle; share with selected recipients under explicit access rules. Filing remains a separate human handoff unless an authorized integration is implemented.
 
+## Authority and consequential-action acceptance
+
+These are **planned acceptance criteria**, not evidence of installed grants, enabled routes, or production readiness. They clarify PIV-02, PIV-08/11, PIV-14–16 and, only when separately approved, PIV-18–19. Preserve the existing [action catalog](../contracts/action_catalog.v1.json), ADR-0017 and reviewed policies as the authority for actual action identifiers and installed grants; the categories below are conceptual, not newly granted permissions.
+
+| Action category | Required boundary |
+|---|---|
+| Read sources / run checks | Current signed actor, exact matter and action grant, authorized source and scope. Reading or checking does not grant editing, review, publication, sharing or filing. |
+| Apply a correction | Authorized human action, current matter/write grant, exact live draft/range and source/review versions; preview, revalidation, reversible application and affected recheck. |
+| Review / release | Explicit reviewer or documented solo policy; separate action-specific release authority on the exact current reviewed artifact and manifest. Review does not establish legal correctness or filing authority. |
+| Download / share | Separately authorized action and exact output; for sharing, permitted recipient, scope, redaction and access conditions. Revocation cannot recall a copy already downloaded. |
+| External filing or connector mutation | Out of initial scope. If separately approved, require a dedicated authorization and integration design before activation; export is not submission and only an actual external receipt establishes receipt-confirmed state. |
+
+- **Decision record:** For each consequential approval or denial record the authenticated actor, relevant role/delegation and policy version, matter, exact action, input/review snapshot and artifact/manifest identity, timestamp and outcome; record recipient/destination, scope, expiry and revocation where applicable. Avoid unnecessary confidential content in telemetry. A review disposition is not a blanket approval for another action.
+- **Revalidate at execution:** Check current actor and action grant, policy, snapshot and approval immediately before a consequential operation, including queued/resumed work; reject revoked, expired, stale, conflicting or unverifiable authority. Material changes invalidate affected approvals and require fresh review as applicable. Required audit failure blocks completion. Stable operation IDs and reconciliation prevent duplicate effects after an uncertain acknowledgment.
+- **Adversarial acceptance:** Test read-only actor attempts to edit/publish/share, same-organization ungranted and cross-tenant access, revoked or expired permission before execution, stale draft/source/reviewer policy, replay against another matter/artifact/recipient, audit failure, concurrent changes and lost acknowledgments. Treat text in documents, retrieved passages and model outputs as untrusted: purported instructions or approvals in them never confer authority.
+- **Future external actions:** Before enabling a connector that transmits, submits, modifies or deletes externally, specify authorized human, exact artifact and destination, changed-input invalidation, least privilege, receipt binding, uncertain outcomes, safe retry/reconciliation and integration-specific security acceptance. No autonomous external action is authorized by this section.
+- **Milestone evidence:** M1 proves signed matter/action grants and revocation in the real integrated path; M2/M3 prove current authorized review/correction and stale-range rejection; M4 proves action-specific release/share, approval record, audit and recipient controls on actual outputs. PIV-18/19 tests apply only to a separately approved future integration. Synthetic fixtures or a written policy alone do not close a live release gate.
+
 ## Architecture and boundaries
 
 - Keep the sector-neutral kernel in `packages/evidence_kernel/`: immutable source identity, typed anchors, exact fidelity, assessments, declared-scope coverage and provenance. It does not parse/OCR, call models, interpret Belgian procedure, authenticate reviewers or transact production storage.
