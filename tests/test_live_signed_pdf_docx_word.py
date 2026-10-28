@@ -188,3 +188,37 @@ def test_word_search_never_offers_unconfirmed_exhibit_or_invented_pdf_page(monke
     assert TestClient(app, client=("203.0.113.9", 41001)).post(
         route, json={"query": "125 EUR"}, headers=headers,
     ).status_code == 403
+
+
+def test_word_development_sideload_is_local_read_only_and_public_key_only() -> None:
+    app = create_litigation_development_app(
+        publishable_key="sb_publishable_testing123",
+        trusted_ingest_key="sb_secret_never_serve",
+    )
+    local = TestClient(app, client=("127.0.0.1", 3000))
+    remote = TestClient(app, client=("203.0.113.30", 3000))
+    html = local.get("/index.html")
+    assert html.status_code == 200
+    assert 'office.js' in html.text
+    assert 'auth/live-ui.js' in html.text
+    assert "sb_secret" not in html.text
+    assert "frame-ancestors 'none'" not in html.headers["content-security-policy"]
+    assert local.get("/index.html?demo=1").status_code == 404
+    manifest = local.get("/manifest-live-dev.xml")
+    assert manifest.status_code == 200
+    assert "https://localhost:3000/index.html" in manifest.text
+    assert "<Permissions>ReadDocument</Permissions>" in manifest.text
+    assert "?demo=1" not in manifest.text
+    configuration = local.get("/caseproof-public-config.json")
+    assert configuration.status_code == 200
+    assert configuration.json() == {
+        "projectUrl": "https://ldwmocpxwskvhoojndrd.supabase.co",
+        "publishableKey": "sb_publishable_testing123",
+    }
+    assert local.get("/taskpane.js").status_code == 200
+    assert local.get("/auth/live-ui.js").status_code == 200
+    assert local.get("/word-assets/not-authorized.txt").status_code == 404
+    assert remote.get("/index.html").status_code == 403
+    no_key = TestClient(create_litigation_development_app(), client=("127.0.0.1", 3000))
+    assert no_key.get("/index.html").status_code == 404
+    assert no_key.get("/caseproof-public-config.json").status_code == 503
