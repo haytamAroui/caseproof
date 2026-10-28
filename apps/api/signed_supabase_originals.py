@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import http.client
 import re
+import secrets
 from dataclasses import dataclass, field
 from urllib.parse import quote
 from uuid import UUID
@@ -98,6 +99,12 @@ class SignedOriginalsStorage:
             raise ValueError("Invalid signed-user Storage request")
         prefix = "/storage/v1/object/authenticated/" if method == "GET" else "/storage/v1/object/"
         path = prefix + BUCKET + "/" + quote(ref.path, safe="/")
+        if method == "GET":
+            # Cloudflare's private-object CDN can replay a prior success for
+            # this user's same URL after a matter-grant revocation.
+            # A fresh nonce forces an origin authorization check per read.
+            # No sensitive identifier or JWT is included in this query value.
+            path += "?cacheNonce=" + secrets.token_hex(16)
         conn = http.client.HTTPSConnection(
             PROJECT_REF + ".supabase.co", timeout=self.timeout_seconds,
         )
