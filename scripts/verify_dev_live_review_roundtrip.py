@@ -14,18 +14,21 @@ import socket
 import subprocess
 import sys
 import time
-from uuid import UUID, uuid4
 from typing import Any
+from uuid import UUID, uuid4
 
-from apps.api.signed_supabase_originals import OriginalRef
+from apps.api.signed_supabase_originals import OriginalRef, PrivateStorageDenied, SignedOriginalsStorage
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
-from apps.api.signed_supabase_originals import SignedOriginalsStorage, PrivateStorageDenied
-from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
-from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin, PROJECT_REF, ISSUER
+from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
+from scripts.verify_dev_ephemeral_auth import ISSUER, PROJECT_REF, GoTrueDevAdmin
 from scripts.verify_m1_ephemeral_signed_private import ephemeral_private_probe
 from scripts.verify_m1_live_positive_original import (
-    DIGEST, FIXTURE, _remove_original, _rpc, LiveFixtureError,
+    DIGEST,
+    FIXTURE,
+    LiveFixtureError,
+    _remove_original,
+    _rpc,
 )
 
 PORT = 8765
