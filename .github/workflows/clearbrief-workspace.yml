@@ -20,11 +20,11 @@ jobs:
       - name: Check browser source grammar
         run: node --check apps/web/clearbrief/workspace.js
       - name: Security, signed API and reviewer tests
-        run: uv run --locked pytest -q tests/test_clearbrief_workspace.py tests/test_litigation_development_app.py
+        run: uv run --locked pytest -q tests/test_clearbrief_workspace.py tests/test_clearbrief_brief_sources.py tests/test_litigation_development_app.py
       - name: Python format and typing
         run: |
-          uv run --locked ruff check apps/api/litigation_development_app.py apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py tests/test_clearbrief_workspace.py
-          uv run --locked mypy --explicit-package-bases apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py
+          uv run --locked ruff check apps/api/litigation_development_app.py apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py apps/api/litigation_workspace_sources.py tests/test_clearbrief_workspace.py tests/test_clearbrief_brief_sources.py
+          uv run --locked mypy --explicit-package-bases apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py apps/api/litigation_workspace_sources.py
       - name: Scope receipt
         if: always()
         run: |
