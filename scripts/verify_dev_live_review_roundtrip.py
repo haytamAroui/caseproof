@@ -272,11 +272,6 @@ def main() -> int:
                             and os.getenv("CASEPROOF_ALLOW_ONE_TIME_PUSH") == "YES")
                     )
                 )
-                or (
-                    os.getenv("GITHUB_REF") == "refs/heads/feat/live-review-round-trip"
-                    and os.getenv("GITHUB_EVENT_NAME") == "push"
-                    and os.getenv("CASEPROOF_LIVE_PR_PROBE") == "YES"
-                )
             )):
             raise LiveFixtureError("protected manual main-only run required")
         pub = os.environ.get("CASEPROOF_DEV_PUBLISHABLE_KEY", "")
