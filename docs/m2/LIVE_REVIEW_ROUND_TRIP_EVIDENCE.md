@@ -35,7 +35,9 @@ The following are explicitly excluded: lawyer-created matter, ingestion, OCR, co
 
 The installed M2 tables deny direct authenticated client read/write. Do not imply that browser sessions have those privileges. Choose a narrowly scoped server or database transaction that derives the signed actor independently, revalidates current organization and exact matter grant at execution time, verifies source/brief snapshots, and atomically persists the review/audit/receipt. Review function ownership, search path, privileges and RLS behavior for the selected mechanism. A privileged MCP catalog query or simulated JWT claim does not establish real signed-user access.
 
-Current read-only schema inspection confirms M2 brief, check and review tables exist, but the existing disposable checker references `_m1_exhibit_heads` and `_s2_009b_vault_intents`, which are absent from the live development schema. A genuine implementation must bridge or replace these dependencies; do not point the disposable owner adapter at live data and claim acceptance.
+Live development migration `20261028065430_caseproof_m1_private_exhibit_storage` installed `_m1_exhibit_heads` and `_m1_exhibit_events`; these remain inaccessible to authenticated and anon roles. M2 brief, check and review tables exist. The existing disposable checker additionally references `_s2_009b_vault_intents`, which is absent from the live development schema. A genuine implementation must bridge or replace these dependencies; do not point the disposable owner adapter at live data and claim acceptance.
+
+The existing service-role CI fixture only seeds M1 matter/source rows and explicitly cannot clean up M2 immutable journals. Do not reuse its cleanup as proof for a populated review round trip; implement a narrowly scoped disposable-run cleanup and verify it before creating fixture data.
 
 ## Completion
 
