@@ -23,8 +23,8 @@ from apps.api.signed_supabase_originals import OriginalRef, PrivateStorageDenied
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
 from scripts.verify_dev_ephemeral_auth import PROJECT_REF, GoTrueDevAdmin
-from scripts.verify_dev_live_review_roundtrip import _request, _server_start, _server_stop
-from scripts.verify_dev_live_txt_journey import admin_rpc, success, denied
+from scripts.verify_dev_live_review_roundtrip import _server_start, _server_stop
+from scripts.verify_dev_live_txt_journey import admin_rpc, denied, success
 from scripts.verify_m1_ephemeral_signed_private import ephemeral_private_probe
 from scripts.verify_m1_live_positive_original import LiveFixtureError, _remove_original
 
