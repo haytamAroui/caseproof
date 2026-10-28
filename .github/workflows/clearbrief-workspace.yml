@@ -22,7 +22,7 @@ jobs:
       - name: Exercise source-preview provenance
         run: node --test tests/clearbrief_source_preview.test.js
       - name: Security, signed API and reviewer tests
-        run: uv run --locked pytest -q tests/test_clearbrief_workspace.py tests/test_clearbrief_brief_sources.py tests/test_clearbrief_signed_matter_catalog.py tests/test_litigation_development_app.py
+        run: uv run --locked pytest -q tests/test_clearbrief_workspace.py tests/test_clearbrief_brief_sources.py tests/test_clearbrief_signed_matter_catalog.py tests/test_litigation_live_roundtrip.py tests/test_litigation_development_app.py
       - name: Python format and typing
         run: |
           uv run --locked ruff check apps/api/litigation_development_app.py apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py apps/api/litigation_workspace_sources.py apps/api/signed_supabase_matter_catalog.py tests/test_clearbrief_workspace.py tests/test_clearbrief_brief_sources.py tests/test_clearbrief_signed_matter_catalog.py
