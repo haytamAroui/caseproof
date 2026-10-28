@@ -97,7 +97,7 @@ def test_pdf_promotion_requires_server_verified_storage_bytes_and_service_key(mo
         "apps.api.litigation_live_journey.http.client.HTTPSConnection",
         lambda *_args, **_kwargs: connection,
     )
-    client = JourneyClient("sb_publishable_testing", "sb_secret_protected")
+    client = JourneyClient("sb_publishable_testing123", "sb_secret_protected")
     client._verifier = SimpleNamespace(
         verify_bearer=lambda _jwt: SimpleNamespace(subject_id=str(uuid4())),
     )
@@ -118,7 +118,7 @@ def test_pdf_promotion_requires_server_verified_storage_bytes_and_service_key(mo
 
 
 def test_browser_cannot_promote_without_secret(monkeypatch) -> None:
-    client = JourneyClient("sb_publishable_testing")
+    client = JourneyClient("sb_publishable_testing123")
     client.library = SignedBinaryLibrary(synthetic_pdf(), "application/pdf")
     with pytest.raises(AccessRejected):
         client.ingest("signed-jwt", str(uuid4()), str(uuid4()), str(uuid4()), str(uuid4()))
@@ -143,7 +143,7 @@ def test_word_search_never_offers_unconfirmed_exhibit_or_invented_pdf_page(monke
         return {"briefs": [{"brief_version_id": brief}], "sources": [source]}
 
     monkeypatch.setattr("apps.api.litigation_live_journey.JourneyClient.call", stub_call)
-    app = create_litigation_development_app(publishable_key="sb_publishable_testing")
+    app = create_litigation_development_app(publishable_key="sb_publishable_testing123")
     client = TestClient(app, client=("127.0.0.1", 53411))
     headers = {"Authorization": "Bearer signed-test"}
     route = f"/dev/live/matters/{case}/briefs/{brief}/evidence/search"
