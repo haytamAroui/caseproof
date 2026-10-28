@@ -11,7 +11,7 @@ The source DOCX and exhibits are never silently rewritten. **No “all facts tru
 ## Preconditions
 
 - Authenticated active actor with exact matter/check/review/export action grants; no client-supplied tenant authority.
-- Immutable original hashes, exact source versions and page anchors; a confirmed inventory/exhibit revision; current draft revision/processing coverage; complete or transparently scoped check run; a human reviewer disposition where required.
+- Immutable original hashes, exact source versions and page anchors; an inventory explicitly confirmed **complete for the declared scope** (otherwise identity `NOT_ASSESSED`, never falsely `NOT_IN_INVENTORY`); current draft revision/per-region DOCX and per-page source processing coverage; complete or transparently scoped check run; translated quote fidelity `TRANSLATION_REVIEW_REQUIRED` until human contextual review; a human reviewer disposition where required.
 - Original PDF physical pages, printed page labels and compiled bundle pages are distinct. Source crop and representation text must refer to the same source version.
 - Unreliable OCR, unprocessed source or unsupported DOCX structure never upgrades to `EXACT_MATCH`, `MAPPED`, confirmed semantic support, or an implicitly clean whole-dossier report.
 
@@ -59,6 +59,6 @@ Using **real signed staging users with synthetic/rights-cleared NL/FR/mixed fixt
 
 ## Pilot / launch gates
 
-**M4 technical exit** requires complete signed synthetic web acceptance and output-byte integrity, not just an API response. **M5** separately requires practitioner usefulness and a priced/conditional commitment. **Customer/pilot use** requires independent legal/privacy/security rights and operations review; an M4 pass does not authorize confidential customer documents or represent commercial viability.
+**M4 technical exit** requires complete signed synthetic web acceptance and output-byte integrity, not just an API response. M3 cannot be considered complete without the four implemented [pre-M3 verification contracts](../contracts/PRE_M3_VERIFICATION_SPEC.md); full coverage requires the defined DOCX-region denominators, and a partial report must disclose them. A commercial pilot with confidential evidence additionally requires the [SEC-01–16 authorization checklist](../security/PILOT_DATA_SECURITY_GATE.md), with explicit signoff for its exact environment and data class. **M5** separately requires practitioner usefulness and a priced/conditional commitment. **Customer/pilot use** requires independent legal/privacy/security rights and operations review; an M4 pass does not authorize confidential customer documents or represent commercial viability.
 
 Deferred Word interaction details: [optional integration contract](../m3/WORD_INTEGRATION_ACCEPTANCE.md). Historical full dynamic exhibit/recipient-share requirements remain in [prior M4 contract in Git history](https://github.com/haytamAroui/caseproof/blob/486b239926b681d76e1e3f79d30e3dc7098ab6d8/docs/m4/DELIVERY_ACCEPTANCE.md) and do not silently re-enter v1.
