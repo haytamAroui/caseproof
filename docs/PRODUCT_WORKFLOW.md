@@ -1,252 +1,166 @@
-# CaseProof — Belgian litigation product workflow
+# CaseProof — pre-submission exhibit verification: complete v1 user workflow
 
-**Purpose:** define the **frozen Clearbrief-class, Word-first Belgian lawyer workflow** implemented by the authoritative [ROADMAP.md](ROADMAP.md). This is a target/acceptance contract, not a claim that the screens or live capabilities exist. On 2026-10-27, `main@eb289e8` has no `apps/word_addin/` and the synthetic web reviewer is not a released litigation product. [42-feature actual-state ledger](FEATURE_DELIVERY_MATRIX.md).
+**Decision date:** 28 October 2026. **Authority:** [ROADMAP.md](ROADMAP.md), [ADR 0018](adr/0018-pre-submission-verification-freeze.md), [CONSTITUTION.md](../CONSTITUTION.md). This is the **product acceptance specification**, not a claim that any browser journey is already implemented, secure for clients, legally approved or commercially validated. [Historical Clearbrief-class workflow](https://github.com/haytamAroui/caseproof/blob/486b239926b681d76e1e3f79d30e3dc7098ab6d8/docs/PRODUCT_WORKFLOW.md) is superseded for launch scope.
 
-**Primary user:** a Belgian lawyer preparing, checking or reviewing a civil/commercial brief and its exhibit bundle. The three product languages are **Dutch (NL), French (FR) and English (EN)** for the UI, searches, evidence workflows and supported outputs. Product UI language, source language, document language and output language are separate settings; they may differ in the same matter. Language support is a product target, not a claim of implemented translations or measured retrieval quality.
+**User job:** a Belgian civil/commercial litigator about to file conclusions checks whether detected `Stuk/Pièce` factual references point to the right preserved exhibit and correct page and whether an actual source representation contains the quoted text or appropriately matched number. The software reports located/matched, mismatched and unresolved references; an authorized lawyer alone decides semantic support and corrections. **No court filing, legal advice, case-law checking or legal-validity certificate.**
 
-## Product outcome
+**First commercial experience:** web workspace, `upload → verify → inspect source → review → export`. Word is **not required** to perform this journey. Accept genuine DOCX and text/image PDF as bounded input formats, not as license to silently alter or regenerate legal conclusions. The supported subset of DOCX formatting must be declared.
 
-A lawyer can import a brief and its evidence, confirm which files correspond to which Stuk/Pièce references, find and inspect source passages, insert evidence citations while drafting, run a scoped check, resolve or correct findings, hand the exact version to a reviewer, and deliver a navigable brief and exhibit package. When the brief or evidence changes, the product identifies the affected work and requires the appropriate recheck.
+## Inputs, exact coverage and output contract
 
-The product reports what it checked and what it could not check. “No issue found” means no issue was found within the declared and processed scope; it never means that all facts are true or all evidence was discovered. **Commercial wedge:** the *first integrated checker* verifies cited-exhibit existence, quotation fidelity **when quotations exist**, and carefully aligned date/amount claims in **one** headless pass, including cases with **zero quotations**. Its result is an auditable review record, not a statement of professional certification or court readiness. See [source/competitor audit](research/BELGIAN_WEDGE_FEEDBACK_AUDIT_2026-10-26.md).
-
-## Commercial workflow vs backend slices
-
-**M1/M2 technical slice:** code/CI can demonstrate verified source-bound citations, type-checked factual differences and a durable reviewer history **headlessly**. It can inform the UX and a controlled benchmark, but **must not be sold as a substitute for the end-to-end Clearbrief-class application**.
-
-**Initial complete product target (M1–M4, not all F01–F42):** one signed Belgian lawyer creates an authorized matter, stores actual originals, confirms exhibits, **works inside Microsoft Word** to find evidence and add inspectable Stuk/Pièce citations, checks/corrects/reviews the document, and receives **validated DOCX/PDF, dynamic exhibits, verification report and controlled handoff**. Timelines, generalized document Q&A, US legal research/TOA and court filing integrations are later or separately authorized.
-
-**Early Office spike:** develop a synthetic Word selection/search/preview/insert/save/undo/reopen thin path in parallel with M1-B/M2-B to verify API/editor compatibility. This is a **non-production contract spike**, not a shortcut around signed private access. [M3 host and accessibility requirements](m3/WORD_INTEGRATION_ACCEPTANCE.md); [M4 real-byte and delivery requirements](m4/DELIVERY_ACCEPTANCE.md).
-
-## Main navigation
-
-1. **Matters** — create/open, recent activity, access status, archived matters.
-2. **Evidence** — upload status, source inventory, exhibit register, page/source viewer.
-3. **Drafts** — own brief, opponent brief, response draft, version history.
-4. **Search** — search passages across the authorized, indexed matter record.
-5. **Review** — issue queue, exact source context, assignment, decisions and corrections.
-6. **Outputs** — reports, linked briefs, exhibit indexes/bundles and recipient shares.
-7. **Matter settings** — roles, language, citation format, retention and model eligibility.
-
-The **Word task pane is a mandatory first-product client**, not a future optional extra. It exposes the contextual subset: selection, evidence suggestions, source inspection, citation insertion, correction preview, recheck status and open-in-web actions. Both clients use the same server-owned matter graph and permissions.
-
-## End-to-end journey
-
-### 0. Sign in and choose a matter
-
-The lawyer signs in, selects an authorized organization and opens or creates a matter. The matter setup captures a title/reference, jurisdiction/court when known, working language and permitted collaborators. It does not require a legal rule profile before evidence work can begin.
-
-**System:** checks current identity and matter access before listing or reading documents. An inaccessible or revoked matter is masked/denied. **ADR-0017 default-private litigation** requires an explicit current grant per matter/action even for colleagues in the same firm. A new matter starts with no evidence and no inferred legal state.
-
-**States:** loading, signed out, organization selection, empty matter, active matter, archived, access revoked, service unavailable.
-
-**Done when:** the lawyer sees the matter identity, access role, processing status and a clear next action.
-
-### 1. Add the brief and evidence
-
-The lawyer uploads the current draft or opponent brief and the available exhibits. Files are preserved as immutable originals. The upload screen shows per-file progress, duplicate detection, unsupported formats, quarantine/scanning state and whether a prior version already exists. The user can add files incrementally.
-
-**System:** creates stable source identities and resumable jobs; records byte digest, receipt time, uploader and matter scope. It parses supported pages and parts, runs configured OCR where available, and creates derived representations with parser/version lineage. Failed or unprocessed pages remain visible. An upload does not establish that a document was filed or communicated. **Keep separate:** (a) present in the user's inventory, (b) bytes actually in custody, (c) communication to the other side proven by a recorded event/receipt, and (d) court submission/receipt actually observed. A missing number proves none of the latter three.
-
-**States:** queued, uploading, quarantined, scanning, parsing, OCR pending, ready, partial, failed, duplicate, removed-from-active-scope.
-
-**Done when:** every uploaded file has an explicit status and can be opened as original or as a clearly labelled derivative. The lawyer can continue with available sources while the UI identifies what is missing or failed.
-
-### 2. Confirm the exhibit register
-
-The lawyer imports or creates an exhibit list and maps each displayed identifier (Stuk/Pièce, annex, range, alias) to one or more stable source versions. Printed page numbers, PDF page numbers and bundle page numbers are recorded separately. Duplicate labels, uncertain matches and multi-file exhibits require explicit resolution.
-
-**System:** proposes matches based on supplied metadata, names and extracted references, but never silently treats a filename or numeric similarity as authority. Renumbering a label does not change source identity. Communication, filing and receipt facts remain distinct and require their own records.
-
-**States:** unmatched, suggested, ambiguous, duplicate label, confirmed, revised, stale mapping.
-
-**Done when:** every reference in the selected brief is either resolved to a confirmed exhibit/page map or explicitly left ambiguous/unresolved. The register can include manually selected exhibits that are not cited in the current draft.
-
-### 3. Prepare the brief version
-
-The lawyer chooses a role for each document: own draft, opponent brief, earlier version, response draft, filed copy or other. The system parses paragraphs, tables, footnotes and citations into a versioned draft model while preserving the original bytes and layout. The lawyer can compare parsed text with the original document and correct extraction/mapping errors.
-
-**System:** associates assertions and detected references with this draft revision and parser version. It separates legal references from exhibit references and identifies unsupported/ambiguous references. It does not infer that a changed argument was legally abandoned.
-
-**States:** parsing, ready, needs mapping, unsupported structure, stale, superseded.
-
-**Done when:** the user confirms the draft version and its visible text/reference mapping before checking or editing.
-
-### 4. Write with evidence (Word or web)
-
-The lawyer selects a factual sentence or phrase, opens “Find evidence,” and searches the authorized matter record. Results show source title, exhibit label, page, language, surrounding context and why the passage was returned. The lawyer opens the original or derived source at the exact location, inspects relevant preceding/following context, then inserts a Stuk/Pièce pinpoint.
-
-**System:** records the citation edge from this draft revision/assertion to the resolved exhibit, source version and anchor. Retrieval rank is labelled as relevance ordering, not truth probability. An empty result is a valid outcome with its search scope and unindexed/failed material visible.
-
-**Retrieval promise:** launch with evidence retrieval whose Dutch, French and English keyword and paraphrase-query performance is measured on the rights-cleared corpus. This first search path is **PIV-10 evidence retrieval**; it is not a claim that the separately evaluated PIV-12 **opponent-wide uncited-page discovery** is complete. Do not imply proven broad conceptual-search equivalence from a lexical baseline. Broader conceptual-search claims depend on demonstrated retrieval results. Semantic retrieval, if proposed, is a separately evaluated capability; semantic support assessment remains optional under PIV-12 and is not a prerequisite for the deterministic workflow.
-
-**Word safety:** this is an actual supported Microsoft Word host with an installable task pane, not a web-only editor pretending to be Word. Before insertion, the add-in checks that the selected range still matches the captured document revision/context. If the text moved or another editor changed it, the add-in stops and asks the lawyer to reselect or review a refreshed proposal. It preserves formatting, lists, footnotes and tracked changes; the operation is reversible.
-
-**States:** no selection, searching, partial index, results, no matches, source unavailable, citation ready, selection changed, inserted, undone.
-
-**Done when:** in a **real tested Word host**, the lawyer can reopen the inserted pinpoint and inspect the same immutable source version from Word or web; a changed selection, expired token or second insert request does not silently damage the file. The saved DOCX is reopened and checked for citation/footnote/format integrity. [Host matrix and failure tests](m3/WORD_INTEGRATION_ACCEPTANCE.md).
-
-### 5. Check own or opponent brief
-
-The lawyer chooses a check profile and explicitly confirms scope: selected draft revision, confirmed exhibit set, excluded documents/pages, and whether to check only cited evidence or also search the wider record for possible counterevidence.
-
-**M2 launch: one unified, non-LLM, headless check pass** (not separate buyer-facing quote-only modules):
-- **Exhibit identity/existence:** resolve Stuk/Pièce/annex aliases, duplicates, exact source ID/version and physical/printed/bundle page; distinguish cited-not-in-register, inventory-only, missing bytes, unproved communication, and actual recorded filing.
-- **Quotation fidelity if present:** literal or properly bounded normalization of the selected quote against the mapped exact source span and page, preserving original wording and candidate alignment separately from exact fidelity. A 35-page brief with zero verbatim quotes still receives the other checks.
-- **Typed date/value candidates:** parse amounts, dates, percentages, units and currencies from brief + mapped evidence; compare only **same-role** values with compatible basis and source anchors (payment vs payment, not due date vs paid date; net vs gross and VAT/amendments require explicit context). Conflicting, absent or multiple roles yield `needs_context`/`not_assessed`, never an invented mismatch or legal truth.
-- **Presentation and scope:** apply reviewed local citation-format profile where configured; include unsupported files, unprocessed/partial pages, corpus denominator, reviewed exclusions, parser quality flags and stale versions.
-
-One run returns a reproducible *scope manifest* plus exact/unknown/mismatch observations. **A clean brief can correctly produce no findings**; do not force errors to improve a sales demo.
-
-A second, optional semantic pass may retrieve supporting, qualifying or contrary context and create model-proposed observations. It records the model/prompt/scope version, can abstain, and never changes an issue into an authorized decision. **Opponent-wide mode** may, after separately evaluated PIV-10/12 coverage, search authorized *uncited* pages of the opponent's disclosed record for potentially adverse/qualifying context, with cite/page and surrounding text. It does not auto-label admissions, prove an opponent's wrongdoing or generate court-ready rebuttals; the lawyer must assess relevance and opportunity to contest. Legal references are marked “not checked” unless a separately specified legal-authority service and source entitlement are active.
-
-**System:** reports execution status separately from evidence status. A clean result is allowed. If indexing or parsing was incomplete, the report says exactly which pages/files were not checked. It does not infer that an uncited exhibit was uncommunicated, or that the opponent omitted evidence from the world.
-
-**States:** scope confirmation, queued, processing, partial, completed-with-observations, completed-clean, blocked, failed, outcome-unknown, stale.
-
-**Done when:** each observation has a type, severity or uncertainty level, draft/source versions, source location where available, check version and reproducible explanation.
-
-### 6. Review and resolve observations
-
-The lawyer opens a review queue with filters for unresolved reference, literal mismatch, typed value difference, context warning, semantic proposal, missing material and processing issue. Selecting an observation opens the draft beside the source, including enough context to assess it. The reviewer can retain, reject, qualify, correct, or request more evidence, with rationale where required.
-
-A firm can assign a named reviewer to an exact draft/check snapshot, return issues to the author, inspect changes since review and release the exact artifact. A solo practice uses its explicitly configured policy; a solo signoff is identified as such and never represented as independent review.
-
-**System:** appends review events and retains prior assessments. A reviewer disposition does not rewrite source evidence or semantic support. Read permission does not grant edit, publish or filing permission. Concurrency conflicts are explicit; no stale reviewer packet can authorize publication.
-
-**Done when:** every item is resolved, intentionally left open with rationale, or surfaced in the report as unresolved. The reviewer can see scope, exclusions, failed pages and changes since the previous review.
-
-### 7. Correct and recheck
-
-Correction lifecycle: **inspect → propose → preview → revalidate → apply/undo → invalidate → recheck**.
-
-The lawyer previews a text, citation or mapping patch against the current document. The system checks the live range, actor permissions, draft revision and cited source version. If the draft or source changed, it requests a fresh review rather than writing over another editor's work. After application, the change is reversible and recorded.
-
-Only checks/reviews/outputs that depend on changed inputs become stale. History and unrelated issue work remain. Changing the whole-record search universe invalidates that search result even if an individual citation was unchanged. A new check creates a new result version; it does not erase the old one.
-
-For an opponent brief, the original remains untouched. Corrections are annotations, an analysis copy or edits to a separate response draft.
-
-### 8. Generate outputs
-
-The lawyer selects the exact draft revision, exhibit register revision, check run, review state, inclusion policy and output language. Available outputs are separately identified:
-- source-linked working brief or correction copy;
-- cite-check/review report listing checked and unchecked scope, findings and dispositions, with an **optional neutral Verification Run Record / Verificatierapport / Rapport de vérification** that states exactly which source versions, original/representation digests, page spans and checks were processed, which were not, and who reviewed each exception; it is **not** a certificate of factual truth, professional accreditation, procedural compliance or billable client disbursement;
-- exhibit index with stable identifiers and displayed aliases;
-- exhibit bundle with bookmarks/hyperlinks where supported;
-- offline package or hosted courtesy copy.
-
-The lawyer chooses exhibit order policy (fixed register or first citation) and confirms manually included uncited exhibits. Removing a draft citation never silently removes an exhibit from the register or an already frozen output. The system renders, reopens and validates generated files and links. An earlier output remains immutable and can be marked superseded by a later version.
-
-**States:** dirty draft, stale review, scope confirmation, queued, rendering, validating, ready, failed, superseded.
-
-**Done when:** the output manifest identifies exact input versions, policy/check versions, review events, exclusions and limitations. **Generated DOCX, PDF, index and exhibit bundle bytes have been reopened and hyperlinks/page maps independently validated**, including changed and uncited retained exhibits. A hash is an integrity aid, not proof of source authenticity or legal correctness. [M4 artifact proof](m4/DELIVERY_ACCEPTANCE.md).
-
-### 9. Share or hand off for filing
-
-The lawyer chooses recipients and access scope for a hosted copy, with expiry and revocation settings. Redaction is applied to a derivative and verified in the generated output. Offline downloads cannot be recalled. Filing preparation may produce a court-specific checklist and size/readability preflight, but export is not submission.
-
-Submission and receipt capture are separate actions. A real filing integration requires its own authorization and uncertain-outcome recovery. A receipt is recorded only when an actual external receipt is observed and bound to the submitted artifact.
-
-Court-profile guidance is versioned and shows the court/division/chamber, document type, source and passage, effective date, last verification date, owner, and whether each item is mandatory or recommended. Show scope, expiry and any conflict or unavailable source. A stale or unknown profile is labelled unverified and cannot certify court readiness or impose a national rejection rule. Technical bundle validation and procedural readiness are separate statuses; both remain subject to professional review.
-
-**Done when:** the recipient sees only authorized materials, or the lawyer has downloaded the intended package for the existing filing process. The matter records prepared, shared, submitted and receipt-confirmed as distinct states.
-
-## Authority throughout the lawyer workflow
-
-**Target behavior; not a claim that these controls are implemented or deployed.** CaseProof proposes and checks; an authorized human decides consequential actions. The application enforces current matter- and action-specific authorization independently of any model output. The existing action catalog and reviewed matter policy determine actual permission names and grants; the categories below do not install new permissions.
-
-| Step | Authorized action and check |
-|---|---|
-| Open matter / inspect evidence | A signed actor has current access to the exact matter and source. Read access does not authorize edits, review, publication, sharing or filing. |
-| Check or propose | Confirm current check authority and selected scope. Results and model suggestions remain proposals; content found in a document cannot approve a subsequent action. |
-| Correct | An authorized human previews the change; immediately before applying, revalidate permission, current draft/range, source and relevant review versions. A stale or revoked action stops; preserve history and recheck affected work. |
-| Review | A permitted named reviewer or the explicit solo-practice policy records a decision for the exact draft/check snapshot. Review is distinct from permission to release. |
-| Release | A separately authorized human approves the precise current manifest/artifact under the applicable review policy. The system checks authority and freshness again immediately before execution and records an auditable outcome. |
-| Share or hand off | A separate authorized action specifies the exact artifact, recipient, scope, redaction and access conditions; expiry/revocation apply to hosted access. A prior review or release is not blanket permission to share with anyone. |
-| Future external submission | Remains a separate human handoff unless a separately approved integration is designed and accepted. A future action must bind authorization to the artifact and destination and reconcile uncertain outcomes; export is not filing. |
-
-For consequential approval or denial, record the authenticated actor and relevant role/delegation, policy version, action, matter, input/review snapshot, artifact/manifest, time and outcome, plus recipient/destination, scope, expiry or revocation when applicable. Keep sensitive content out of operational telemetry. If required audit persistence fails, do not complete the action. If permission or approval expires, is revoked, conflicts, cannot be verified, or the relevant document, recipient, policy or snapshot changes, stop and require appropriate renewed authorization. Use stable operation IDs to reconcile uncertain acknowledgments before retry; preserve prior history. A downloaded copy cannot be remotely recalled.
-
-**Acceptance scenarios:** deny a read-only actor's edit/release/share; deny same-organization ungranted and cross-tenant access; reject a revoked actor or changed snapshot between preparation and execution; reject replay for another matter, artifact or recipient; block on required audit failure; handle concurrent changes and uncertain acknowledgment without duplicate action. A malicious instruction or purported approval embedded in an uploaded document or retrieved/model-generated text does not confer authority. These checks belong in M1–M4 signed integrated acceptance; external submission scenarios apply only to separately approved future integrations. [Roadmap authority acceptance](ROADMAP.md#authority-and-consequential-action-acceptance).
-
-## Minimum complete launch demonstration (one real integrated outcome)
-
-These are **one contiguous user journey**, not seven isolated green fixture tests. After appropriate **approved security and confidentiality** gates, record in staging:
-
-1. Genuine signed private-matter owner and second differently granted teammate; verify isolation and revocation.
-2. Real rights-cleared mixed NL/FR/EN clean PDF/DOCX and scanned exhibit corpus, byte hashes, failures and page denominator.
-3. Human-confirmed Stuk/Pièce aliases and physically resolvable source pages; new immutable draft version.
-4. **Word:** select draft sentence → search matter sources → inspect original with context → insert precise citation → save/reopen DOCX and reopen citation source.
-5. **Check:** one unified zero-quote capable run over references, literal quotations and same-role dates/amounts; clean case legitimately passes with no findings, incomplete pages show unknown.
-6. Human inspect/reject/confirm, preview correction, apply/undo, recheck affected assertions; stale review and source replacement blocked from release.
-7. Human-approved current manifest → **actual link-validated DOCX/PDF, dynamic exhibit index/bundle and Verification Run Record** → authorized download/recipient share and independent process restart.
-8. A second task on the matter, measured lawyer effort and access/revocation negatives; record full receipt, document versions and benchmark denominator.
-
-If a row cannot be completed, mark the **whole product demonstration incomplete**. A successful headless M2 program still counts as engineering progress, not a successful commercial launch. No filing receipt or legal certificate is inferred.
-
-## Cross-cutting failure and recovery behavior
-
-| Failure | Product response |
-|---|---|
-| Unsupported/corrupt file | Preserve upload record; mark unsupported/failed; continue other files where safe; disclose scope gap |
-| OCR failure or low-quality scan | Show original and failed pages; do not fabricate text/geometry or claim complete checking |
-| Duplicate/ambiguous Stuk label | Keep all candidates; request user mapping; never first-match silently |
-| Partial index | Label search partial; disclose excluded sources/pages; allow retry/reindex |
-| Requesty timeout/uncertain dispatch | Preserve outcome-unknown; do not automatically repeat a potentially paid call |
-| Save acknowledged but refresh failed | Show saved state separately from refresh failure; reload without claiming save rollback |
-| Lost edit/publication acknowledgment | Reconcile by stable operation ID before retry; prevent duplicate mutation/output |
-| Source/draft changed during review | Mark dependent checks stale; preserve the review history; block stale release |
-| Permission revoked | Deny subsequent reads/search/share; invalidate caches; explain access loss without exposing source metadata |
-| Export fails validation | Keep prior output intact; report failed artifact; do not mark ready |
-| Court profile is stale, conflicting or unavailable | Mark procedural guidance unverified; explain the profile gap; do not claim court readiness or apply a national rejection rule |
-| Clean check | Show checked scope and “no confirmed issue found”; never award an all-record correctness badge |
-
-## Confidentiality modes and pilot gate
-
-**Professional secrecy is not resolved by pseudonymizing names alone.** The January 2025 OVB/OBFG AI guidance distinguishes personal data from material protected by professional secrecy, and describes processing secrets in AI tools only where the lawyer is certain that a sufficiently protected closed environment is used. A region label, no-training switch or vendor \"zero retention\" claim alone is not that proof.
-
-1. **Now — headless deterministic research:** source-linked checks can be run in isolated tests with synthetic or properly rights-cleared nonconfidential redacted materials, without Requesty credentials. This does not establish that the deployed SaaS processes all content locally or is an approved closed environment.
-2. **Future optional offline product:** requires a real separately packaged local parser/checker with no outbound network, controlled temporary files/logs, tested update/backup behavior and customer/on-device threat modeling. It is a **separate capability gate**, not assumed from the existing server-first architecture.
-3. **Hosted professional deployment:** gated on M1-B/C signed current permissions and true case-isolating RLS, private immutable storage, incident response, vendor/subprocessor contracts, deletion/retention, technical and contractual guarantees and qualified professional-secrecy review. Model-based processing has its own explicit opt-in/processor boundary.
-
-Use the same API/claim/source-check contracts across privacy modes if any are added, without claiming equivalent implementation or legal suitability until proved.
-
-## Product success measures
-
-Measure task completion on representative NL/FR/EN and mixed-language dossiers through the competitive benchmark and adoption protocol in [ROADMAP.md](ROADMAP.md):
-- compare manual Word/PDF with authorized, tested products on fixed tasks; record source/output correctness, total time including setup/review/cleanup, false positives, assistance, errors and breakage;
-- first complete task, second task on an actual matter, repeat use within a defined window, false-warning review time and abandonment reasons;
-- maintain separate invited/access, registered, trained, active and paying cohorts;
-- track cost per completed reviewed dossier, with observed values distinct from estimates and unavailable unit costs left null; **test seat, per-dossier and hybrid pricing against actual buyers**, using Alice's dated €85/user/month public Core offer only as a comparison; client reimbursement/pass-through is subject to engagement terms and independent bar/tax review, not an automatic fee or revenue promise;
-- retain existing measures for reference resolution, labelled-passage recall, correction outcomes, round-trip integrity, partial/failure recovery and access rejection; add **quote-free brief performance**, same-role value-mismatch precision, falsely matched dates/units, actionable finding yield, reviewer seconds per alert, zero-findings clean controls, and manually measured opponent uncited-page retrieval recall. Compare with [Hublex](https://hublex.be/en/conclusions-check) + manual Word/PDF + authorized Alice where feasible, without claiming no local competitors.
-
-Use privacy-safe operational metadata; no customer document content enters telemetry. Each measure names its denominator, corpus/task protocol and version. No metric is advertised as legal accuracy without a validated evaluation design.
-
-## Delivery evidence per interface
-
-The web workspace is useful for matter inventory, PDF/source inspection, reviewer assignment and outputs. It **must not substitute** for the M3 native Word experience in acceptance. An M2 headless JSON report is not the reviewed M4 DOCX/PDF verification deliverable. Preserve this distinction in screenshots, demos and sales copy.
-
-| User-facing result | Required proof | Gate |
+| Artifact | Authority and handling | What absence means |
 |---|---|---|
-| Private case and uploaded sources | Signed users, exact-case grants, private custody, real PDF/DOCX/OCR, resumable jobs | M1-B/C |
-| Factual check and human review | Scoped source-bound NL/FR/EN results, readable original, historical decisions, durable undo/recheck | M2-B |
-| Word evidence writing | Real supported Office host, selected range freshness, lookup, preview, pinpoint insert, saved DOCX roundtrip | M3 |
-| Dynamic final package | Correct frozen aliases/order/page maps, linked DOCX/PDF/index/bundle and validated reread | M4 |
-| Customer delivery | Genuine permission, review state, recipient redaction/expiry, audit/receipt and repeat-use measurement | M4/PIV-20 |
+| **Conclusions DOCX** | Original preserved; identify checked draft version/hash and language; extract reference candidates from supported paragraph/table/footnote parts; provide unprocessed-structure coverage | Missing/unparseable draft blocks check and cannot become “zero findings” |
+| **Inventory** | Upload separate inventory document or structured list; parse *proposals*, lawyer confirms `exhibit_id ↔ Stuk/Pièce alias`, order, amendments, page labels | No inventory → `NOT_IN_INVENTORY` or `NOT_ASSESSED` by declared scope; do not silently synthesize a definitive one |
+| **Preserved exhibits** | One or more separately preserved originals, optionally an assembled bundle; content hash, version, physical page, OCR crop/representation, ingestion and authority metadata | An inventory label without authorized source = `SOURCE_MISSING`, not proof of late/noncommunication |
+| **Optional existing bundle** | Source for bundle-page offsets; separate physical PDF / printed page / compiled bundle page mapping; never assume all three equal | Missing or conflicting mapping = `UNMAPPED` / `CONFLICTING` |
+| **Output** | Per-reference findings + actual source link/crop + reviewer decision + scoped verification run record + annotated or corrected DOCX where safely supported | Incomplete or unsupported export must fail visibly and leave source draft intact |
 
-## Implementation mapping
+Languages: support NL/FR citation labels and case text, including mixed-language documents. UI language, source language, draft language and output language are independent; no translation is treated as original evidence. EN UI/testing support can be retained, but full EN legal-domain feature parity is not a launch guarantee. Citation candidates without quotes still receive existence/page checks; all-zero-error controls can legitimately return no findings.
 
-This workflow is implemented through the principal PIV backlog in [ROADMAP.md](ROADMAP.md), not a parallel task system:
+## User journey and transitions
 
-| Workflow segment | PIV packets |
-|---|---|
-| Matter setup, access and evidence intake | PIV-02–05 |
-| Exhibit register and draft/reference graph | PIV-06–07 |
-| Check and review workbench | PIV-08–10 |
-| Word evidence-writing loop | PIV-10–11 |
-| Semantic/opponent analysis and synthesis | PIV-12–13 |
-| Correction, outputs, sharing and release | PIV-08, 11, 14–16 |
-| Belgian advisories, filing handoff and connectors | PIV-17–19 |
-| Onboarding, operations and release evidence | PIV-20 |
+### 0. Sign in, choose a permitted matter (M1)
 
-PIV-00/01 establish the scope, owners, claims register, rights-cleared evaluation corpus, fixed competitive task protocol and clean-case controls before integrated delivery. PIV-20 adds cost and repeat-use evidence. No customer document content is collected as telemetry. Customer documents remain gated on the applicable security, custody, persistence and operations evidence in ROADMAP.md.
+**Action:** lawyer authenticates, chooses/creates a private matter, sees only permitted matters. No tenant/matter authority is taken from URL, DOCX, HTTP header or model output. Roles and permissions are current server-owned checks.
+
+**User sees:** `Matter ready` or a concrete blocked reason; private files, source coverage and prior reviews belong only to that matter.
+
+**Acceptance:** real signed user and same-org ungranted user must have different rights; denied/revoked/expired actor cannot inspect source, edit review, export or receive pending job results. Server restart preserves state. No customer data before security signoff.
+
+### 1. Upload and preserve the source universe (M1)
+
+**Action:** upload `conclusions.docx`, separately identifiable inventory, original PDF/text/scanned exhibits. Each original is immutable, SHA-256 checked on readback; never replace bytes in place. Keep PDF page 1-based display distinct from internal 0-based parser locator and from printed/bundle numbers. Upload and processing have stable operation IDs.
+
+**User sees:** clear file types, accepted/rejected, pages processed, pages `needs OCR`, crop availability, originals vs generated text, duplicate labels, corrupt files, permissions and file budgets. Processing progress is not an evidentiary approval.
+
+**Failure:** corrupt/password protected/oversize/unreadable/unsafe file stops only its affected scope; sources remain preserved with errors and remaining denominators. No invisible zero-page completion; retries/restarts reconcile persisted job state rather than duplicate sources.
+
+### 2. Confirm the exhibit register (M1)
+
+**Action:** CaseProof proposes Stuk/Pièce number, name, alias and source-version matches; the lawyer confirms or rejects independently of candidate OCR text. Source/exhibit internal ID stays stable across label renumberings. Separate `listed_in_inventory`, `source_in_custody`, `communicated_proven` and `filed_proven`, with the latter two never inferred from this workflow.
+
+**Page contract:** physical PDF pages, printed labels and bundle positions are independent; a uniquely found exhibit can be `RESOLVED` even if its page is `UNMAPPED`. Reordering or replacing a source creates a new register revision and invalidates affected checks.
+
+**Failure:** ambiguous aliases, multiple candidate files, missing source, wrong page space, duplicate label and no confirm permission require review; never choose a match because it has the highest OCR score.
+
+### 3. Detect references in the draft and freeze the checked scope (M2)
+
+**Action:** parse every supported DOCX content region and candidate legal-exhibit reference (e.g. `Stuk 4, p. 3`, `Pièce 7, p. 5`, aliases or references without pinpoint). Detect exact citation occurrence and its draft location; link each candidate to the confirmed register snapshot. User may add/correct missing reference detections without silently editing the original file.
+
+**User sees:** total candidates detected, checked/not-assessed, checked source/page scope, reasons for omissions, unsupported footnotes/tables, and source completeness. If all references cannot be detected with required coverage, report explicitly.
+
+**Failure:** an unmatched draft citation is not a pass. A no-citation/zero-quote draft is valid as an input, with `0 references detected` and its extraction limitations disclosed.
+
+### 4. Run one source-bound evidence check (M2)
+
+**Action:** a scoped deterministic pass checks exhibit existence, pinpoint mapping, exact literal quotations where applicable, and **only unambiguous same-role** values (amount/date/currency/unit/tax basis). Every candidate result carries exact original/representation identifiers, provenance, processing and rules version. No mandatory LLM, vector DB or agent loop.
+
+**Four independent dimensions:**
+
+| Dimension | Typed states | Authority |
+|---|---|---|
+| Exhibit identity | `RESOLVED`, `NOT_IN_INVENTORY`, `SOURCE_MISSING`, `AMBIGUOUS` | Server-confirmed source/inventory identity |
+| Page location | `MAPPED`, `UNMAPPED`, `CONFLICTING` | Independent original/printed/bundle mapping |
+| Text/value fidelity | `EXACT_MATCH`, `MISMATCH`, `OCR_UNRELIABLE`, `NOT_ASSESSED` | Reproducible source-bound checks with OCR abstention |
+| Semantic support | `NOT_ASSESSED`, `CONFIRMED_SUPPORTED`, `CONFIRMED_QUALIFIED`, `CONFIRMED_CONTRADICTED` | **Human reviewer only** after contextual inspection |
+
+**Critical distinctions:** `EXACT_MATCH` is not the truth of a claim, the authenticity of a document, or a semantic-support decision. `QUALIFIED` is not an OCR-confidence state. Unreviewed low-fidelity OCR requires `OCR_UNRELIABLE`, crop inspection and optional transcription correction linked to the original, not an automatic exact-match green status. Quote-free claims can still be checked for exhibit/page existence. Unknown VAT basis, negations, third-party allegations, different dates/roles and conditional text cannot be confidently auto-compared.
+
+**Failure:** timeout, unavailable representation, source mismatch, stale register/draft, partial OCR or unauthorized scope becomes `NOT_ASSESSED`/specific unresolved state. A model suggestion never writes authoritative `CONFIRMED_*` support or reviewer actions.
+
+### 5. Inspect each finding beside the actual source (M3)
+
+**Action:** web results show an assertion/citation, detected reference, inventory identity, physical/printed/bundle page, immutable original viewer and cropped original image when relevant, plus extracted text **marked as derived**, with citations back to source versions.
+
+**User sees:** sortable `needs attention`, `located/matched`, `mismatch`, `not assessable` categories without one global “verified” label. Default ordering prioritizes unresolved and actionable mismatches; a clean scoped run may show no errors. Every checked finding shows neighboring context and a direct reopen link; unavailable source or crop never becomes silently substituted OCR text.
+
+**Failure:** broken link, crop not tied to correct page, incomplete coverage and mismatch between source hash and image prevents confirming that finding.
+
+### 6. Human review and safe proposed correction (M3)
+
+**Action:** authorized reviewer inspects original and context; chooses confirm support, qualify, contradict, dismiss mismatch, request more evidence or record a correction proposal with rationale. Human decision records exact current review/run/draft/source snapshot, actor, time and audit; a sole reviewer is labelled solo, not independent peer review.
+
+**Correction:** produce a preview of exact original draft span and replacement; do not overwrite preserved original, alter opponent material, strip tracked changes or silently edit unsupported DOCX structures. Applying generates a new draft revision or an explicit annotated-only output; affected references are rechecked.
+
+**Failure:** revoked permission, stale selection/changed draft, concurrent edit, ambiguous OCR, missing audit or unknown external acknowledgment blocks promotion/revision. A second retry must reconcile the first operation ID, not duplicate a decision.
+
+### 7. Recheck, produce report and export (M4)
+
+**Action:** re-run affected checks against the new exact draft/source/inventory snapshots; freeze a manifest and generate reviewed/annotated or supported corrected DOCX, a machine-readable run record and human-readable verification report. Export only after authorized reviewer and explicit export grant; no automatic filing/share.
+
+**Report MUST include:** original and output hashes, artifact/document versions, source universe and per-page processing status, detected/checkable/not-assessed reference denominators, mapping and OCR uncertainty, exact source/crop locators, findings and human dispositions, unresolved/excluded items, engine/parser versions, timestamp, reviewer role and limitations. Do not call it a court certificate.
+
+**Integrity:** generated outputs remain immutable, reopen actual DOCX and any PDF produced with an independent reader, verify targets and page links against exact manifest. Preserve known formatting, lists, tables, footnotes and tracked-change semantics within the published support matrix; refuse unsupported transformations. A completed report may list unresolved items; it never claims all evidence proved.
+
+**Failure:** missing review, stale version, failed rendering/link verification, storage/audit failure, permissions revoked or unexplained scope changes block marked-current export. Prior exports remain attributable to earlier snapshots but are not re-certified after edits.
+
+### 8. Download and hand off manually (M4)
+
+**Action:** authorized lawyer downloads the exact reviewed output/report. Actual court filing, transmission and delivery receipt remain external human actions. In v1, copying to a recipient or e-Deposit submission is not a required app capability.
+
+**User sees:** reviewed output version, source/check manifest, unresolved counts, who approved what, and explicit `NOT FILED BY CASEPROOF`. A saved download cannot be revoked retroactively; only hosted future access can be withdrawn.
+
+### 9. Reopen the same matter on another day (M1–M4)
+
+**Action:** sign in again, reopen original files, source map, checked draft revisions, reviewed findings and exported manifest after a cold process restart.
+
+**Acceptance:** there is no implicit approval from past session tokens; revoked actors cannot reopen, and all data/review lineage remains reproducible for currently authorized actors.
+
+## UI pages — minimum, no second word processor
+
+| Screen | Actual purpose | Must-not-do |
+|---|---|---|
+| **Matters** | Authorized matters and source health | No cross-tenant source previews |
+| **Upload & inventory** | Preserve DOCX/inventory/exhibits; confirm candidates and three page spaces | No invented inventory, authenticity or filing status |
+| **Findings** | Per-reference states, source location, missing/partial coverage | No green global “all true” badge |
+| **Review** | Side-by-side original crop/context, independent findings, human disposition/correction preview | No auto semantic confirmation |
+| **Exports** | Exact reviewed DOCX and report, re-openable manifest, release failures | No court filing or legal certificate |
+
+Use accessible keyboard navigation, screen-reader labels, stable focus, explicit status text (not color alone), reliable text scaling and NL/FR terminology. Partial source sets and empty states must be visible. Do not construct a proprietary Word competitor or force editing inside a new rich-text editor.
+
+## One complete v1 launch acceptance (not currently passed)
+
+A genuinely signed user in an approved staging environment:
+
+1. Creates a restricted matter and imports a real-format synthetic NL/FR DOCX, inventory, text PDF and image-only scanned PDF; verifies preserved bytes/hash and per-page status.
+2. Confirms exhibit identities and page spaces, including a uniquely resolved exhibit with **unmapped** pinpoint and a duplicate/ambiguous label.
+3. Runs a comprehensive scoped reference check on correct, missing, wrong-page, mismatched-value, negative/conditional, zero-quote and unreadable items; sees complete denominators, original page crops and no false confidently mapped/matched findings in the fixed test set.
+4. Reviews one uncertain OCR crop, records human confirmation or non-confirmation and makes a safe versioned correction; rechecks dependent reference(s).
+5. Exports reviewed/annotated DOCX + scoped verification report; opens the **actual bytes** independently, checks source links/formatting, and confirms the immutable manifest.
+6. Stops server, signs in again, reopens the same source/draft/review/output history; tests ungranted/expired/revoked actor denials, stale changes, interrupted jobs and failed audit.
+7. Presents that real experience to practitioner reviewers; collects their measured time, corrections and objections separately from a legally/operationally authorized customer pilot.
+
+**A passing synthetic path is not a sellable release.** Legal/confidentiality, hosting, operational resilience, customer authorization and commercial pilot gates remain independent. [M4 detailed output acceptance](m4/DELIVERY_ACCEPTANCE.md).
+
+## Interface independence — optional channels never redefine v1
+
+- **Web:** first full experience.
+- **Word:** optional future client to start the same check from selected text, inspect crop, insert a source reference and recheck; [host contract](m3/WORD_INTEGRATION_ACCEPTANCE.md) remains an engineering reference, **not launch acceptance**.
+- **API:** mandatory first-class case-scoped contracts for all clients; current signed application authorization and durable job boundaries are the authority.
+- **MCP:** future thin adapter to authorized API actions, not a new authority/control plane, mandatory daemon or direct access path to original bytes. No external tool call creates legal or review approval.
+
+## Privacy, lawful processing and trust
+
+- Initial demo uses synthetic or explicitly rights-cleared fixtures. A redacted client dossier is not automatically anonymous or permissible; real files require assessed professional secrecy, GDPR, signed agreements, appropriate closed-processing assurance, retention/deletion and security approval.
+- Cloud location, pseudonymization or zero-retention **alone** does not prove professional-secrecy compliance. Never route confidential evidence to unapproved remote inference, trace/logging or support tools.
+- Original custody, inference/OCR location and audit/provenance are separate ports; firm-controlled/local processing is a possible later deployment based on customer needs, not a current claim.
+- No legal-advice output, automated Book 8 judgment, procedural deadline status or AI Act certification. Intended use, applicable transparency and high-risk classification require legal review when relevant. Refer to [source and law notes in roadmap](ROADMAP.md).
+
+## Commercial experiment — independent of feature shipping
+
+**Five weeks from the first practitioner conversation**, not a preannounced launch date: five disconfirming conversations, two workflow observations, 3–5 controlled dossier evaluations only if justified, one priced signed paid/conditional proposal. Record baseline and assisted total time, false flags and review time, `0/N` false matched/mapped observations, no material missed seeded errors except explicitly unresolved, reviewer-requested report and deployment requirements, price and decision. Do not encourage lawyers to stop sampling checked results; measure *calibrated* trust.
+
+**Proceed** only with repeated pain, satisfactory safe verification and a credible commitment; **refine** workflow/pricing/deployment if value exists; **reconsider niche** if rare/unpaid/adequately solved. No automatic product pivot based on fresh competitors. [M5 in roadmap](ROADMAP.md).
+
+## Milestone mapping / source-of-truth
+
+- **M0:** scope, dataset rights, synthetic fixtures, evaluation design, change control.
+- **M1:** real-format secure intake, inventory, PDF/DOCX/scans, page & crop coverage.
+- **M2:** all detected references, identity+pinpoint, literal/value, OCR abstention, scoped check record.
+- **M3:** authenticated web inspect/review/correction preview and persisted actions.
+- **M4:** supported version-safe DOCX, report, correct links and authorized export/reopen.
+- **M5:** practitioner evidence and priced commitment; no production launch merely from research.
+- **M6:** only explicitly authorized Word/MCP/enterprise channels and other future hypotheses.
+
+Engineering receipt truth is in [STATUS.md](STATUS.md), not inferred from this journey. Older `PIV-00–20` and `F01–F42` ledgers document historical capability targets; they cannot silently override this acceptance.

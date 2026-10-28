@@ -1,7 +1,14 @@
-# CaseProof — Belgian litigation writing and evidence review
+# CaseProof — Belgian pre-submission exhibit verification
 
-**Product decision:** build a **Clearbrief-class Microsoft Word evidence-writing, factual-checking and dynamic-exhibit delivery workflow for Belgian lawyers**, not a standalone M2 fact checker or a finance product. **Principal roadmap:** [M0–M6 full product scope](docs/ROADMAP.md). **Product workflow:** [complete lawyer journey](docs/PRODUCT_WORKFLOW.md). **All 42 feature states:** [Clearbrief delivery ledger](docs/FEATURE_DELIVERY_MATRIX.md). **Word acceptance:** [M3](docs/m3/WORD_INTEGRATION_ACCEPTANCE.md). **Real document release:** [M4](docs/m4/DELIVERY_ACCEPTANCE.md). It supersedes the finance-first product order in older README/roadmap material; historical ADRs remain architecture records. The repository code has not yet completed this pivot and the litigation product is not production-ready. See [verified implementation status and release blockers](docs/STATUS.md).
+**Frozen first commercial hypothesis (28 October 2026):** upload conclusions DOCX, a separately confirmed Stuk/Pièce inventory and preserved PDF/scanned exhibits; inspect reference identity, physical/printed/bundle pages, literal/typed fidelity and OCR uncertainty; get an authorized human-reviewed source-linked DOCX/report export. **Web workspace first; Word and deployed MCP are optional channels, not pilot blockers.** No legal research, argument generation, deadline checks or automated Book 8 sufficiency.
 
+**Current sources of truth:** [M0–M6 roadmap](docs/ROADMAP.md) · [complete verify-review-export journey](docs/PRODUCT_WORKFLOW.md) · [ADR 0018 scope freeze](docs/adr/0018-pre-submission-verification-freeze.md) · [engineering status and real gate evidence](docs/STATUS.md). [Historical Clearbrief feature ledger](docs/FEATURE_DELIVERY_MATRIX.md) and [Word channel contract](docs/m3/WORD_INTEGRATION_ACCEPTANCE.md) are reference material, **not launch requirements**. [M4 export acceptance](docs/m4/DELIVERY_ACCEPTANCE.md) governs actual document/report outputs.
+
+**Truth:** signed synthetic TXT backend corrections/recheck have passed in development; the full scanned exhibit + browser reviewer + reopenable DOCX/report task has **not** been accepted, and confidential customer material is not authorized by this document. An early completed engineering slice does not prove paid demand.
+
+## Historical engineering README below (not current commercial scope)
+
+The following M0–M4 notes and scripts document prior implementation experiments and are retained for reproducibility; do **not** treat their old Word-first launch language or previous PR statuses as active next-work instructions.
 
 ## M0 — Belgian litigation pivot baseline (PIV-00/01)
 
