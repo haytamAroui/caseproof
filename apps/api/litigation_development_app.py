@@ -31,6 +31,7 @@ def create_litigation_development_app(
     signed_originals: SignedSourceLibrary | None = None,
     evidence: EvidenceReader | None = None,
     reviews: SignedReviewWorkspace | None = None,
+    publishable_key: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="CaseProof loopback development", docs_url=None, redoc_url=None, openapi_url=None)
     # One shared checker ensures search and check use the same trust boundary.
@@ -40,6 +41,17 @@ def create_litigation_development_app(
     app.include_router(create_clearbrief_review_router(
         reviews if checker is not None and reviews is not None and reviews.checker is checker else None,
     ))
+
+    if publishable_key is not None and (
+        not publishable_key.startswith("sb_publishable_")
+        or len(publishable_key) > 512
+        or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in publishable_key)
+    ):
+        raise ValueError("Only a public Supabase development publishable key is allowed")
+
+    @app.get("/dev/clearbrief/config", include_in_schema=False)
+    def lawyer_config() -> dict[str, str | None]:
+        return {"schema": "caseproof-clearbrief-dev-config-v1", "publishable_key": publishable_key}
 
     # Fixed static assets: no user-defined paths and no production mount.
     _workspace = Path(__file__).resolve().parents[1] / "web" / "clearbrief"
@@ -70,7 +82,8 @@ def create_litigation_development_app(
         if request.url.path.startswith("/dev/clearbrief"):
             response.headers["Content-Security-Policy"] = (
                 "default-src 'none'; script-src 'self'; style-src 'self'; "
-                "connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; "
+                "connect-src 'self' https://ldwmocpxwskvhoojndrd.supabase.co; "
+                "img-src 'self'; base-uri 'none'; form-action 'self'; "
                 "frame-ancestors 'none'"
             )
         else:
