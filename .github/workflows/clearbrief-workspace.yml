@@ -21,6 +21,10 @@ jobs:
         run: node --check apps/web/clearbrief/workspace.js
       - name: Exercise source-preview provenance
         run: node --test tests/clearbrief_source_preview.test.js tests/clearbrief_journey_session.test.js
+      - name: Build pinned signed Word add-in bundle
+        run: |
+          npm ci --prefix apps/word_addin
+          npm --prefix apps/word_addin run build
       - name: Signed Word add-in read-only development bridge
         run: node --test apps/word_addin/taskpane.test.cjs apps/word_addin/auth/live-ui.test.cjs
       - name: Security, signed API and reviewer tests
