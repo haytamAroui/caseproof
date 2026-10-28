@@ -127,3 +127,22 @@ def test_org_and_matter_permissions_keep_read_separate_from_edit():
         "'draft:check','draft:write','review:request']::text[])" in sql
     )
     assert "if p_action='ingest' then raise exception 'trusted server verifier required'" in sql
+
+
+def test_latest_signed_journey_requires_org_and_matter_draft_write():
+    from pathlib import Path
+
+    final = (Path("supabase/migrations")
+        / "20261028111744_caseproof_dev_require_org_write_for_brief.sql"
+    ).read_text()
+    assert "if p_action='brief' and not exists(" in final
+    assert "'draft:write'=any(m.actions) and 'draft:write'=any(g.permissions)" in final
+    assert "case when exists(" in final
+    assert "g.permissions @> array['case:read','evidence:read','evidence:upload'," in final
+    assert "trusted server verifier required" in final
+
+    toggle = (Path("supabase/migrations")
+        / "20261028111820_caseproof_dev_org_only_revoke_test_rpc.sql"
+    ).read_text()
+    assert "to service_role" in toggle
+    assert "from public,anon,authenticated" in toggle
