@@ -32,7 +32,9 @@
   async function search(provider, query) {
     const token = await provider.getBearer();
     if (typeof token !== 'string' || !token.trim() || token.length > 8192) throw new Error('Session expired.');
-    const url = `/v2/matters/${encodeURIComponent(provider.caseId)}/briefs/${encodeURIComponent(provider.briefVersionId)}/evidence/search`;
+    const url = provider.mode === 'dev-live'
+      ? `/dev/live/matters/${encodeURIComponent(provider.caseId)}/briefs/${encodeURIComponent(provider.briefVersionId)}/evidence/search`
+      : `/v2/matters/${encodeURIComponent(provider.caseId)}/briefs/${encodeURIComponent(provider.briefVersionId)}/evidence/search`;
     const response = await fetch(url, {
       method: 'POST', credentials: 'omit', cache: 'no-store', redirect: 'error',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -145,7 +147,8 @@
       if (window.caseproofSession !== provider || generation !== activeGeneration) {
         throw new Error('The session changed. Download cancelled.');
       }
-      const path = `/v2/matters/${encodeURIComponent(provider.caseId)}/briefs/${encodeURIComponent(provider.briefVersionId)}` +
+      const prefix = provider.mode === 'dev-live' ? '/dev/live' : '/v2';
+      const path = `${prefix}/matters/${encodeURIComponent(provider.caseId)}/briefs/${encodeURIComponent(provider.briefVersionId)}` +
         `/evidence/${encodeURIComponent(hit.source_id)}/versions/${encodeURIComponent(hit.source_version_id)}/original`;
       const response = await fetch(path, { credentials: 'omit', cache: 'no-store', redirect: 'error',
         headers: { Authorization: `Bearer ${token}` } });
@@ -164,11 +167,12 @@
         throw new Error('The session changed. Download cancelled.');
       }
       const media = response.headers.get('X-CaseProof-Original-Media-Type');
-      if (!['application/pdf', 'text/plain'].includes(media)) throw new Error('Unsupported source type.');
+      if (!['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(media)) throw new Error('Unsupported source type.');
       // Do not automatically execute or embed an untrusted original.
       objectUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
       const link = document.createElement('a');
-      link.href = objectUrl; link.download = media === 'application/pdf' ? 'caseproof-original.pdf' : 'caseproof-original.txt'; link.click();
+      link.href = objectUrl; link.download = media === 'application/pdf' ? 'caseproof-original.pdf' :
+        media === 'text/plain' ? 'caseproof-original.txt' : 'caseproof-original.docx'; link.click();
       status.textContent = 'Original downloaded. Check it against the displayed source.';
     } catch (error) {
       status.textContent = error instanceof Error ? error.message : 'Could not download the original.';
@@ -180,7 +184,7 @@
   function render(provider, query, original, data) {
     hitsView.replaceChildren();
     selectionView.textContent = original.text;
-    coverage.textContent = data.coverage === 'complete' ? 'Search scope: complete.' :
+    coverage.textContent = data.coverage === 'complete' ? 'Search scope: complete for the declared parser.' :
       `Search scope is partial; ${data.omitted_sources} source(s) were not searched.`;
     if (!data.hits.length) {
       const empty = document.createElement('p');
@@ -191,7 +195,8 @@
       const article = document.createElement('article');
       const source = document.createElement('p');
       source.className = 'label';
-      source.textContent = hit.citation ? `${hit.citation.label} · PDF page ${hit.citation.pdf_page}` : 'Citation mapping unavailable';
+      source.textContent = hit.citation ? `${hit.citation.label} · PDF page ${hit.citation.pdf_page}` :
+        hit.page ? `Unconfirmed source · physical PDF page ${hit.page}` : 'Citation/page mapping unconfirmed';
       const excerpt = document.createElement('blockquote');
       excerpt.textContent = hit.text;
       const action = document.createElement('button');
@@ -238,7 +243,9 @@
       const data = await search(provider, query);
       if (current !== generation || window.caseproofSession !== provider) return;
       render(provider, query, original, data);
-      status.textContent = 'Inspect the source passage before inserting a citation.';
+      status.textContent = provider.mode === 'dev-live' ?
+        'Private signed source inspected. Citation insertion requires a confirmed Stuk/Pièce mapping.' :
+        'Inspect the source passage before inserting a citation.';
     } catch (error) {
       status.textContent = error instanceof Error ? error.message : 'Evidence search failed.';
     } finally {
