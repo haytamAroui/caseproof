@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Header
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from apps.api.access_control import (
@@ -47,6 +48,11 @@ def _uuid(value: str) -> str:
     if str(parsed) != value:
         raise AccessRejected(AccessFailure.RESOURCE_MASKED)
     return value
+
+
+class SignedEvidenceSearch(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    query: str = Field(min_length=2, max_length=120)
 
 
 class MatterCreate(BaseModel):
@@ -342,5 +348,89 @@ def create_live_journey_router(
     def state(case_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         c, bearer = active(authorization)
         return c.call(bearer, "state", case_id=case_id)
+
+    @router.post("/dev/live/matters/{case_id}/briefs/{brief_version_id}/evidence/search")
+    def signed_evidence_search(
+        case_id: str, brief_version_id: str, body: SignedEvidenceSearch,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        c, bearer = active(authorization)
+        data = c.call(bearer, "state", case_id=case_id)
+        briefs, sources = data.get("briefs"), data.get("sources")
+        if not isinstance(briefs, list) or not briefs or not isinstance(sources, list) or len(sources) != 1:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        # Do not hand a Word host a stale document or a guessed matter/source.
+        if briefs[0].get("brief_version_id") != _uuid(brief_version_id):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        source = sources[0]
+        text = source.get("text")
+        manifest = source.get("parse_manifest")
+        if not isinstance(text, str) or not isinstance(source.get("original_sha"), str):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if manifest is not None and not isinstance(manifest, dict):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        found: list[dict[str, object]] = []
+        start = 0
+        # Exact offsets in the persisted representation. No fuzzy matches,
+        # unverified page numbers, or invented Stuk/Pièce citations.
+        while len(found) < 12:
+            at = text.find(body.query, start)
+            if at < 0:
+                break
+            end = at + len(body.query)
+            page = None
+            locator = "unmapped"
+            if manifest:
+                for block in manifest.get("blocks", []):
+                    if block["start"] <= at and end <= block["end"]:
+                        locator = str(block["locator"])
+                        if isinstance(block.get("page_index"), int):
+                            page = block["page_index"] + 1
+                        break
+            found.append({
+                "source_id": source["document_id"], "source_version_id": source["version_id"],
+                "source_sha256": source["original_sha"], "representation_id": source["representation_sha"],
+                "locator": locator, "page": page, "start": at, "end": end,
+                "text": text[max(0, at - 100):min(len(text), end + 100)],
+                "citation": None,
+            })
+            start = end
+        coverage = "partial" if manifest and manifest.get("complete") is False else "complete"
+        return {
+            "schema": "caseproof-evidence-search-v1", "case_id": case_id,
+            "brief_version_id": brief_version_id, "exhibit_revision": 1,
+            "coverage": coverage, "omitted_sources": 1 if coverage == "partial" else 0,
+            "source_media_type": source.get("media_type", "text/plain"),
+            "source_manifest": manifest, "hits": found,
+            "status": "unconfirmed_source_no_citation_authority",
+        }
+
+    @router.get("/dev/live/matters/{case_id}/briefs/{brief_version_id}/evidence/{document_id}/versions/{version_id}/original")
+    def signed_evidence_original(
+        case_id: str, brief_version_id: str, document_id: str, version_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> Response:
+        c, bearer = active(authorization)
+        data = c.call(bearer, "state", case_id=case_id)
+        briefs, sources = data.get("briefs"), data.get("sources")
+        if (not isinstance(briefs, list) or not briefs or
+            briefs[0].get("brief_version_id") != _uuid(brief_version_id) or
+            not isinstance(sources, list) or len(sources) != 1):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        source = sources[0]
+        if source.get("document_id") != _uuid(document_id) or source.get("version_id") != _uuid(version_id):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        try:
+            original = c.library.read(bearer=bearer, case_id=case_id,
+                document_id=document_id, version_id=version_id)
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        if hashlib.sha256(original).hexdigest() != source.get("original_sha"):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return Response(original, media_type="application/octet-stream", headers={
+            "Content-Disposition": "attachment; filename=caseproof-original",
+            "X-CaseProof-Original-SHA256": source["original_sha"],
+            "X-CaseProof-Original-Media-Type": source.get("media_type", "text/plain"),
+        })
 
     return router
