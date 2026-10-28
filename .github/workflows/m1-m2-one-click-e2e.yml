@@ -116,9 +116,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: caseproof-dev-live-auth
-    concurrency:
-      group: caseproof-m1b-ephemeral-private-auth
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7.0.1
         with:
