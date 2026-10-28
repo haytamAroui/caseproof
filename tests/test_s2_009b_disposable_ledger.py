@@ -100,6 +100,7 @@ def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
             "20261028110102_caseproof_dev_reversible_draft_cleanup.sql",
             "20261028110233_caseproof_dev_ordered_revised_brief_state.sql",
             "20261028110604_caseproof_dev_correction_review_head_fence.sql",
+            "20261028111543_caseproof_dev_correct_owner_write_and_read_separation.sql",
     }
     assert not (ROOT / "apps/api/vault_repository.py").exists()
     assert "evidence_vault_protocol" not in (ROOT / "apps/api/main.py").read_text()
