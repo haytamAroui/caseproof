@@ -134,16 +134,18 @@
       $("source-preview").textContent=statusFor(error);}
   }
   async function downloadOriginal(row) {
+    const generation=state.generation;
     try {
       const response=await api(path()+"/evidence/"+encodeURIComponent(row.source_id)+
         "/versions/"+encodeURIComponent(row.version_id)+"/original",{raw:true});
       const blob=await response.blob();
+      if(generation!==state.generation||!state.session)return;
       if(blob.size>20*1024*1024||blob.size===0)throw Error("invalid_original");
       const url=URL.createObjectURL(blob),a=document.createElement("a");
       a.href=url;a.download="caseproof-original";a.rel="noopener";a.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
       notice("Original downloaded. Its source identity must still be independently validated.","ok");
-    }catch(error){notice(statusFor(error),"danger");}
+    }catch(error){if(generation===state.generation)notice(statusFor(error),"danger");}
   }
   function allObservations() {
     if(!state.check)return [];
@@ -310,10 +312,12 @@
       submit.disabled=!state.selected||!state.review;}
   }
   async function search(){
+    const generation=state.generation;
     const query=$("query").value.trim(),node=$("search-results");node.replaceChildren();
     if(query.length<2){node.append(el("p","Enter at least two characters.","small"));return;}
     try{
       const d=await api(path()+"/evidence/search",{method:"POST",json:{query}});
+      if(generation!==state.generation||!state.session)return;
       if(d.schema!=="caseproof-evidence-search-v1"||d.case_id!==state.caseId ||
          d.brief_version_id!==state.briefId||!Array.isArray(d.hits))throw Error("invalid_schema");
       node.append(el("p",d.coverage+" coverage · "+d.hits.length+" matches","small"));
@@ -327,10 +331,11 @@
         item.append(button);node.append(item);
       }
       if(!d.hits.length)node.append(el("p","No match in the searched scope; review exclusions and incomplete sources.","small"));
-    }catch(error){node.append(el("p",statusFor(error),"error"));}
+    }catch(error){if(generation===state.generation)node.append(el("p",statusFor(error),"error"));}
   }
   async function upload(evt){
     evt.preventDefault();
+    const generation=state.generation;
     const documentId=$("document-id").value.trim(),versionId=$("version-id").value.trim();
     const file=$("original-file").files?.[0];
     if(!UUID.test(documentId)||!UUID.test(versionId)||!file||file.size<=0||file.size>20*1024*1024){
@@ -346,10 +351,12 @@
           method:"PUT",credentials:"omit",redirect:"error",cache:"no-store",
           headers:{"Authorization":"Bearer "+token,"Content-Type":mime},body:file,
         });
+      if(generation!==state.generation||!state.session)return;
       if(response.status!==201)throw Error("unavailable");
       notice("Original uploaded to its pre-registered version. Reopen the verified source after indexing.","ok");
       await load();
-    }catch(error){notice("Upload was denied or its outcome is unknown. Verify the exact version before retrying.","danger");}
+    }catch(error){if(generation===state.generation)
+      notice("Upload was denied or its outcome is unknown. Verify the exact version before retrying.","danger");}
     finally{$("upload").disabled=false;}
   }
   function signout(){
