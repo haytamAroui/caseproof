@@ -18,7 +18,10 @@ from fastapi import APIRouter, Header
 from pydantic import BaseModel, ConfigDict, Field
 
 from apps.api.access_control import (
-    AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer,
+    AccessFailure,
+    AccessRejected,
+    IdentityServiceUnavailable,
+    InvalidBearer,
 )
 from apps.api.litigation_evidence_app import _token
 from apps.api.signed_supabase_originals import (
