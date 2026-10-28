@@ -38,6 +38,49 @@
       <div class="form-actions"><button type="submit" id="connect">Open matter</button><p class="small">Signed sessions stay in memory only. No token is saved in browser storage.</p></div>
     </form>
   </section>
+  <section class="card journey-card" aria-labelledby="journey-heading">
+    <p class="kicker">NEW · SIGNED DEVELOPMENT JOURNEY</p>
+    <h2 id="journey-heading">Create a matter and check your own TXT evidence</h2>
+    <p class="small">Real private Supabase matter, immutable UTF-8 source and versioned brief. TXT only, up to 1 MiB. All actions require your current signed membership. Source label remains unconfirmed; this is not a legal finding.</p>
+    <div class="journey-grid">
+      <div class="journey-step">
+        <h3>1 / Create matter</h3>
+        <button id="journey-find-orgs" type="button" class="secondary">Find eligible organizations</button>
+        <label>Authorized organization<select id="journey-org" required><option value="">Find organizations first</option></select></label>
+        <form id="journey-create-form">
+          <label>Matter name<input id="journey-matter-name" maxlength="160" value="Synthetic TXT matter" required></label>
+          <button id="journey-create" type="submit">Create private matter</button>
+        </form>
+      </div>
+      <div class="journey-step">
+        <h3>2 / Upload and ingest</h3>
+        <form id="journey-file-form">
+          <label>Original UTF-8 TXT<input id="journey-file" type="file" accept=".txt,text/plain" required></label>
+          <button id="journey-ingest" type="submit">Verify and ingest TXT</button>
+        </form>
+      </div>
+      <div class="journey-step">
+        <h3>3 / Author a brief</h3>
+        <form id="journey-brief-form">
+          <label>Draft statement<textarea id="journey-draft" rows="3" maxlength="8000" required placeholder="The invoice shows 125 EUR."></textarea></label>
+          <label>Exact amount phrase in your statement<input id="journey-quote" minlength="3" maxlength="100" value="125 EUR" required></label>
+          <button id="journey-save-brief" type="submit">Create versioned brief</button>
+        </form>
+      </div>
+      <div class="journey-step">
+        <h3>4 / Check and review</h3>
+        <button id="journey-check" type="button">Check ingested source</button>
+        <form id="journey-review-form">
+          <label>Disposition<select id="journey-disposition"><option value="needs_information">Needs information</option><option value="confirmed_candidate">Confirm candidate</option><option value="dismissed">Dismiss candidate</option></select></label>
+          <label>Human rationale<input id="journey-rationale" maxlength="2000" value="Manual synthetic review; no legal approval" required></label>
+          <button id="journey-review" type="submit">Save review</button>
+        </form>
+      </div>
+    </div>
+    <div class="form-actions"><button id="journey-reopen" class="secondary" type="button">Reopen this matter from Supabase</button><p class="small">To reopen after refreshing, enter its matter UUID above. Tokens are never persisted in browser storage.</p></div>
+    <div id="journey-result" class="notice" aria-live="polite">Sign in and find an authorized organization to begin.</div>
+    <pre id="journey-state" class="journey-state" aria-live="polite"></pre>
+  </section>
   <div id="notice" class="notice" role="status" aria-live="polite">Connect to an existing authorized development matter to begin.</div>
   <section id="workspace" hidden aria-label="ClearBrief workspace">
     <div class="workspace-head"><div><p class="kicker">PRIVATE MATTER</p><h2 id="matter-name">Evidence and brief review</h2>

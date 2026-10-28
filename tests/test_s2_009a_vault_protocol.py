@@ -431,4 +431,9 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
             "20261028070156_caseproof_dev_signed_review_roundtrip.sql",
             "20261028070231_caseproof_dev_scoped_review_cleanup.sql",
             "20261028071554_caseproof_dev_signed_review_security_hardening.sql",
+            "20261028081227_caseproof_dev_signed_matter_txt_ingestion.sql",
+            "20261028081347_caseproof_dev_txt_review_binding.sql",
+            "20261028081408_caseproof_dev_txt_revocation_cleanup.sql",
+            "20261028081528_caseproof_dev_signed_create_org_discovery.sql",
+            "20261028082143_caseproof_dev_txt_cleanup_uuid_fix.sql",
     }

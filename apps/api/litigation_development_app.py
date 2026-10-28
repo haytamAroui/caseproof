@@ -17,6 +17,7 @@ from apps.api.litigation_check_app import create_litigation_check_app
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
 from apps.api.litigation_evidence_app import EvidenceReader, _token, create_evidence_app
 from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
+from apps.api.litigation_live_journey import create_live_journey_router
 from apps.api.litigation_live_roundtrip import create_live_review_router
 from apps.api.litigation_original_reader import AuthorizedOriginalReader
 from apps.api.litigation_review_app import create_clearbrief_review_router
@@ -54,6 +55,7 @@ def create_litigation_development_app(
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
     app.include_router(create_live_review_router(publishable_key))
+    app.include_router(create_live_journey_router(publishable_key))
 
     @app.get("/dev/clearbrief/config", include_in_schema=False)
     def lawyer_config() -> dict[str, str | None]:
