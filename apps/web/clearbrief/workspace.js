@@ -121,6 +121,10 @@
       if(data.schema!=="caseproof-clearbrief-brief-source-preview-v1" || data.row?.source_id!==row.source_id ||
         data.case_id!==state.caseId || data.brief_version_id!==state.briefId)
         throw Error("invalid_schema");
+      if(!row.version_id || !row.representation_id || !sha.test(row.original_sha256 || "") ||
+        data.row.version_id!==row.version_id || data.row.original_sha256!==row.original_sha256 ||
+        data.row.representation_id!==row.representation_id)
+        throw Error("source_version_mismatch");
       const preview=$("source-preview");preview.replaceChildren();
       preview.append(el("strong",row.source_id));
       preview.append(el("p","SHA-256: "+row.original_sha256,"small mono"));
@@ -131,7 +135,9 @@
       preview.append(download);
       $("selected").textContent="Viewing source only. Select an observation to record a review.";
     } catch(error){if(generation===state.generation&&seq===state.previewSeq&&state.selected===null)
-      $("source-preview").textContent=statusFor(error);}
+      $("source-preview").textContent=error?.message==="source_version_mismatch" ?
+        "Source version, digest or representation changed. Refresh the inventory before viewing or downloading." :
+        statusFor(error);}
   }
   async function downloadOriginal(row) {
     const generation=state.generation;
@@ -423,3 +429,4 @@
   }
   void init();
 })();
+
