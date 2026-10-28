@@ -98,6 +98,12 @@ jobs:
           CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
           CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
         run: uv run --locked python -m scripts.verify_dev_live_txt_journey
+      - name: LIVE signed PDF and DOCX, parser coverage, Word search and restart
+        env:
+          CASEPROOF_DEV_LIVE_BINARY_JOURNEY: "YES"
+          CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+          CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+        run: uv run --locked python -m scripts.verify_dev_live_binary_journey
       - name: Summarize what was actually tested
         if: always()
         run: |
@@ -113,7 +119,7 @@ jobs:
             echo '- LIVE M2: check/review with real signed dev Auth + actual Supabase, fresh-login cold-server reopening and RLS revocation must have a green LIVE M2 step.'
             echo '- No remote DB admin DSN, CA PEM, or customer original used.'
             echo '- Live TXT journey: signed owner CREATE matter, private TXT Storage, real verified ingest, authored brief, deterministic quote check, review, restart/reopen, revoked denial, cleanup.'
-            echo '- TXT remains development-only. NOT general citation checking, PDF/DOCX, OCR, Word, corrected brief or final deliverables.'
+            echo '- TXT/PDF/DOCX remains development-only; Word preview proves signed source read, NOT Word-host insertion; OCR, confirmed citations and final deliverables remain open.'
             echo '- Each step must be green; read the failed step in Actions for precise gaps.'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -160,3 +166,25 @@ jobs:
           CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
           CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
         run: uv run --locked python -m scripts.verify_dev_live_txt_journey
+
+  live-binary-acceptance-on-merge:
+    name: Signed PDF/DOCX ingestion and Word preview, protected main
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof' && contains(github.event.head_commit.message, '[live-binary-acceptance]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: caseproof-dev-live-auth
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Three signed users, real PDF/DOCX, immutable source/parse, Word search/restart and cleanup
+        env:
+          CASEPROOF_DEV_LIVE_BINARY_JOURNEY: "YES"
+          CASEPROOF_ALLOW_ONE_TIME_PUSH: "YES"
+          CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+          CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+        run: uv run --locked python -m scripts.verify_dev_live_binary_journey
