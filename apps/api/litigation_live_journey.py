@@ -120,6 +120,34 @@ class JourneyClient:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def call_create_organizations(self, bearer: str) -> dict[str, Any]:
+        con = http.client.HTTPSConnection(HOST, timeout=12)
+        try:
+            con.request(
+                "POST", "/rest/v1/rpc/caseproof_dev_journey_organizations",
+                body=b"{}", headers={
+                    "apikey": self._key, "Authorization": "Bearer " + bearer,
+                    "Content-Type": "application/json", "Cache-Control": "no-store",
+                },
+            )
+            response = con.getresponse()
+            status, raw = response.status, response.read(16385)
+        except (OSError, TimeoutError, http.client.HTTPException):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        finally:
+            con.close()
+        if status in (400, 401, 403, 404):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        if status != 200 or len(raw) > 16384:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            result = json.loads(raw)
+        except (UnicodeError, ValueError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if not isinstance(result, dict) or result.get("schema") != "caseproof-dev-create-orgs-v1":
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return result
+
     def upload(
         self, bearer: str, case_id: str, doc_id: str, version_id: str, content: str,
     ) -> dict[str, object]:
@@ -183,6 +211,11 @@ def create_live_journey_router(publishable_key: str | None) -> APIRouter:
         if client is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return client, _token(authorization)
+
+    @router.get("/dev/live/create-organizations")
+    def create_organizations(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        c, bearer = active(authorization)
+        return c.call_create_organizations(bearer)
 
     @router.post("/dev/live/matters")
     def create(body: MatterCreate, authorization: str | None = Header(default=None)) -> dict[str, Any]:
