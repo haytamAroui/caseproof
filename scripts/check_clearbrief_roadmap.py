@@ -20,6 +20,8 @@ FILES = {
     "delivery": ROOT / "docs" / "m4" / "DELIVERY_ACCEPTANCE.md",
     "agents": ROOT / "AGENTS.md",
     "readme": ROOT / "README.md",
+    "pre_m3": ROOT / "docs" / "contracts" / "PRE_M3_VERIFICATION_SPEC.md",
+    "pilot_security": ROOT / "docs" / "security" / "PILOT_DATA_SECURITY_GATE.md",
 }
 FEATURE_ROW = re.compile(r"^\| (F\d{2}) \| ([^|]+) \|", re.MULTILINE)
 EXPECTED_FEATURES = [f"F{i:02d}" for i in range(1, 43)]
@@ -56,6 +58,13 @@ def main() -> None:
             "M3 — Independent web verification",
             "M4 — Reviewed document",
             "M5 — Five-week practitioner",
+            "## Pre-M3 hard prerequisites",
+            "## Pre-M5 hard prerequisites",
+            "TRANSLATION_REVIEW_REQUIRED",
+            "NOT_ASSESSED",
+            "P3-01", "P3-02", "P3-03", "P3-04",
+            "P5-01", "P5-02", "P5-03", "P5-04",
+            "PILOT_DATA_SECURITY_GATE.md",
         ),
         FILES["roadmap"],
     )
@@ -69,6 +78,12 @@ def main() -> None:
             "OCR_UNRELIABLE", "NOT_IN_INVENTORY",
             "CONFIRMED_QUALIFIED", "MAPPED", "NOT_ASSESSED",
             "not required", "No court filing",
+            "## Pre-M3 contractual readiness",
+            "TRANSLATION_REVIEW_REQUIRED",
+            "INVENTORY_MISSING",
+            "regions_discovered",
+            "PILOT_DATA_SECURITY_GATE.md",
+            "P5-01..04",
         ),
         FILES["workflow"],
     )
@@ -91,6 +106,23 @@ def main() -> None:
         documents["agents"],
         ("Current commercial hypothesis (ADR 0018", "pre-submission"),
         FILES["agents"],
+    )
+    _contains_all(
+        documents["pre_m3"],
+        (
+            "P3-01", "P3-02", "P3-03", "P3-04",
+            "TRANSLATION_REVIEW_REQUIRED",
+            "OCR_LOCAL_WORKER", "UNPROCESSED_REGION",
+            "INVENTORY_MISSING", "NOT_IN_INVENTORY",
+            "M3 may start",
+        ),
+        FILES["pre_m3"],
+    )
+    _contains_all(
+        documents["pilot_security"],
+        tuple(f"SEC-{i:02d}" for i in range(1, 17))
+        + ("OPEN / NOT APPROVED", "not automatically", "APPROVED FOR THIS EXACT PILOT"),
+        FILES["pilot_security"],
     )
     _contains_all(
         documents["readme"],
