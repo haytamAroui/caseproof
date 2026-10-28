@@ -117,6 +117,7 @@ def verify(
         if any(any(m["case_id"] == case for m in catalog.list_matters(x)) for x in outsiders):
             raise LiveFixtureError("ungranted users enumerated private matter")
         print("LIVE_TXT_2: signed matter created; grant, audit, idempotency and denial")
+        print("LIVE_TXT_STAGE3: validating metadata and concurrent single-original registration")
 
         source_path = f"/dev/live/matters/{case}/sources"
         denied(owner, "POST", source_path, {
@@ -143,7 +144,10 @@ def verify(
             contenders = list(executor.map(race_register, range(2)))
         winners = [payload for status, payload in contenders if status == 200]
         if len(winners) != 1 or len(contenders) != 2:
-            raise LiveFixtureError("concurrent registration created duplicate originals")
+            raise LiveFixtureError(
+                "concurrent registration unexpected HTTP statuses: "
+                + ",".join(str(status) for status, _ in contenders)
+            )
         reg = winners[0]
         doc, version = (str(UUID(reg[k])) for k in ("document_id", "version_id"))
         ref = OriginalRef(UUID(org), UUID(case), UUID(doc), UUID(version), DIGEST, "text/plain")
@@ -361,7 +365,9 @@ def main() -> int:
         print("LIVE_CREATED_MATTER_INGESTED_TXT_AUTHORED_REVIEW_COLD_RESTART_PASSED")
         return 0
     except Exception as exc:
-        print(f"LIVE_TXT_JOURNEY_FAILED: {type(exc).__name__}", file=sys.stderr)
+        # Only authored, bounded fixture errors; never include live HTTP body/JWT.
+        reason = str(exc)[:200] if isinstance(exc, LiveFixtureError) else ""
+        print(f"LIVE_TXT_JOURNEY_FAILED: {type(exc).__name__} {reason}", file=sys.stderr)
         return 1
 
 
