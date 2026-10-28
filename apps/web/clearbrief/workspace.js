@@ -3,7 +3,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const state = {session:null, external:false, caseId:"", briefId:"", inventory:null, check:null,
-    review:null, selected:null, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null};
+    review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null};
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const sha = /^[0-9a-f]{64}$/;
   const el = (tag, content, className) => {
@@ -42,7 +42,7 @@
     return options.raw ? response : response.json();
   }
   function clearView() {
-    state.inventory=null; state.check=null; state.review=null; state.selected=null; state.pending=null;
+    state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null;
     state.previewSeq+=1;state.loading=false;
     $("check-scope").textContent="Check source scope not assessed.";
     $("workspace").hidden=true; $("sources").replaceChildren(); $("observations").replaceChildren();
@@ -114,7 +114,7 @@
     if(state.busy||state.loading)return;
     const seq=++state.previewSeq, generation=state.generation;
     $("source-preview").textContent="Loading source preview…";
-    state.selected=null;$("save-review").disabled=true;
+    state.selected=null;state.previewReady=false;$("save-review").disabled=true;
     try {
       const data=await api(path()+"/sources/"+encodeURIComponent(row.source_id));
       if(generation!==state.generation||seq!==state.previewSeq||state.selected!==null)return;
@@ -152,12 +152,14 @@
     return [
       ...(state.check.citation_observations||[]).map(a=>({
         id:"citation:"+a.reference_id,kind:"Citation",state:a.state,source:a.source_id,
+        version:a.source_version_id, sourceSha:a.source_sha256, representation:a.representation_id,
         span:a.text_start===null?"Unresolved anchor":"Offsets "+a.text_start+"–"+a.text_end,
         raw:a,
       })),
       ...(state.check.factual_observations||[]).map(a=>({
         id:"fact:"+a.claim_id,kind:"Factual value",state:a.state||a.status||"unknown",
-        source:a.source_id,span:"Version-bound candidate",raw:a,
+        source:a.source_id,version:a.source_version_id,sourceSha:a.source_sha256,
+        representation:a.representation_id,span:"Version-bound candidate",raw:a,
       })),
     ];
   }
@@ -202,15 +204,29 @@
   function renderSelected(){
     const selected=state.selected;
     $("selected").replaceChildren();
-    $("save-review").disabled=!selected || !state.review || state.loading || state.busy;
+    state.previewReady=false;
+    $("save-review").disabled=true;
     if(!selected){$("selected").textContent="Select a finding to inspect and review.";return;}
     $("selected").append(el("strong",selected.kind+" · "+selected.id));
     $("selected").append(el("p","Check state: "+label(selected.state)));
     $("selected").append(el("p","Source: "+(selected.source||"not resolved"),"small"));
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
-    const row=state.inventory?.rows?.find(r=>r.source_id===selected.source);
-    $("source-preview").textContent=row?"Loading selected observation source…":"No authorized source preview for this observation.";
-    if(row)void selectPreviewOnly(row,selected.id);
+    // A claim may be reviewed only against the exact checked source version,
+    // digest and representation, never a newer catalog entry sharing its source_id.
+    if(!selected.source){
+      $("source-preview").textContent="No source resolved for this observation. Evidence support is unknown.";
+      state.previewReady=true;$("save-review").disabled=!state.review||state.loading||state.busy;return;
+    }
+    const rows=state.inventory?.rows||[];
+    const matches=rows.filter(r=>r.source_id===selected.source &&
+      r.version_id===selected.version && r.original_sha256===selected.sourceSha &&
+      r.representation_id===selected.representation);
+    if(matches.length!==1){
+      $("source-preview").textContent="The checked source version, digest or representation cannot be uniquely reopened. Refresh; review is blocked.";
+      return;
+    }
+    $("source-preview").textContent="Verifying exact source version and representation…";
+    void selectPreviewOnly(matches[0],selected.id);
   }
   async function selectPreviewOnly(row,selectedId){
     const seq=++state.previewSeq,generation=state.generation;
@@ -220,10 +236,22 @@
       const d=await api(path()+"/sources/"+encodeURIComponent(row.source_id));
       if(!current())return;
       if(d.schema!=="caseproof-clearbrief-brief-source-preview-v1"||d.row?.source_id!==row.source_id||
-        d.case_id!==state.caseId||d.brief_version_id!==state.briefId)
-        throw Error("invalid_schema");
+        d.case_id!==state.caseId||d.brief_version_id!==state.briefId||
+        d.row.version_id!==row.version_id||
+        d.row.original_sha256!==row.original_sha256||
+        d.row.representation_id!==row.representation_id ||
+        d.row.version_id!==state.selected.version ||
+        d.row.original_sha256!==state.selected.sourceSha ||
+        d.row.representation_id!==state.selected.representation)
+        throw Error("source_version_mismatch");
       $("source-preview").textContent=d.text||"Source has no available text representation.";
-    }catch(error){if(current())$("source-preview").textContent=statusFor(error);}
+      state.previewReady=true;$("save-review").disabled=!state.review||state.busy||state.loading;
+    }catch(error){if(current()){
+      state.previewReady=false;$("save-review").disabled=true;
+      $("source-preview").textContent=error?.message==="source_version_mismatch"?
+        "Source version/representation mismatch. This finding cannot be reviewed from this preview.":
+        statusFor(error);
+    }}
   }
   function renderReview(){
     const rev=state.review;
@@ -242,7 +270,7 @@
   async function load(){
     if(state.busy||state.pending){notice("Resolve the pending review save before refreshing this snapshot.","danger");return;}
     const generation=++state.generation;
-    state.previewSeq+=1;state.loading=true;state.check=null;state.review=null;
+    state.previewSeq+=1;state.loading=true;state.check=null;state.review=null;state.previewReady=false;
     state.inventory=null;state.selected=null;
     $("save-review").disabled=true;
     $("review-form").setAttribute("aria-busy","true");
@@ -284,7 +312,7 @@
   }
   async function submitReview(evt){
     evt.preventDefault();
-    if(state.busy||state.loading||!state.selected||!state.check||!state.review)return;
+    if(state.busy||state.loading||!state.previewReady||!state.selected||!state.check||!state.review)return;
     const generation=state.generation;
     const rationale=$("rationale").value.trim();
     if(!rationale){notice("A review rationale is required.","danger");return;}
@@ -310,7 +338,7 @@
       if(generation!==state.generation)return;
       notice("Save outcome not confirmed. Keep the same request and retry; do not edit it. "+statusFor(error),"danger");
     }finally{state.busy=false;if(generation===state.generation)
-      submit.disabled=!state.selected||!state.review;}
+      submit.disabled=!state.previewReady||!state.selected||!state.review;}
   }
   async function search(){
     const generation=state.generation;
