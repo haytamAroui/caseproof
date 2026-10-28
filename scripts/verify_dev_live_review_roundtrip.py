@@ -260,7 +260,11 @@ def main() -> int:
     try:
         if (os.getenv("CASEPROOF_DEV_LIVE_ROUNDTRIP") != "YES"
             or os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof"
-            or os.getenv("GITHUB_EVENT_NAME") != "workflow_dispatch"
+            or not (
+                os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+                or (os.getenv("GITHUB_EVENT_NAME") == "push"
+                    and os.getenv("CASEPROOF_ALLOW_ONE_TIME_PUSH") == "YES")
+            )
             or os.getenv("GITHUB_REF") != "refs/heads/main"):
             raise LiveFixtureError("protected manual main-only run required")
         pub = os.environ.get("CASEPROOF_DEV_PUBLISHABLE_KEY", "")
