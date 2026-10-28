@@ -36,6 +36,7 @@ def create_litigation_development_app(
     evidence: EvidenceReader | None = None,
     reviews: SignedReviewWorkspace | None = None,
     publishable_key: str | None = None,
+    trusted_ingest_key: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="CaseProof loopback development", docs_url=None, redoc_url=None, openapi_url=None)
     # One shared checker ensures search and check use the same trust boundary.
@@ -55,7 +56,7 @@ def create_litigation_development_app(
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
     app.include_router(create_live_review_router(publishable_key))
-    app.include_router(create_live_journey_router(publishable_key))
+    app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key))
 
     @app.get("/dev/clearbrief/config", include_in_schema=False)
     def lawyer_config() -> dict[str, str | None]:
