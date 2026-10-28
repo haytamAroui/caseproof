@@ -34,7 +34,8 @@ jobs:
             echo "## ClearBrief development product slice"
             echo "- Browser UI and typed API contract: real code, not mocked output."
             echo "- Signed evidence, scoped checks, review UX and original transport are opt-in ports."
-            echo "- Live ingestion and review require the protected signed server acceptance, not these mocked HTTP contracts.\n            echo "- Word host, release artifacts and customer access remain OPEN."
+            echo "- Live ingestion and review require the protected signed server acceptance, not these mocked HTTP contracts."
+            echo "- Word host, release artifacts and customer access remain OPEN."
           } >> "$GITHUB_STEP_SUMMARY"
 
 
