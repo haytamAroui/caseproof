@@ -24,6 +24,7 @@ from apps.api.access_control import (
     InvalidBearer,
 )
 from apps.api.litigation_evidence_app import _token
+from apps.api.signed_document_parse import BINARY_MEDIA, MAX_BINARY_BYTES, parse_verified_original
 from apps.api.signed_supabase_originals import (
     PrivateStorageExists,
     PrivateStorageFailure,
@@ -34,6 +35,7 @@ from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAut
 
 HOST = "ldwmocpxwskvhoojndrd.supabase.co"
 MAX_TXT = 1024 * 1024
+MAX_ORIGINAL = MAX_BINARY_BYTES
 MAX_RPC_RESPONSE = 2 * 1024 * 1024
 
 
@@ -58,14 +60,14 @@ class OriginalRegister(BaseModel):
     model_config = ConfigDict(extra="forbid")
     filename: str = Field(min_length=1, max_length=128)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    byte_length: int = Field(ge=1, le=MAX_TXT)
-    media_type: str = Field(pattern=r"^text/plain$")
+    byte_length: int = Field(ge=1, le=MAX_ORIGINAL)
+    media_type: str = Field(pattern=r"^(text/plain|application/pdf|application/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$")
     request_id: UUID
 
 
 class OriginalUpload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    content_base64: str = Field(min_length=1, max_length=1400000)
+    content_base64: str = Field(min_length=1, max_length=6990600)
 
 
 class AuthoredBrief(BaseModel):
@@ -170,12 +172,12 @@ class JourneyClient:
     ) -> dict[str, object]:
         try:
             encoded = content.encode("ascii")
-            if len(encoded) > 1400000:
+            if len(encoded) > 6990600:
                 raise ValueError("oversize")
             data = base64.b64decode(encoded, validate=True)
         except (UnicodeError, ValueError, binascii.Error):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
-        if not 0 < len(data) <= MAX_TXT:
+        if not 0 < len(data) <= MAX_ORIGINAL:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         digest = hashlib.sha256(data).hexdigest()
         try:
@@ -183,7 +185,9 @@ class JourneyClient:
                 bearer=bearer, case_id=_uuid(case_id),
                 document_id=_uuid(doc_id), version_id=_uuid(version_id),
             )
-            if source.sha256_hex != digest or size != len(data) or source.content_type != "text/plain":
+            if (source.sha256_hex != digest or size != len(data) or
+                (source.content_type == "text/plain" and len(data) > MAX_TXT) or
+                (source.content_type not in BINARY_MEDIA and source.content_type != "text/plain")):
                 raise AccessRejected(AccessFailure.RESOURCE_MASKED)
             try:
                 self.library.put_once(
@@ -204,13 +208,22 @@ class JourneyClient:
         self, bearer: str, case_id: str, doc_id: str, version_id: str, request_id: str,
     ) -> dict[str, Any]:
         try:
-            raw = self.library.read(
+            ref, length = self.library.source(
                 bearer=bearer, case_id=_uuid(case_id),
                 document_id=_uuid(doc_id), version_id=_uuid(version_id),
             )
-            if not raw or len(raw) > MAX_TXT:
+            if ref.content_type not in BINARY_MEDIA and ref.content_type != "text/plain":
                 raise AccessRejected(AccessFailure.RESOURCE_MASKED)
-            raw.decode("utf-8", errors="strict")
+            raw = self.library.read(
+                bearer=bearer, case_id=case_id,
+                document_id=doc_id, version_id=version_id,
+            )
+            if len(raw) != length or not raw or len(raw) > MAX_ORIGINAL:
+                raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+            if ref.content_type == "text/plain":
+                if len(raw) > MAX_TXT:
+                    raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+                raw.decode("utf-8", errors="strict")
         except (PrivateStorageFailure, UnicodeError):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         # Only trusted loopback API may promote a verified source. The actor
@@ -223,7 +236,7 @@ class JourneyClient:
             raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
         except IdentityServiceUnavailable:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
-        data = {
+        data: dict[str, object] = {
             "p_actor": _uuid(actor.subject_id),
             "p_case": _uuid(case_id),
             "p_request": _uuid(request_id),
@@ -231,6 +244,19 @@ class JourneyClient:
             "p_version": _uuid(version_id),
             "p_content_base64": base64.b64encode(raw).decode("ascii"),
         }
+        rpc = "/rest/v1/rpc/caseproof_dev_ingest_verified"
+        if ref.content_type in BINARY_MEDIA:
+            from application.extraction.contracts import ExtractionError
+            try:
+                representation, manifest = parse_verified_original(
+                    document_id=doc_id, version_id=version_id,
+                    data=raw, media_type=ref.content_type,
+                )
+            except (ExtractionError, ValueError):
+                raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+            rpc = "/rest/v1/rpc/caseproof_dev_ingest_parsed_verified"
+            data["p_representation"] = representation
+            data["p_manifest"] = manifest
         admin = self._trusted_ingest_key
         headers = {
             "apikey": admin, "Content-Type": "application/json",
@@ -241,7 +267,7 @@ class JourneyClient:
         con = http.client.HTTPSConnection(HOST, timeout=20)
         try:
             con.request(
-                "POST", "/rest/v1/rpc/caseproof_dev_ingest_verified",
+                "POST", rpc,
                 body=json.dumps(data, separators=(",", ":")).encode("utf-8"),
                 headers=headers,
             )
