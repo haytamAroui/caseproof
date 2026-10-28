@@ -181,6 +181,10 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.11"
+      - name: Build actual pinned Word developer task pane
+        run: |
+          npm ci --prefix apps/word_addin
+          npm --prefix apps/word_addin run build
       - name: Three signed users, real PDF/DOCX, immutable source/parse, Word search/restart and cleanup
         env:
           CASEPROOF_DEV_LIVE_BINARY_JOURNEY: "YES"
