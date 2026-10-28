@@ -3,7 +3,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const state = {session:null, external:false, caseId:"", briefId:"", inventory:null, check:null,
-    review:null, selected:null, pending:null, busy:false, generation:0, publishable:null};
+    review:null, selected:null, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null};
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const sha = /^[0-9a-f]{64}$/;
   const el = (tag, content, className) => {
@@ -43,6 +43,8 @@
   }
   function clearView() {
     state.inventory=null; state.check=null; state.review=null; state.selected=null; state.pending=null;
+    state.previewSeq+=1;state.loading=false;
+    $("check-scope").textContent="Check source scope not assessed.";
     $("workspace").hidden=true; $("sources").replaceChildren(); $("observations").replaceChildren();
     $("search-results").replaceChildren(); $("source-preview").textContent="";
     $("review-history").replaceChildren(); $("selected").textContent="Select an observation.";
@@ -109,11 +111,14 @@
     $("coverage").textContent=complete?"Inventory complete":"Partial / unknown";
   }
   async function selectSource(row) {
+    if(state.busy||state.loading)return;
+    const seq=++state.previewSeq, generation=state.generation;
     $("source-preview").textContent="Loading source preview…";
     state.selected=null;$("save-review").disabled=true;
     try {
       const data=await api("/v2/matters/"+encodeURIComponent(state.caseId)+"/evidence/"+
         encodeURIComponent(row.source_id));
+      if(generation!==state.generation||seq!==state.previewSeq||state.selected!==null)return;
       if(data.schema!=="caseproof-evidence-preview-v1" || data.row?.source_id!==row.source_id)
         throw Error("invalid_schema");
       const preview=$("source-preview");preview.replaceChildren();
@@ -125,7 +130,8 @@
       download.addEventListener("click",()=>downloadOriginal(row));
       preview.append(download);
       $("selected").textContent="Viewing source only. Select an observation to record a review.";
-    } catch(error){$("source-preview").textContent=statusFor(error);}
+    } catch(error){if(generation===state.generation&&seq===state.previewSeq&&state.selected===null)
+      $("source-preview").textContent=statusFor(error);}
   }
   async function downloadOriginal(row) {
     try {
@@ -156,6 +162,26 @@
   function renderChecks() {
     const node=$("observations");node.replaceChildren();
     const values=allObservations();
+    const scope=$("check-scope");scope.replaceChildren();
+    if(state.check){
+      const c=state.check, declared=Array.isArray(c.declared)?c.declared:[],
+        processed=Array.isArray(c.processed)?c.processed:[],
+        excluded=Array.isArray(c.excluded)?c.excluded:[],
+        incomplete=Array.isArray(c.incomplete)?c.incomplete:[];
+      const partial=excluded.length>0||incomplete.length>0||declared.length!==processed.length;
+      scope.className="check-scope"+(partial?" partial":"");
+      scope.append(el("strong","Check scope · "+processed.length+" processed of "+declared.length+" declared"));
+      scope.append(el("span",excluded.length+" excluded · "+incomplete.length+" incomplete · "+
+        (partial?"NOT fully assessed":"declared scope processed")));
+      if(partial){
+        const names=arr=>arr.slice(0,6).map(pair=>Array.isArray(pair)?pair.join(" / "):String(pair)).join("; ");
+        if(excluded.length)scope.append(el("small","Excluded: "+names(excluded)));
+        if(incomplete.length)scope.append(el("small","Incomplete: "+names(incomplete)));
+      }
+    }else{
+      scope.className="check-scope partial";
+      scope.textContent="Check not available. Declared sources and exclusions have not been assessed.";
+    }
     $("citation-count").textContent=String(state.check?.citation_observations?.length??0);
     $("fact-count").textContent=String(state.check?.factual_observations?.length??0);
     if(!state.check){node.append(el("p","Check is unavailable. No success or correctness is implied.","empty"));return;}
@@ -166,28 +192,36 @@
       button.append(el("span",item.kind+" / "+label(item.state),"tag"));
       button.append(el("strong",item.id.replace("citation:","Reference ").replace("fact:","Fact ")));
       button.append(el("small",(item.source||"No confirmed source")+" · "+item.span));
-      button.addEventListener("click",()=>{state.selected=item;renderChecks();renderSelected();});
+      button.addEventListener("click",()=>{if(state.loading||state.busy||state.pending)return;
+        state.selected=item;renderChecks();renderSelected();});
       node.append(button);
     }
   }
   function renderSelected(){
     const selected=state.selected;
     $("selected").replaceChildren();
-    $("save-review").disabled=!selected || !state.review || Boolean(state.pending);
+    $("save-review").disabled=!selected || !state.review || state.loading || state.busy;
     if(!selected){$("selected").textContent="Select a finding to inspect and review.";return;}
     $("selected").append(el("strong",selected.kind+" · "+selected.id));
     $("selected").append(el("p","Check state: "+label(selected.state)));
     $("selected").append(el("p","Source: "+(selected.source||"not resolved"),"small"));
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
     const row=state.inventory?.rows?.find(r=>r.source_id===selected.source);
-    if(row)void selectPreviewOnly(row);
+    $("source-preview").textContent=row?"Loading selected observation source…":"No authorized source preview for this observation.";
+    if(row)void selectPreviewOnly(row,selected.id);
   }
-  async function selectPreviewOnly(row){
+  async function selectPreviewOnly(row,selectedId){
+    const seq=++state.previewSeq,generation=state.generation;
+    const current=()=>generation===state.generation && seq===state.previewSeq &&
+      state.selected?.id===selectedId && !state.loading && state.session;
     try{
       const d=await api("/v2/matters/"+encodeURIComponent(state.caseId)+"/evidence/"+
         encodeURIComponent(row.source_id));
+      if(!current())return;
+      if(d.schema!=="caseproof-evidence-preview-v1"||d.row?.source_id!==row.source_id)
+        throw Error("invalid_schema");
       $("source-preview").textContent=d.text||"Source has no available text representation.";
-    }catch(error){$("source-preview").textContent=statusFor(error);}
+    }catch(error){if(current())$("source-preview").textContent=statusFor(error);}
   }
   function renderReview(){
     const rev=state.review;
@@ -204,7 +238,16 @@
     }
   }
   async function load(){
+    if(state.busy||state.pending){notice("Resolve the pending review save before refreshing this snapshot.","danger");return;}
     const generation=++state.generation;
+    state.previewSeq+=1;state.loading=true;state.check=null;state.review=null;
+    state.inventory=null;state.selected=null;
+    $("save-review").disabled=true;
+    $("review-form").setAttribute("aria-busy","true");
+    $("selected").textContent="Checking current brief and permissions…";
+    $("source-preview").textContent="Source preview cleared while the current scope reloads.";
+    $("observations").replaceChildren();$("review-history").replaceChildren();
+    $("check-scope").textContent="Checking current source denominator…";
     $("workspace").hidden=false;
     $("matter-meta").textContent="Matter "+state.caseId+" · brief "+state.briefId;
     notice("Checking private access and current evidence scope…");
@@ -216,27 +259,30 @@
         throw Error("invalid_schema");
       state.check=checked;
       notice("Authorized check completed. Findings remain unreviewed until saved.","ok");
-    }catch(error){state.check=null;notice(statusFor(error),"danger");}
+    }catch(error){if(generation!==state.generation)return;
+      state.check=null;notice(statusFor(error),"danger");}
     if(generation!==state.generation)return;
     try {
       const inv=await api("/v2/matters/"+encodeURIComponent(state.caseId)+"/evidence");
       if(generation===state.generation)
         state.inventory=inv.schema==="caseproof-evidence-library-v1"?inv:null;
-    }catch{state.inventory=null;}
+    }catch{if(generation!==state.generation)return;state.inventory=null;}
     try {
       const review=await api(path()+"/review");
       if(generation===state.generation && review.schema==="caseproof-clearbrief-review-v1" &&
         review.case_id===state.caseId && review.snapshot_hash===state.check?.snapshot_hash)
         state.review=review;
       else state.review=null;
-    }catch{state.review=null;}
+    }catch{if(generation!==state.generation)return;state.review=null;}
     if(generation!==state.generation)return;
-    state.selected=null;state.pending=null;
+    state.loading=false;$("review-form").removeAttribute("aria-busy");
+    state.selected=null;
     renderSources();renderChecks();renderReview();renderSelected();
   }
   async function submitReview(evt){
     evt.preventDefault();
-    if(state.busy || !state.selected || !state.check || !state.review)return;
+    if(state.busy||state.loading||!state.selected||!state.check||!state.review)return;
+    const generation=state.generation;
     const rationale=$("rationale").value.trim();
     if(!rationale){notice("A review rationale is required.","danger");return;}
     if(!state.pending)state.pending={
@@ -247,17 +293,21 @@
     const submit=$("save-review");submit.disabled=true;state.busy=true;
     try{
       const receipt=await api(path()+"/review",{method:"POST",json:state.pending});
+      if(generation!==state.generation)return;
       if(receipt.schema!=="caseproof-clearbrief-review-receipt-v1" ||
         receipt.snapshot_hash!==state.check.snapshot_hash)throw Error("invalid_receipt");
       state.pending=null;$("rationale").value="";
       const review=await api(path()+"/review");
+      if(generation!==state.generation)return;
       if(review.schema!=="caseproof-clearbrief-review-v1"||review.revision!==receipt.revision)
         throw Error("reload_required");
       state.review=review;renderReview();
       notice("Review saved at revision "+receipt.revision+". This does not approve publication.","ok");
     }catch(error){
+      if(generation!==state.generation)return;
       notice("Save outcome not confirmed. Keep the same request and retry; do not edit it. "+statusFor(error),"danger");
-    }finally{state.busy=false;submit.disabled=!state.selected||!state.review;}
+    }finally{state.busy=false;if(generation===state.generation)
+      submit.disabled=!state.selected||!state.review;}
   }
   async function search(){
     const query=$("query").value.trim(),node=$("search-results");node.replaceChildren();
@@ -303,7 +353,8 @@
     finally{$("upload").disabled=false;}
   }
   function signout(){
-    state.generation+=1;if(!state.external)state.session?.clear?.();
+    state.generation+=1;state.previewSeq+=1;
+    if(!state.external)state.session?.clear?.();
     state.session=null;state.external=false;state.caseId="";state.briefId="";
     $("password").value="";$("signout").hidden=true;clearView();notice("Session ended. No credentials were saved.");
   }
@@ -313,8 +364,8 @@
     $("search").addEventListener("click",search);
     $("upload-form").addEventListener("submit",upload);
     $("signout").addEventListener("click",signout);
-    $("refresh").addEventListener("click",()=>{state.pending=null;void load();});
-    $("recheck").addEventListener("click",()=>{state.pending=null;void load();});
+    $("refresh").addEventListener("click",()=>{void load();});
+    $("recheck").addEventListener("click",()=>{void load();});
     if(window.caseproofSession?.getBearer){
       $("credentials").hidden=true;$("auth-mode").textContent="Connected host session";
       $("case-id").value=window.caseproofSession.caseId||"";
