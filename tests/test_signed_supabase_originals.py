@@ -77,7 +77,8 @@ def test_real_api_upload_and_verified_readback(monkeypatch: pytest.MonkeyPatch) 
     assert storage.get_verified(ref, "signed-fixture") == DATA
     assert [r[0] for r in requests] == ["POST", "GET"]
     assert requests[0][1] == "/storage/v1/object/" + BUCKET + "/" + ref.path
-    assert requests[1][1] == "/storage/v1/object/authenticated/" + BUCKET + "/" + ref.path
+    assert requests[1][1].startswith("/storage/v1/object/authenticated/" + BUCKET + "/" + ref.path + "?cacheNonce=")
+    assert len(requests[1][1].split("?cacheNonce=", 1)[1]) == 32
     assert requests[0][2] == DATA
     assert requests[0][3]["x-upsert"] == "false"
     assert requests[0][3]["Authorization"] == "Bearer signed-fixture"
