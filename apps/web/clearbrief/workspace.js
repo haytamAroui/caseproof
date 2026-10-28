@@ -428,7 +428,7 @@
   }
 
   // M1/M2 genuinely authored development journey; no browser-side fixture or fake source.
-  const journey = {caseId:"", source:null, brief:null, snapshot:null, observation:null, revision:0, pending:null, createRequest:null, briefRequest:null, uploadIdentity:null, registerRequest:null, ingestRequest:null, busy:false};
+  const journey = {caseId:"", source:null, brief:null, snapshot:null, observation:null, revision:0, pending:null, createRequest:null, briefRequest:null, uploadIdentity:null, registerRequest:null, ingestRequest:null, correctionRequest:null, correctionPreview:null, busy:false};
   function journeyOutput(message, value) {
     $("journey-result").textContent=message;
     if(value!==undefined)$("journey-state").textContent=JSON.stringify(value,null,2);
@@ -540,6 +540,8 @@
       if(!UUID.test(result.brief_version_id))throw Error("invalid_schema");
       journey.briefRequest=null;
       journey.caseId=caseId;journey.source=source;journey.brief=result;
+      $("journey-correction-before").value=quote;
+      journey.correctionPreview=null;journey.correctionRequest=null;
       journey.snapshot=null;journey.revision=0;journey.pending=null;
       $("brief-id").value=result.brief_version_id;
       journeyOutput("Authored versioned brief saved. The factual check is still pending.",result);
@@ -581,8 +583,69 @@
       if(saved.review_revision!==journey.revision+1&&!saved.replayed)
         throw Error("invalid_receipt");
       journey.revision=saved.review_revision;journey.pending=null;
+      journey.correctionPreview=null;journey.correctionRequest=null;
       journeyOutput("Version-bound human review saved atomically.",saved);
     }catch(e){if(generation===state.generation)journeyOutput("Review outcome unknown; retry with the same request. "+statusFor(e));}
+    finally{if(generation===state.generation)journey.busy=false;}
+  }
+  function correctionPayload(){
+    if(!journey.snapshot||!journey.brief||journey.revision<1)
+      throw Error("run_review_first");
+    const before=$("journey-correction-before").value.trim();
+    const after=$("journey-correction-after").value.trim();
+    if(before===after||before.length<3||after.length<3||
+       before.length>100||after.length>100||!/[0-9]/.test(before)||!/[0-9]/.test(after))
+      throw Error("invalid_correction");
+    return {snapshot_hash:journey.snapshot,
+      expected_review_revision:journey.revision,before,after};
+  }
+  async function journeyPreviewCorrection(){
+    const generation=state.generation;
+    if(journey.busy)return;
+    journey.busy=true;
+    try{
+      const payload=correctionPayload();
+      const c=journey.caseId,b=journey.brief.brief_version_id;
+      const base="/dev/live/matters/"+c+"/briefs/"+b;
+      const response=await api(base+"/corrections/preview",{
+        method:"POST",json:{...payload,request_id:crypto.randomUUID()}});
+      if(generation!==state.generation)return;
+      if(response.schema!=="dev-signed-draft-correction-v1"||
+         response.committed!==false||typeof response.preview_text!=="string")
+        throw Error("invalid_schema");
+      journey.correctionPreview={payload,caseId:c,versionId:b};
+      journey.correctionRequest=null;
+      $("journey-correction-diff").textContent=response.old_text+" → "+response.preview_text;
+      journeyOutput("Correction preview only. Source original and draft are unchanged.",response);
+    }catch(e){if(generation===state.generation)journeyOutput("Correction preview rejected. "+statusFor(e));}
+    finally{if(generation===state.generation)journey.busy=false;}
+  }
+  async function journeyCommitCorrection(){
+    const generation=state.generation;
+    if(journey.busy)return;
+    journey.busy=true;
+    try{
+      const current=correctionPayload(),p=journey.correctionPreview;
+      if(!p||p.caseId!==journey.caseId||
+        p.versionId!==journey.brief.brief_version_id||
+        JSON.stringify(p.payload)!==JSON.stringify(current))
+        throw Error("repreview_changed_correction");
+      if(!journey.correctionRequest)journey.correctionRequest=crypto.randomUUID();
+      const path="/dev/live/matters/"+p.caseId+"/briefs/"+p.versionId;
+      const updated=await api(path+"/corrections/commit",{
+        method:"POST",json:{...current,request_id:journey.correctionRequest}});
+      if(generation!==state.generation)return;
+      if(updated.committed!==true||!UUID.test(updated.brief_version_id))
+        throw Error("invalid_schema");
+      journey.brief={brief_version_id:updated.brief_version_id};
+      $("brief-id").value=updated.brief_version_id;
+      $("journey-correction-before").value=current.after;
+      $("journey-quote").value=current.after;
+      journey.snapshot=null;journey.observation=null;journey.revision=0;
+      journey.pending=null;journey.correctionPreview=null;journey.correctionRequest=null;
+      $("journey-correction-diff").textContent="New draft saved. Run Check again; the old review does not authorize this revision.";
+      journeyOutput("Immutable new draft saved. Recheck and independently review the new snapshot.",updated);
+    }catch(e){if(generation===state.generation)journeyOutput("Correction not confirmed. Retry the same request or reopen. "+statusFor(e));}
     finally{if(generation===state.generation)journey.busy=false;}
   }
   async function journeyReopen(){
@@ -605,6 +668,8 @@
       if(generation!==state.generation)return;
         journey.snapshot=check.snapshot_hash;journey.observation=check.observation_id;journey.revision=review.review_revision;
         journey.brief={brief_version_id:b.brief_version_id};
+        $("journey-correction-before").value=b.quote||"";
+        journey.correctionPreview=null;journey.correctionRequest=null;
         $("brief-id").value=b.brief_version_id;
         reopened.review=review;reopened.check=check;
       }
@@ -618,7 +683,7 @@
     state.generation+=1;state.previewSeq+=1;
     if(!state.external)state.session?.clear?.();
     state.session=null;state.external=false;state.caseId="";state.briefId="";
-    Object.assign(journey,{caseId:"",source:null,brief:null,snapshot:null,observation:null,revision:0,pending:null,createRequest:null,briefRequest:null,uploadIdentity:null,registerRequest:null,ingestRequest:null,busy:false});
+    Object.assign(journey,{caseId:"",source:null,brief:null,snapshot:null,observation:null,revision:0,pending:null,createRequest:null,briefRequest:null,uploadIdentity:null,registerRequest:null,ingestRequest:null,correctionRequest:null,correctionPreview:null,busy:false});
     $("journey-state").textContent="";
     $("matter-options").replaceChildren();
     $("password").value="";$("signout").hidden=true;clearView();notice("Session ended. No credentials were saved.");
@@ -632,6 +697,8 @@
     $("journey-check").addEventListener("click",journeyCheck);
     $("journey-review-form").addEventListener("submit",journeyReview);
     $("journey-reopen").addEventListener("click",journeyReopen);
+    $("journey-correction-preview").addEventListener("click",journeyPreviewCorrection);
+    $("journey-correction-commit").addEventListener("click",journeyCommitCorrection);
     $("find-matters").addEventListener("click",findMatters);
     $("review-form").addEventListener("submit",submitReview);
     $("search").addEventListener("click",search);
