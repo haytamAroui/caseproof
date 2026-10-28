@@ -1,6 +1,6 @@
 # Live review round trip — evidence and scope
 
-**Status: NOT EXECUTED.** Evidence baseline recorded before implementation.
+**Status: SQL APPLIED, AUTOMATED ACCEPTANCE NOT YET OBSERVED.** Baseline recorded before implementation. The live signed round-trip is wired to the protected GitHub workflow, and the main-merge job is guarded by the exact commit marker `[live-review-acceptance]`.
 
 - Base main: `b1a24c57a88d1c7d9b657761e562ac1707d24b9f`; all nine checks on that commit reported success.
 - Target commit: pending final implementation and successful CI.
@@ -42,3 +42,12 @@ The existing service-role CI fixture only seeds M1 matter/source rows and explic
 ## Completion
 
 All rows above must be linked to observed outcomes, target SHA, green relevant CI, role/privilege evidence, cold-restart proof and cleanup results. Mark unknown or failed steps explicitly. Independent review and the development migration workflow remain applicable. Until then the milestone remains **open**.
+
+## Implementation readback — 28 October 2026
+
+- Supabase MCP applied `20261028070156_caseproof_dev_signed_review_roundtrip` and `20261028070231_caseproof_dev_scoped_review_cleanup` in dedicated `caseproof-dev`. Both SQL files were aligned byte-for-byte with their installed migration history after Supabase assigned versions.
+- `public.caseproof_dev_review_seed(uuid,uuid)` and `public.caseproof_dev_review_cleanup(uuid,uuid)` have service-role EXECUTE only; `public.caseproof_dev_live_review(...)` has authenticated EXECUTE and anonymous EXECUTE revoked. Private M2 relations retain no direct client grants.
+- The signed RPC is deliberately SECURITY DEFINER with an empty search path and checks `auth.uid()`, nonanonymous authenticated role, exact current case grant, live membership, brief/exhibit revisions, source digest, Storage object lineage and checked observation before atomic write. Supabase's security advisor flags the intentional callable definer as WARN; independent review is still required.
+- The candidate check is intentionally **narrow**: it compares one pre-seeded synthetic TXT amount quote to the versioned brief and its exhibit text, not general-purpose semantic/factual evidence verification. This does not establish the full Evidence Kernel, ingestion, OCR, PDF/Word handling or legal approval.
+- Protected check: `scripts/verify_dev_live_review_roundtrip.py` uses three confirmed GoTrue users, signed source upload and SHA-256 readback, atomic check/review, idempotent replay, stale revision denial, **actual uvicorn process stop/start**, fresh sign-in, SQL-backed reopening, ungranted and revoked access denial and scoped synthetic cleanup.
+- Only the protected live Actions execution can promote this note from **installed/implemented** to **verified**. A CI run against disposable Postgres or a mocked auth fixture is not enough.
