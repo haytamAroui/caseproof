@@ -427,4 +427,7 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
             "20261027202734_caseproof_m1_private_originals_storage.sql",
             "20261027204343_caseproof_m1_storage_upload_action_correction.sql",
             "20261027214851_caseproof_m1_dev_live_positive_fixture_rpc.sql",
+            "20261028065430_caseproof_m1_private_exhibit_storage.sql",
+            "20261028080300_caseproof_dev_signed_review_roundtrip.sql",
+            "20261028081400_caseproof_dev_scoped_review_cleanup.sql",
     }
