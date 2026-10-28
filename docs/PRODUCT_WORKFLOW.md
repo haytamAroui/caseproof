@@ -11,7 +11,7 @@
 | Artifact | Authority and handling | What absence means |
 |---|---|---|
 | **Conclusions DOCX** | Original preserved; identify checked draft version/hash and language; extract reference candidates from supported paragraph/table/footnote parts; provide unprocessed-structure coverage | Missing/unparseable draft blocks check and cannot become “zero findings” |
-| **Inventory** | Upload separate inventory document or structured list; parse *proposals*, lawyer confirms `exhibit_id ↔ Stuk/Pièce alias`, order, amendments, page labels | No inventory → `NOT_IN_INVENTORY` or `NOT_ASSESSED` by declared scope; do not silently synthesize a definitive one |
+| **Inventory** | Upload separate inventory document or structured list; parse *proposals*, lawyer confirms `exhibit_id ↔ Stuk/Pièce alias`, order, amendments, page labels | No inventory, unparseable, unconfirmed or incomplete inventory → exhibit identity `NOT_ASSESSED` with typed reason; `NOT_IN_INVENTORY` requires a reviewer-confirmed complete inventory and provably absent listing |
 | **Preserved exhibits** | One or more separately preserved originals, optionally an assembled bundle; content hash, version, physical page, OCR crop/representation, ingestion and authority metadata | An inventory label without authorized source = `SOURCE_MISSING`, not proof of late/noncommunication |
 | **Optional existing bundle** | Source for bundle-page offsets; separate physical PDF / printed page / compiled bundle page mapping; never assume all three equal | Missing or conflicting mapping = `UNMAPPED` / `CONFLICTING` |
 | **Output** | Per-reference findings + actual source link/crop + reviewer decision + scoped verification run record + annotated or corrected DOCX where safely supported | Incomplete or unsupported export must fail visibly and leave source draft intact |
@@ -30,7 +30,7 @@ Languages: support NL/FR citation labels and case text, including mixed-language
 
 ### 1. Upload and preserve the source universe (M1)
 
-**Action:** upload `conclusions.docx`, separately identifiable inventory, original PDF/text/scanned exhibits. Each original is immutable, SHA-256 checked on readback; never replace bytes in place. Keep PDF page 1-based display distinct from internal 0-based parser locator and from printed/bundle numbers. Upload and processing have stable operation IDs.
+**Action:** upload `conclusions.docx`, separately identifiable inventory, original PDF/text/scanned exhibits. **For confidential client sources the intended OCR path is an isolated self-hosted CaseProof processing worker inside an approved processing boundary, no default third-party OCR endpoint or uncontrolled outbound egress** (design, not yet delivered); record hosting/provider/region and security approval before accepting client material. [Exact processing contract](contracts/PRE_M3_VERIFICATION_SPEC.md#p3-02--ocr-location-provider-and-processing-boundary). Each original is immutable, SHA-256 checked on readback; never replace bytes in place. Keep PDF page 1-based display distinct from internal 0-based parser locator and from printed/bundle numbers. Upload and processing have stable operation IDs.
 
 **User sees:** clear file types, accepted/rejected, pages processed, pages `needs OCR`, crop availability, originals vs generated text, duplicate labels, corrupt files, permissions and file budgets. Processing progress is not an evidentiary approval.
 
@@ -40,15 +40,17 @@ Languages: support NL/FR citation labels and case text, including mixed-language
 
 **Action:** CaseProof proposes Stuk/Pièce number, name, alias and source-version matches; the lawyer confirms or rejects independently of candidate OCR text. Source/exhibit internal ID stays stable across label renumberings. Separate `listed_in_inventory`, `source_in_custody`, `communicated_proven` and `filed_proven`, with the latter two never inferred from this workflow.
 
+**Negative-inventory rule:** absent, unreadable, unconfirmed, scope-incomplete inventory → identity `NOT_ASSESSED` and reason `INVENTORY_MISSING` / `INVENTORY_UNPARSEABLE` / `INVENTORY_UNCONFIRMED` / `INVENTORY_INCOMPLETE` (or `OUT_OF_SCOPE`). Only a confirmed complete scope can produce `NOT_IN_INVENTORY`. A known item without an original is `SOURCE_MISSING`. These are **not** communication or filing states.
+
 **Page contract:** physical PDF pages, printed labels and bundle positions are independent; a uniquely found exhibit can be `RESOLVED` even if its page is `UNMAPPED`. Reordering or replacing a source creates a new register revision and invalidates affected checks.
 
 **Failure:** ambiguous aliases, multiple candidate files, missing source, wrong page space, duplicate label and no confirm permission require review; never choose a match because it has the highest OCR score.
 
 ### 3. Detect references in the draft and freeze the checked scope (M2)
 
-**Action:** parse every supported DOCX content region and candidate legal-exhibit reference (e.g. `Stuk 4, p. 3`, `Pièce 7, p. 5`, aliases or references without pinpoint). Detect exact citation occurrence and its draft location; link each candidate to the confirmed register snapshot. User may add/correct missing reference detections without silently editing the original file.
+**Action:** enumerate **all discovered OpenXML story parts**, scan supported main-body paragraphs, nested tables and footnotes/endnotes, and explicitly flag unprocessed headers/footers, textboxes, drawings/embedded content and unresolved tracked revisions as appropriate. The [binding coverage matrix](contracts/PRE_M3_VERIFICATION_SPEC.md#p3-03--docx-reference-detection-coverage-denominator) specifies mandatory counts and exclusion reasons; there is no implicit document-wide coverage. Parse every supported DOCX content region and candidate legal-exhibit reference (e.g. `Stuk 4, p. 3`, `Pièce 7, p. 5`, aliases or references without pinpoint). Detect exact citation occurrence and its draft location; link each candidate to the confirmed register snapshot. User may add/correct missing reference detections without silently editing the original file.
 
-**User sees:** total candidates detected, checked/not-assessed, checked source/page scope, reasons for omissions, unsupported footnotes/tables, and source completeness. If all references cannot be detected with required coverage, report explicitly.
+**User sees:** per-story `regions_discovered / scanned / unprocessed / unsupported`, tracked-revision status, `references_detected / checked / not_assessed`, checked source/page scope, reasons for omissions, unsupported textboxes/footnotes/tables when present, and source completeness. Never present a whole-document complete outcome when an unenumerated or unscanned region might contain a citation. If all references cannot be detected with required coverage, report explicitly.
 
 **Failure:** an unmatched draft citation is not a pass. A no-citation/zero-quote draft is valid as an input, with `0 references detected` and its extraction limitations disclosed.
 
@@ -60,20 +62,28 @@ Languages: support NL/FR citation labels and case text, including mixed-language
 
 | Dimension | Typed states | Authority |
 |---|---|---|
-| Exhibit identity | `RESOLVED`, `NOT_IN_INVENTORY`, `SOURCE_MISSING`, `AMBIGUOUS` | Server-confirmed source/inventory identity |
+| Exhibit identity | `RESOLVED`, `NOT_IN_INVENTORY`, `SOURCE_MISSING`, `AMBIGUOUS`, `NOT_ASSESSED` (with inventory reason) | Server-confirmed source/inventory identity |
 | Page location | `MAPPED`, `UNMAPPED`, `CONFLICTING` | Independent original/printed/bundle mapping |
-| Text/value fidelity | `EXACT_MATCH`, `MISMATCH`, `OCR_UNRELIABLE`, `NOT_ASSESSED` | Reproducible source-bound checks with OCR abstention |
+| Text/value fidelity | `EXACT_MATCH`, `MISMATCH`, `OCR_UNRELIABLE`, `TRANSLATION_REVIEW_REQUIRED`, `NOT_ASSESSED` | Reproducible source-bound checks with OCR abstention |
 | Semantic support | `NOT_ASSESSED`, `CONFIRMED_SUPPORTED`, `CONFIRMED_QUALIFIED`, `CONFIRMED_CONTRADICTED` | **Human reviewer only** after contextual inspection |
+
+**Cross-language rule:** a French quote/paraphrase of a Dutch original, or the reverse, is `TRANSLATION_REVIEW_REQUIRED` and **not** an exact quote match. Show original-language text, draft-language assertion and reviewer translation separately; unresolved OCR plus translation preserves both signals. Only a human may confirm semantic support. [P3-01 test cases](contracts/PRE_M3_VERIFICATION_SPEC.md#p3-01--translated-quotations-and-cross-language-claims).
+
+**Same-role normalization:** parse values as typed `Decimal` or canonical local calendar date only with a declared source locale/role; preserve raw value and interpretation. `12 500 EUR`, `12.500,00 €`, `12 500,00 EUR` may match under established Belgian grouping; `€12,500` without trusted locale is **ambiguous**, not automatically 12,500 EUR. `14 maart 2026`, `14 mars 2026` and `14/03/2026` may align to `2026-03-14` with verified locale; ambiguous `03/04/2026` without a trusted date convention becomes `NOT_ASSESSED(AMBIGUOUS_DATE_FORMAT)`. Never compare net/gross, claimed/paid or different currency as the same role. [P5-02 canonicalization](ROADMAP.md#p5-02--locale-aware-same-role-moneydate-normalization).
 
 **Critical distinctions:** `EXACT_MATCH` is not the truth of a claim, the authenticity of a document, or a semantic-support decision. `QUALIFIED` is not an OCR-confidence state. Unreviewed low-fidelity OCR requires `OCR_UNRELIABLE`, crop inspection and optional transcription correction linked to the original, not an automatic exact-match green status. Quote-free claims can still be checked for exhibit/page existence. Unknown VAT basis, negations, third-party allegations, different dates/roles and conditional text cannot be confidently auto-compared.
 
 **Failure:** timeout, unavailable representation, source mismatch, stale register/draft, partial OCR or unauthorized scope becomes `NOT_ASSESSED`/specific unresolved state. A model suggestion never writes authoritative `CONFIRMED_*` support or reviewer actions.
 
+## Pre-M3 contractual readiness — no UI inference from missing states
+
+**M3 product-shaped implementation cannot begin until the four rules in [PRE_M3_VERIFICATION_SPEC.md](contracts/PRE_M3_VERIFICATION_SPEC.md) have reviewed M1/M2 schema and fixture evidence:** translated quote state; approved OCR worker location and protected data flow; exact DOCX story-region coverage and denominators; missing inventory `NOT_ASSESSED` versus confirmed negative `NOT_IN_INVENTORY`. The documentation is designed; real implementation/signoff is **OPEN**. A read-only synthetic UI spike may exist, but cannot be counted as M3 progress or acceptance. The review UI must **only render** the shared verification contract, never invent it.
+
 ### 5. Inspect each finding beside the actual source (M3)
 
 **Action:** web results show an assertion/citation, detected reference, inventory identity, physical/printed/bundle page, immutable original viewer and cropped original image when relevant, plus extracted text **marked as derived**, with citations back to source versions.
 
-**User sees:** sortable `needs attention`, `located/matched`, `mismatch`, `not assessable` categories without one global “verified” label. Default ordering prioritizes unresolved and actionable mismatches; a clean scoped run may show no errors. Every checked finding shows neighboring context and a direct reopen link; unavailable source or crop never becomes silently substituted OCR text.
+**User sees:** sortable `needs attention`, `located/matched`, `mismatch`, `translated quote—human review`, `not assessable` categories without one global “verified” label. Default ordering prioritizes unresolved and actionable mismatches; a clean scoped run may show no errors. Every checked finding shows neighboring context and a direct reopen link; unavailable source or crop never becomes silently substituted OCR text.
 
 **Failure:** broken link, crop not tied to correct page, incomplete coverage and mismatch between source hash and image prevents confirming that finding.
 
@@ -89,11 +99,11 @@ Languages: support NL/FR citation labels and case text, including mixed-language
 
 **Action:** re-run affected checks against the new exact draft/source/inventory snapshots; freeze a manifest and generate reviewed/annotated or supported corrected DOCX, a machine-readable run record and human-readable verification report. Export only after authorized reviewer and explicit export grant; no automatic filing/share.
 
-**Report MUST include:** original and output hashes, artifact/document versions, source universe and per-page processing status, detected/checkable/not-assessed reference denominators, mapping and OCR uncertainty, exact source/crop locators, findings and human dispositions, unresolved/excluded items, engine/parser versions, timestamp, reviewer role and limitations. Do not call it a court certificate.
+**Report MUST include:** original and output hashes, artifact/document versions, source universe and per-story DOCX processing/unsupported denominators, per-page processing status, detected/checkable/not-assessed reference denominators, translated quote states and related original-language text pointers, mapping and OCR uncertainty, exact source/crop locators, findings and human dispositions, unresolved/excluded items, engine/parser versions, timestamp, reviewer role and limitations. Do not call it a court certificate.
 
 **Integrity:** generated outputs remain immutable, reopen actual DOCX and any PDF produced with an independent reader, verify targets and page links against exact manifest. Preserve known formatting, lists, tables, footnotes and tracked-change semantics within the published support matrix; refuse unsupported transformations. A completed report may list unresolved items; it never claims all evidence proved.
 
-**Failure:** missing review, stale version, failed rendering/link verification, storage/audit failure, permissions revoked or unexplained scope changes block marked-current export. Prior exports remain attributable to earlier snapshots but are not re-certified after edits.
+**Failure:** missing review, stale version, failed rendering/link verification, storage/audit failure, permissions revoked or unexplained scope changes block marked-current export. Reports with partial/unknown document regions MUST say **scoped or incomplete**, never certify all references checked. Prior exports remain attributable to earlier snapshots but are not re-certified after edits.
 
 ### 8. Download and hand off manually (M4)
 
@@ -142,6 +152,7 @@ A genuinely signed user in an approved staging environment:
 
 ## Privacy, lawful processing and trust
 
+- The real-client pilot security gate is [SEC-01..16](security/PILOT_DATA_SECURITY_GATE.md): threat model, TLS, at-rest keys, tenant and matter authorization, OCR processing/egress, lineage/audit, redacted telemetry, retention and tested deletion, subcontractors/transfers/DPA, lawful professional-secrecy review, file isolation, independent security assessment, incident/recovery, release permissions and operational runbook. **All statuses begin OPEN; do not authorize real client data from code passing CI.**
 - Initial demo uses synthetic or explicitly rights-cleared fixtures. A redacted client dossier is not automatically anonymous or permissible; real files require assessed professional secrecy, GDPR, signed agreements, appropriate closed-processing assurance, retention/deletion and security approval.
 - Cloud location, pseudonymization or zero-retention **alone** does not prove professional-secrecy compliance. Never route confidential evidence to unapproved remote inference, trace/logging or support tools.
 - Original custody, inference/OCR location and audit/provenance are separate ports; firm-controlled/local processing is a possible later deployment based on customer needs, not a current claim.
@@ -151,16 +162,18 @@ A genuinely signed user in an approved staging environment:
 
 **Five weeks from the first practitioner conversation**, not a preannounced launch date: five disconfirming conversations, two workflow observations, 3–5 controlled dossier evaluations only if justified, one priced signed paid/conditional proposal. Record baseline and assisted total time, false flags and review time, `0/N` false matched/mapped observations, no material missed seeded errors except explicitly unresolved, reviewer-requested report and deployment requirements, price and decision. Do not encourage lawyers to stop sampling checked results; measure *calibrated* trust.
 
-**Proceed** only with repeated pain, satisfactory safe verification and a credible commitment; **refine** workflow/pricing/deployment if value exists; **reconsider niche** if rare/unpaid/adequately solved. No automatic product pivot based on fresh competitors. [M5 in roadmap](ROADMAP.md).
+**Before M5 closes:** [P5-01..04](ROADMAP.md#pre-m5-hard-prerequisites--the-commercial-experiment-must-have-an-exit) must be evidenced: written exact *next action* for PROCEED/REFINE/RECONSIDER; unambiguous NL/FR/EN same-role Decimal/date normalization; dossiers at practitioner-observed scale including representative 50–200-page source volumes if observations confirm; and approved SEC-01..16 for any client-confidential trial.
+
+**PROCEED** means owner-approved proposal for a **bounded paid design-partner beta**, not launch, production upload, fundraising claim or M6. **REFINE** means a recorded minimal workflow/pricing/security correction and rerun. **RECONSIDER** means halt the niche and request a separate owner decision, not an automatic pivot. **Proceed** only with repeated pain, satisfactory safe verification and a credible commitment; **refine** workflow/pricing/deployment if value exists; **reconsider niche** if rare/unpaid/adequately solved. No automatic product pivot based on fresh competitors. [M5 in roadmap](ROADMAP.md).
 
 ## Milestone mapping / source-of-truth
 
 - **M0:** scope, dataset rights, synthetic fixtures, evaluation design, change control.
 - **M1:** real-format secure intake, inventory, PDF/DOCX/scans, page & crop coverage.
 - **M2:** all detected references, identity+pinpoint, literal/value, OCR abstention, scoped check record.
-- **M3:** authenticated web inspect/review/correction preview and persisted actions.
+- **M3:** four P3 prerequisite implementations signed off; authenticated web inspect/review/correction preview and persisted actions.
 - **M4:** supported version-safe DOCX, report, correct links and authorized export/reopen.
-- **M5:** practitioner evidence and priced commitment; no production launch merely from research.
+- **M5:** practitioner evidence and priced commitment with P5-01..04 closure; a written beta proposal only, no production launch merely from research.
 - **M6:** only explicitly authorized Word/MCP/enterprise channels and other future hypotheses.
 
 Engineering receipt truth is in [STATUS.md](STATUS.md), not inferred from this journey. Older `PIV-00–20` and `F01–F42` ledgers document historical capability targets; they cannot silently override this acceptance.
