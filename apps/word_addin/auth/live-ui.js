@@ -25,7 +25,7 @@
       controller = window.CaseProofLiveAuth.create({ projectUrl: config.projectUrl, publishableKey: config.publishableKey });
       const matter = controller.matter(caseInput.value.trim(), briefInput.value.trim());
       await controller.login();
-      window.caseproofSession = matter;
+      window.caseproofSession = Object.freeze({ ...matter, mode: 'dev-live' });
       logout.disabled = false;
       caseInput.disabled = true; briefInput.disabled = true;
       message.textContent = 'Signed in. Search is available for authorized matters.';
