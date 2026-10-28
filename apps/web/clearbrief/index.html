@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en-BE">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>ClearBrief · CaseProof development workbench</title>
+  <link rel="stylesheet" href="/dev/clearbrief/workspace.css">
+  <script src="/dev/clearbrief/workspace.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to workbench</a>
+<header class="site-header">
+  <div class="identity"><div class="mark" aria-hidden="true">C<span>·</span></div><div><strong>ClearBrief</strong><span class="subbrand">by CaseProof</span></div></div>
+  <span class="environment">DEVELOPMENT · SYNTHETIC / RIGHTS-CLEARED ONLY</span>
+  <button id="signout" class="ghost" hidden>End session</button>
+</header>
+<main id="main">
+  <div class="intro">
+    <div><p class="kicker">BELGIAN LITIGATION WORKSPACE</p><h1>Every assertion, connected to its source.</h1>
+      <p class="lede">Inspect a private dossier, verify cited statements and record a version-bound review. Nothing here approves a legal conclusion or filing.</p></div>
+    <div class="intro-aside"><span class="tiny">CURRENT SCOPE</span><strong>Development workbench</strong><span>Not a production client portal</span></div>
+  </div>
+  <section id="connection" class="connection card" aria-labelledby="connect-heading">
+    <div class="connection-head"><div><h2 id="connect-heading">Open an authorized matter</h2>
+    <p>The matter and brief must already exist. This workspace does not create grants or bypass access controls.</p></div><span id="auth-mode" class="pill">Checking connection</span></div>
+    <form id="connection-form">
+      <div id="credentials" class="credential-row">
+        <label>Dev Auth email<input id="email" type="email" autocomplete="username" maxlength="254" placeholder="you@example.com"></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" maxlength="256"></label>
+      </div>
+      <div class="two">
+        <label>Matter UUID<input id="case-id" required spellcheck="false" autocomplete="off" placeholder="00000000-0000-4000-8000-000000000000"></label>
+        <label>Brief version UUID<input id="brief-id" required spellcheck="false" autocomplete="off" placeholder="00000000-0000-4000-8000-000000000000"></label>
+      </div>
+      <div class="form-actions"><button type="submit" id="connect">Open matter</button><p class="small">Signed sessions stay in memory only. No token is saved in browser storage.</p></div>
+    </form>
+  </section>
+  <div id="notice" class="notice" role="status" aria-live="polite">Connect to an existing authorized development matter to begin.</div>
+  <section id="workspace" hidden aria-label="ClearBrief workspace">
+    <div class="workspace-head"><div><p class="kicker">PRIVATE MATTER</p><h2 id="matter-name">Evidence and brief review</h2>
+      <p id="matter-meta" class="small mono"></p></div><div class="workspace-buttons"><button id="refresh" class="secondary">Refresh scope</button><button id="recheck">Run factual check</button></div></div>
+    <div class="statrow"><div><span>Source inventory</span><strong id="source-count">—</strong></div><div><span>Citation observations</span><strong id="citation-count">—</strong></div><div><span>Factual observations</span><strong id="fact-count">—</strong></div><div><span>Review revision</span><strong id="review-count">—</strong></div></div>
+    <div class="columns">
+      <section class="card evidence-panel" aria-labelledby="evidence-title">
+        <div class="section-head"><div><p class="kicker">01 / RECORD</p><h3 id="evidence-title">Evidence library</h3></div><span id="coverage" class="pill">Not assessed</span></div>
+        <p class="small">Only sources the current signed actor can see. Processing gaps remain visible.</p>
+        <div id="sources" class="source-list"><p class="empty">Load the authorized source inventory.</p></div>
+        <div class="searchbox"><label for="query">Search within this brief's evidence</label><div class="inline"><input id="query" minlength="2" maxlength="120" placeholder="e.g. betaling, montant, date"><button id="search" type="button" class="secondary">Find</button></div></div>
+        <div id="search-results" class="results" aria-live="polite"></div>
+        <details class="upload"><summary>Upload a pre-registered original (development)</summary>
+          <p class="small">Only if the server has already created this document/version and granted upload permission. This is not case creation.</p>
+          <form id="upload-form"><label>Document UUID<input id="document-id" required spellcheck="false"></label>
+          <label>Version UUID<input id="version-id" required spellcheck="false"></label>
+          <label>Original file<input id="original-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
+          <button id="upload" type="submit" class="secondary">Upload immutable original</button></form>
+        </details>
+      </section>
+      <section class="card checks-panel" aria-labelledby="check-title">
+        <div class="section-head"><div><p class="kicker">02 / VERIFY</p><h3 id="check-title">Brief check</h3></div><span class="pill neutral">Deterministic</span></div>
+        <p class="small">Citation, quotation and same-role date/value checks are observations, not legal determinations.</p>
+        <div id="check-scope" class="check-scope" role="status" aria-live="polite">Check source scope not assessed.</div>
+        <div id="observations" class="observation-list"><div class="empty">Run a factual check to inspect this versioned brief.</div></div>
+      </section>
+      <section class="card review-panel" aria-labelledby="review-title">
+        <div class="section-head"><div><p class="kicker">03 / HUMAN DECISION</p><h3 id="review-title">Review an observation</h3></div></div>
+        <div id="selected" class="selected">Select a citation or factual observation to review its scope.</div>
+        <div id="source-preview" class="preview"><p class="empty">Select a source or a finding to inspect its verified representation.</p></div>
+        <form id="review-form">
+          <label for="disposition">Reviewer disposition</label>
+          <select id="disposition"><option value="needs_information">Needs information</option><option value="confirmed_candidate">Confirm candidate issue</option><option value="dismissed">Dismiss finding</option></select>
+          <label for="rationale">Rationale <span class="required">*</span></label>
+          <textarea id="rationale" maxlength="2000" rows="4" placeholder="State what this source does and does not establish." required></textarea>
+          <button id="save-review" type="submit" disabled>Save version-bound review</button>
+        </form>
+        <div id="review-history" class="history"></div>
+      </section>
+    </div>
+    <div class="handoff card"><div><p class="kicker">04 / DELIVER</p><h3>From checked draft to linked Word document</h3>
+      <p class="small">Citation insertion, reversible Word edits, approved DOCX/PDF, dynamic exhibit bundle and recipient sharing require separate host and release acceptance.</p></div>
+      <div class="handoff-actions"><button disabled>Insert into Word · pending host acceptance</button><button disabled>Release package · not enabled</button></div></div>
+  </section>
+</main>
+<footer><span>ClearBrief / CaseProof</span><span>Review ≠ approval · Export ≠ filing · Source hash ≠ authenticity</span></footer>
+</body></html>
