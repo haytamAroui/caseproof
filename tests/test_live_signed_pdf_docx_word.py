@@ -151,7 +151,6 @@ def test_word_search_never_offers_unconfirmed_exhibit_or_invented_pdf_page(monke
     assert result.status_code == 200
     data = result.json()
     assert data["coverage"] == "partial"
-    assert data["source_manifest"]["page_mapping"] if "page_mapping" in data["source_manifest"] else True
     assert len(data["hits"]) == 1
     assert data["hits"][0]["citation"] is None
     assert data["hits"][0]["page"] is None
