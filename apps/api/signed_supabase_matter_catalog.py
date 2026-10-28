@@ -23,7 +23,7 @@ class SignedMatterCatalog:
 
     def list_matters(self, bearer: str) -> list[dict[str, object]]:
         if (not isinstance(bearer, str) or not 0 < len(bearer) <= 8192
-                or "\r" in bearer or "\n" in bearer):
+                or any(not 33 <= ord(char) <= 126 for char in bearer)):
             raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED)
         conn = http.client.HTTPSConnection(PROJECT_HOST, timeout=12)
         try:
