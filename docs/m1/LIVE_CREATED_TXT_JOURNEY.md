@@ -1,6 +1,6 @@
 # Live created TXT journey — development acceptance
 
-**Status:** Implemented on PR #114; live protected acceptance **NOT YET VERIFIED** until the GitHub Actions main run and independent readback are green. Do not equate migrations or local tests with a passed live journey.
+**Status: LIVE SIGNED CREATED-MATTER → TXT INGEST → AUTHORED BRIEF → REVIEW → COLD RESTART → CLEANUP PASSED on 28 October 2026 (development only).** Protected main workflow [#40657265878](https://github.com/haytamAroui/caseproof/actions/runs/40657265878), merge commit `a8fd5a85f4f4f49a8083f0da66eb815c1700b5d2`, PR [#114](https://github.com/haytamAroui/caseproof/pull/114); all eight PR checks passed.
 
 ## Acceptance boundary
 
@@ -29,3 +29,7 @@
 2. Protected main-only run `[live-txt-acceptance]` succeeds, logs `LIVE_CREATED_MATTER_INGESTED_TXT_AUTHORED_REVIEW_COLD_RESTART_PASSED`.
 3. Independent Supabase MCP post-run query finds zero residue.
 4. Record exact run URL, merged main SHA, migration count and limitations. Mark **PASSED** only after this is observed.
+
+## Observed acceptance receipt (28 October 2026)
+
+SUCCESS: https://github.com/haytamAroui/caseproof/actions/runs/40657265878; 8 stages passed, all 19 cleanup counts zero, 16 migrations installed. Development server/API only, not browser-click acceptance; security review and remaining product milestones open.
