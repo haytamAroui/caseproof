@@ -53,5 +53,6 @@ def test_catalog_refuses_malformed_or_unbounded_results():
         with patch("apps.api.signed_supabase_matter_catalog.http.client.HTTPSConnection",
                    return_value=Connection(body)), pytest.raises(AccessRejected):
             catalog.list_matters("signed-token")
-    with pytest.raises(AccessRejected):
-        catalog.list_matters("bad\nheader")
+    for token in ("bad\nheader", "bad\theader", "bad header", "é", "🙂"):
+        with pytest.raises(AccessRejected):
+            catalog.list_matters(token)
