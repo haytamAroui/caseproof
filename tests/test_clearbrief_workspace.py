@@ -236,4 +236,13 @@ def test_browser_never_reuses_review_context_or_stale_source_previews():
     assert 'Resolve the pending review save before refreshing' in script
     assert 'processed of ' in script and 'Excluded: ' in script and 'Incomplete: ' in script
     assert "generation!==state.generation" in script
+    assert "r.version_id===selected.version" in script
+    assert "r.original_sha256===selected.sourceSha" in script
+    assert "r.representation_id===selected.representation" in script
+    assert "d.row.version_id!==state.selected.version" in script
+    assert "d.row.original_sha256!==state.selected.sourceSha" in script
+    assert "d.row.representation_id!==state.selected.representation" in script
+    assert "state.previewReady=false" in script
+    assert "state.previewReady=true" in script
+    assert "Source version/representation mismatch." in script
     assert "state.session" in script
