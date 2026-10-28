@@ -6,7 +6,7 @@ the reviewed observation/snapshot and a disposition proposal.
 """
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Header
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,9 +22,9 @@ class ReviewBody(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     observation_id: str = Field(min_length=1, max_length=160)
-    request_id: UUID
+    request_id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     expected_revision: int = Field(ge=0, le=256)
-    disposition: ReviewDisposition
+    disposition: Literal["confirmed_candidate", "dismissed", "needs_information"]
     rationale: str = Field(min_length=1, max_length=2000)
 
 
@@ -51,7 +51,7 @@ def create_clearbrief_review_router(service: SignedReviewWorkspace | None = None
     ) -> dict[str, Any]:
         if service is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        if body.request_id.version != 4 or body.request_id.int == 0 or not body.rationale.strip():
+        if not body.rationale.strip():
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return service.record(
             bearer=_token(authorization),
@@ -59,9 +59,9 @@ def create_clearbrief_review_router(service: SignedReviewWorkspace | None = None
             command=ReviewCommand(
                 snapshot_hash=body.snapshot_hash,
                 observation_id=body.observation_id,
-                request_id=body.request_id,
+                request_id=UUID(body.request_id),
                 expected_revision=body.expected_revision,
-                disposition=body.disposition,
+                disposition=ReviewDisposition(body.disposition),
                 rationale=body.rationale,
             ),
         )
