@@ -7,7 +7,8 @@ This is a **new browser application**, distinct from the old ExceptionDesk invoi
 Start the existing injected `create_litigation_development_app(...)` composition with:
 
 - `checker`: `AuthorizedLitigationChecker`, backed by trusted current matter grants, source-version graph and typed deterministic checking.
-- `evidence`: existing authenticated evidence library reader for inventory and source previews.
+- Signed evidence inventory/preview now comes automatically from the same injected `checker` through `GET /v2/matters/{case}/briefs/{version}/sources` and `/sources/{source}`, with its verified authorized source scope, exact version and revalidated permissions. No second evidence reader is required for the browser's brief-scoped library.
+- `evidence` (optional): existing **separate** authenticated matter-wide M1 evidence reader, if needed by other development clients.
 - `originals`: existing `AuthorizedOriginalReader` for verified version-bound bytes, or `signed_originals`: `SignedSourceLibrary` for previously registered signed Storage original upload and SHA-verified readback.
 - `reviews`: `SignedReviewWorkspace(checker, ledger)`, only when **the checker's publisher is the same durable ledger** and all grants are enforced. Without a ledger/review port, review requests return 503, not a success.
 - Optional `publishable_key="sb_publishable_..."` for direct user Supabase development password sign-in. Other keys (including `sb_secret_*`) are rejected. A trusted host can alternatively inject `window.caseproofSession` with `getBearer()`, `caseId`, `briefVersionId`, as the Word spike does.
@@ -17,7 +18,7 @@ Open `http://127.0.0.1:<port>/dev/clearbrief` from the **same host**. No service
 ## Completed interactive behavior
 
 1. Signed existing matter open, fail closed for invalid/expired session.
-2. Versioned source inventory with incomplete/error states, authorized representation preview and verified original download.
+2. Versioned **brief-scoped** source inventory with incomplete/excluded states, authorized representation preview and verified original download (latter requires the original-reader port).
 3. Signed lexical search with exact source/citation mapping and reported coverage.
 4. Single scoped M2 deterministic check displaying **citations + factual candidate observations**, declared partial scope and clean-zero warning behavior.
 5. A visible reviewer panel; typed human disposition + rationale, same actor/snapshot authorization, idempotent request UUID and optimistic revision; reopen saved review history.
