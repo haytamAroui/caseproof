@@ -56,16 +56,11 @@
     if (err?.message === "stale_revision") return "The source or review changed. Refresh before trying again.";
     return "This operation is unavailable. Check the configured service and current permissions.";
   }
-  async function startSession(evt) {
-    evt.preventDefault();
-    const caseId=$("case-id").value.trim(), briefId=$("brief-id").value.trim();
-    if (!UUID.test(caseId)||!UUID.test(briefId)) {notice("Enter canonical matter and brief-version UUIDs.","danger");return;}
-    $("connect").disabled=true;
-    try {
+  async function authenticate() {
+      if(state.session) { await bearer(); return state.session; }
+      const generation=state.generation;
       let session;
       if (window.caseproofSession && typeof window.caseproofSession.getBearer === "function") {
-        if (window.caseproofSession.caseId !== caseId || window.caseproofSession.briefVersionId !== briefId)
-          throw Error("provider_mismatch");
         session=window.caseproofSession; state.external=true;
       } else {
         if (!state.publishable) throw Error("config_unavailable");
@@ -84,14 +79,51 @@
           clear:()=>{token="";expiresAt=0;}};
         state.external=false;
       }
-      state.session=session;state.caseId=caseId;state.briefId=briefId;
+      if(generation!==state.generation){session.clear?.();throw Error("session_expired");}
+      state.session=session;
       $("password").value="";$("signout").hidden=false;
+      return session;
+  }
+  async function startSession(evt) {
+    evt.preventDefault();
+    const caseId=$("case-id").value.trim(), briefId=$("brief-id").value.trim();
+    if (!UUID.test(caseId)||!UUID.test(briefId)) {notice("Enter canonical matter and brief-version UUIDs.","danger");return;}
+    $("connect").disabled=true;$("find-matters").disabled=true;
+    try {
+      const session=await authenticate();
+      if(state.external && (session.caseId!==caseId || session.briefVersionId!==briefId))
+        throw Error("provider_mismatch");
+      state.caseId=caseId;state.briefId=briefId;
       clearView(); await load();
     } catch(err) {
       if(err.message==="provider_mismatch")notice("The connected Word session belongs to a different matter/brief.","danger");
       else if(err.message==="credentials_required")notice("Enter your development Auth email and password.","danger");
       else notice(statusFor(err),"danger");
-    } finally {$("connect").disabled=false;}
+    } finally {$("connect").disabled=false;$("find-matters").disabled=false;}
+  }
+  async function findMatters() {
+    const generation=state.generation;
+    $("connect").disabled=true;$("find-matters").disabled=true;
+    const node=$("matter-options");node.replaceChildren();
+    try {
+      await authenticate();
+      const data=await api("/dev/clearbrief/matters");
+      if(generation!==state.generation || !state.session)return;
+      if(data.schema!=="caseproof-clearbrief-matters-v1" || !Array.isArray(data.matters))throw Error("invalid_schema");
+      if(!data.matters.length)node.append(el("p","No matters are currently available to this account.","small"));
+      for(const matter of data.matters){
+        if(!UUID.test(matter.case_id))throw Error("invalid_schema");
+        if(state.external && matter.case_id!==state.session.caseId)continue;
+        const button=el("button","Matter "+matter.case_id+" · "+label(matter.state),"source-item");
+        button.type="button";
+        button.addEventListener("click",()=>{$("case-id").value=matter.case_id;});
+        node.append(button);
+      }
+      notice("Select a matter and enter its brief version to continue.");
+    } catch(error){
+      if(generation===state.generation)notice(error.message==="credentials_required" ?
+        "Enter your development Auth email and password." : statusFor(error),"danger");
+    } finally {$("connect").disabled=false;$("find-matters").disabled=false;}
   }
   function renderSources() {
     const node=$("sources");node.replaceChildren();
@@ -398,10 +430,12 @@
     state.generation+=1;state.previewSeq+=1;
     if(!state.external)state.session?.clear?.();
     state.session=null;state.external=false;state.caseId="";state.briefId="";
+    $("matter-options").replaceChildren();
     $("password").value="";$("signout").hidden=true;clearView();notice("Session ended. No credentials were saved.");
   }
   async function init(){
     $("connection-form").addEventListener("submit",startSession);
+    $("find-matters").addEventListener("click",findMatters);
     $("review-form").addEventListener("submit",submitReview);
     $("search").addEventListener("click",search);
     $("upload-form").addEventListener("submit",upload);
@@ -429,4 +463,5 @@
   }
   void init();
 })();
+
 

@@ -22,6 +22,7 @@ from apps.api.litigation_review_app import create_clearbrief_review_router
 from apps.api.litigation_review_workspace import SignedReviewWorkspace
 from apps.api.litigation_search_app import create_litigation_search_app
 from apps.api.litigation_workspace_sources import create_clearbrief_sources_router
+from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 
@@ -54,6 +55,15 @@ def create_litigation_development_app(
     @app.get("/dev/clearbrief/config", include_in_schema=False)
     def lawyer_config() -> dict[str, str | None]:
         return {"schema": "caseproof-clearbrief-dev-config-v1", "publishable_key": publishable_key}
+
+    catalog = SignedMatterCatalog(publishable_key) if publishable_key else None
+
+    @app.get("/dev/clearbrief/matters", include_in_schema=False)
+    def lawyer_matters(authorization: str | None = Header(default=None)) -> dict[str, object]:
+        if catalog is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return {"schema": "caseproof-clearbrief-matters-v1",
+                "matters": catalog.list_matters(_token(authorization))}
 
     # Fixed static assets: no user-defined paths and no production mount.
     _workspace = Path(__file__).resolve().parents[1] / "web" / "clearbrief"
@@ -164,3 +174,4 @@ def create_litigation_development_app(
         return Response(status_code=201)
 
     return app
+

@@ -29,6 +29,8 @@
         <label>Dev Auth email<input id="email" type="email" autocomplete="username" maxlength="254" placeholder="you@example.com"></label>
         <label>Password<input id="password" type="password" autocomplete="current-password" maxlength="256"></label>
       </div>
+      <div class="form-actions"><button type="button" id="find-matters" class="secondary">Find my matters</button><span class="small">Sign in to list your authorized development matters.</span></div>
+      <div id="matter-options" class="source-list" aria-live="polite"></div>
       <div class="two">
         <label>Matter UUID<input id="case-id" required spellcheck="false" autocomplete="off" placeholder="00000000-0000-4000-8000-000000000000"></label>
         <label>Brief version UUID<input id="brief-id" required spellcheck="false" autocomplete="off" placeholder="00000000-0000-4000-8000-000000000000"></label>
