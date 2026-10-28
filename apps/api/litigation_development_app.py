@@ -17,9 +17,9 @@ from apps.api.litigation_check_app import create_litigation_check_app
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
 from apps.api.litigation_evidence_app import EvidenceReader, _token, create_evidence_app
 from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
+from apps.api.litigation_live_roundtrip import create_live_review_router
 from apps.api.litigation_original_reader import AuthorizedOriginalReader
 from apps.api.litigation_review_app import create_clearbrief_review_router
-from apps.api.litigation_live_roundtrip import create_live_review_router
 from apps.api.litigation_review_workspace import SignedReviewWorkspace
 from apps.api.litigation_search_app import create_litigation_search_app
 from apps.api.litigation_workspace_sources import create_clearbrief_sources_router
