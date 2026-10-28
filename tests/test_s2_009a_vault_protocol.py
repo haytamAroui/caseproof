@@ -444,4 +444,7 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
             "20261028110102_caseproof_dev_reversible_draft_cleanup.sql",
             "20261028110233_caseproof_dev_ordered_revised_brief_state.sql",
             "20261028110604_caseproof_dev_correction_review_head_fence.sql",
+            "20261028111543_caseproof_dev_correct_owner_write_and_read_separation.sql",
+            "20261028111744_caseproof_dev_require_org_write_for_brief.sql",
+            "20261028111820_caseproof_dev_org_only_revoke_test_rpc.sql",
     }
