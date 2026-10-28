@@ -1,0 +1,31 @@
+name: CaseProof development signed live review PR acceptance
+on:
+  push:
+    branches:
+      - feat/live-review-round-trip
+permissions:
+  contents: read
+concurrency:
+  group: caseproof-live-review-pr-private-auth
+  cancel-in-progress: false
+
+jobs:
+  live-signed-roundtrip:
+    if: ${{ github.repository == 'haytamAroui/caseproof' && github.ref == 'refs/heads/feat/live-review-round-trip' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: caseproof-dev-live-auth
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - name: Signed development Auth, existing seeded matter, live review and cold restart
+        env:
+          CASEPROOF_DEV_LIVE_ROUNDTRIP: 'YES'
+          CASEPROOF_LIVE_PR_PROBE: 'YES'
+          CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+          CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+        run: uv run --locked python -m scripts.verify_dev_live_review_roundtrip
