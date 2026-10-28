@@ -64,7 +64,7 @@ jobs:
           fixture='supabase/migrations/20261027214851_caseproof_m1_dev_live_positive_fixture_rpc.sql'
           test -f "$fixture"
           cmp "$fixture" db/proposals/PIV-M1_DEV_live_positive_fixture_rpc.sql
-          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 24
+          test "$(find supabase/migrations -type f -name '*.sql' | wc -l)" -eq 25
       - name: Cross-check with pinned official Supabase CLI
         run: |
           set -euo pipefail
