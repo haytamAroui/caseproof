@@ -1,8 +1,8 @@
 # ADR 0016 — Belgian litigation writing and evidence review pivot
 
-**Decision:** ACCEPTED as the product delivery direction on 2026-10-26. **Implementation:** M0 contracts and synthetic evaluations only; no new production routes, schema, authorizations, or legal-rule approval.
+**Decision:** ACCEPTED as the product delivery direction on 2026-10-26; **commercial Word-first/broad-scope decision SUPERSEDED on 2026-10-28 by [ADR 0018](0018-pre-submission-verification-freeze.md)**. Retained as historical rationale and for architecture/security continuity. **Implementation:** M0 contracts and synthetic evaluations only; no new production routes, schema, authorizations, or legal-rule approval.
 
-**Source of authority:** [ROADMAP.md](../ROADMAP.md) is the sole PIV-00–20 backlog and [PRODUCT_WORKFLOW.md](../PRODUCT_WORKFLOW.md) is the companion full user journey. This ADR records product-level decisions; it does not override [CONSTITUTION.md](../../CONSTITUTION.md) or technical trust gates.
+**Historical source of authority:** [ROADMAP.md](../ROADMAP.md) now records the narrower M0–M6 scope; historical PIV-00–20 items do not override it and [PRODUCT_WORKFLOW.md](../PRODUCT_WORKFLOW.md) is the companion full user journey. This ADR records product-level decisions; it does not override [CONSTITUTION.md](../../CONSTITUTION.md) or technical trust gates.
 
 ## Decision and intended customer outcome
 
