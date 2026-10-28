@@ -6,16 +6,24 @@ commands are real but do not claim an installed live reviewer/Word backend.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
 from application.litigation.review_cycle import ReviewPacket
+from application.litigation.matter_policy import (
+    CurrentMatterGrant, CurrentOrganizationGrant,
+    MatterPermission, OrganizationPermission,
+)
 from application.litigation.unified_review import ObservationReview, ReviewDisposition
 from apps.api.litigation_development_app import create_litigation_development_app
+from apps.api.access_control import VerifiedSubject, InvalidBearer
+from apps.api.litigation_check_service import PrivateMatterAccess
 from apps.api.litigation_review_workspace import SignedReviewWorkspace
 from tests.test_litigation_evidence_search import ACTOR, CASE, DRAFT, search_rig
+from tests.test_litigation_m2_headless_api import NOW
 
 
 HEADERS = {"Authorization": "Bearer signed-dev-fixture"}
@@ -68,6 +76,37 @@ def make_client():
     search, _store = search_rig()
     ledger = Ledger()
     checker = search.checker
+    # The legacy headless fixture uses non-UUID names; the actual reviewer
+    # ledger must receive canonical Supabase actor and organization UUIDs.
+    uuid_actor, uuid_org = str(uuid4()), str(uuid4())
+
+    class CanonicalVerifier:
+        def verify_bearer(self, token):
+            if token != "signed-dev-fixture":
+                raise InvalidBearer("not a signed fixture")
+            return VerifiedSubject(
+                uuid_actor, "synthetic-issuer", "authenticated",
+                NOW - timedelta(minutes=1), NOW + timedelta(hours=1), False,
+            )
+
+    def current_access(subject_id, case_id):
+        if subject_id != uuid_actor or case_id != CASE:
+            return None
+        member = CurrentOrganizationGrant(
+            uuid_actor, uuid_org, True,
+            frozenset({OrganizationPermission.CASE_READ,
+                       OrganizationPermission.FINDING_WRITE,
+                       OrganizationPermission.REVIEW_REQUEST}), 1,
+        )
+        grant = CurrentMatterGrant(
+            uuid_actor, uuid_org, CASE, True,
+            frozenset({MatterPermission.READ, MatterPermission.DRAFT_CHECK,
+                       MatterPermission.REVIEW_REQUEST}), 1,
+        )
+        return PrivateMatterAccess(CASE, uuid_org, member, grant, 1)
+
+    checker.verifier = CanonicalVerifier()
+    checker.store.current_access = current_access
     checker.publisher = ledger
     review = SignedReviewWorkspace(checker, ledger)
     app = create_litigation_development_app(checker=checker, reviews=review)
