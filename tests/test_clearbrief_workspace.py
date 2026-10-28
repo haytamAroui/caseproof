@@ -220,3 +220,20 @@ def test_unconnected_review_is_not_a_successful_decision():
     assert "localStorage" not in script and "sessionStorage" not in script
     assert "innerHTML" not in script and "document.write" not in script
     assert 'getBearer' in script
+
+
+def test_browser_never_reuses_review_context_or_stale_source_previews():
+    repo = Path(__file__).resolve().parents[1]
+    script = (repo / "apps/web/clearbrief/workspace.js").read_text()
+    page = (repo / "apps/web/clearbrief/index.html").read_text()
+    assert 'id="check-scope"' in page
+    assert "state.previewSeq+=1" in script
+    assert "seq!==state.previewSeq" in script
+    assert "state.selected?.id===selectedId" in script
+    assert "state.check=null;state.review=null;" in script
+    assert 'state.loading=true' in script
+    assert 'state.selected=null;' in script
+    assert 'Resolve the pending review save before refreshing' in script
+    assert 'processed of ' in script and 'Excluded: ' in script and 'Incomplete: ' in script
+    assert "generation!==state.generation" in script
+    assert "state.session" in script
