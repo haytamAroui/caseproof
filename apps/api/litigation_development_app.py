@@ -85,6 +85,75 @@ def create_litigation_development_app(
         return FileResponse(_workspace / asset)
 
 
+    # Word's pinned localhost sideload origin now serves the same signed
+    # application APIs. The browser receives only a publishable key. No
+    # customer/public listener, admin credentials or production routes.
+    _word = Path(__file__).resolve().parents[1] / "word_addin"
+    _word_files = {
+        "index.html": "text/html",
+        "taskpane.js": "application/javascript",
+        "taskpane.css": "text/css",
+        "demo-session.js": "application/javascript",
+        "auth/live-ui.js": "application/javascript",
+        "auth/office-callback.js": "application/javascript",
+        "auth-callback.html": "text/html",
+        "dist/live-auth.js": "application/javascript",
+        "manifest-live-dev.xml": "application/xml",
+    }
+
+    @app.get("/caseproof-public-config.json", include_in_schema=False)
+    def word_public_config() -> dict[str, str]:
+        if publishable_key is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return {"projectUrl": "https://ldwmocpxwskvhoojndrd.supabase.co",
+                "publishableKey": publishable_key}
+
+    @app.get("/index.html", include_in_schema=False)
+    def signed_word_entry(request: Request) -> FileResponse:
+        if request.query_params.get("demo") == "1" or publishable_key is None:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        return FileResponse(_word / "index.html", media_type="text/html")
+
+    @app.get("/word-assets/{asset_path:path}", include_in_schema=False)
+    def signed_word_asset(asset_path: str) -> FileResponse:
+        # Exact allowlist. No path normalization, traversal or arbitrary
+        # open-file primitive from the Office task pane.
+        if publishable_key is None or asset_path not in _word_files:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        return FileResponse(_word / asset_path, media_type=_word_files[asset_path])
+
+    @app.get("/taskpane.js", include_in_schema=False)
+    def word_taskpane_js() -> FileResponse:
+        return signed_word_asset("taskpane.js")
+
+    @app.get("/taskpane.css", include_in_schema=False)
+    def word_taskpane_css() -> FileResponse:
+        return signed_word_asset("taskpane.css")
+
+    @app.get("/demo-session.js", include_in_schema=False)
+    def word_demo_js() -> FileResponse:
+        return signed_word_asset("demo-session.js")
+
+    @app.get("/auth/live-ui.js", include_in_schema=False)
+    def word_auth_ui() -> FileResponse:
+        return signed_word_asset("auth/live-ui.js")
+
+    @app.get("/auth/office-callback.js", include_in_schema=False)
+    def word_auth_callback_js() -> FileResponse:
+        return signed_word_asset("auth/office-callback.js")
+
+    @app.get("/auth-callback.html", include_in_schema=False)
+    def word_auth_callback_html() -> FileResponse:
+        return signed_word_asset("auth-callback.html")
+
+    @app.get("/dist/live-auth.js", include_in_schema=False)
+    def word_auth_bundle() -> FileResponse:
+        return signed_word_asset("dist/live-auth.js")
+
+    @app.get("/manifest-live-dev.xml", include_in_schema=False)
+    def word_live_manifest() -> FileResponse:
+        return signed_word_asset("manifest-live-dev.xml")
+
     @app.middleware("http")
     async def local_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
         try:
@@ -97,7 +166,17 @@ def create_litigation_development_app(
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        if request.url.path.startswith("/dev/clearbrief"):
+        if request.url.path in {"/index.html", "/caseproof-public-config.json",
+            "/taskpane.js", "/taskpane.css", "/demo-session.js",
+            "/auth/live-ui.js", "/auth/office-callback.js", "/auth-callback.html",
+            "/dist/live-auth.js", "/manifest-live-dev.xml"} or request.url.path.startswith("/word-assets/"):
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; script-src 'self' https://appsforoffice.microsoft.com; "
+                "style-src 'self'; connect-src 'self' https://ldwmocpxwskvhoojndrd.supabase.co; "
+                "img-src 'self' data:; base-uri 'none'; form-action 'none'; "
+                "frame-ancestors 'self' https://*.office.com https://*.officeapps.live.com"
+            )
+        elif request.url.path.startswith("/dev/clearbrief"):
             response.headers["Content-Security-Policy"] = (
                 "default-src 'none'; script-src 'self'; style-src 'self'; "
                 "connect-src 'self' https://ldwmocpxwskvhoojndrd.supabase.co; "

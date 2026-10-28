@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Header
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from apps.api.access_control import (
@@ -24,6 +25,7 @@ from apps.api.access_control import (
     InvalidBearer,
 )
 from apps.api.litigation_evidence_app import _token
+from apps.api.signed_document_parse import BINARY_MEDIA, MAX_BINARY_BYTES, parse_verified_original
 from apps.api.signed_supabase_originals import (
     PrivateStorageExists,
     PrivateStorageFailure,
@@ -34,6 +36,7 @@ from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAut
 
 HOST = "ldwmocpxwskvhoojndrd.supabase.co"
 MAX_TXT = 1024 * 1024
+MAX_ORIGINAL = MAX_BINARY_BYTES
 MAX_RPC_RESPONSE = 2 * 1024 * 1024
 
 
@@ -47,6 +50,11 @@ def _uuid(value: str) -> str:
     return value
 
 
+class SignedEvidenceSearch(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    query: str = Field(min_length=2, max_length=120)
+
+
 class MatterCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     org_id: UUID
@@ -58,14 +66,14 @@ class OriginalRegister(BaseModel):
     model_config = ConfigDict(extra="forbid")
     filename: str = Field(min_length=1, max_length=128)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    byte_length: int = Field(ge=1, le=MAX_TXT)
-    media_type: str = Field(pattern=r"^text/plain$")
+    byte_length: int = Field(ge=1, le=MAX_ORIGINAL)
+    media_type: str = Field(pattern=r"^(text/plain|application/pdf|application/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$")
     request_id: UUID
 
 
 class OriginalUpload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    content_base64: str = Field(min_length=1, max_length=1400000)
+    content_base64: str = Field(min_length=1, max_length=6990600)
 
 
 class AuthoredBrief(BaseModel):
@@ -170,12 +178,12 @@ class JourneyClient:
     ) -> dict[str, object]:
         try:
             encoded = content.encode("ascii")
-            if len(encoded) > 1400000:
+            if len(encoded) > 6990600:
                 raise ValueError("oversize")
             data = base64.b64decode(encoded, validate=True)
         except (UnicodeError, ValueError, binascii.Error):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
-        if not 0 < len(data) <= MAX_TXT:
+        if not 0 < len(data) <= MAX_ORIGINAL:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         digest = hashlib.sha256(data).hexdigest()
         try:
@@ -183,7 +191,9 @@ class JourneyClient:
                 bearer=bearer, case_id=_uuid(case_id),
                 document_id=_uuid(doc_id), version_id=_uuid(version_id),
             )
-            if source.sha256_hex != digest or size != len(data) or source.content_type != "text/plain":
+            if (source.sha256_hex != digest or size != len(data) or
+                (source.content_type == "text/plain" and len(data) > MAX_TXT) or
+                (source.content_type not in BINARY_MEDIA and source.content_type != "text/plain")):
                 raise AccessRejected(AccessFailure.RESOURCE_MASKED)
             try:
                 self.library.put_once(
@@ -204,13 +214,22 @@ class JourneyClient:
         self, bearer: str, case_id: str, doc_id: str, version_id: str, request_id: str,
     ) -> dict[str, Any]:
         try:
-            raw = self.library.read(
+            ref, length = self.library.source(
                 bearer=bearer, case_id=_uuid(case_id),
                 document_id=_uuid(doc_id), version_id=_uuid(version_id),
             )
-            if not raw or len(raw) > MAX_TXT:
+            if ref.content_type not in BINARY_MEDIA and ref.content_type != "text/plain":
                 raise AccessRejected(AccessFailure.RESOURCE_MASKED)
-            raw.decode("utf-8", errors="strict")
+            raw = self.library.read(
+                bearer=bearer, case_id=case_id,
+                document_id=doc_id, version_id=version_id,
+            )
+            if len(raw) != length or not raw or len(raw) > MAX_ORIGINAL:
+                raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+            if ref.content_type == "text/plain":
+                if len(raw) > MAX_TXT:
+                    raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+                raw.decode("utf-8", errors="strict")
         except (PrivateStorageFailure, UnicodeError):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         # Only trusted loopback API may promote a verified source. The actor
@@ -223,7 +242,7 @@ class JourneyClient:
             raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
         except IdentityServiceUnavailable:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
-        data = {
+        data: dict[str, object] = {
             "p_actor": _uuid(actor.subject_id),
             "p_case": _uuid(case_id),
             "p_request": _uuid(request_id),
@@ -231,6 +250,19 @@ class JourneyClient:
             "p_version": _uuid(version_id),
             "p_content_base64": base64.b64encode(raw).decode("ascii"),
         }
+        rpc = "/rest/v1/rpc/caseproof_dev_ingest_verified"
+        if ref.content_type in BINARY_MEDIA:
+            from application.extraction.contracts import ExtractionError
+            try:
+                representation, manifest = parse_verified_original(
+                    document_id=doc_id, version_id=version_id,
+                    data=raw, media_type=ref.content_type,
+                )
+            except (ExtractionError, ValueError):
+                raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+            rpc = "/rest/v1/rpc/caseproof_dev_ingest_parsed_verified"
+            data["p_representation"] = representation
+            data["p_manifest"] = manifest
         admin = self._trusted_ingest_key
         headers = {
             "apikey": admin, "Content-Type": "application/json",
@@ -241,7 +273,7 @@ class JourneyClient:
         con = http.client.HTTPSConnection(HOST, timeout=20)
         try:
             con.request(
-                "POST", "/rest/v1/rpc/caseproof_dev_ingest_verified",
+                "POST", rpc,
                 body=json.dumps(data, separators=(",", ":")).encode("utf-8"),
                 headers=headers,
             )
@@ -316,5 +348,89 @@ def create_live_journey_router(
     def state(case_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         c, bearer = active(authorization)
         return c.call(bearer, "state", case_id=case_id)
+
+    @router.post("/dev/live/matters/{case_id}/briefs/{brief_version_id}/evidence/search")
+    def signed_evidence_search(
+        case_id: str, brief_version_id: str, body: SignedEvidenceSearch,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, object]:
+        c, bearer = active(authorization)
+        data = c.call(bearer, "state", case_id=case_id)
+        briefs, sources = data.get("briefs"), data.get("sources")
+        if not isinstance(briefs, list) or not briefs or not isinstance(sources, list) or len(sources) != 1:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        # Do not hand a Word host a stale document or a guessed matter/source.
+        if briefs[0].get("brief_version_id") != _uuid(brief_version_id):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        source = sources[0]
+        text = source.get("text")
+        manifest = source.get("parse_manifest")
+        if not isinstance(text, str) or not isinstance(source.get("original_sha"), str):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if manifest is not None and not isinstance(manifest, dict):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        found: list[dict[str, object]] = []
+        start = 0
+        # Exact offsets in the persisted representation. No fuzzy matches,
+        # unverified page numbers, or invented Stuk/Pièce citations.
+        while len(found) < 12:
+            at = text.find(body.query, start)
+            if at < 0:
+                break
+            end = at + len(body.query)
+            page = None
+            locator = "unmapped"
+            if manifest:
+                for block in manifest.get("blocks", []):
+                    if block["start"] <= at and end <= block["end"]:
+                        locator = str(block["locator"])
+                        if isinstance(block.get("page_index"), int):
+                            page = block["page_index"] + 1
+                        break
+            found.append({
+                "source_id": source["document_id"], "source_version_id": source["version_id"],
+                "source_sha256": source["original_sha"], "representation_id": source["representation_sha"],
+                "locator": locator, "page": page, "start": at, "end": end,
+                "text": text[max(0, at - 100):min(len(text), end + 100)],
+                "citation": None,
+            })
+            start = end
+        coverage = "partial" if manifest and manifest.get("complete") is False else "complete"
+        return {
+            "schema": "caseproof-evidence-search-v1", "case_id": case_id,
+            "brief_version_id": brief_version_id, "exhibit_revision": 1,
+            "coverage": coverage, "omitted_sources": 1 if coverage == "partial" else 0,
+            "source_media_type": source.get("media_type", "text/plain"),
+            "source_manifest": manifest, "hits": found,
+            "status": "unconfirmed_source_no_citation_authority",
+        }
+
+    @router.get("/dev/live/matters/{case_id}/briefs/{brief_version_id}/evidence/{document_id}/versions/{version_id}/original")
+    def signed_evidence_original(
+        case_id: str, brief_version_id: str, document_id: str, version_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> Response:
+        c, bearer = active(authorization)
+        data = c.call(bearer, "state", case_id=case_id)
+        briefs, sources = data.get("briefs"), data.get("sources")
+        if (not isinstance(briefs, list) or not briefs or
+            briefs[0].get("brief_version_id") != _uuid(brief_version_id) or
+            not isinstance(sources, list) or len(sources) != 1):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        source = sources[0]
+        if source.get("document_id") != _uuid(document_id) or source.get("version_id") != _uuid(version_id):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        try:
+            original = c.library.read(bearer=bearer, case_id=case_id,
+                document_id=document_id, version_id=version_id)
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        if hashlib.sha256(original).hexdigest() != source.get("original_sha"):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return Response(original, media_type="application/octet-stream", headers={
+            "Content-Disposition": "attachment; filename=caseproof-original",
+            "X-CaseProof-Original-SHA256": source["original_sha"],
+            "X-CaseProof-Original-Media-Type": source.get("media_type", "text/plain"),
+        })
 
     return router

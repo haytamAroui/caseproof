@@ -35,3 +35,40 @@ See `docs/m3/WORD_INTEGRATION_ACCEPTANCE.md` for the full product acceptance con
 The task pane also includes a Supabase OAuth/PKCE sign-in candidate adapted from Vaquill. It loads the pinned SDK through a locally built bundle and stores its session and PKCE verifier in an ephemeral in-memory storage instance. To exercise it on an independently configured development origin, that origin must serve the bundled client, same-origin search API and `caseproof-public-config.json` containing only `projectUrl` and `publishableKey` (an `sb_publishable_` key). Secret and service-role keys must never be supplied. The server and callback must use HTTPS; `auth-callback.html` must be in the Supabase redirect allowlist and the selected identity provider must be enabled. The current implementation supports standard `*.supabase.co` project domains and Google OAuth only.
 
 The included manifest and `demo_app.py` run synthetic mode, not a live CaseProof backend. Live authentication and private-matter integration have not been exercised, no customer use is authorized, and live citation editing remains disabled. Real deployment also needs approved origin/manifest configuration, validated Office dialog behavior, session revocation tests and independent security review. Use separate development users and synthetic files.
+
+## Signed development PDF/DOCX search in Microsoft Word — read-only integration
+
+The **separate** [signed development manifest](manifest-live-dev.xml) requests
+`ReadDocument`, not editing authority. It points at `https://localhost:3000/index.html`
+(no `demo=1`). The loopback CaseProof development API serves the Word pane,
+the pinned local SDK bundle, OAuth callback and the same-origin authenticated
+`/dev/live/...` source search and original-download routes. These expose only
+the public Supabase publishable key and **never** an admin key.
+
+1. Run `npm ci --prefix apps/word_addin` and
+   `npm --prefix apps/word_addin run build` to generate
+   `apps/word_addin/dist/live-auth.js`. The bundle is **not** committed.
+2. Obtain and trust a local development TLS certificate valid for `localhost`.
+   Start `uv run --locked uvicorn apps.api.dev_live_entry:app --host
+   127.0.0.1 --port 3000 --ssl-certfile <local-cert> --ssl-keyfile <local-key>
+   --no-proxy-headers`. Provide `CASEPROOF_DEV_PUBLISHABLE_KEY` securely.
+   Do not publish the server to the network or use production secrets. The
+   protected service-only ingestion credential, if needed for local ingestion,
+   must **never** be supplied through the Word task pane or browser config.
+3. In the **development** Supabase project, independently enable an appropriate
+   supported OAuth provider and add exactly
+   `https://localhost:3000/auth-callback.html` to its redirect allowlist.
+   Sideload `manifest-live-dev.xml` into a supported Word host. Enter the
+   authorized matter UUID and current authored brief-version UUID, then
+   complete Office dialog sign-in and select a unique sentence.
+4. Search exact text from a signed ingested PDF/DOCX and inspect the physical
+   PDF page/partial parser warning and SHA-256-verified original. No source
+   is auto-identified as `Stuk` or `Pièce`. Live search returns
+   `citation: null`; the Insert button remains disabled until later
+   exhibit-confirmation and Word-host editing acceptance.
+
+**Verification limit:** automated simulated Office and backend tests exercise
+routing, data access, digest validation and fail-closed behavior. A real Word
+host installation, OAuth dialog, document save/reopen, coauthoring and
+cross-host compatibility have **not yet been verified**. This is not customer
+processing or a filing/release workflow. Do not use confidential files.

@@ -31,6 +31,7 @@ test('sign-in binds matter only after login and sign-out clears it', async () =>
   const r = setup();
   await r.elements.login.click();
   assert.equal(r.win.caseproofSession.caseId, 'case-1');
+  assert.equal(r.win.caseproofSession.mode, 'dev-live');
   assert.equal(r.elements['matter-id'].disabled, true);
   assert.equal(r.elements.login.disabled, true);
   assert.doesNotMatch(r.elements['session-status'].textContent, /private-token/);

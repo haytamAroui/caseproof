@@ -194,6 +194,10 @@ def test_all_new_code_is_unwired_and_migration_unchanged() -> None:
             "20261028111543_caseproof_dev_correct_owner_write_and_read_separation.sql",
             "20261028111744_caseproof_dev_require_org_write_for_brief.sql",
             "20261028111820_caseproof_dev_org_only_revoke_test_rpc.sql",
+            "20261028114522_caseproof_dev_signed_pdf_docx_register_parse_manifest.sql",
+            "20261028114616_caseproof_dev_service_verified_binary_parser_promotion.sql",
+            "20261028114940_caseproof_dev_m2_preserve_partial_pdf_docx_unknown.sql",
+            "20261028114956_caseproof_dev_cleanup_verified_binary_source.sql",
     }
     workflow = (root / ".github/workflows/kernel-boundary.yml").read_text()
     assert "scripts.verify_s2_008a3_reader" in workflow
