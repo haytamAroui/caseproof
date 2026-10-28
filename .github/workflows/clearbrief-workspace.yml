@@ -21,12 +21,14 @@ jobs:
         run: node --check apps/web/clearbrief/workspace.js
       - name: Exercise source-preview provenance
         run: node --test tests/clearbrief_source_preview.test.js tests/clearbrief_journey_session.test.js
+      - name: Signed Word add-in read-only development bridge
+        run: node --test apps/word_addin/taskpane.test.cjs apps/word_addin/auth/live-ui.test.cjs
       - name: Security, signed API and reviewer tests
-        run: uv run --locked pytest -q tests/test_clearbrief_workspace.py tests/test_clearbrief_brief_sources.py tests/test_clearbrief_signed_matter_catalog.py tests/test_litigation_live_roundtrip.py tests/test_live_reviewed_correction.py tests/test_litigation_live_journey.py tests/test_litigation_development_app.py
+        run: uv run --locked pytest -q tests/test_clearbrief_workspace.py tests/test_clearbrief_brief_sources.py tests/test_clearbrief_signed_matter_catalog.py tests/test_litigation_live_roundtrip.py tests/test_live_reviewed_correction.py tests/test_live_signed_pdf_docx_word.py tests/test_litigation_live_journey.py tests/test_litigation_development_app.py
       - name: Python format and typing
         run: |
-          uv run --locked ruff check apps/api/litigation_live_roundtrip.py tests/test_live_reviewed_correction.py apps/api/litigation_live_journey.py tests/test_litigation_live_journey.py apps/api/litigation_development_app.py apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py apps/api/litigation_workspace_sources.py apps/api/signed_supabase_matter_catalog.py tests/test_clearbrief_workspace.py tests/test_clearbrief_brief_sources.py tests/test_clearbrief_signed_matter_catalog.py
-          uv run --locked mypy --explicit-package-bases apps/api/litigation_live_roundtrip.py apps/api/litigation_live_journey.py apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py apps/api/litigation_workspace_sources.py
+          uv run --locked ruff check apps/api/signed_document_parse.py apps/api/litigation_live_roundtrip.py scripts/verify_dev_live_binary_journey.py tests/test_live_signed_pdf_docx_word.py tests/test_live_reviewed_correction.py apps/api/litigation_live_journey.py tests/test_litigation_live_journey.py apps/api/litigation_development_app.py apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py apps/api/litigation_workspace_sources.py apps/api/signed_supabase_matter_catalog.py tests/test_clearbrief_workspace.py tests/test_clearbrief_brief_sources.py tests/test_clearbrief_signed_matter_catalog.py
+          uv run --locked mypy --explicit-package-bases apps/api/signed_document_parse.py apps/api/litigation_live_roundtrip.py apps/api/litigation_live_journey.py apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py apps/api/litigation_workspace_sources.py
       - name: Scope receipt
         if: always()
         run: |
@@ -34,7 +36,7 @@ jobs:
             echo "## ClearBrief development product slice"
             echo "- Browser UI and typed API contract: real code, not mocked output."
             echo "- Signed evidence, scoped checks, review UX and original transport are opt-in ports."
-            echo "- Live ingestion and review require the protected signed server acceptance, not these mocked HTTP contracts."
+            echo "- PDF/DOCX parsing and Word search have real local parser tests; live Auth/Storage requires the separate protected main acceptance."
             echo "- Word host, release artifacts and customer access remain OPEN."
           } >> "$GITHUB_STEP_SUMMARY"
 
