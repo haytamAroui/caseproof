@@ -151,6 +151,24 @@ Court-profile guidance is versioned and shows the court/division/chamber, docume
 
 **Done when:** the recipient sees only authorized materials, or the lawyer has downloaded the intended package for the existing filing process. The matter records prepared, shared, submitted and receipt-confirmed as distinct states.
 
+## Authority throughout the lawyer workflow
+
+**Target behavior; not a claim that these controls are implemented or deployed.** CaseProof proposes and checks; an authorized human decides consequential actions. The application enforces current matter- and action-specific authorization independently of any model output. The existing action catalog and reviewed matter policy determine actual permission names and grants; the categories below do not install new permissions.
+
+| Step | Authorized action and check |
+|---|---|
+| Open matter / inspect evidence | A signed actor has current access to the exact matter and source. Read access does not authorize edits, review, publication, sharing or filing. |
+| Check or propose | Confirm current check authority and selected scope. Results and model suggestions remain proposals; content found in a document cannot approve a subsequent action. |
+| Correct | An authorized human previews the change; immediately before applying, revalidate permission, current draft/range, source and relevant review versions. A stale or revoked action stops; preserve history and recheck affected work. |
+| Review | A permitted named reviewer or the explicit solo-practice policy records a decision for the exact draft/check snapshot. Review is distinct from permission to release. |
+| Release | A separately authorized human approves the precise current manifest/artifact under the applicable review policy. The system checks authority and freshness again immediately before execution and records an auditable outcome. |
+| Share or hand off | A separate authorized action specifies the exact artifact, recipient, scope, redaction and access conditions; expiry/revocation apply to hosted access. A prior review or release is not blanket permission to share with anyone. |
+| Future external submission | Remains a separate human handoff unless a separately approved integration is designed and accepted. A future action must bind authorization to the artifact and destination and reconcile uncertain outcomes; export is not filing. |
+
+For consequential approval or denial, record the authenticated actor and relevant role/delegation, policy version, action, matter, input/review snapshot, artifact/manifest, time and outcome, plus recipient/destination, scope, expiry or revocation when applicable. Keep sensitive content out of operational telemetry. If required audit persistence fails, do not complete the action. If permission or approval expires, is revoked, conflicts, cannot be verified, or the relevant document, recipient, policy or snapshot changes, stop and require appropriate renewed authorization. Use stable operation IDs to reconcile uncertain acknowledgments before retry; preserve prior history. A downloaded copy cannot be remotely recalled.
+
+**Acceptance scenarios:** deny a read-only actor's edit/release/share; deny same-organization ungranted and cross-tenant access; reject a revoked actor or changed snapshot between preparation and execution; reject replay for another matter, artifact or recipient; block on required audit failure; handle concurrent changes and uncertain acknowledgment without duplicate action. A malicious instruction or purported approval embedded in an uploaded document or retrieved/model-generated text does not confer authority. These checks belong in M1–M4 signed integrated acceptance; external submission scenarios apply only to separately approved future integrations. [Roadmap authority acceptance](ROADMAP.md#authority-and-consequential-action-acceptance).
+
 ## Minimum complete launch demonstration (one real integrated outcome)
 
 These are **one contiguous user journey**, not seven isolated green fixture tests. After appropriate **approved security and confidentiality** gates, record in staging:
