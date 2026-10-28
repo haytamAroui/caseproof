@@ -10,10 +10,9 @@ from dataclasses import asdict
 from typing import Any
 
 from fastapi import APIRouter, Header
-from fastapi.responses import JSONResponse
 
 from apps.api.access_control import AccessFailure, AccessRejected
-from apps.api.litigation_check_service import AuthorizedLitigationChecker
+from apps.api.litigation_check_service import AuthorizedLitigationChecker, CheckBundle
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
 
@@ -22,7 +21,7 @@ class SignedBriefSources:
     def __init__(self, checker: AuthorizedLitigationChecker) -> None:
         self.checker = checker
 
-    def _bundle(self, *, bearer: str, case_id: str, brief_version_id: str):
+    def _bundle(self, *, bearer: str, case_id: str, brief_version_id: str) -> CheckBundle:
         if any(type(x) is not str or not 0 < len(x) <= 128
                for x in (case_id, brief_version_id)):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
@@ -79,6 +78,8 @@ class SignedBriefSources:
     def preview(
         self, *, bearer: str, case_id: str, brief_version_id: str, source_id: str,
     ) -> dict[str, Any]:
+        if not isinstance(source_id, str) or not 0 < len(source_id) <= 128:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         bundle = self._bundle(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
         matches = [x for x in bundle.previews if x.row.source_id==source_id]
         if len(matches)!=1:
