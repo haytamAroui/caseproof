@@ -192,7 +192,7 @@ def test_unknown_observation_and_invalid_uuid_refused():
     assert client.post(BASE + "/review", headers=HEADERS, json=cmd).status_code == 503
     assert client.post(BASE + "/review", headers=HEADERS, json={
         **cmd, "request_id": str(UUID(int=0))
-    }).status_code == 404
+    }).status_code == 422
 
 
 def test_public_key_is_opt_in_and_never_accepts_secret():
