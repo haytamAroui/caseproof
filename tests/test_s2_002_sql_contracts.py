@@ -146,6 +146,7 @@ def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> Non
             "20261028110031_caseproof_dev_signed_reviewed_draft_correction.sql",
             "20261028110102_caseproof_dev_reversible_draft_cleanup.sql",
             "20261028110233_caseproof_dev_ordered_revised_brief_state.sql",
+            "20261028110604_caseproof_dev_correction_review_head_fence.sql",
     }
     integration = (root / "scripts/verify_s2_002_database.py").read_text(
         encoding="utf-8"
