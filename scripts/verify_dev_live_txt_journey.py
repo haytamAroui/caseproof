@@ -230,6 +230,55 @@ def verify(
         denied(owner, "POST", base + "/reviews", {**review, "request_id": str(uuid4())})
         print("LIVE_TXT_5: authored brief, data-driven check and atomic signed M2 review")
 
+        # A reviewed change is a NEW immutable authored brief revision. It
+        # never overwrites the signed private source, original brief or review.
+        correction = {
+            "snapshot_hash": snapshot, "expected_review_revision": 1,
+            "before": claim, "after": "126 EUR", "request_id": str(uuid4()),
+        }
+        for outsider in outsiders:
+            denied(outsider, "POST", base + "/corrections/preview", correction)
+            denied(outsider, "POST", base + "/corrections/commit", correction)
+        denied(owner, "POST", base + "/corrections/commit",
+               {**correction, "snapshot_hash": "f" * 64})
+        preview = success(owner, "POST", base + "/corrections/preview", correction)
+        corrected_text = statement.replace("125 EUR", "126 EUR")
+        if (preview.get("preview_text") != corrected_text
+            or preview.get("committed") is not False):
+            raise LiveFixtureError("review-bound correction preview mismatch")
+        changed = success(owner, "POST", base + "/corrections/commit", correction)
+        changed_replay = success(owner, "POST", base + "/corrections/commit", correction)
+        new_version = str(UUID(changed["brief_version_id"]))
+        if (changed.get("committed") is not True
+            or changed.get("revision") != 2
+            or changed.get("parent_version_id") != brief
+            or changed_replay.get("replayed") is not True
+            or changed_replay.get("brief_version_id") != new_version):
+            raise LiveFixtureError("durable correction/idempotent receipt mismatch")
+        denied(owner, "POST", base + "/corrections/commit",
+               {**correction, "after": "127 EUR"})
+        denied(owner, "POST", base + "/corrections/commit",
+               {**correction, "request_id": str(uuid4())})
+        denied(owner, "POST", base + "/check")
+        new_base = f"/dev/live/matters/{case}/briefs/{new_version}"
+        rechecked = success(owner, "POST", new_base + "/check")
+        if (rechecked.get("outcome") != "candidate_quote_mismatch"
+            or rechecked.get("snapshot_hash") == snapshot
+            or rechecked.get("review_revision") != 0
+            or rechecked.get("release_authorized") is not False):
+            raise LiveFixtureError("new revision did not produce separate unapproved finding")
+        new_review = {
+            "snapshot_hash": rechecked["snapshot_hash"],
+            "observation_id": rechecked["observation_id"],
+            "request_id": str(uuid4()), "expected_revision": 0,
+            "disposition": "needs_information",
+            "rationale": "New draft mismatch must be manually resolved; no approval",
+        }
+        new_saved = success(owner, "POST", new_base + "/reviews", new_review)
+        if new_saved.get("review_revision") != 1:
+            raise LiveFixtureError("corrected draft has no independent review")
+        print("LIVE_TXT_5A: reviewed correction preview, atomic CAS/replay, fresh mismatch and recheck")
+
         old_pid = proc.pid
         _server_stop(proc)
         proc = _server_start()
@@ -242,12 +291,17 @@ def verify(
         if (len(reopened.get("sources", [])) != 1 or
             reopened["sources"][0]["text"] != FIXTURE.decode("utf-8") or
             reopened["sources"][0]["snapshot_sha"] != ingested["snapshot_sha"] or
-            len(reopened.get("briefs", [])) != 1 or
-            reopened["briefs"][0]["text"] != statement):
-            raise LiveFixtureError("ingested source or authored brief lost after cold restart")
-        saved = success(fresh.access_token, "GET", base + "/reviews/" + snapshot)
+            len(reopened.get("briefs", [])) != 2 or
+            reopened["briefs"][0]["brief_version_id"] != new_version or
+            reopened["briefs"][0]["parent_version_id"] != brief or
+            reopened["briefs"][0]["text"] != corrected_text or
+            reopened["briefs"][0]["quote"] != "126 EUR" or
+            reopened["briefs"][1]["text"] != statement or
+            reopened["briefs"][1]["quote"] != claim):
+            raise LiveFixtureError("immutable draft revisions not reopened after cold restart")
+        saved = success(fresh.access_token, "GET", new_base + "/reviews/" + rechecked["snapshot_hash"])
         if saved.get("review_revision") != 1 or len(saved.get("decisions", [])) != 1:
-            raise LiveFixtureError("review not reopened from live Supabase after cold restart")
+            raise LiveFixtureError("new correction check/review not reopened from live Supabase")
         for outsider in outsiders:
             denied(outsider, "GET", f"/dev/live/matters/{case}/state")
             denied(outsider, "GET", base + "/reviews/" + snapshot)
@@ -257,7 +311,8 @@ def verify(
                                            "p_case": case}) is not True:
             raise LiveFixtureError("scoped revoke failed")
         denied(fresh.access_token, "GET", f"/dev/live/matters/{case}/state")
-        denied(fresh.access_token, "POST", base + "/check")
+        denied(fresh.access_token, "POST", new_base + "/check")
+        denied(fresh.access_token, "POST", new_base + "/corrections/commit", correction)
         denied(fresh.access_token, "POST", endpoint + "/ingest?request_id=" + str(uuid4()))
         try:
             stored.get_verified(ref, fresh.access_token)
