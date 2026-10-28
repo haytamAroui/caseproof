@@ -1,8 +1,8 @@
 """Development-only real signed matter -> original TXT -> immutable ingest -> brief.
 
-The server never uses a privileged Supabase key. PostgREST authenticates the
-bearer and the installed SQL RPC derives auth.uid() for every transaction.
-A source is promoted only after a signed Storage readback and SHA-256 check.
+All ordinary mutations use signed JWT and publishable key. TXT promotion
+instead uses loopback server verification of GoTrue and actual Storage bytes,
+then a service-only SQL function. Clients cannot self-certify original text.
 """
 from __future__ import annotations
 
@@ -17,7 +17,9 @@ from uuid import UUID
 from fastapi import APIRouter, Header
 from pydantic import BaseModel, ConfigDict, Field
 
-from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.access_control import (
+    AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer,
+)
 from apps.api.litigation_evidence_app import _token
 from apps.api.signed_supabase_originals import (
     PrivateStorageExists,
@@ -25,6 +27,7 @@ from apps.api.signed_supabase_originals import (
     SignedOriginalsStorage,
 )
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
+from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 
 HOST = "ldwmocpxwskvhoojndrd.supabase.co"
 MAX_TXT = 1024 * 1024
@@ -71,10 +74,19 @@ class AuthoredBrief(BaseModel):
 
 
 class JourneyClient:
-    def __init__(self, publishable_key: str):
+    def __init__(self, publishable_key: str, trusted_ingest_key: str | None = None):
         if not publishable_key.startswith("sb_publishable_"):
             raise ValueError("development publishable key required")
         self._key = publishable_key
+        if trusted_ingest_key is not None and not (
+            trusted_ingest_key.startswith('sb_secret_') or trusted_ingest_key.startswith('eyJ')
+        ):
+            raise ValueError('protected development admin key required')
+        self._trusted_ingest_key = trusted_ingest_key
+        self._verifier = SupabaseAuthUserVerifier(
+            'ldwmocpxwskvhoojndrd',
+            HttpsSupabaseUserLookup('ldwmocpxwskvhoojndrd', publishable_key),
+        )
         self.library = SignedSourceLibrary(SignedOriginalsStorage(publishable_key))
 
     def call(
@@ -83,7 +95,7 @@ class JourneyClient:
         request_id: str | None = None,
         data: dict[str, object] | None = None,
     ) -> dict[str, Any]:
-        if action not in {"create", "register", "ingest", "brief", "state"}:
+        if action not in {"create", "register", "brief", "state"}:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         body: dict[str, object] = {"p_action": action, "p_data": data or {}}
         if case_id is not None:
@@ -196,16 +208,62 @@ class JourneyClient:
             raw.decode("utf-8", errors="strict")
         except (PrivateStorageFailure, UnicodeError):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
-        return self.call(
-            bearer, "ingest", case_id=case_id, request_id=request_id,
-            data={"document_id": doc_id, "version_id": version_id,
-                  "content_base64": base64.b64encode(raw).decode("ascii")},
-        )
+        # Only trusted loopback API may promote a verified source. The actor
+        # is established by GoTrue, NEVER accepted from request JSON.
+        if self._trusted_ingest_key is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            actor = self._verifier.verify_bearer(bearer)
+        except InvalidBearer:
+            raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+        except IdentityServiceUnavailable:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        data = {
+            "p_actor": _uuid(actor.subject_id),
+            "p_case": _uuid(case_id),
+            "p_request": _uuid(request_id),
+            "p_document": _uuid(doc_id),
+            "p_version": _uuid(version_id),
+            "p_content_base64": base64.b64encode(raw).decode("ascii"),
+        }
+        admin = self._trusted_ingest_key
+        headers = {
+            "apikey": admin, "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+        }
+        if admin.startswith("eyJ"):
+            headers["Authorization"] = "Bearer " + admin
+        con = http.client.HTTPSConnection(HOST, timeout=20)
+        try:
+            con.request(
+                "POST", "/rest/v1/rpc/caseproof_dev_ingest_verified",
+                body=json.dumps(data, separators=(",", ":")).encode("utf-8"),
+                headers=headers,
+            )
+            response = con.getresponse()
+            status, body = response.status, response.read(MAX_RPC_RESPONSE + 1)
+        except (OSError, TimeoutError, http.client.HTTPException):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        finally:
+            con.close()
+        if status in (400, 401, 403, 404, 409, 422):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        if status != 200 or len(body) > MAX_RPC_RESPONSE:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            result = json.loads(body)
+        except (UnicodeError, ValueError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if not isinstance(result, dict):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return result
 
 
-def create_live_journey_router(publishable_key: str | None) -> APIRouter:
+def create_live_journey_router(
+    publishable_key: str | None, trusted_ingest_key: str | None = None,
+) -> APIRouter:
     router = APIRouter()
-    client = JourneyClient(publishable_key) if publishable_key else None
+    client = JourneyClient(publishable_key, trusted_ingest_key) if publishable_key else None
 
     def active(authorization: str | None) -> tuple[JourneyClient, str]:
         if client is None:
