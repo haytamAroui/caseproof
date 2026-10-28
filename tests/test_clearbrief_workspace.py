@@ -100,8 +100,7 @@ def make_client():
         )
         grant = CurrentMatterGrant(
             uuid_actor, uuid_org, CASE, True,
-            frozenset({MatterPermission.READ, MatterPermission.DRAFT_CHECK,
-                       MatterPermission.REVIEW_REQUEST}), 1,
+            frozenset({MatterPermission.READ, MatterPermission.DRAFT_CHECK}), 1,
         )
         return PrivateMatterAccess(CASE, uuid_org, member, grant, 1)
 
