@@ -7,10 +7,10 @@ the reviewed observation/snapshot and a disposition proposal.
 from __future__ import annotations
 
 from typing import Annotated, Any, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Header
 from pydantic import BaseModel, ConfigDict, Field
-from uuid import UUID
 
 from application.litigation.unified_review import ReviewDisposition
 from apps.api.access_control import AccessFailure, AccessRejected
