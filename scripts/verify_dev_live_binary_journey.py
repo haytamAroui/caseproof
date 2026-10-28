@@ -22,8 +22,7 @@ from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 from apps.api.signed_supabase_originals import OriginalRef, PrivateStorageDenied, SignedOriginalsStorage
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
-from scripts.verify_dev_ephemeral_auth import ISSUER, PROJECT_REF, GoTrueDevAdmin
-from scripts.verify_dev_ephemeral_auth import EphemeralAuthFailure
+from scripts.verify_dev_ephemeral_auth import PROJECT_REF, GoTrueDevAdmin
 from scripts.verify_dev_live_review_roundtrip import _request, _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import admin_rpc, success, denied
 from scripts.verify_m1_ephemeral_signed_private import ephemeral_private_probe
