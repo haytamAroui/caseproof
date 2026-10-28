@@ -24,7 +24,7 @@ jobs:
       - name: Python format and typing
         run: |
           uv run --locked ruff check apps/api/litigation_development_app.py apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py tests/test_clearbrief_workspace.py
-          uv run --locked mypy apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py
+          uv run --locked mypy --explicit-package-bases apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py
       - name: Scope receipt
         if: always()
         run: |
