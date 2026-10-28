@@ -19,6 +19,7 @@ from apps.api.litigation_evidence_app import _token
 
 HOST = "ldwmocpxwskvhoojndrd.supabase.co"
 RPC = "/rest/v1/rpc/caseproof_dev_live_review"
+CORRECTION_RPC = "/rest/v1/rpc/caseproof_dev_correct_brief"
 
 
 class LiveReviewRequest(BaseModel):
@@ -31,6 +32,17 @@ class LiveReviewRequest(BaseModel):
     rationale: str = Field(min_length=1, max_length=2000)
 
 
+class LiveCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_review_revision: int = Field(ge=1, le=255)
+    before: str = Field(min_length=3, max_length=100)
+    after: str = Field(min_length=3, max_length=100)
+    request_id: str = Field(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    )
+
+
 class SignedLiveReview:
     def __init__(self, publishable_key: str):
         if not publishable_key.startswith("sb_publishable_"):
@@ -41,7 +53,7 @@ class SignedLiveReview:
         self, bearer: str, *, case_id: str, brief_version_id: str,
         action: str, **values: object,
     ) -> dict[str, Any]:
-        if action not in {"check", "state", "review"}:
+        if action not in {"check", "state", "review", "preview_correction", "commit_correction"}:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         try:
             case = str(UUID(case_id))
@@ -50,14 +62,17 @@ class SignedLiveReview:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         if len(bearer) > 8192 or not bearer:
             raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED)
+        is_correction = action in {"preview_correction", "commit_correction"}
+        rpc = CORRECTION_RPC if is_correction else RPC
         data = {
-            "p_case": case, "p_version": version, "p_action": action,
+            "p_case": case, "p_version": version,
+            "p_action": action.removesuffix("_correction") if is_correction else action,
             **values,
         }
         con = http.client.HTTPSConnection(HOST, timeout=12)
         try:
             con.request(
-                "POST", RPC,
+                "POST", rpc,
                 json.dumps(data, separators=(",", ":")).encode("utf-8"),
                 headers={
                     "apikey": self._key,
@@ -84,7 +99,11 @@ class SignedLiveReview:
             result = json.loads(raw)
         except (ValueError, UnicodeError):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
-        if not isinstance(result, dict) or result.get("schema") != "caseproof-dev-signed-roundtrip-v1":
+        expected_schema = (
+            "dev-signed-draft-correction-v1"
+            if is_correction else "caseproof-dev-signed-roundtrip-v1"
+        )
+        if not isinstance(result, dict) or result.get("schema") != expected_schema:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
@@ -134,6 +153,31 @@ def create_live_review_router(publishable_key: str | None) -> APIRouter:
             p_snapshot=body.snapshot_hash, p_request=body.request_id,
             p_expected=body.expected_revision, p_observation=body.observation_id,
             p_disposition=body.disposition, p_rationale=body.rationale,
+        )
+
+    @router.post(base + "/corrections/preview")
+    def preview_correction(
+        case_id: str, brief_version_id: str, body: LiveCorrectionRequest,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        return invoke(
+            authorization, case_id, brief_version_id, "preview_correction",
+            p_snapshot=body.snapshot_hash,
+            p_expected_review=body.expected_review_revision,
+            p_before=body.before, p_after=body.after,
+        )
+
+    @router.post(base + "/corrections/commit")
+    def commit_correction(
+        case_id: str, brief_version_id: str, body: LiveCorrectionRequest,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        return invoke(
+            authorization, case_id, brief_version_id, "commit_correction",
+            p_snapshot=body.snapshot_hash,
+            p_expected_review=body.expected_review_revision,
+            p_before=body.before, p_after=body.after,
+            p_request=body.request_id,
         )
 
     return router
