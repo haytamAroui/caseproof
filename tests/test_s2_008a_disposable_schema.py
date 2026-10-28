@@ -78,6 +78,9 @@ def test_no_installed_migration_or_prod_route() -> None:
             "20261028081408_caseproof_dev_txt_revocation_cleanup.sql",
             "20261028081528_caseproof_dev_signed_create_org_discovery.sql",
             "20261028082143_caseproof_dev_txt_cleanup_uuid_fix.sql",
+            "20261028083533_caseproof_dev_close_client_ingest_bypass.sql",
+            "20261028083622_caseproof_dev_trusted_ingest_verified_promotion.sql",
+            "20261028083747_caseproof_dev_cleanup_actor_isolation.sql",
     }
     assert "S2-008a_disposable_representation_anchor_graph.sql" not in (
         ROOT / "apps/api/main.py"

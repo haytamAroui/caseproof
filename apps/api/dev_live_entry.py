@@ -5,4 +5,5 @@ from apps.api.litigation_development_app import create_litigation_development_ap
 
 app = create_litigation_development_app(
     publishable_key=os.environ.get("CASEPROOF_DEV_PUBLISHABLE_KEY"),
+    trusted_ingest_key=os.environ.get("CASEPROOF_DEV_AUTH_ADMIN_KEY"),
 )

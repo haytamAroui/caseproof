@@ -434,9 +434,12 @@
     if(value!==undefined)$("journey-state").textContent=JSON.stringify(value,null,2);
   }
   async function journeyOrganizations() {
+    const generation=state.generation;
     try {
       await authenticate();
+      if(generation!==state.generation)return;
       const result=await api("/dev/live/create-organizations");
+      if(generation!==state.generation)return;
       if(result.schema!=="caseproof-dev-create-orgs-v1"||!Array.isArray(result.organizations))
         throw Error("invalid_schema");
       const select=$("journey-org");select.replaceChildren();
@@ -448,9 +451,10 @@
       journeyOutput(result.organizations.length ?
         "Choose an authorized organization to create a private matter." :
         "No active organization grants case:create. Contact your development administrator.");
-    }catch(e){journeyOutput(statusFor(e));}
+    }catch(e){if(generation===state.generation)journeyOutput(statusFor(e));}
   }
   async function journeyCreate(event) {
+    const generation=state.generation;
     event.preventDefault();
     if(journey.busy)return;
     journey.busy=true;
@@ -458,19 +462,22 @@
     try{
       if(!UUID.test(org)||!name)throw Error("invalid_data");
       await authenticate();
+      if(generation!==state.generation)return;
       if(!journey.createRequest)journey.createRequest=crypto.randomUUID();
       const result=await api("/dev/live/matters",{method:"POST",json:{
         org_id:org,name,request_id:journey.createRequest}});
+      if(generation!==state.generation)return;
       if(!UUID.test(result.case_id))throw Error("invalid_schema");
       journey.createRequest=null;
       journey.caseId=result.case_id;journey.source=null;journey.brief=null;
       journey.snapshot=null;journey.observation=null;journey.revision=0;journey.pending=null;
       $("case-id").value=result.case_id;
       journeyOutput("Matter created with a private owner grant and atomic audit.",result);
-    }catch(e){journeyOutput(statusFor(e));}
-    finally{journey.busy=false;}
+    }catch(e){if(generation===state.generation)journeyOutput(statusFor(e));}
+    finally{if(generation===state.generation)journey.busy=false;}
   }
   async function journeyIngest(event){
+    const generation=state.generation;
     event.preventDefault();
     if(journey.busy)return;
     journey.busy=true;
@@ -479,9 +486,12 @@
       if(!UUID.test(caseId)||!file||file.size<1||file.size>1048576||
          !file.name.toLowerCase().endsWith(".txt"))throw Error("invalid_data");
       await authenticate();
+      if(generation!==state.generation)return;
       const bytes=new Uint8Array(await file.arrayBuffer());
+      if(generation!==state.generation)return;
       new TextDecoder("utf-8",{fatal:true}).decode(bytes);
       const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",bytes));
+      if(generation!==state.generation)return;
       const hex=Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("");
       const identity=caseId+":"+hex+":"+file.name;
       if(journey.uploadIdentity!==identity){journey.uploadIdentity=identity;
@@ -489,22 +499,26 @@
       const reg=await api("/dev/live/matters/"+caseId+"/sources",{method:"POST",json:{
         filename:file.name,sha256:hex,byte_length:bytes.length,media_type:"text/plain",
         request_id:journey.registerRequest}});
+      if(generation!==state.generation)return;
       let binary="";for(let i=0;i<bytes.length;i+=8192)
         binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
       const route="/dev/live/matters/"+caseId+"/sources/"+reg.document_id+"/"+reg.version_id;
       const uploaded=await api(route+"/upload",{method:"POST",json:{content_base64:btoa(binary)}});
+      if(generation!==state.generation)return;
       if(!uploaded.verified||uploaded.sha256!==hex)throw Error("unverified_upload");
       const ingested=await api(route+"/ingest?request_id="+journey.ingestRequest,{method:"POST"});
+      if(generation!==state.generation)return;
       if(ingested.original_sha!==hex||ingested.exhibit_confirmed!==false)
         throw Error("unverified_ingestion");
       journey.uploadIdentity=null;journey.registerRequest=null;journey.ingestRequest=null;
       journey.caseId=caseId;journey.source=ingested;
       $("case-id").value=caseId;
       journeyOutput("Verified original and immutable UTF-8 source representation.",ingested);
-    }catch(e){journeyOutput("TXT ingestion not confirmed. "+statusFor(e));}
-    finally{journey.busy=false;}
+    }catch(e){if(generation===state.generation)journeyOutput("TXT ingestion not confirmed. "+statusFor(e));}
+    finally{if(generation===state.generation)journey.busy=false;}
   }
   async function journeyBrief(event){
+    const generation=state.generation;
     event.preventDefault();
     if(journey.busy)return;
     journey.busy=true;
@@ -514,6 +528,7 @@
       let source=journey.source;
       if(!source){
         const data=await api("/dev/live/matters/"+caseId+"/state");
+      if(generation!==state.generation)return;
         source=data.sources?.[0];if(!source)throw Error("missing_ingested_source");
       }
       const text=$("journey-draft").value,quote=$("journey-quote").value;
@@ -521,16 +536,18 @@
       if(!journey.briefRequest)journey.briefRequest=crypto.randomUUID();
       const result=await api("/dev/live/matters/"+caseId+"/briefs",{
         method:"POST",json:{source_version_id:source.version_id,text,quote,request_id:journey.briefRequest}});
+      if(generation!==state.generation)return;
       if(!UUID.test(result.brief_version_id))throw Error("invalid_schema");
       journey.briefRequest=null;
       journey.caseId=caseId;journey.source=source;journey.brief=result;
       journey.snapshot=null;journey.revision=0;journey.pending=null;
       $("brief-id").value=result.brief_version_id;
       journeyOutput("Authored versioned brief saved. The factual check is still pending.",result);
-    }catch(e){journeyOutput("Brief creation not confirmed. "+statusFor(e));}
-    finally{journey.busy=false;}
+    }catch(e){if(generation===state.generation)journeyOutput("Brief creation not confirmed. "+statusFor(e));}
+    finally{if(generation===state.generation)journey.busy=false;}
   }
   async function journeyCheck(){
+    const generation=state.generation;
     if(journey.busy)return;
     journey.busy=true;
     try{
@@ -539,14 +556,16 @@
       if(!UUID.test(c)||!UUID.test(b))throw Error("invalid_data");
       const base="/dev/live/matters/"+c+"/briefs/"+b;
       const check=await api(base+"/check",{method:"POST"});
+      if(generation!==state.generation)return;
       if(!sha.test(check.snapshot_hash)||typeof check.outcome!=="string")throw Error("invalid_schema");
       journey.caseId=c;journey.brief={brief_version_id:b};
       journey.snapshot=check.snapshot_hash;journey.observation=check.observation_id;journey.revision=check.review_revision;
       journeyOutput("Deterministic source quote check completed; not a legal conclusion.",check);
-    }catch(e){journeyOutput("Check unavailable. "+statusFor(e));}
-    finally{journey.busy=false;}
+    }catch(e){if(generation===state.generation)journeyOutput("Check unavailable. "+statusFor(e));}
+    finally{if(generation===state.generation)journey.busy=false;}
   }
   async function journeyReview(event){
+    const generation=state.generation;
     event.preventDefault();
     if(journey.busy)return;
     journey.busy=true;
@@ -558,26 +577,32 @@
         request_id:crypto.randomUUID(),expected_revision:journey.revision,
         disposition:$("journey-disposition").value,rationale:$("journey-rationale").value.trim()};
       const saved=await api(base+"/reviews",{method:"POST",json:journey.pending});
+      if(generation!==state.generation)return;
       if(saved.review_revision!==journey.revision+1&&!saved.replayed)
         throw Error("invalid_receipt");
       journey.revision=saved.review_revision;journey.pending=null;
       journeyOutput("Version-bound human review saved atomically.",saved);
-    }catch(e){journeyOutput("Review outcome unknown; retry with the same request. "+statusFor(e));}
-    finally{journey.busy=false;}
+    }catch(e){if(generation===state.generation)journeyOutput("Review outcome unknown; retry with the same request. "+statusFor(e));}
+    finally{if(generation===state.generation)journey.busy=false;}
   }
   async function journeyReopen(){
+    const generation=state.generation;
     if(journey.busy)return;
     journey.busy=true;
     try{
       await authenticate();
+      if(generation!==state.generation)return;
       const c=journey.caseId||$("case-id").value.trim();
       if(!UUID.test(c))throw Error("invalid_data");
       const reopened=await api("/dev/live/matters/"+c+"/state");
+      if(generation!==state.generation)return;
       if(reopened.schema!=="dev-live-txt-v1")throw Error("invalid_schema");
       const b=reopened.briefs?.[0];
       if(b){
         const check=await api("/dev/live/matters/"+c+"/briefs/"+b.brief_version_id+"/check",{method:"POST"});
+      if(generation!==state.generation)return;
         const review=await api("/dev/live/matters/"+c+"/briefs/"+b.brief_version_id+"/reviews/"+check.snapshot_hash);
+      if(generation!==state.generation)return;
         journey.snapshot=check.snapshot_hash;journey.observation=check.observation_id;journey.revision=review.review_revision;
         journey.brief={brief_version_id:b.brief_version_id};
         $("brief-id").value=b.brief_version_id;
@@ -586,8 +611,8 @@
       journey.caseId=c;journey.source=reopened.sources?.[0]||null;
       $("case-id").value=c;
       journeyOutput("Reopened matter, ingested text, authored brief and review directly from Supabase.",reopened);
-    }catch(e){journeyOutput("Reopening not confirmed. "+statusFor(e));}
-    finally{journey.busy=false;}
+    }catch(e){if(generation===state.generation)journeyOutput("Reopening not confirmed. "+statusFor(e));}
+    finally{if(generation===state.generation)journey.busy=false;}
   }
   function signout(){
     state.generation+=1;state.previewSeq+=1;
