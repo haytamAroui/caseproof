@@ -428,7 +428,7 @@
   }
 
   // M1/M2 genuinely authored development journey; no browser-side fixture or fake source.
-  const journey = {caseId:"", source:null, brief:null, snapshot:null, revision:0, pending:null, busy:false};
+  const journey = {caseId:"", source:null, brief:null, snapshot:null, observation:null, revision:0, pending:null, busy:false};
   function journeyOutput(message, value) {
     $("journey-result").textContent=message;
     if(value!==undefined)$("journey-state").textContent=JSON.stringify(value,null,2);
@@ -462,7 +462,7 @@
         org_id:org,name,request_id:crypto.randomUUID()}});
       if(!UUID.test(result.case_id))throw Error("invalid_schema");
       journey.caseId=result.case_id;journey.source=null;journey.brief=null;
-      journey.snapshot=null;journey.revision=0;journey.pending=null;
+      journey.snapshot=null;journey.observation=null;journey.revision=0;journey.pending=null;
       $("case-id").value=result.case_id;
       journeyOutput("Matter created with a private owner grant and atomic audit.",result);
     }catch(e){journeyOutput(statusFor(e));}
@@ -533,7 +533,7 @@
       const check=await api(base+"/check",{method:"POST"});
       if(!sha.test(check.snapshot_hash)||typeof check.outcome!=="string")throw Error("invalid_schema");
       journey.caseId=c;journey.brief={brief_version_id:b};
-      journey.snapshot=check.snapshot_hash;journey.revision=check.review_revision;
+      journey.snapshot=check.snapshot_hash;journey.observation=check.observation_id;journey.revision=check.review_revision;
       journeyOutput("Deterministic source quote check completed; not a legal conclusion.",check);
     }catch(e){journeyOutput("Check unavailable. "+statusFor(e));}
     finally{journey.busy=false;}
@@ -546,7 +546,7 @@
       if(!journey.snapshot||!journey.brief)throw Error("run_check_first");
       const base="/dev/live/matters/"+journey.caseId+"/briefs/"+journey.brief.brief_version_id;
       if(!journey.pending)journey.pending={
-        snapshot_hash:journey.snapshot,observation_id:"fact:amount-1",
+        snapshot_hash:journey.snapshot,observation_id:journey.observation,
         request_id:crypto.randomUUID(),expected_revision:journey.revision,
         disposition:$("journey-disposition").value,rationale:$("journey-rationale").value.trim()};
       const saved=await api(base+"/reviews",{method:"POST",json:journey.pending});
@@ -570,7 +570,7 @@
       if(b){
         const check=await api("/dev/live/matters/"+c+"/briefs/"+b.brief_version_id+"/check",{method:"POST"});
         const review=await api("/dev/live/matters/"+c+"/briefs/"+b.brief_version_id+"/reviews/"+check.snapshot_hash);
-        journey.snapshot=check.snapshot_hash;journey.revision=review.review_revision;
+        journey.snapshot=check.snapshot_hash;journey.observation=check.observation_id;journey.revision=review.review_revision;
         journey.brief={brief_version_id:b.brief_version_id};
         $("brief-id").value=b.brief_version_id;
         reopened.review=review;reopened.check=check;
@@ -585,7 +585,7 @@
     state.generation+=1;state.previewSeq+=1;
     if(!state.external)state.session?.clear?.();
     state.session=null;state.external=false;state.caseId="";state.briefId="";
-    Object.assign(journey,{caseId:"",source:null,brief:null,snapshot:null,revision:0,pending:null,busy:false});
+    Object.assign(journey,{caseId:"",source:null,brief:null,snapshot:null,observation:null,revision:0,pending:null,busy:false});
     $("journey-state").textContent="";
     $("matter-options").replaceChildren();
     $("password").value="";$("signout").hidden=true;clearView();notice("Session ended. No credentials were saved.");
