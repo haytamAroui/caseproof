@@ -1,6 +1,6 @@
 # M3 — Word evidence writing and citation loop: implementation and acceptance
 
-**Status: early read-only synthetic task-pane spike; M3 is not implemented.** The spike reads a selection and displays a fixed example; it does not insert citations or connect to the API. No Word host has yet been tested. This document is an M3 acceptance contract subordinate to [the authoritative roadmap](../ROADMAP.md), [product workflow](../PRODUCT_WORKFLOW.md), [ADR-0017](../adr/0017-default-private-litigation-matters.md) and [CONSTITUTION](../../CONSTITUTION.md). It adds no separate backlog, authorizes no deployment and does not claim tested Word-host support.
+**Status: signed development read-only source search and original download are implemented; full M3 Word authoring is OPEN.** The task pane has a localhost same-origin development composition, pinned OAuth/PKCE bundle, a separate `ReadDocument` sideload manifest and an authenticated source/brief-version scoped search API. Real signed PDF/DOCX retrieval, SHA-256 original readback, access revocation and cold restart passed protected [run #40684874908](https://github.com/haytamAroui/caseproof/actions/runs/40684874908); the Office API itself is simulated in tests. **No Word host was actually tested**. Sources have no confirmed Stuk/Pièce mapping and real citation insertion is disabled. No DOCX edit/undo/save/reopen was accepted. This document is an M3 acceptance contract subordinate to [the authoritative roadmap](../ROADMAP.md), [product workflow](../PRODUCT_WORKFLOW.md), [ADR-0017](../adr/0017-default-private-litigation-matters.md) and [CONSTITUTION](../../CONSTITUTION.md). It adds no separate backlog, authorizes no deployment and does not claim tested Word-host support.
 
 ## Why Word is a launch requirement rather than a late accessory
 
@@ -8,7 +8,7 @@ CaseProof deliberately reproduces the **end-to-end Clearbrief-class workflow** f
 
 ## Early integration proof (parallel to M1-B/M2-B; not an M3 pass)
 
-Do an early, **synthetic-only** Office integration spike before freezing client-facing API payloads:
+Finish and validate the remaining **actual Office host** integration gates. The early synthetic and signed read-only backend bridge now exist; the tasks below are acceptance requirements, not automatically satisfied:
 
 1. Create an installable Word task-pane shell and a documented local developer sideload path. Record precisely which Word hosts/versions and document formats were *actually tested* (desktop Windows, Word web, macOS as available). **Do not promise parity on untested hosts.**
 2. Select a sentence in a synthetic DOCX; capture an editor-local selection/range fingerprint, the document revision/content identity, and the case/brief source graph reference. Round-trip to an opt-in mock authenticated API with a fixed evidence passage. Editor offsets/selection are **not** evidence anchors.
