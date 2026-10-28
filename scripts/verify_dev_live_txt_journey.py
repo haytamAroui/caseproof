@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import http.client
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import sys
@@ -130,10 +131,20 @@ def verify(
             "request_id": str(uuid4()), "filename": "oversized.txt",
             "sha256": DIGEST, "byte_length": 1048577, "media_type": "text/plain",
         })
-        reg = success(owner, "POST", source_path, {
-            "request_id": str(uuid4()), "filename": "invoice.txt",
-            "sha256": DIGEST, "byte_length": len(FIXTURE), "media_type": "text/plain",
-        })
+        # A racing second source registration must fail even with another
+        # idempotency key. Only one matter original is permitted in this slice.
+        def race_register(_index: int) -> tuple[int, dict[str, Any]]:
+            return _request(owner, "POST", source_path, {
+                "request_id": str(uuid4()), "filename": "invoice.txt",
+                "sha256": DIGEST, "byte_length": len(FIXTURE),
+                "media_type": "text/plain",
+            })
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            contenders = list(executor.map(race_register, range(2)))
+        winners = [payload for status, payload in contenders if status == 200]
+        if len(winners) != 1 or len(contenders) != 2:
+            raise LiveFixtureError("concurrent registration created duplicate originals")
+        reg = winners[0]
         doc, version = (str(UUID(reg[k])) for k in ("document_id", "version_id"))
         ref = OriginalRef(UUID(org), UUID(case), UUID(doc), UUID(version), DIGEST, "text/plain")
         endpoint = source_path + f"/{doc}/{version}"
@@ -157,6 +168,26 @@ def verify(
                 pass
             else:
                 raise LiveFixtureError("ungranted user read existing Storage original")
+        # A direct bearer-authenticated database request must NEVER be able
+        # to certify source bytes by inventing content_base64. Storage's path
+        # metadata alone is not cryptographic evidence of the original bytes.
+        con = http.client.HTTPSConnection(HOST, timeout=12)
+        try:
+            con.request("POST", "/rest/v1/rpc/caseproof_dev_journey",
+                body=json.dumps({
+                    "p_action": "ingest", "p_case": case, "p_request": str(uuid4()),
+                    "p_data": {"document_id": doc, "version_id": version,
+                               "content_base64": content["content_base64"]},
+                }).encode(), headers={
+                    "apikey": publishable, "Authorization": "Bearer " + owner,
+                    "Content-Type": "application/json",
+                })
+            direct_status = con.getresponse().status
+        finally:
+            con.close()
+        if direct_status == 200:
+            raise LiveFixtureError("CRITICAL: authenticated self-certified ingest succeeded")
+        print("LIVE_TXT_3A: direct signed ingestion RPC denied; only trusted server can promote")
         print("LIVE_TXT_3: signed Storage upload/readback; content and access negatives")
 
         bad_utf8 = {"content_base64": base64.b64encode(b"\xff\xfe").decode()}
