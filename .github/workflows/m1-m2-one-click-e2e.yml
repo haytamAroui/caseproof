@@ -1,6 +1,8 @@
 name: CaseProof M1 + M2 one-click signed E2E
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 permissions:
   contents: read
 concurrency:
@@ -107,3 +109,28 @@ jobs:
             echo '- This check covers synthetic TXT dev-only review acceptance; NOT ingestion/OCR, lawyer matter creation, production release, PDF viewer, Word or final deliverables.'
             echo '- Each step must be green; read the failed step in Actions for precise gaps.'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  live-review-acceptance-on-merge:
+    name: One-time signed LIVE M2 acceptance on protected main
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof' && contains(github.event.head_commit.message, '[live-review-acceptance]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: caseproof-dev-live-auth
+    concurrency:
+      group: caseproof-m1b-ephemeral-private-auth
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Signed live synthetic source, check, review, restart, revoke, cleanup
+        env:
+          CASEPROOF_DEV_LIVE_ROUNDTRIP: "YES"
+          CASEPROOF_ALLOW_ONE_TIME_PUSH: "YES"
+          CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+          CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+        run: uv run --locked python -m scripts.verify_dev_live_review_roundtrip
