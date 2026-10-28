@@ -1,0 +1,36 @@
+name: ClearBrief lawyer workbench (development-only)
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    name: Signed matter, evidence, reviewer and browser contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Check browser source grammar
+        run: node --check apps/web/clearbrief/workspace.js
+      - name: Security, signed API and reviewer tests
+        run: uv run --locked pytest -q tests/test_clearbrief_workspace.py tests/test_litigation_development_app.py
+      - name: Python format and typing
+        run: |
+          uv run --locked ruff check apps/api/litigation_development_app.py apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py tests/test_clearbrief_workspace.py
+          uv run --locked mypy apps/api/litigation_review_workspace.py apps/api/litigation_review_app.py
+      - name: Scope receipt
+        if: always()
+        run: |
+          {
+            echo "## ClearBrief development product slice"
+            echo "- Browser UI and typed API contract: real code, not mocked output."
+            echo "- Signed evidence, scoped checks, review UX and original transport are opt-in ports."
+            echo "- Live M2 persistence, Word host, release artifacts and customer access remain OPEN."
+          } >> "$GITHUB_STEP_SUMMARY"
