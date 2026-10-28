@@ -150,9 +150,9 @@ begin
     or v_exhibit.payload->>'version_id' <> v_brief.document_version_id::text
     or encode(extensions.digest(convert_to(v_brief.representation,'UTF8'),'sha256'),'hex')
       <> v_brief.representation_sha256
-    or pg_catalog.substring(v_brief.representation from v_claim.text_start+1
+    or substring(v_brief.representation from v_claim.text_start+1
        for v_claim.text_end-v_claim.text_start) <> v_claim.assertion_text
-    or pg_catalog.position(v_claim.assertion_text in (v_exhibit.payload->>'source_text')) = 0
+    or position(v_claim.assertion_text in (v_exhibit.payload->>'source_text')) = 0
     or not exists (
       select 1 from caseproof.documents d
       join caseproof.document_versions dv on dv.org_id=d.org_id and dv.document_id=d.id
