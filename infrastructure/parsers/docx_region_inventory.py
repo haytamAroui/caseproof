@@ -3,11 +3,11 @@
 Uses bounded ZIP metadata and stdlib XML; never executes embedded content.
 A discovered region is not marked scanned by this inventory adapter.
 """
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from enum import StrEnum
 from io import BytesIO
 from zipfile import BadZipFile, ZipFile
-import xml.etree.ElementTree as ET
 
 WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
