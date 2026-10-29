@@ -2,10 +2,10 @@
 
 Not a malware sandbox. Does not claim full document-wide reference recall.
 """
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from io import BytesIO
 from zipfile import ZipFile
-import xml.etree.ElementTree as ET
 
 from infrastructure.parsers.docx_region_inventory import (
     MAX_PACKAGE_BYTES,
@@ -15,6 +15,7 @@ from infrastructure.parsers.docx_region_inventory import (
     WORD_NS,
     inventory_docx_regions,
 )
+
 
 @dataclass(frozen=True)
 class TextRegion:
