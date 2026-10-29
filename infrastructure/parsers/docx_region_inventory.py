@@ -112,8 +112,12 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
                     regions.append(DocxRegion(name, kind, RegionStatus.REVISION_UNRESOLVED, "FROZEN_VIEW_REQUIRED"))
                 else:
                     regions.append(DocxRegion(name, kind, RegionStatus.UNSCANNED, "TEXT_NOT_YET_SCANNED"))
-                if any(node.tag in {WORD_NS + "txbxContent", WORD_NS + "altChunk"} for node in root.iter()):
-                    regions.append(DocxRegion(name + "#structured", "STRUCTURED_CONTENT", RegionStatus.UNSUPPORTED, "TEXTBOX_OR_ALTCHUNK"))
+                if any(node.tag in {
+                    WORD_NS + "txbxContent", WORD_NS + "altChunk", WORD_NS + "drawing",
+                    WORD_NS + "pict", WORD_NS + "object", WORD_NS + "fldChar",
+                    WORD_NS + "fldSimple", WORD_NS + "instrText",
+                } for node in root.iter()):
+                    regions.append(DocxRegion(name + "#structured", "STRUCTURED_CONTENT", RegionStatus.UNSUPPORTED, "UNSUPPORTED_STRUCTURED_CONTENT"))
             return DocxCoverage(tuple(regions), False)
     except (BadZipFile, ET.ParseError, OSError, RuntimeError, ValueError):
         return DocxCoverage((), True, "UNREADABLE_PACKAGE")
