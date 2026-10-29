@@ -79,6 +79,8 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
             if sum(info.file_size for info in infos) > MAX_TOTAL_UNCOMPRESSED:
                 return DocxCoverage((), True, "UNCOMPRESSED_LIMIT")
             names = [info.filename for info in infos]
+            if any(info.flag_bits & 1 for info in infos):
+                return DocxCoverage((), True, "ENCRYPTED_ZIP_ENTRY")
             if len(set(names)) != len(names):
                 return DocxCoverage((), True, "DUPLICATE_ZIP_ENTRY")
             if "word/document.xml" not in names or "[Content_Types].xml" not in names:
@@ -86,7 +88,7 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
             regions: list[DocxRegion] = []
             for info in infos:
                 name = info.filename
-                if name.startswith("/") or ".." in name.split("/"):
+                if name.startswith("/") or "\\" in name or ".." in name.split("/"):
                     return DocxCoverage((), True, "UNSAFE_PART_PATH")
                 kind = _kind(name)
                 if kind is None:
