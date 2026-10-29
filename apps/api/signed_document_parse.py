@@ -14,6 +14,7 @@ from application.documents.contracts import MAX_BLOCKS, MAX_TEXT_CHARS, PARSER_S
 from application.extraction.contracts import ExtractionError
 from infrastructure.parsers.engines import DOCX_MIME
 from infrastructure.parsers.limited import LimitedDocumentParser
+from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
 BINARY_MEDIA = frozenset({"application/pdf", DOCX_MIME})
@@ -24,6 +25,8 @@ MAX_MANIFEST_BYTES = 300000
 def parse_verified_original(
     *, document_id: str, version_id: str, data: bytes, media_type: str,
     parser: LimitedDocumentParser | None = None,
+    ocr: LocalPDFOCR | None = None,
+    ocr_languages: tuple[str, ...] = ("nl", "fr"),
 ) -> tuple[str, dict[str, Any]]:
     """Validate a worker-produced representation and preserve absent page coverage."""
     if media_type not in BINARY_MEDIA or not 0 < len(data) <= MAX_BINARY_BYTES:
@@ -119,6 +122,32 @@ def parse_verified_original(
         "page_mapping": "pdf_physical_page" if media_type == "application/pdf" else "unverified",
         "pages": pages, "blocks": public_blocks, "warnings": sorted(set(warnings)),
     }
+    # OCR is a review-only candidate and never changes extraction completeness.
+    # The caller must explicitly opt in to a locally isolated OCR worker.
+    if ocr is not None and media_type == "application/pdf":
+        candidates: list[dict[str, Any]] = []
+        for page in pages:
+            if page["status"] != "needs_ocr":
+                continue
+            number = int(page["pdf_page"])
+            try:
+                result = ocr.recognize(source, page_number=number, languages=ocr_languages)
+                candidates.append({
+                    "pdf_page": number, "status": "requires_human_review",
+                    "original_sha256": result.original_sha256,
+                    "image_sha256": result.image_sha256,
+                    "image_width_px": result.image_width_px,
+                    "image_height_px": result.image_height_px,
+                    "image_dpi": result.image_dpi,
+                    "coordinate_basis": result.coordinate_basis,
+                    "engine": result.engine,
+                    "words": [{"text": w.text, "left": w.left, "top": w.top,
+                               "width": w.width, "height": w.height,
+                               "confidence": w.confidence} for w in result.words],
+                })
+            except OCRUnavailable:
+                candidates.append({"pdf_page": number, "status": "ocr_unavailable"})
+        manifest["ocr_candidates"] = candidates
     import json
     if len(json.dumps(manifest, ensure_ascii=False).encode("utf-8")) > MAX_MANIFEST_BYTES:
         raise ExtractionError("parser_manifest_limit")
