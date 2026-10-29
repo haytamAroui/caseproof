@@ -7,7 +7,6 @@ Offsets refer to the supplied Unicode string, not original PDF byte positions.
 import re
 from dataclasses import dataclass
 
-
 _REFERENCE = re.compile(
     r"(?<![\w])(?P<label>stuk(?:ken)?|pi[eè]ce(?:s)?)"
     r"\s*(?:n[°ºo.]?\s*)?(?P<number>[0-9]{1,4})"
