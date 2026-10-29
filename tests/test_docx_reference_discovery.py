@@ -5,7 +5,6 @@ from zipfile import ZipFile
 
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 
-
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
