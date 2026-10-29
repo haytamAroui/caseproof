@@ -129,7 +129,9 @@ def parse_verified_original(
         for page in pages:
             if page["status"] != "needs_ocr":
                 continue
-            number = int(page["pdf_page"])
+            number = page["pdf_page"]
+            if type(number) is not int:
+                raise ExtractionError("invalid_pdf_page")
             try:
                 result = ocr.recognize(source, page_number=number, languages=ocr_languages)
                 candidates.append({
