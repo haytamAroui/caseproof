@@ -29,12 +29,68 @@
         <label>Dev Auth email<input id="email" type="email" autocomplete="username" maxlength="254" placeholder="you@example.com"></label>
         <label>Password<input id="password" type="password" autocomplete="current-password" maxlength="256"></label>
       </div>
+      <div class="form-actions"><button type="button" id="find-matters" class="secondary">Find my matters</button><span class="small">Sign in to list your authorized development matters.</span></div>
+      <div id="matter-options" class="source-list" aria-live="polite"></div>
       <div class="two">
         <label>Matter UUID<input id="case-id" required spellcheck="false" autocomplete="off" placeholder="00000000-0000-4000-8000-000000000000"></label>
         <label>Brief version UUID<input id="brief-id" required spellcheck="false" autocomplete="off" placeholder="00000000-0000-4000-8000-000000000000"></label>
       </div>
       <div class="form-actions"><button type="submit" id="connect">Open matter</button><p class="small">Signed sessions stay in memory only. No token is saved in browser storage.</p></div>
     </form>
+  </section>
+  <section class="card journey-card" aria-labelledby="journey-heading">
+    <p class="kicker">NEW · SIGNED DEVELOPMENT JOURNEY</p>
+    <h2 id="journey-heading">Create a matter and check your own TXT evidence</h2>
+    <p class="small">Real private Supabase matter, immutable UTF-8 source and versioned brief. TXT only, up to 1 MiB. All actions require your current signed membership. Source label remains unconfirmed; this is not a legal finding.</p>
+    <div class="journey-grid">
+      <div class="journey-step">
+        <h3>1 / Create matter</h3>
+        <button id="journey-find-orgs" type="button" class="secondary">Find eligible organizations</button>
+        <label>Authorized organization<select id="journey-org" required><option value="">Find organizations first</option></select></label>
+        <form id="journey-create-form">
+          <label>Matter name<input id="journey-matter-name" maxlength="160" value="Synthetic TXT matter" required></label>
+          <button id="journey-create" type="submit">Create private matter</button>
+        </form>
+      </div>
+      <div class="journey-step">
+        <h3>2 / Upload and ingest</h3>
+        <form id="journey-file-form">
+          <label>Original PDF, DOCX or UTF-8 TXT<input id="journey-file" type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" required></label>
+          <button id="journey-ingest" type="submit">Verify and ingest original</button>
+        </form>
+      </div>
+      <div class="journey-step">
+        <h3>3 / Author a brief</h3>
+        <form id="journey-brief-form">
+          <label>Draft statement<textarea id="journey-draft" rows="3" maxlength="8000" required placeholder="The invoice shows 125 EUR."></textarea></label>
+          <label>Exact amount phrase in your statement<input id="journey-quote" minlength="3" maxlength="100" value="125 EUR" required></label>
+          <button id="journey-save-brief" type="submit">Create versioned brief</button>
+        </form>
+      </div>
+      <div class="journey-step">
+        <h3>4 / Check and review</h3>
+        <button id="journey-check" type="button">Check ingested source</button>
+        <form id="journey-review-form">
+          <label>Disposition<select id="journey-disposition"><option value="needs_information">Needs information</option><option value="confirmed_candidate">Confirm candidate</option><option value="dismissed">Dismiss candidate</option></select></label>
+          <label>Human rationale<input id="journey-rationale" maxlength="2000" value="Manual synthetic review; no legal approval" required></label>
+          <button id="journey-review" type="submit">Save review</button>
+        </form>
+      </div>
+      <div class="journey-step">
+        <h3>5 / Correct and recheck</h3>
+        <p class="small">After saving the human review, preview an exact numeric claim edit. Commit creates a new immutable draft revision; it does not modify your original source or a Word document. Recheck and review the new draft separately.</p>
+        <label>Current reviewed phrase<input id="journey-correction-before" minlength="3" maxlength="100" value="125 EUR"></label>
+        <label>Replacement phrase<input id="journey-correction-after" minlength="3" maxlength="100" value="126 EUR"></label>
+        <div class="form-actions">
+          <button id="journey-correction-preview" class="secondary" type="button">Preview correction</button>
+          <button id="journey-correction-commit" type="button">Commit new draft revision</button>
+        </div>
+        <p class="small" id="journey-correction-diff" aria-live="polite">No reviewed correction preview yet.</p>
+      </div>
+    </div>
+    <div class="form-actions"><button id="journey-reopen" class="secondary" type="button">Reopen this matter from Supabase</button><p class="small">To reopen after refreshing, enter its matter UUID above. Tokens are never persisted in browser storage.</p></div>
+    <div id="journey-result" class="notice" aria-live="polite">Sign in and find an authorized organization to begin.</div>
+    <pre id="journey-state" class="journey-state" aria-live="polite"></pre>
   </section>
   <div id="notice" class="notice" role="status" aria-live="polite">Connect to an existing authorized development matter to begin.</div>
   <section id="workspace" hidden aria-label="ClearBrief workspace">

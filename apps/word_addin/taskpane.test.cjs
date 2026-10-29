@@ -55,7 +55,7 @@ function setup(options = {}) {
     } },
     fetch: async (url, request) => {
       state.calls++;
-      assert.ok(url.startsWith('/v2/matters/'));
+      assert.ok(url.startsWith(options.mode === 'dev-live' ? '/dev/live/matters/' : '/v2/matters/'));
       assert.equal(request.redirect, 'error');
       if (!request.method) return { ok: true, headers: { get: name => ({
         'X-CaseProof-Original-SHA256': originalHash, 'Content-Length': String(original.length),
@@ -64,8 +64,11 @@ function setup(options = {}) {
         if (options.tampered) return Uint8Array.from(Buffer.alloc(original.length, 1)).buffer;
         return Uint8Array.from(original).buffer;
       } };
-      return { ok: true, json: async () => options.changed && state.calls > 1 ?
-        { ...response, exhibit_revision: 2 } : response };
+      return { ok: true, json: async () => options.mode === 'dev-live'
+        ? { ...response, coverage: 'partial', omitted_sources: 1,
+            hits: [{ ...hit, citation: null, page: null }] }
+        : options.changed && state.calls > 1 ?
+          { ...response, exhibit_revision: 2 } : response };
     },
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'taskpane.js'), 'utf8'), context);
@@ -142,4 +145,16 @@ test('sign out while obtaining download token sends no original request', async 
   assert.equal(rig.state.calls, 1);
   assert.equal(rig.state.downloads, 0);
   assert.match(rig.elements.status.textContent, /session changed/i);
+});
+
+test('development signed Word host inspects PDF/DOCX without granting insertion', async () => {
+  const rig = await start({ mode: 'dev-live' });
+  assert.equal(rig.state.calls, 1);
+  assert.equal(action(rig).disabled, true);
+  assert.match(rig.elements.status.textContent, /confirmed Stuk\/Pièce mapping/);
+  assert.match(rig.elements.coverage.textContent, /partial/);
+  await action(rig).click();
+  assert.equal(rig.state.writes.length, 0);
+  await rig.elements.hits.children[0].children[3].click();
+  assert.equal(rig.state.downloads, 1);
 });
