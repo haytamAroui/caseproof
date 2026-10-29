@@ -72,6 +72,30 @@ def test_scanned_pdf_is_explicitly_incomplete_not_verified() -> None:
     assert "pdf_page_needs_ocr_or_review" in manifest["warnings"]
 
 
+def test_ocr_failure_preserves_incomplete_scan_coverage() -> None:
+    from io import BytesIO
+
+    from pypdf import PdfWriter
+
+    from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
+
+    class UnavailableOCR(LocalPDFOCR):
+        def recognize(self, source, *, page_number, languages):
+            raise OCRUnavailable("offline")
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=300, height=300)
+    output = BytesIO()
+    writer.write(output)
+    text, manifest = parse_verified_original(
+        document_id=str(uuid4()), version_id=str(uuid4()), data=output.getvalue(),
+        media_type="application/pdf", ocr=UnavailableOCR(),
+    )
+    assert text == ""
+    assert manifest["complete"] is False
+    assert manifest["ocr_candidates"] == [{"pdf_page": 1, "status": "ocr_unavailable"}]
+
+
 @pytest.mark.parametrize(("data", "mime"), [
     (b"<html>125 EUR</html>", "application/pdf"),
     (b"not a zip", DOCX),
@@ -145,6 +169,38 @@ def test_browser_cannot_promote_without_secret(monkeypatch) -> None:
     client.library = SignedBinaryLibrary(synthetic_pdf(), "application/pdf")
     with pytest.raises(AccessRejected):
         client.ingest("signed-jwt", str(uuid4()), str(uuid4()), str(uuid4()), str(uuid4()))
+
+
+def test_signed_scan_persists_ocr_as_unverified_candidate(monkeypatch) -> None:
+    from io import BytesIO
+
+    from pypdf import PdfWriter
+
+    from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRPage, OCRWord
+
+    class SyntheticOCR(LocalPDFOCR):
+        def recognize(self, source, *, page_number, languages):
+            return OCRPage(source.document_id, source.version_id, source.sha256_hex,
+                           page_number, "a" * 64, 300, 300, 150, "125 EUR",
+                           (OCRWord("125", 1, 2, 20, 10, "80"),))
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=300, height=300)
+    output = BytesIO()
+    writer.write(output)
+    connection = ParsedConnection()
+    monkeypatch.setattr("apps.api.litigation_live_journey.http.client.HTTPSConnection",
+                        lambda *_args, **_kwargs: connection)
+    client = JourneyClient("sb_publishable_testing123", "sb_secret_protected", ocr=SyntheticOCR())
+    client._verifier = SimpleNamespace(verify_bearer=lambda _jwt: SimpleNamespace(subject_id=str(uuid4())))
+    client.library = SignedBinaryLibrary(output.getvalue(), "application/pdf")
+    client.ingest("signed-jwt", *(str(uuid4()) for _ in range(3)), str(uuid4()))
+    payload = connection.request_data[2]
+    manifest = payload["p_manifest"]
+    assert manifest["complete"] is False
+    assert manifest["ocr_candidates"][0]["status"] == "requires_human_review"
+    assert manifest["ocr_candidates"][0]["original_sha256"] == hashlib.sha256(output.getvalue()).hexdigest()
+    assert payload["p_representation"] == ""
 
 
 def test_word_search_never_offers_unconfirmed_exhibit_or_invented_pdf_page(monkeypatch) -> None:
