@@ -36,6 +36,7 @@ def extract_docx_text_regions(payload: bytes) -> DocxTextExtraction:
     extracted: list[TextRegion] = []
     unscanned: list[str] = []
     with ZipFile(BytesIO(payload)) as archive:
+        # Re-validate package identity before reading XML; inventory alone is not a parser sandbox.
         infos = archive.infolist()
         if len(infos) > MAX_PARTS or sum(i.file_size for i in infos) > MAX_TOTAL_UNCOMPRESSED:
             return DocxTextExtraction((), ("LIMIT_EXCEEDED",), False)
@@ -50,7 +51,15 @@ def extract_docx_text_regions(payload: bytes) -> DocxTextExtraction:
             if info.file_size > MAX_PART_BYTES:
                 unscanned.append(region.part)
                 continue
-            root = ET.fromstring(archive.read(info))
+            xml = archive.read(info)
+            if b"<!DOCTYPE" in xml.upper() or b"<!ENTITY" in xml.upper():
+                unscanned.append(region.part)
+                continue
+            try:
+                root = ET.fromstring(xml)
+            except ET.ParseError:
+                unscanned.append(region.part)
+                continue
             # Only plain paragraph text. Nested tables are traversed by paragraph order.
             # Hyperlink text is included; field results, revisions and shapes are not certified.
             paragraphs: list[str] = []
