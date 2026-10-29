@@ -14,6 +14,7 @@ class DocxReferenceDiscovery:
     references: tuple[ExhibitReference, ...]
     coverage_complete: bool
     unscanned_parts: tuple[str, ...]
+    text_coverage_complete: bool
 
 
 def discover_docx_references(payload: bytes) -> DocxReferenceDiscovery:
@@ -25,6 +26,7 @@ def discover_docx_references(payload: bytes) -> DocxReferenceDiscovery:
     )
     return DocxReferenceDiscovery(
         references=references,
-        coverage_complete=extracted.coverage_complete,
+        coverage_complete=False,  # Recognition recall is not established by scanning text.
         unscanned_parts=extracted.unscanned_parts,
+        text_coverage_complete=extracted.coverage_complete,
     )
