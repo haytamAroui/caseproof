@@ -1,4 +1,14 @@
-# Current product direction — M1 backend-first, M2 may be developed in parallel — 2026-10-26
+# CaseProof — current product scope and status pointer (28 October 2026)
+
+**Active product direction:** [ADR 0018](adr/0018-pre-submission-verification-freeze.md), [ROADMAP M0–M6](ROADMAP.md) and [web workflow](PRODUCT_WORKFLOW.md): pre-submission factual exhibit verification, web-first, Word/MCP optional. The dated reports below are **historical engineering receipts**, not a current Word-mandatory, finance-first or broader litigation product instruction. Follow the roadmap for live-vs-open gate distinctions.
+
+**Most recent stated narrow proof:** [PR #119](https://github.com/haytamAroui/caseproof/pull/119) and [signed synthetic TXT live receipt](m2/LIVE_SIGNED_CORRECTION_RECHECK_2026-10-28.md) establish a particular authenticated TXT source/brief/review/correction/recheck/restart scenario. **Open:** verified full PDF/DOCX/scanned corpus and OCR cropping, reference/page split, web reviewer, released actual DOCX/report, confidentiality review, pilot and paid demand. No claim that other historical M1/M2 status below is current; dates and exact receipts decide what was actually tested.
+
+---
+
+## Historical dated status log (retained; superseded for product direction)
+
+### Current product direction — M1 backend-first, M2 may be developed in parallel — 2026-10-26
 
 > **27 October 2026 live M1 update:** Supabase `caseproof-dev` has applied the exact default-private M1 migration `20261027160745`; read-only policy/role/privilege inspection verified deployment. **M1-B is still OPEN**: zero Auth users, matters and grants, absent dedicated least-privilege app DB login, no signed-user actual-db acceptance or independent security signoff. **27 October 2026 later live update:** All 11 private M2 tables and the 2 restricted M1 security-invoker read views are now **installed in `caseproof-dev`** via Supabase MCP (`20261027195417`, `20261027195451`). Verified RLS/private privileges. **M1-B and M2-B are still open** for positive live signed-user matter access, real private Storage bytes and full persisted live correction/recheck, not SQL installation. [Current receipt](m1/M1_M2_LIVE_DEV_MIGRATION_RECEIPT_2026-10-27.md). [Earlier M1 receipt](m1/LIVE_DEV_PRIVATE_MIGRATION_RECEIPT_2026-10-27.md). Earlier dated PR and Supabase snapshots below are historical.
 
