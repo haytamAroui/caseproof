@@ -5,7 +5,6 @@ from zipfile import ZipFile
 
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 
-
 NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
