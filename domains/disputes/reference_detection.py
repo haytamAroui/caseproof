@@ -9,9 +9,9 @@ from dataclasses import dataclass
 
 
 _REFERENCE = re.compile(
-    r"(?<![\\w])(?P<label>stuk(?:ken)?|pi[eè]ce(?:s)?)"
-    r"\\s*(?:n[°ºo.]?\\s*)?(?P<number>[0-9]{1,4})"
-    r"(?P<suffix>\\s*(?:bis|ter))?(?![0-9])",
+    r"(?<![\w])(?P<label>stuk(?:ken)?|pi[eè]ce(?:s)?)"
+    r"\s*(?:n[°ºo.]?\s*)?(?P<number>[0-9]{1,4})"
+    r"(?P<suffix>\s*(?:bis|ter))?(?![0-9])",
     re.IGNORECASE,
 )
 
