@@ -21,7 +21,8 @@ def _payload(main: str, *, unknown: bool = False) -> bytes:
 def test_docx_regions_feed_reference_discovery() -> None:
     result = discover_docx_references(_payload("Zie stuk 12 en pièce 4."))
     assert [ref.number for ref in result.references] == ["12", "4"]
-    assert result.coverage_complete
+    assert result.text_coverage_complete
+    assert not result.coverage_complete
     assert all(ref.region == "word/document.xml" for ref in result.references)
 
 
