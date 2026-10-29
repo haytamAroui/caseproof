@@ -74,4 +74,9 @@ def extract_docx_text_regions(payload: bytes) -> DocxTextExtraction:
                     if fragments:
                         paragraphs.append("".join(fragments))
             extracted.append(TextRegion(region.part, "\n".join(paragraphs)))
-    # A parsed paragraph stream is not proof that all Word story content was read.\n    # Unknown/structured parts, revisions and an absent main body must keep\n    # reference-discovery coverage explicitly incomplete.\n    scanned_main = any(region.part == "word/document.xml" for region in extracted)\n    complete = scanned_main and not unscanned and not coverage.coverage_unknown\n    return DocxTextExtraction(tuple(extracted), tuple(unscanned), complete)
+    # A parsed paragraph stream is not proof that all Word story content was read.
+    # Unknown/structured parts, revisions and an absent main body must keep
+    # reference-discovery coverage explicitly incomplete.
+    scanned_main = any(region.part == "word/document.xml" for region in extracted)
+    complete = scanned_main and not unscanned and not coverage.coverage_unknown
+    return DocxTextExtraction(tuple(extracted), tuple(unscanned), complete)
