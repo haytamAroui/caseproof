@@ -44,3 +44,13 @@ def test_revisions_are_not_silently_certified() -> None:
     result = extract_docx_text_regions(payload)
     assert not result.coverage_complete
     assert "word/document.xml" in result.unscanned_parts
+
+
+def test_embedded_drawing_and_fields_block_full_coverage() -> None:
+    for element in ("drawing", "pict", "object", "fldChar", "fldSimple", "instrText"):
+        payload = _docx(
+            body=f'<w:document xmlns:w="{NS}"><w:body><w:{element}/></w:body></w:document>'
+        )
+        result = extract_docx_text_regions(payload)
+        assert not result.coverage_complete
+        assert "word/document.xml#structured" in result.unscanned_parts
