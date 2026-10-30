@@ -2,7 +2,7 @@ name: Complete signed dossier live acceptance
 # Trigger protected branch acceptance on this commit; do not merge without zero-residual evidence.
 on:
   push:
-    branches: [feat/complete-dossier-journey]
+    branches: [feat/complete-dossier-journey, fix/dossier-ranges-mixed]
   workflow_dispatch:
 permissions:
   contents: read
@@ -33,6 +33,10 @@ jobs:
       - name: Unreadable original must remain unprocessed in the live API
         env:
           CASEPROOF_DOSSIER_UNREADABLE: "YES"
+        run: uv run --locked --with python-docx --with reportlab --with pillow python -m scripts.dossier_live
+      - name: Page-range refusal and OCR on page 2 of a mixed PDF
+        env:
+          CASEPROOF_DOSSIER_EDGE_CASES: "YES"
         run: uv run --locked --with python-docx --with reportlab --with pillow python -m scripts.dossier_live
       - name: Downloadable synthetic originals and scoped outputs
         if: success()

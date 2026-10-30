@@ -102,7 +102,9 @@ class DossierStore:
                     if reader.is_encrypted or not 0 < len(reader.pages) <= 64:
                         raise ValueError('unsupported PDF')
                     row['page_count'] = len(reader.pages)
-                    row['image_only'] = not any((p.extract_text() or '').strip() for p in reader.pages)
+                    row['image_only_pages'] = [i for i, page in enumerate(reader.pages, 1)
+                                              if not (page.extract_text() or '').strip()]
+                    row['image_only'] = len(row['image_only_pages']) == row['page_count']
                 except (ValueError, PdfReadError, OSError, KeyError):
                     row['page_count'] = 0
                     row['parse_error'] = 'unreadable_or_unsupported_pdf'
@@ -115,6 +117,9 @@ class DossierStore:
         drafts = [s for s in sources if s['role'] == 'draft' and s['version_id'] == brief]
         if len(drafts) != 1:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        raw = originals[brief]
+        discovery = discover_docx_references(raw)
+        regions = {r.part: r.text for r in extract_docx_text_regions(raw).regions}
         confirmation = context.get('confirmation')
         inventory = next((x for x in sources if x['role'] == 'inventory'), None)
         inventory_readable = False
@@ -139,13 +144,15 @@ class DossierStore:
                 'inventory_complete': bool(inventory_readable and confirmation['payload']['inventory_complete']
                                            and supplied_identities == inventory_identities)}}
         if confirmation:
+            initial = build_findings(discovery, regions, sources, confirmation)
             # Only retrieve stored geometry for explicitly mapped physical pages.
             for source in sources:
                 pages = {p['pdf_page'] for e in confirmation['payload']['entries']
                          if e.get('source_version_id') == source['version_id'] for p in e['pages']}
-                # Explicit physical PDF references can target any bounded page.
-                if source.get('image_only'):
-                    pages.update(range(1, source.get('page_count', 0) + 1))
+                # Resolve actual referenced physical pages independently of the
+                # whole-file text status, including scanned pages in mixed PDFs.
+                pages.update(f['pdf_page'] for f in initial['findings']
+                             if f['version_id'] == source['version_id'] and f['pdf_page'] is not None)
                 geometry = {}
                 for page in sorted(pages):
                     try:
@@ -161,9 +168,7 @@ class DossierStore:
                             **{k: w[k] for k in ('left', 'top', 'width', 'height')},
                             'geometry_sha256': ref.geometry_sha256}}
                 source['geometry'] = geometry
-        raw = originals[brief]
-        found = build_findings(discover_docx_references(raw),
-                               {r.part: r.text for r in extract_docx_text_regions(raw).regions}, sources, confirmation)
+        found = build_findings(discovery, regions, sources, confirmation)
         report = {'schema': 'caseproof-dossier-v1', 'case_id': case, 'brief_id': brief,
                   'bundle_signature': context['bundle_signature'],
                   'confirmation_id': confirmation['request_id'] if confirmation else None,
