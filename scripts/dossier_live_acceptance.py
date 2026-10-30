@@ -40,7 +40,7 @@ def json_request(token, method, path, payload=None):
 
 
 def main():
-    if os.getenv('GITHUB_REF') not in {'refs/heads/feat/complete-dossier-journey', 'refs/heads/main'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
+    if os.getenv('GITHUB_REF') not in {'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
         raise RuntimeError('protected dossier branch required')
     key = os.environ['CASEPROOF_DEV_PUBLISHABLE_KEY']
     signin = SupabasePasswordSignin(PROJECT_REF, key)
@@ -58,6 +58,22 @@ def main():
         record(os.environ['CASEPROOF_DEV_AUTH_ADMIN_KEY'], os.environ['CASEPROOF_P3_RUN_ID'], 'matter', case, 'CREATED')
         bundle = list(dossier_bundle())
         unreadable = os.getenv('CASEPROOF_DOSSIER_UNREADABLE') == 'YES'
+        edge_cases = os.getenv('CASEPROOF_DOSSIER_EDGE_CASES') == 'YES'
+        if edge_cases:
+            from docx import Document
+            from pypdf import PdfReader, PdfWriter
+            draft = Document(io.BytesIO(bundle[0].content))
+            draft.paragraphs[1].text = 'Voir Pièce 2, PDF p. 2.'
+            draft.add_paragraph('Zie Stuk 1, PDF p. 1-99.')
+            out = io.BytesIO()
+            draft.save(out)
+            bundle[0] = SyntheticSource(bundle[0].filename, 'draft', bundle[0].media_type, out.getvalue())
+            writer = PdfWriter()
+            for source in bundle[2:]:
+                writer.add_page(PdfReader(io.BytesIO(source.content)).pages[0])
+            mixed = io.BytesIO()
+            writer.write(mixed)
+            bundle[3] = SyntheticSource(bundle[3].filename, 'exhibit', 'application/pdf', mixed.getvalue())
         if unreadable:
             bundle[0] = SyntheticSource('draft.docx', 'draft', bundle[0].media_type, b'Unreadable synthetic DOCX fixture')
         status, raw = direct(token, key, '/rest/v1/rpc/caseproof_dev_register_bundle', 'POST',
@@ -88,18 +104,32 @@ def main():
             return
         success(token, 'POST', f'/dev/live/matters/{case}/sources/{scan["document_id"]}/{scan["version_id"]}/ingest?request_id={uuid4()}')
         body = confirmation(before['bundle_signature'], str(uuid4()), text['version_id'], scan['version_id'])
+        if edge_cases:
+            # No printed/bundle map may pre-populate the lookup. Only the
+            # physical PDF reference should cause page-2 geometry retrieval.
+            body['entries'][1]['pages'] = []
         json_request(token, 'POST', base + '/confirmation', body)
         report = json_request(token, 'GET', base)
-        if [f['identity'] for f in report['findings']] != EXPECTED_IDENTITIES:
+        expected_identities = EXPECTED_IDENTITIES + (['resolved'] if edge_cases else [])
+        expected_counts = {'detected': 9, 'checked': 3, 'unresolved': 6} if edge_cases else EXPECTED_COUNTS
+        if [f['identity'] for f in report['findings']] != expected_identities:
             raise RuntimeError('DOSSIER_SEEDED_IDENTITIES_FAILED')
         counts = {k: report['coverage'][k] for k in EXPECTED_COUNTS}
-        if counts != EXPECTED_COUNTS or report['coverage']['unprocessed_regions'] < 1 or report['coverage']['fully_checked']:
+        if counts != expected_counts or report['coverage']['unprocessed_regions'] < 1 or report['coverage']['fully_checked']:
             raise RuntimeError('DOSSIER_COVERAGE_OVERCLAIMED')
+        if edge_cases:
+            sequence = report['findings'][-1]
+            mixed_source = next(s for s in report['sources'] if s['version_id'] == scan['version_id'])
+            if sequence['technical_check'] != 'unresolved' or sequence['page_mapping_reason'] != 'page_sequence_requires_review':
+                raise RuntimeError('DOSSIER_RANGE_FALSE_CHECK')
+            if mixed_source['image_only'] or mixed_source['image_only_pages'] != [2] or report['findings'][1]['pdf_page'] != 2:
+                raise RuntimeError('DOSSIER_MIXED_PDF_PAGE_STATUS_FAILED')
+            print('DOSSIER_RANGE_ABSTENTION_AND_MIXED_PAGE_2_GEOMETRY_PASSED', flush=True)
         scanned = report['findings'][1]
         if scanned['ocr_uncertainty'] != 'requires_human_confirmation' or not scanned['ocr_crop']:
             raise RuntimeError('DOSSIER_OCR_UNCERTAINTY_OR_CROP_MISSING')
         for row in (text, scan):
-            status, page = request(token, 'GET', base + f'/sources/{row["version_id"]}/pages/1')
+            status, page = request(token, 'GET', base + f'/sources/{row["version_id"]}/pages/{2 if edge_cases and row == scan else 1}')
             if status != 200 or not page.startswith(b'%PDF'):
                 raise RuntimeError('DOSSIER_ORIGINAL_PAGE_FAILED')
         crop = {k: v for k, v in scanned['ocr_crop'].items() if k != 'geometry_sha256'}

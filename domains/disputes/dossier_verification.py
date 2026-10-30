@@ -4,8 +4,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-ALGORITHM = 'caseproof-dossier-v1'
-_PAGE = re.compile(r'^\s*[,;:]?\s*(?:(PDF|printed|gedrukte|imprimée|bundle|bundel|liasse)\s+)?p(?:age)?\.?\s*(\d+)\b', re.I)
+ALGORITHM = 'caseproof-dossier-v2'
+_PAGE = re.compile(r'^\s*[,;:]?\s*(?:(PDF|printed|gedrukte|imprimée|bundle|bundel|liasse)\s+)?(?:pp?|pages?)\.?\s*(\d+)\b', re.I)
 
 
 def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[str, Any]], confirmation: dict[str, Any] | None) -> dict[str, Any]:
@@ -24,14 +24,17 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
                     else 'not_in_inventory' if complete else 'not_assessed')
         page = _PAGE.match(regions.get(ref.region, '')[ref.end:])
         requested = None
+        unsupported_sequence = False
         if page:
             raw_space = (page[1] or '').casefold()
             space = ('pdf' if raw_space == 'pdf' else 'printed' if raw_space in
                      {'printed', 'gedrukte', 'imprimée'} else 'bundle' if raw_space in
                      {'bundle', 'bundel', 'liasse'} else 'unspecified')
-            requested = {'space': space, 'label': page[2]}
+            tail = regions.get(ref.region, '')[ref.end + page.end():]
+            unsupported_sequence = bool(re.match(r'^\s*(?:[-–—−]|[,;]\s*\d|(?:and|en|et|to|tot|à)\s+\d)', tail, re.I))
+            requested = {'space': space, 'label': page[2], 'kind': 'sequence' if unsupported_sequence else 'single'}
         mapped = []
-        if source and entry and requested and requested['space'] != 'unspecified':
+        if source and entry and requested and not unsupported_sequence and requested['space'] != 'unspecified':
             if requested['space'] == 'pdf':
                 physical = int(requested['label'])
                 if 1 <= physical <= source.get('page_count', 0):
@@ -42,6 +45,8 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
         targets = {p['pdf_page'] for p in mapped}
         pdf_page = next(iter(targets)) if len(targets) == 1 else None
         geometry = source.get('geometry', {}).get(str(pdf_page)) if source and pdf_page else None
+        image_page = bool(source and pdf_page and pdf_page in source.get('image_only_pages', []))
+        image_page = image_page or bool(source and source.get('image_only'))
         findings.append({
             'reference_id': f'ref-{index:04d}', 'literal': ref.raw, 'region': ref.region,
             'offsets': {'start': ref.start, 'end': ref.end}, 'number': ref.number,
@@ -51,14 +56,15 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
             'source_sha256': source['sha256'] if source else None,
             'page_mapping': 'mapped' if pdf_page else 'conflicting' if len(targets) > 1 else 'unmapped',
             'pdf_page': pdf_page,
+            'page_mapping_reason': 'page_sequence_requires_review' if unsupported_sequence else None,
             'printed_page': requested['label'] if pdf_page and requested and requested['space'] == 'printed' else None,
             'bundle_page': requested['label'] if pdf_page and requested and requested['space'] == 'bundle' else None,
             'mapping_basis': mapped if pdf_page else [],
             'source_page': {'version_id': version, 'pdf_page': pdf_page} if pdf_page else None,
             'ocr_crop': geometry.get('crop') if geometry else None,
             'ocr_uncertainty': 'requires_human_confirmation' if geometry else
-                               'image_only_no_usable_ocr' if source and source.get('image_only') else 'not_assessed',
-            'fidelity': 'ocr_unreliable' if geometry or (source and source.get('image_only')) else 'not_assessed',
+                               'image_only_no_usable_ocr' if image_page else 'not_assessed',
+            'fidelity': 'ocr_unreliable' if geometry or image_page else 'not_assessed',
             'support': 'not_assessed',
             'technical_check': 'checked' if identity == 'resolved' and pdf_page else 'unresolved',
         })

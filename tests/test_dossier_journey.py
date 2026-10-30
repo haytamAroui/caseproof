@@ -148,3 +148,59 @@ def test_annotation_keeps_conflicting_human_decisions_visible():
     with ZipFile(io.BytesIO(annotated_docx(raw, report))) as archive:
         xml = archive.read('word/document.xml')
         assert b'CONFIRMED_SUPPORTED' in xml and b'CONFIRMED_CONTRADICTED' in xml
+
+
+def test_page_sequences_never_silently_check_only_the_first_page():
+    source = {'role': 'exhibit', 'version_id': 'v', 'document_id': 'd', 'sha256': 'a' * 64, 'page_count': 1}
+    context = {'payload': {'inventory_complete': True, 'entries': [
+        {'label': 'stuk', 'number': '1', 'source_version_id': 'v', 'pages': []}]}}
+    for suffix in ('PDF p. 1-99', 'PDF pp. 1–99', 'PDF p. 1—99', 'PDF p. 1−99', 'PDF p. 1 à 99', 'PDF p. 1, 99',
+                   'printed p. 1-99', 'bundle p. 1-99', 'p. 1-99'):
+        result = assess(docx('Stuk 1, ' + suffix), [source], context)
+        finding = result['findings'][0]
+        assert finding['pdf_page'] is None and finding['technical_check'] == 'unresolved'
+        assert finding['page_mapping_reason'] == 'page_sequence_requires_review'
+        assert result['coverage']['checked'] == 0
+
+
+def test_mixed_pdf_physical_reference_looks_up_its_actual_scanned_page():
+    from types import SimpleNamespace
+
+    from apps.api.access_control import AccessFailure, AccessRejected
+    from apps.api.dossier_journey import DossierStore
+
+    class GeometryClient:
+        def __init__(self, available):
+            self.available = available
+            self.lookups = []
+
+        def read_geometry(self, token, version, page):
+            self.lookups.append((version, page))
+            if not self.available:
+                raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+            return (SimpleNamespace(original_sha256='a' * 64, geometry_sha256='b' * 64),
+                    {'words': [{'left': 1, 'top': 2, 'width': 3, 'height': 4}]})
+
+    class MixedStore(DossierStore):
+        def __init__(self, available):
+            self.client = GeometryClient(available)
+
+        def rpc(self, token, case, action, data=None):
+            return {'bundle_signature': 'c' * 64, 'confirmation': {
+                'request_id': 'revision', 'payload': {'inventory_complete': True, 'entries': [
+                    {'label': 'piece', 'number': '2', 'source_version_id': 'mixed', 'pages': []}]}}}
+
+        def sources(self, token, case):
+            return ([{'role': 'draft', 'version_id': 'draft'}, {'role': 'inventory', 'version_id': 'inv'},
+                     {'role': 'exhibit', 'version_id': 'mixed', 'document_id': 'doc', 'sha256': 'a' * 64,
+                      'page_count': 2, 'image_only': False, 'image_only_pages': [2]}],
+                    {'draft': docx('Pièce 2, PDF p. 2.'), 'inv': b'Piece 2 scan'})
+
+    for available in (True, False):
+        store = MixedStore(available)
+        report, _ = store.load('signed-test-double', 'case', 'draft')
+        finding = report['findings'][0]
+        assert store.client.lookups == [('mixed', 2)]
+        assert finding['pdf_page'] == 2 and finding['fidelity'] == 'ocr_unreliable'
+        assert finding['ocr_uncertainty'] == ('requires_human_confirmation' if available else 'image_only_no_usable_ocr')
+        assert bool(finding['ocr_crop']) == available
