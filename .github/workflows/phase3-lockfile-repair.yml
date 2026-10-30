@@ -20,7 +20,7 @@ jobs:
           python-version: "3.11"
       - name: Resolve and validate lockfile
         run: |
-          uv lock
+          uv lock --upgrade-package pillow
           uv sync --locked --group dev
           uv lock --check
       - name: Commit generated lockfile
