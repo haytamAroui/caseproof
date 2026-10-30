@@ -156,7 +156,8 @@ def _run(command: list[str], *, timeout: int) -> None:
     try:
         completed = subprocess.run(
             isolated, capture_output=True,
-            timeout=timeout, check=False, preexec_fn=_worker_limits,
+            timeout=timeout, check=False,
+            preexec_fn=None if container_name is not None else _worker_limits,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise OCRUnavailable("ocr_binary_unavailable_or_timeout") from None
