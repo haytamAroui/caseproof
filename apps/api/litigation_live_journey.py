@@ -301,9 +301,10 @@ class JourneyClient:
 
 def create_live_journey_router(
     publishable_key: str | None, trusted_ingest_key: str | None = None,
+    *, ocr: LocalPDFOCR | None = None,
 ) -> APIRouter:
     router = APIRouter()
-    client = JourneyClient(publishable_key, trusted_ingest_key) if publishable_key else None
+    client = JourneyClient(publishable_key, trusted_ingest_key, ocr=ocr) if publishable_key else None
 
     def active(authorization: str | None) -> tuple[JourneyClient, str]:
         if client is None:
