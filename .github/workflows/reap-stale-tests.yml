@@ -1,0 +1,29 @@
+name: M0.5 stale fixture reaper
+# Protected five-hour stale-run recovery proof on this PR branch.
+on:
+  schedule:
+    - cron: "17 */4 * * *"
+  push:
+    branches: [feat/m05-ephemeral-fixture-hardening]
+    paths:
+      - .github/workflows/reap-stale-tests.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: caseproof-dev-fixture-reaper
+  cancel-in-progress: false
+jobs:
+  reaper:
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 15
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Reconcile stale CI fixtures
+        run: uv run --locked python -m scripts.reap_stale_runs --older-than-hours 4

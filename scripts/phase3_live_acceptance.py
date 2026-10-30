@@ -1,4 +1,4 @@
-"""Persistent Phase 3 live OCR acceptance. NEVER delete users or fixture data."""
+"""Ephemeral Phase 3 OCR acceptance; cleanup managed by M0.5 wrapper."""
 
 from __future__ import annotations
 
@@ -10,16 +10,12 @@ import os
 from uuid import uuid4
 
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
+from scripts.m05_registry import record
 from scripts.verify_dev_ephemeral_auth import PROJECT_REF
 from scripts.verify_dev_live_review_roundtrip import _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import success
 
-ORG = "db0fe3b9-3bfc-4f69-b9ef-65a6949d67bc"
-ROLES = {
-    "owner": ("7e1e8ef5-e5d4-41a8-b8d4-5ccf3a6333bd", "Phase3Owner!2026"),
-    "ungranted": ("d80ae946-9121-4da6-9770-148b4cec7bbf", "Phase3Ungranted!2026"),
-    "foreign": ("eb5c2e9c-420c-48e3-9383-8b1d37862c42", "Phase3Foreign!2026"),
-}
+ROLES = ("owner", "ungranted", "foreign")
 
 
 def sources():
@@ -63,28 +59,25 @@ def crop(token, case, doc, version, box):
 def main():
     if (
         os.getenv("CASEPROOF_PHASE3_LIVE") != "YES"
-        or os.getenv("GITHUB_REF") != "refs/heads/feat/phase3-ocr-geometry-crops"
+        or os.getenv("GITHUB_REF") != "refs/heads/feat/m05-ephemeral-fixture-hardening"
         or os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof"
     ):
         raise RuntimeError("protected Phase 3 branch required")
     key = os.environ["CASEPROOF_DEV_PUBLISHABLE_KEY"]
     signin = SupabasePasswordSignin(PROJECT_REF, key)
     sessions = {}
-    for role, (user_id, password) in ROLES.items():
-        # GoTrue fixture email suffix was randomly generated; look up only via
-        # protected admin API, never SQL-write auth.users.
-        admin = os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"]
-        status, raw = direct(admin, admin, "/auth/v1/admin/users?page=1&per_page=100")
-        if status != 200:
-            raise RuntimeError(f"P3_AUTH_LIST_FAILED status={status}")
-        candidates = [u for u in json.loads(raw).get("users", []) if u.get("id") == user_id]
-        if len(candidates) != 1:
-            raise RuntimeError("P3_AUTH_USER_NOT_FOUND")
-        session = signin.sign_in(PasswordCredentials(email=candidates[0]["email"], password=password))
-        if str(session.user_id) != user_id:
-            raise RuntimeError("P3_AUTH_IDENTITY_MISMATCH")
+    credentials = {}
+    actors = {}
+    for role in ROLES:
+        email = os.environ[f"CASEPROOF_P3_{role.upper()}_EMAIL"]
+        password = os.environ[f"CASEPROOF_P3_{role.upper()}_PASSWORD"]
+        session = signin.sign_in(PasswordCredentials(email=email, password=password))
         sessions[role] = session.access_token
-    print("P3_AUTH_SIGNED: three existing persistent users", flush=True)
+        credentials[role] = PasswordCredentials(email=email, password=password)
+        actors[role] = str(session.user_id)
+    if len(set(actors.values())) != 3:
+        raise RuntimeError("P3_DISTINCT_AUTH_USERS_REQUIRED")
+    print("P3_AUTH_SIGNED: three ephemeral users", flush=True)
     proc = None
     try:
         proc = _server_start()
@@ -93,8 +86,9 @@ def main():
             owner,
             "POST",
             "/dev/live/matters",
-            {"org_id": ORG, "name": "Persistent Phase 3 OCR acceptance", "request_id": str(uuid4())},
+            {"org_id": os.environ["CASEPROOF_P3_ORG_ID"], "name": "CaseProof CI " + os.environ["CASEPROOF_P3_RUN_ID"], "request_id": str(uuid4())},
         )["case_id"]
+        record(os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"], os.environ["CASEPROOF_P3_RUN_ID"], "matter", case, "CREATED")
         print("P3_MATTER_CREATED: " + case, flush=True)
         bundle = sources()
         metadata = [
@@ -128,9 +122,14 @@ def main():
         if len(registered) != 4:
             raise RuntimeError("P3_BUNDLE_INCOMPLETE")
         print("P3_BUNDLE_REGISTERED: four source identities", flush=True)
+        if os.getenv("FORCE_FAILURE") == "YES":
+            raise RuntimeError("P3_INJECTED_FAILURE_STEP_3")
         scan = None
         for (filename, _media, raw), item in zip(bundle, registered, strict=True):
             doc, version = item["document_id"], item["version_id"]
+            digest = hashlib.sha256(raw).hexdigest()
+            storage_path = "/".join((os.environ["CASEPROOF_P3_ORG_ID"], case, doc, version, digest))
+            record(os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"], os.environ["CASEPROOF_P3_RUN_ID"], "storage_file", storage_path)
             uploaded = success(
                 owner,
                 "POST",
@@ -178,14 +177,7 @@ def main():
         proc = None
         proc = _server_start()
         # Fresh login, no cached session or geometry.
-        status, raw = direct(
-            os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"],
-            os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"],
-            "/auth/v1/admin/users?page=1&per_page=100",
-        )
-        users = json.loads(raw)["users"]
-        email = next(u["email"] for u in users if u["id"] == ROLES["owner"][0])
-        fresh = signin.sign_in(PasswordCredentials(email=email, password=ROLES["owner"][1])).access_token
+        fresh = signin.sign_in(credentials["owner"]).access_token
         status, png = crop(fresh, case, doc, version, box)
         if status != 200 or not png.startswith(bytes.fromhex("89504e470d0a1a0a")):
             raise RuntimeError(f"P3_COLD_RESTART_CROP_FAILED: {status}")
@@ -207,14 +199,14 @@ def main():
         elif status not in (401, 403, 404):
             raise RuntimeError(f"P3_PRIVATE_POSTGREST_EXPOSED: {status}")
         print("P3_PRIVATE_POSTGREST_DENIED", flush=True)
-        # Intentionally retain revoked grant row and every fixture.
+        # Revocation is tested before scoped teardown by the caller.
         from scripts.verify_dev_live_txt_journey import admin_rpc
 
         # revoke RPC requires the fixture run and owner identity.
         ok = admin_rpc(
             os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"],
             "revoke",
-            {"p_run": "45de000d-dd12-4d6d-990d-88225ae77297", "p_owner": ROLES["owner"][0], "p_case": case},
+            {"p_run": os.environ["CASEPROOF_P3_RUN_ID"], "p_owner": actors["owner"], "p_case": case},
         )
         if ok is not True:
             raise RuntimeError("P3_REVOKE_RPC_FAILED")
@@ -222,7 +214,7 @@ def main():
         if status not in (403, 404) or body.startswith(bytes.fromhex("89504e47")):
             raise RuntimeError(f"P3_REVOKED_CROP_NOT_DENIED: {status}")
         print("P3_REVOKED_CROP_DENIED", flush=True)
-        print("P3_ALL_NINE_STEPS_PASSED; persistent fixtures retained", flush=True)
+        print("P3_ALL_NINE_STEPS_PASSED; teardown required", flush=True)
     finally:
         if proc is not None:
             _server_stop(proc)
