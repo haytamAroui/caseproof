@@ -93,7 +93,8 @@ def verify_registration(
         raise LiveFixtureError("three distinct signed users required")
     run_id = str(uuid4())
     proc = None
-    refs = []\n    sources = _sources()
+    refs = []
+    sources = _sources()
     try:
         setup = admin_rpc(admin_key, "setup", {
             "p_run": run_id, "p_owner": actors[0],
