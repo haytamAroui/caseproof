@@ -1,27 +1,15 @@
-"""Proof of denied outbound HTTP from a Docker --network none worker.
-
-The probe uses only Python stdlib; missing libraries cannot cause success.
-The CI runner separately asserts that the container has network mode 'none'.
-"""
+"""Prove denied outbound HTTP at the container network boundary."""
 import errno
 import socket
-import urllib.error
-import urllib.request
 
 
 def test_outbound_http_is_denied_by_network_boundary():
+    # Numeric public IPv4 address avoids DNS and proxy configuration.
     try:
-        urllib.request.urlopen(
-            urllib.request.Request("http://93.184.215.14/", headers={"Host": "example.com"}),
-            timeout=3,
-        )
-    except urllib.error.URLError as exc:
-        reason = exc.reason
-        assert isinstance(reason, OSError), f"unexpected URL failure: {exc}"
-        assert reason.errno in {
-            errno.ENETUNREACH, errno.EHOSTUNREACH, errno.EPERM, errno.EACCES,
-        }, f"not a network isolation denial: {reason}"
+        with socket.create_connection(("93.184.215.14", 80), timeout=3) as sock:
+            sock.sendall(b"GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n")
+            raise AssertionError("outbound TCP/HTTP unexpectedly connected")
     except OSError as exc:
-        assert exc.errno in {errno.ENETUNREACH, errno.EHOSTUNREACH, errno.EPERM, errno.EACCES}
-    else:
-        raise AssertionError("worker unexpectedly reached external HTTP")
+        assert exc.errno in {
+            errno.ENETUNREACH, errno.EHOSTUNREACH, errno.EPERM, errno.EACCES,
+        }, f"not a proven network-isolation denial: {exc}"
