@@ -93,6 +93,10 @@ def test_no_installed_migration_or_prod_route() -> None:
             "20261028114616_caseproof_dev_service_verified_binary_parser_promotion.sql",
             "20261028114940_caseproof_dev_m2_preserve_partial_pdf_docx_unknown.sql",
             "20261028114956_caseproof_dev_cleanup_verified_binary_source.sql",
+            "20261030095000_caseproof_dev_bundle_cleanup.sql",
+            "20261030101500_caseproof_dev_bundle_manifest.sql",
+            "20261030103000_caseproof_durable_bundle_roles.sql",
+            "20261030110000_caseproof_dev_atomic_bundle_registration.sql",
     }
     assert "S2-008a_disposable_representation_anchor_graph.sql" not in (
         ROOT / "apps/api/main.py"

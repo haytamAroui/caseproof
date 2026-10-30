@@ -124,6 +124,10 @@ def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> Non
     assert migration.read_bytes() == proposal.read_bytes()
     assert {p.name for p in (root / "supabase/migrations").glob("*.sql")} == {
         "20261022001009_caseproof_tenant_foundation.sql",
+        "20261030110000_caseproof_dev_atomic_bundle_registration.sql",
+        "20261030095000_caseproof_dev_bundle_cleanup.sql",
+        "20261030101500_caseproof_dev_bundle_manifest.sql",
+        "20261030103000_caseproof_durable_bundle_roles.sql",
         "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
         "20261027195417_caseproof_m2_dev_atomic_private_review.sql",
         "20261027195451_caseproof_m1_signed_invoker_read_views.sql",

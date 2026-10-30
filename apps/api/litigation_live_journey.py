@@ -176,6 +176,32 @@ class JourneyClient:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def bundle_manifest(self, bearer: str, case_id: str) -> dict[str, Any]:
+        con = http.client.HTTPSConnection(HOST, timeout=15)
+        try:
+            con.request("POST", "/rest/v1/rpc/caseproof_dev_bundle_manifest",
+                        json.dumps({"p_case": _uuid(case_id)}).encode(), headers={
+                            "apikey": self._key, "Authorization": "Bearer " + bearer,
+                            "Content-Type": "application/json", "Cache-Control": "no-store",
+                        })
+            response = con.getresponse()
+            status, raw = response.status, response.read(MAX_RPC_RESPONSE + 1)
+        except (OSError, TimeoutError, http.client.HTTPException):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        finally:
+            con.close()
+        if status in (400, 401, 403, 404, 409, 422):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        if status != 200 or len(raw) > MAX_RPC_RESPONSE:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            result = json.loads(raw)
+        except (ValueError, UnicodeError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if not isinstance(result, dict) or result.get("case_id") != case_id or not isinstance(result.get("sources"), list):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return result
+
     def upload(
         self, bearer: str, case_id: str, doc_id: str, version_id: str, content: str,
     ) -> dict[str, object]:
@@ -347,6 +373,11 @@ def create_live_journey_router(
         c, bearer = active(authorization)
         return c.call(bearer, "brief", case_id=case_id, request_id=str(body.request_id),
                       data=body.model_dump(mode="json", exclude={"request_id"}))
+
+    @router.get("/dev/live/matters/{case_id}/manifest")
+    def bundle_manifest(case_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        c, bearer = active(authorization)
+        return c.bundle_manifest(bearer, case_id)
 
     @router.get("/dev/live/matters/{case_id}/state")
     def state(case_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:

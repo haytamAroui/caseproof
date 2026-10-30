@@ -386,4 +386,8 @@ def test_does_not_wire_database_or_enable_approval_api() -> None:
             "20261028114616_caseproof_dev_service_verified_binary_parser_promotion.sql",
             "20261028114940_caseproof_dev_m2_preserve_partial_pdf_docx_unknown.sql",
             "20261028114956_caseproof_dev_cleanup_verified_binary_source.sql",
+            "20261030095000_caseproof_dev_bundle_cleanup.sql",
+            "20261030101500_caseproof_dev_bundle_manifest.sql",
+            "20261030103000_caseproof_durable_bundle_roles.sql",
+            "20261030110000_caseproof_dev_atomic_bundle_registration.sql",
     }
