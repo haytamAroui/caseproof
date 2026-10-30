@@ -21,12 +21,65 @@ from scripts.verify_dev_live_txt_journey import LiveFixtureError, admin_rpc, suc
 from scripts.verify_dev_live_review_roundtrip import _request, _server_start, _server_stop
 
 
-SOURCES = (
-    ("inventory.txt", "text/plain", b"Inventory: Stuk 1; Stuk 2; Stuk 3\n"),
-    ("stuk-1.pdf", "application/pdf", b"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n"),
-    ("stuk-2.pdf", "application/pdf", b"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n"),
-    ("stuk-3-scan.pdf", "application/pdf", b"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n"),
-)
+def _pdf(objects: list[bytes]) -> bytes:
+    """Construct a deterministic, valid single-page PDF with an xref table."""
+    data = bytearray(b"%PDF-1.4\\n%\\xe2\\xe3\\xcf\\xd3\\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, 1):
+        offsets.append(len(data))
+        data.extend(f"{index} 0 obj\\n".encode() + obj + b"\\nendobj\\n")
+    xref = len(data)
+    data.extend(f"xref\\n0 {len(offsets)}\\n0000000000 65535 f \\n".encode())
+    for offset in offsets[1:]:
+        data.extend(f"{offset:010d} 00000 n \\n".encode())
+    data.extend(
+        f"trailer\\n<< /Size {len(offsets)} /Root 1 0 R >>\\n"
+        f"startxref\\n{xref}\\n%%EOF\\n".encode()
+    )
+    return bytes(data)
+
+
+def _text_pdf(text: str) -> bytes:
+    stream = f"BT /F1 14 Tf 40 180 Td ({text}) Tj ET".encode()
+    return _pdf([
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 240] "
+        b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        f"<< /Length {len(stream)} >>\\nstream\\n".encode() + stream + b"\\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ])
+
+
+def _scan_pdf() -> bytes:
+    import zlib
+    width, height = 240, 120
+    # Image-only: black strokes on white pixels, no PDF text operators.
+    pixels = bytes(
+        0 if (22 < y < 90 and (x // 11 + y // 8) % 7 == 0) else 255
+        for y in range(height) for x in range(width)
+    )
+    image = zlib.compress(pixels)
+    stream = b"q 240 0 0 120 0 0 cm /Im1 Do Q"
+    return _pdf([
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 120] "
+        b"/Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>",
+        f"<< /Length {len(stream)} >>\\nstream\\n".encode() + stream + b"\\nendstream",
+        (f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} "
+         f"/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode "
+         f"/Length {len(image)} >>\\nstream\\n").encode() + image + b"\\nendstream",
+    ])
+
+
+def _sources() -> tuple[tuple[str, str, bytes], ...]:
+    return (
+        ("inventory.txt", "text/plain", b"Inventory: Stuk 1; Stuk 2; Stuk 3\\n"),
+        ("stuk-1.pdf", "application/pdf", _text_pdf("Stuk 1: invoice 125 EUR")),
+        ("stuk-2.pdf", "application/pdf", _text_pdf("Stuk 2: receipt 125 EUR")),
+        ("stuk-3-scan.pdf", "application/pdf", _scan_pdf()),
+    )
 
 
 def verify_registration(
@@ -40,7 +93,7 @@ def verify_registration(
         raise LiveFixtureError("three distinct signed users required")
     run_id = str(uuid4())
     proc = None
-    refs = []
+    refs = []\n    sources = _sources()
     try:
         setup = admin_rpc(admin_key, "setup", {
             "p_run": run_id, "p_owner": actors[0],
@@ -61,7 +114,7 @@ def verify_registration(
                 "byte_length": len(payload),
                 "sha256": hashlib.sha256(payload).hexdigest(),
             }
-            for index, (filename, media_type, payload) in enumerate(SOURCES)
+            for index, (filename, media_type, payload) in enumerate(sources)
         ]
         con = http.client.HTTPSConnection(f"{PROJECT_REF}.supabase.co", timeout=15)
         try:
@@ -86,7 +139,7 @@ def verify_registration(
         print("LIVE_MULTISOURCE_REGISTERED: inventory and three exhibit versions")
         stored = SignedOriginalsStorage(publishable)
         outsiders = (sessions[1].access_token, sessions[2].access_token)
-        for source, item in zip(SOURCES, registered["sources"], strict=True):
+        for source, item in zip(sources, registered["sources"], strict=True):
             filename, media_type, payload = source
             ref = OriginalRef(
                 UUID(org), UUID(case), UUID(item["document_id"]),
