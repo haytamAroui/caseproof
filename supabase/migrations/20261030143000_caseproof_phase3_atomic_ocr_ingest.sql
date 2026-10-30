@@ -8,7 +8,7 @@ declare
  v_old caseproof._dev_journey_operations%rowtype;
  v_source caseproof._dev_journey_sources%rowtype;
  v_bytes bytea; v_sha text; v_rep text; v_man text; v_snapshot text;
- v_input text; v_audit uuid; v_audit2 uuid;
+ v_input text; v_audit uuid; v_audit2 uuid; v_geometry_count integer;
  v_exhibit jsonb; v_exhibit_sha text; v_result jsonb;
 begin
  if p_actor is null or p_case is null or p_request is null or
@@ -71,7 +71,7 @@ begin
  then raise exception 'original and verified parser identity mismatch' using errcode='42501'; end if;
  v_input:=encode(extensions.digest(convert_to(pg_catalog.jsonb_build_object(
   'case',p_case,'document',p_document,'version',p_version,
-  'sha',v_sha,'representation_sha',v_rep,'manifest_sha',v_man)::text,'UTF8'),'sha256'),'hex');
+  'sha',v_sha,'representation_sha',v_rep,'manifest_sha',v_man,'geometry',p_geometry)::text,'UTF8'),'sha256'),'hex');
  select * into v_old from caseproof._dev_journey_operations
  where org_id=v_org and actor_id=p_actor and operation='ingest' and request_id=p_request
  for update;
@@ -129,28 +129,35 @@ begin
     payload_sha256,payload,audit_id)
    values(v_org,p_case,1,p_request,p_actor,0,v_exhibit_sha,v_exhibit,v_audit2);
  end if;
- -- Sidecars and source promotion are committed in the SAME PostgreSQL transaction.
- -- A geometry failure aborts the source, manifest, exhibit and audit inserts.
+ -- Strictly validate every sidecar against its content-addressed manifest reference.
+ -- Canonical hashes are over PostgreSQL jsonb::text, never unverified client strings.
+ select count(*) into v_geometry_count
+ from jsonb_array_elements(p_geometry) g
+ join lateral jsonb_array_elements(coalesce(p_manifest->'ocr_candidates','[]'::jsonb)) c
+   on c->>'pdf_page'=g->>'page_number'
+ where g->'payload'->>'schema'='caseproof.ocr.geometry.v1'
+   and g->'payload'->>'original_sha256'=v_sha
+   and g->'payload'->>'page_number'=g->>'page_number'
+   and g->>'coordinate_basis'=g->'payload'->>'coordinate_basis'
+   and jsonb_typeof(g->'payload'->'words')='array'
+   and c->>'original_sha256'=v_sha
+   and c->>'geometry_sha256'=g->>'geometry_sha256'
+   and g->>'geometry_sha256'=encode(extensions.digest(convert_to((g->'payload')::text,'UTF8'),'sha256'),'hex');
+ if v_geometry_count <> jsonb_array_length(p_geometry)
+ then raise exception 'OCR geometry hash or identity mismatch' using errcode='42501'; end if;
  insert into caseproof.ocr_geometry_sidecars(
    document_version_id,page_number,original_sha256_hex,geometry_sha256_hex,
    coordinate_basis,word_count,payload
  )
- select p_version,(g->>'page_number')::integer,v_sha,
-   encode(extensions.digest(convert_to((g->'payload')::text,'UTF8'),'sha256'),'hex'),
+ select p_version,(g->>'page_number')::integer,v_sha,g->>'geometry_sha256',
    g->>'coordinate_basis',jsonb_array_length(g->'payload'->'words'),g->'payload'
  from jsonb_array_elements(p_geometry) g
- where g->'payload'->>'original_sha256'=v_sha
-   and g->'payload'->>'schema'='caseproof.ocr.geometry.v1'
-   and g->'payload'->>'page_number'=g->>'page_number'
-   and exists (
-     select 1 from jsonb_array_elements(coalesce(p_manifest->'ocr_candidates','[]'::jsonb)) c
-     where c->>'pdf_page'=g->>'page_number'
-       and c->>'geometry_sha256'=g->>'geometry_sha256'
-       and c->>'original_sha256'=v_sha
-   )
  on conflict (document_version_id,page_number) do nothing;
  if (select count(*) from caseproof.ocr_geometry_sidecars x
-     where x.document_version_id=p_version) < jsonb_array_length(p_geometry)
+     join jsonb_array_elements(p_geometry) g on x.page_number=(g->>'page_number')::integer
+     where x.document_version_id=p_version
+       and x.geometry_sha256_hex=g->>'geometry_sha256'
+       and x.original_sha256_hex=v_sha) <> jsonb_array_length(p_geometry)
  then raise exception 'OCR geometry persistence incomplete' using errcode='42501'; end if;
  v_result:=pg_catalog.jsonb_build_object(
   'case_id',p_case,'document_id',p_document,'version_id',p_version,
@@ -162,6 +169,6 @@ begin
  return v_result||'{"replayed":false}'::jsonb;
 end $body$;
 revoke all on function public.caseproof_dev_ingest_parsed_with_geometry(
- uuid,uuid,uuid,uuid,uuid,text,text,jsonb) from public,anon,authenticated;
+ uuid,uuid,uuid,uuid,uuid,text,text,jsonb,jsonb) from public,anon,authenticated;
 grant execute on function public.caseproof_dev_ingest_parsed_with_geometry(
- uuid,uuid,uuid,uuid,uuid,text,text,jsonb) to service_role;
+ uuid,uuid,uuid,uuid,uuid,text,text,jsonb,jsonb) to service_role;
