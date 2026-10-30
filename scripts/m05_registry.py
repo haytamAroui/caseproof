@@ -21,9 +21,12 @@ def call(key: str, action: str, run_id: str, kind=None, resource=None, state=Non
         headers["Authorization"] = "Bearer " + key
     payload = {"p_action": action, "p_run": run_id, "p_kind": kind,
                "p_resource": resource, "p_state": state, "p_cutoff": cutoff}
+    endpoint = "/rest/v1/rpc/caseproof_m05_verify_empty" if action == "verify" else RPC
+    if action == "verify":
+        payload = {"p_run": run_id}
     conn = http.client.HTTPSConnection(HOST, timeout=20)
     try:
-        conn.request("POST", RPC, json.dumps(payload).encode(), headers)
+        conn.request("POST", endpoint, json.dumps(payload).encode(), headers)
         res = conn.getresponse()
         status, raw = res.status, res.read(100000)
     finally:
