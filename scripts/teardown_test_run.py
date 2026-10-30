@@ -1,14 +1,15 @@
 """Delete only exact-owned resources from the durable M0.5 ledger."""
 from __future__ import annotations
+
 import argparse
 import os
 from uuid import UUID
 
-from scripts.m05_registry import forget, mark, rows
+from apps.api.signed_supabase_originals import OriginalRef
+from scripts.m05_registry import forget, rows
 from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin
 from scripts.verify_dev_live_txt_journey import admin_rpc
 from scripts.verify_m1_live_positive_original import _remove_original
-from apps.api.signed_supabase_originals import OriginalRef
 
 
 def teardown(run_id: str, key: str) -> None:
