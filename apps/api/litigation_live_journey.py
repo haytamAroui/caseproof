@@ -35,7 +35,7 @@ from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
 from infrastructure.parsers.pdf_source_crop import CropBox, crop_scanned_pdf
-from infrastructure.parsers.ocr_geometry_sidecar import GeometryReference, verify_page_geometry, GeometryRejected
+from infrastructure.parsers.ocr_geometry_sidecar import GeometryReference, GeometryRejected, verify_page_geometry
 
 HOST = "ldwmocpxwskvhoojndrd.supabase.co"
 MAX_TXT = 1024 * 1024
