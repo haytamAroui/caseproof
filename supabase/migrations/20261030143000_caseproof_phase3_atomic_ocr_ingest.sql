@@ -135,14 +135,14 @@ begin
  from jsonb_array_elements(p_geometry) g
  join lateral jsonb_array_elements(coalesce(p_manifest->'ocr_candidates','[]'::jsonb)) c
    on c->>'pdf_page'=g->>'page_number'
- where g->'payload'->>'schema'='caseproof.ocr.geometry.v1'
-   and g->'payload'->>'original_sha256'=v_sha
-   and g->'payload'->>'page_number'=g->>'page_number'
-   and g->>'coordinate_basis'=g->'payload'->>'coordinate_basis'
-   and jsonb_typeof(g->'payload'->'words')='array'
+ where (g->>'payload_text')::jsonb->>'schema'='caseproof.ocr.geometry.v1'
+   and (g->>'payload_text')::jsonb->>'original_sha256'=v_sha
+   and (g->>'payload_text')::jsonb->>'page_number'=g->>'page_number'
+   and g->>'coordinate_basis'=(g->>'payload_text')::jsonb->>'coordinate_basis'
+   and jsonb_typeof((g->>'payload_text')::jsonb->'words')='array'
    and c->>'original_sha256'=v_sha
    and c->>'geometry_sha256'=g->>'geometry_sha256'
-   and g->>'geometry_sha256'=encode(extensions.digest(convert_to((g->'payload')::text,'UTF8'),'sha256'),'hex');
+   and g->>'geometry_sha256'=encode(extensions.digest(convert_to(g->>'payload_text','UTF8'),'sha256'),'hex');
  if v_geometry_count <> jsonb_array_length(p_geometry)
  then raise exception 'OCR geometry hash or identity mismatch' using errcode='42501'; end if;
  insert into caseproof.ocr_geometry_sidecars(
@@ -150,7 +150,7 @@ begin
    coordinate_basis,word_count,payload
  )
  select p_version,(g->>'page_number')::integer,v_sha,g->>'geometry_sha256',
-   g->>'coordinate_basis',jsonb_array_length(g->'payload'->'words'),g->'payload'
+   g->>'coordinate_basis',jsonb_array_length((g->>'payload_text')::jsonb->'words'),g->>'payload_text'
  from jsonb_array_elements(p_geometry) g
  on conflict (document_version_id,page_number) do nothing;
  if (select count(*) from caseproof.ocr_geometry_sidecars x
