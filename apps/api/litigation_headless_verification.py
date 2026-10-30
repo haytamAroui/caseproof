@@ -7,7 +7,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import asdict
 from typing import Any, Literal, Protocol
 from uuid import UUID
 
