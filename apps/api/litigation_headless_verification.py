@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from typing import Any, Literal, Protocol
 from uuid import UUID
 
@@ -45,7 +44,6 @@ class DecisionBody(BaseModel):
         return UUID(value)
 
 
-_PAGE = re.compile(r"^\s*[,;:]?\s*p(?:age|agina|ag)?\.?\s*(\d{1,5})(?!\d)", re.IGNORECASE)
 
 
 def discover(payload: bytes, manifest: list[dict[str, Any]]) -> dict[str, Any]:
@@ -133,7 +131,7 @@ def create_headless_review_router(store: HeadlessMatterStore | None = None) -> A
             return Response(json.dumps(report, ensure_ascii=False, sort_keys=True),
                             media_type="application/json")
         lines = ["# CaseProof verification report", "",
-                 f"Snapshot: `{snapshot['snapshot_hash']}\`", "",
+                 f"Snapshot: `{snapshot['snapshot_hash']}`", "",
                  "Unverified identity, page mappings and OCR remain not assessed.", ""]
         for finding in snapshot["findings"]:
             lines.append(f"- {finding['reference_id']}: {finding['literal']} — {finding['identity']}, {finding['page_mapping']}")
