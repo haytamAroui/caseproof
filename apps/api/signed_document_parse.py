@@ -6,6 +6,7 @@ source record and invoke a service-only transaction. No OCR success is invented.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any
@@ -15,6 +16,7 @@ from application.extraction.contracts import ExtractionError
 from infrastructure.parsers.engines import DOCX_MIME
 from infrastructure.parsers.limited import LimitedDocumentParser
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
+from infrastructure.parsers.ocr_geometry_sidecar import GeometryReference, encode_page_geometry
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
 BINARY_MEDIA = frozenset({"application/pdf", DOCX_MIME})
@@ -27,6 +29,7 @@ def parse_verified_original(
     parser: LimitedDocumentParser | None = None,
     ocr: LocalPDFOCR | None = None,
     ocr_languages: tuple[str, ...] = ("nl", "fr"),
+    persist_geometry: Callable[[GeometryReference, bytes], None] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Validate a worker-produced representation and preserve absent page coverage."""
     if media_type not in BINARY_MEDIA or not 0 < len(data) <= MAX_BINARY_BYTES:
@@ -134,8 +137,12 @@ def parse_verified_original(
                 raise ExtractionError("invalid_pdf_page")
             try:
                 result = ocr.recognize(source, page_number=number, languages=ocr_languages)
+                if persist_geometry is None:
+                    raise ExtractionError("ocr_geometry_persistence_required")
+                reference, encoded = encode_page_geometry(result)
+                persist_geometry(reference, encoded)
                 candidates.append({
-                    "pdf_page": number, "status": "requires_human_review",
+                    "pdf_page": number, "status": "OCR_UNRELIABLE",
                     "original_sha256": result.original_sha256,
                     "image_sha256": result.image_sha256,
                     "image_width_px": result.image_width_px,
@@ -143,9 +150,8 @@ def parse_verified_original(
                     "image_dpi": result.image_dpi,
                     "coordinate_basis": result.coordinate_basis,
                     "engine": result.engine,
-                    "words": [{"text": w.text, "left": w.left, "top": w.top,
-                               "width": w.width, "height": w.height,
-                               "confidence": w.confidence} for w in result.words],
+                    "geometry_sha256": reference.geometry_sha256,
+                    "word_count": reference.word_count,
                 })
             except OCRUnavailable:
                 candidates.append({"pdf_page": number, "status": "ocr_unavailable"})
