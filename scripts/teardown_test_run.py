@@ -36,9 +36,6 @@ def teardown(run_id: str, key: str) -> None:
     if len(owners) != 1:
         raise RuntimeError("exact owner identity missing")
     owner = owners[0].split(":", 1)[1]
-    if not any(e["resource_type"] == "matter" for e in entries):
-        # Setup may have succeeded before matter creation.
-        pass
     admin_rpc(key, "cleanup", {"p_run": run_id, "p_owner": owner})
     for entry in entries:
         if entry["resource_type"] == "matter":
