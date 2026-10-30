@@ -6,6 +6,7 @@ journey is wired and run in protected CI.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import http.client
 import json
@@ -13,6 +14,7 @@ import os
 import sys
 from uuid import UUID, uuid4
 
+from apps.api.signed_supabase_originals import OriginalRef, PrivateStorageDenied, SignedOriginalsStorage
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
 from scripts.verify_dev_ephemeral_auth import PROJECT_REF
 from scripts.verify_dev_live_txt_journey import LiveFixtureError, admin_rpc, success
@@ -38,6 +40,7 @@ def verify_registration(
         raise LiveFixtureError("three distinct signed users required")
     run_id = str(uuid4())
     proc = None
+    refs = []
     try:
         setup = admin_rpc(admin_key, "setup", {
             "p_run": run_id, "p_owner": actors[0],
@@ -81,9 +84,44 @@ def verify_registration(
         if len(registered.get("sources", [])) != 4:
             raise LiveFixtureError("signed bundle registration returned incomplete identities")
         print("LIVE_MULTISOURCE_REGISTERED: inventory and three exhibit versions")
+        stored = SignedOriginalsStorage(publishable)
+        outsiders = (sessions[1].access_token, sessions[2].access_token)
+        for source, item in zip(SOURCES, registered["sources"], strict=True):
+            filename, media_type, payload = source
+            ref = OriginalRef(
+                UUID(org), UUID(case), UUID(item["document_id"]),
+                UUID(item["version_id"]), hashlib.sha256(payload).hexdigest(), media_type,
+            )
+            refs.append(ref)
+            endpoint = (
+                f"/dev/live/matters/{case}/sources/"
+                f"{ref.document_id}/{ref.version_id}/upload"
+            )
+            encoded = {"content_base64": base64.b64encode(payload).decode("ascii")}
+            for outsider in outsiders:
+                status, _ = _request(outsider, "POST", endpoint, encoded)
+                if status == 200:
+                    raise LiveFixtureError("unauthorized original upload accepted")
+            uploaded = success(owner, "POST", endpoint, encoded)
+            if uploaded.get("verified") is not True or uploaded.get("sha256") != ref.sha256_hex:
+                raise LiveFixtureError("Storage SHA-256 upload verification missing")
+            if stored.get_verified(ref, owner) != payload:
+                raise LiveFixtureError("Storage SHA-256 readback bytes differ")
+            for outsider in outsiders:
+                try:
+                    stored.get_verified(ref, outsider)
+                except PrivateStorageDenied:
+                    pass
+                else:
+                    raise LiveFixtureError("unauthorized original download accepted")
+        print("LIVE_MULTISOURCE_STORAGE: four signed uploads, hash readbacks, outsider denials")
+
     finally:
         if proc is not None:
             _server_stop(proc)
+        from scripts.verify_m1_live_positive_original import _remove_original
+        for ref in refs:
+            _remove_original(admin_key, ref)
         admin_rpc(admin_key, "cleanup", {"p_run": run_id, "p_owner": actors[0]})
 
 def main() -> int:
