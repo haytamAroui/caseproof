@@ -66,7 +66,7 @@ def show(findings: list[dict], color: bool) -> None:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--base-url", default="http://127.0.0.1:8000")
+    p.add_argument("--base-url", default="http://127.0.0.1:8765")
     p.add_argument("--case-id", required=True)
     p.add_argument("--brief-id", required=True)
     p.add_argument("--output-dir", type=Path, default=Path("demo-exports"))
