@@ -4,6 +4,9 @@ on:
   push:
     branches: [feat/final-hardening-and-verification]
     paths:
+      - infrastructure/parsers/pdf_ocr.py
+      - tests/test_ocr_docker_egress.py
+      - docker/ocr-egress.Dockerfile
       - scripts/m5_benchmark_live_acceptance.py
       - scripts/m5_generate_stress_docx.py
       - tests/test_m5_discovery_sequence_security.py
@@ -49,6 +52,8 @@ jobs:
           mode=$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$cid")
           test "$mode" = none
           docker start -a "$cid"
+          code=$(docker inspect -f '{{.State.ExitCode}}' "$cid")
+          test "$code" = 0
       - name: Install OCR system dependencies
         run: |
           sudo apt-get update -qq
