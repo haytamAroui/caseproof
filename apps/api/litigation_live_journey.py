@@ -33,6 +33,7 @@ from apps.api.signed_supabase_originals import (
 )
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
+from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 
 HOST = "ldwmocpxwskvhoojndrd.supabase.co"
 MAX_TXT = 1024 * 1024
@@ -85,7 +86,8 @@ class AuthoredBrief(BaseModel):
 
 
 class JourneyClient:
-    def __init__(self, publishable_key: str, trusted_ingest_key: str | None = None):
+    def __init__(self, publishable_key: str, trusted_ingest_key: str | None = None,
+                 *, ocr: LocalPDFOCR | None = None):
         if not publishable_key.startswith("sb_publishable_"):
             raise ValueError("development publishable key required")
         self._key = publishable_key
@@ -94,6 +96,7 @@ class JourneyClient:
         ):
             raise ValueError('protected development admin key required')
         self._trusted_ingest_key = trusted_ingest_key
+        self._ocr = ocr
         self._verifier = (
             SupabaseAuthUserVerifier(
                 "ldwmocpxwskvhoojndrd",
@@ -256,7 +259,7 @@ class JourneyClient:
             try:
                 representation, manifest = parse_verified_original(
                     document_id=doc_id, version_id=version_id,
-                    data=raw, media_type=ref.content_type,
+                    data=raw, media_type=ref.content_type, ocr=self._ocr,
                 )
             except (ExtractionError, ValueError):
                 raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
