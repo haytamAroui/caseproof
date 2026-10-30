@@ -94,8 +94,9 @@ def test_headless_discovery_review_export_contract() -> None:
 def test_unconfigured_api_fails_closed() -> None:
     app = FastAPI()
     app.include_router(create_headless_review_router())
-    from apps.api.access_control import AccessRejected
     from fastapi.responses import JSONResponse
+
+    from apps.api.access_control import AccessRejected
 
     @app.exception_handler(AccessRejected)
     def denied(_request, error):
