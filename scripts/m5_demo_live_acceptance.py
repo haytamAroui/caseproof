@@ -64,7 +64,7 @@ def crop(token, case, doc, version, box):
 def main():
     if (
         os.getenv("CASEPROOF_PHASE3_LIVE") != "YES"
-        or os.getenv("GITHUB_REF") != "refs/heads/feat/demo-cli"
+        or os.getenv("GITHUB_REF") != "refs/heads/feat/final-hardening-and-verification"
         or os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof"
     ):
         raise RuntimeError("protected Phase 3 branch required")
