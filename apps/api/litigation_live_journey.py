@@ -35,6 +35,7 @@ from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
 from infrastructure.parsers.pdf_source_crop import CropBox, crop_scanned_pdf
+from infrastructure.parsers.ocr_geometry_sidecar import GeometryReference, verify_page_geometry, GeometryRejected
 
 HOST = "ldwmocpxwskvhoojndrd.supabase.co"
 MAX_TXT = 1024 * 1024
@@ -212,6 +213,45 @@ class JourneyClient:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def read_geometry(self, bearer: str, version_id: str, page_number: int) -> tuple[GeometryReference, dict[str, object]]:
+        query = (
+            "/rest/v1/ocr_geometry_sidecars?select=page_number,original_sha256_hex,"
+            "geometry_sha256_hex,coordinate_basis,word_count,payload"
+            "&document_version_id=eq." + _uuid(version_id)
+            + "&page_number=eq." + str(page_number)
+        )
+        # Private schema is selected explicitly; signed JWT is required for RLS.
+        con = http.client.HTTPSConnection(HOST, timeout=15)
+        try:
+            con.request("GET", query, headers={
+                "apikey": self._key, "Authorization": "Bearer " + bearer,
+                "Accept-Profile": "caseproof", "Cache-Control": "no-store",
+            })
+            response = con.getresponse()
+            status, raw = response.status, response.read(8 * 1024 * 1024 + 2048)
+        except (OSError, TimeoutError, http.client.HTTPException):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        finally:
+            con.close()
+        if status != 200 or len(raw) > 8 * 1024 * 1024 + 1024:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        try:
+            rows = json.loads(raw)
+            if not isinstance(rows, list) or len(rows) != 1:
+                raise ValueError("missing sidecar")
+            row = rows[0]
+            reference = GeometryReference(
+                original_sha256=row["original_sha256_hex"],
+                geometry_sha256=row["geometry_sha256_hex"],
+                page_number=row["page_number"],
+                word_count=row["word_count"],
+                coordinate_basis=row["coordinate_basis"],
+            )
+            payload = verify_page_geometry(reference, row["payload"].encode("utf-8"))
+        except (ValueError, TypeError, KeyError, AttributeError, GeometryRejected):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        return reference, payload
+
     def upload(
         self, bearer: str, case_id: str, doc_id: str, version_id: str, content: str,
     ) -> dict[str, object]:
@@ -293,15 +333,26 @@ class JourneyClient:
         if ref.content_type in BINARY_MEDIA:
             from application.extraction.contracts import ExtractionError
             try:
+                geometry: list[dict[str, object]] = []
+                def capture(reference: GeometryReference, encoded: bytes) -> None:
+                    geometry.append({
+                        "page_number": reference.page_number,
+                        "geometry_sha256": reference.geometry_sha256,
+                        "coordinate_basis": reference.coordinate_basis,
+                        "payload_text": encoded.decode("utf-8"),
+                    })
                 representation, manifest = parse_verified_original(
                     document_id=doc_id, version_id=version_id,
                     data=raw, media_type=ref.content_type, ocr=self._ocr,
+                    persist_geometry=capture,
                 )
             except (ExtractionError, ValueError):
                 raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
             rpc = "/rest/v1/rpc/caseproof_dev_ingest_parsed_verified"
             data["p_representation"] = representation
             data["p_manifest"] = manifest
+            data["p_geometry"] = geometry
+            rpc = "/rest/v1/rpc/caseproof_dev_ingest_parsed_with_geometry"
         admin = self._trusted_ingest_key
         headers = {
             "apikey": admin, "Content-Type": "application/json",
@@ -497,6 +548,17 @@ def create_live_journey_router(
         if len(matching) != 1 or matching[0].get("media_type") != "application/pdf":
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         source = matching[0]
+        reference, geometry = c.read_geometry(bearer, version_id, body.page_number)
+        if reference.original_sha256 != source.get("original_sha"):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        words = geometry.get("words")
+        if not isinstance(words, list) or not any(
+            isinstance(w, dict)
+            and w.get("left") == body.left and w.get("top") == body.top
+            and w.get("width") == body.width and w.get("height") == body.height
+            for w in words
+        ):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         try:
             original = c.library.read(
                 bearer=bearer, case_id=case_id,
