@@ -1,8 +1,12 @@
 """Full migration + negative retention SQL tests, disposable PostgreSQL only."""
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 from uuid import uuid4
+
+import psycopg
 
 from scripts.verify_s2_002_database import SCHEMA_BOOTSTRAP, _env, _run
 
@@ -68,7 +72,42 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     service = "set request.jwt.claims='{\"role\":\"service_role\"}'; "
     soft = f"select public.caseproof_soft_delete_matter('{case}')"
     _run(actor(guest, soft), env, should_pass=False)
-    _run(actor(owner, soft), env)
+    # Two genuine DB connections: an upload already racing with uncommitted
+    # deletion must wait on the case lock, then fail after deletion commits.
+    with psycopg.connect() as deletion, psycopg.connect() as upload:
+        deletion.execute("set local role authenticated")
+        deletion.execute(f"set local request.jwt.claim.sub='{owner}'")
+        deletion.execute("set local request.jwt.claims='{\"role\":\"authenticated\"}'")
+        deletion.execute("select public.caseproof_soft_delete_matter(%s)", (case,))
+        pid = upload.info.backend_pid
+        outcome = []
+
+        def racing_upload():
+            try:
+                upload.execute("insert into storage.objects values('caseproof-originals-dev',%s)",
+                               (f"{org}/{case}/racing-upload",))
+                upload.commit()
+                outcome.append('unexpected-success')
+            except psycopg.errors.InsufficientPrivilege:
+                upload.rollback()
+                outcome.append('denied')
+
+        worker = threading.Thread(target=racing_upload)
+        worker.start()
+        with psycopg.connect(autocommit=True) as observer:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                row = observer.execute("select wait_event_type from pg_stat_activity where pid=%s", (pid,)).fetchone()
+                if row and row[0] == 'Lock':
+                    break
+                time.sleep(0.05)
+            else:
+                raise AssertionError('racing upload did not wait on deletion lock')
+        deletion.commit()
+        worker.join(timeout=5)
+        if worker.is_alive() or outcome != ['denied']:
+            raise AssertionError('racing upload was not denied after deletion committed')
+    print('RETENTION_REAL_CONCURRENT_STORAGE_UPLOAD_DENIED', flush=True)
     _run(actor(owner, soft), env)  # idempotent creator retry
     if _run(actor(owner, f"select count(*) from caseproof.cases where id='{case}'"), env) != '0':
         raise AssertionError('deleted case visible')
