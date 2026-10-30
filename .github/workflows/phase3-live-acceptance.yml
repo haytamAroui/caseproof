@@ -4,6 +4,8 @@ on:
     branches: [feat/phase3-ocr-geometry-crops]
     paths:
       - scripts/phase3_live_acceptance.py
+      - tests/fixtures/factory.py
+      - tests/test_fixture_factory.py
       - .github/workflows/phase3-live-acceptance.yml
   workflow_dispatch:
 permissions:
@@ -26,5 +28,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y tesseract-ocr tesseract-ocr-nld tesseract-ocr-fra poppler-utils fonts-dejavu-core
+      - name: Validate reusable fixture factory offline
+        run: uv run --locked --with pytest --with python-docx --with reportlab --with pillow python -m pytest -q tests/test_fixture_factory.py
       - name: Execute persistent live OCR acceptance (NO teardown)
         run: uv run --with python-docx --with reportlab --with pillow python -m scripts.phase3_live_acceptance

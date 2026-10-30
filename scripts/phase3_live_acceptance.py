@@ -5,14 +5,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import http.client
-import io
 import json
 import os
 from uuid import uuid4
 
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
 from scripts.verify_dev_ephemeral_auth import PROJECT_REF
-from scripts.verify_dev_live_multisource import _text_pdf
 from scripts.verify_dev_live_review_roundtrip import _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import success
 
@@ -25,36 +23,10 @@ ROLES = {
 
 
 def sources():
-    from docx import Document
-    from PIL import Image, ImageDraw, ImageFont
-    from reportlab.pdfgen import canvas
+    """Use the same synthetic originals as the reusable fixture factory."""
+    from tests.fixtures.factory import generate_bundle
 
-    d = Document()
-    d.add_paragraph("Synthetic CaseProof draft. See Stuk 1 and Pièce 2.")
-    b = io.BytesIO()
-    d.save(b)
-    image = Image.new("RGB", (1500, 650), "white")
-    draw = ImageDraw.Draw(image)
-    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-    font = ImageFont.truetype(font_path, 54)
-    draw.text((80, 90), "PIECE 2 SCANNED RECEIPT", fill="black", font=font)
-    draw.text((80, 190), "PAYMENT RECEIVED EUR 1250", fill="black", font=font)
-    draw.text((80, 290), "14 OCTOBER 2026", fill="black", font=font)
-    scan = io.BytesIO()
-    c = canvas.Canvas(scan, pagesize=(750, 325))
-    c.drawInlineImage(image, 0, 0, width=750, height=325)
-    c.showPage()
-    c.save()
-    return [
-        (
-            "draft.docx",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            b.getvalue(),
-        ),
-        ("inventory.txt", "text/plain", b"Inventory: Stuk 1 invoice; Piece 2 scanned receipt.\n"),
-        ("stuk-1-invoice.pdf", "application/pdf", _text_pdf("Stuk 1 invoice EUR 1250")),
-        ("piece-2-scanned-receipt.pdf", "application/pdf", scan.getvalue()),
-    ]
+    return [(source.filename, source.media_type, source.content) for source in generate_bundle()]
 
 
 def direct(token, key, path, method="GET", payload=None, profile=None):
