@@ -33,7 +33,8 @@ from apps.api.signed_supabase_originals import (
 )
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
-from infrastructure.parsers.pdf_ocr import LocalPDFOCR
+from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
+from infrastructure.parsers.pdf_source_crop import CropBox, crop_scanned_pdf
 
 HOST = "ldwmocpxwskvhoojndrd.supabase.co"
 MAX_TXT = 1024 * 1024
@@ -49,6 +50,15 @@ def _uuid(value: str) -> str:
     if str(parsed) != value:
         raise AccessRejected(AccessFailure.RESOURCE_MASKED)
     return value
+
+
+class SignedCropRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    page_number: int = Field(ge=1, le=64)
+    left: int = Field(ge=0)
+    top: int = Field(ge=0)
+    width: int = Field(ge=1, le=5000)
+    height: int = Field(ge=1, le=6500)
 
 
 class SignedEvidenceSearch(BaseModel):
@@ -467,5 +477,46 @@ def create_live_journey_router(
             "X-CaseProof-Original-SHA256": source["original_sha"],
             "X-CaseProof-Original-Media-Type": source.get("media_type", "text/plain"),
         })
+
+    @router.post("/dev/live/matters/{case_id}/sources/{document_id}/{version_id}/crop")
+    def signed_source_crop(
+        case_id: str, document_id: str, version_id: str, body: SignedCropRequest,
+        authorization: str | None = Header(default=None),
+    ) -> Response:
+        c, bearer = active(authorization)
+        # Signed state enforces the current matter grant before touching Storage.
+        state = c.call(bearer, "state", case_id=_uuid(case_id))
+        sources = state.get("sources")
+        if not isinstance(sources, list):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        matching = [
+            source for source in sources
+            if source.get("document_id") == _uuid(document_id)
+            and source.get("version_id") == _uuid(version_id)
+        ]
+        if len(matching) != 1 or matching[0].get("media_type") != "application/pdf":
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        source = matching[0]
+        try:
+            original = c.library.read(
+                bearer=bearer, case_id=case_id,
+                document_id=document_id, version_id=version_id,
+            )
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        if hashlib.sha256(original).hexdigest() != source.get("original_sha"):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            png = crop_scanned_pdf(
+                original, page_number=body.page_number,
+                box=CropBox(body.left, body.top, body.width, body.height),
+            )
+        except OCRUnavailable:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        return Response(
+            png, media_type="image/png",
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+                     "X-CaseProof-Original-SHA256": source["original_sha"]},
+        )
 
     return router
