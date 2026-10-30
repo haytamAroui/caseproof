@@ -11,7 +11,7 @@ from typing import Any, Literal, Protocol
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.litigation_evidence_app import _token
@@ -36,6 +36,13 @@ class DecisionBody(BaseModel):
     request_id: UUID
     decision: Literal["CONFIRMED_SUPPORTED", "CONFIRMED_QUALIFIED", "CONFIRMED_CONTRADICTED"]
     rationale: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("request_id", mode="before")
+    @classmethod
+    def parse_request_id(cls, value: object) -> UUID:
+        if type(value) is not str:
+            raise ValueError("request_id must be a UUID string")
+        return UUID(value)
 
 
 _PAGE = re.compile(r"^\s*[,;:]?\s*p(?:age|agina|ag)?\.?\s*(\d{1,5})(?!\d)", re.IGNORECASE)
@@ -126,7 +133,7 @@ def create_headless_review_router(store: HeadlessMatterStore | None = None) -> A
             return Response(json.dumps(report, ensure_ascii=False, sort_keys=True),
                             media_type="application/json")
         lines = ["# CaseProof verification report", "",
-                 f"Snapshot: \`{snapshot['snapshot_hash']}\`", "",
+                 f"Snapshot: `{snapshot['snapshot_hash']}\`", "",
                  "Unverified identity, page mappings and OCR remain not assessed.", ""]
         for finding in snapshot["findings"]:
             lines.append(f"- {finding['reference_id']}: {finding['literal']} — {finding['identity']}, {finding['page_mapping']}")
