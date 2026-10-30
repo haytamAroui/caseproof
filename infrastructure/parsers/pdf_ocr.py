@@ -9,6 +9,9 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import os
+import resource
+import sys
 import shutil
 import struct
 import subprocess
@@ -97,16 +100,33 @@ def parse_tsv(raw: bytes, *, width: int, height: int) -> tuple[OCRWord, ...]:
         raise OCRUnavailable("ocr_malformed_tsv") from None
 
 
+def _worker_limits() -> None:
+    """Bound the child process, never the API process."""
+    resource.setrlimit(resource.RLIMIT_AS, (768 * 1024 * 1024, 768 * 1024 * 1024))
+    resource.setrlimit(resource.RLIMIT_CPU, (30, 30))
+    resource.setrlimit(resource.RLIMIT_FSIZE, (16 * 1024 * 1024, 16 * 1024 * 1024))
+
+
+def _isolated_command(command: list[str]) -> list[str]:
+    """Use a kernel network namespace; fail closed if isolation unavailable."""
+    if sys.platform != "linux":
+        raise OCRUnavailable("ocr_linux_sandbox_required")
+    unshare = shutil.which("unshare")
+    if not unshare:
+        raise OCRUnavailable("ocr_network_sandbox_unavailable")
+    return [unshare, "--user", "--map-root-user", "--net", "--", *command]
+
+
 def _run(command: list[str], *, timeout: int) -> None:
     try:
         completed = subprocess.run(
-            command, capture_output=True,
-            timeout=timeout, check=False,
+            _isolated_command(command), capture_output=True,
+            timeout=timeout, check=False, preexec_fn=_worker_limits,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise OCRUnavailable("ocr_binary_unavailable_or_timeout") from None
     if completed.returncode != 0:
-        raise OCRUnavailable("ocr_external_process_failed")
+        raise OCRUnavailable("ocr_external_process_failed_or_sandbox_denied")
 
 
 class LocalPDFOCR:
