@@ -5,7 +5,7 @@ import os
 import sys
 from uuid import UUID
 
-from scripts.m05_registry import record
+from scripts.m05_registry import call, forget, record
 from scripts.teardown_test_run import teardown
 from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin
 from scripts.verify_dev_live_txt_journey import admin_rpc
@@ -30,7 +30,6 @@ def main() -> int:
             user_id = admin.create_confirmed(email=email, password=password)
             actors[role] = user_id
             record(key, run, "auth_user", role + ":" + user_id, "CREATED")
-            from scripts.m05_registry import forget
             forget(key, run, "auth_user", role + ":" + email)
             os.environ[f"CASEPROOF_P3_{role.upper()}_EMAIL"] = email
             os.environ[f"CASEPROOF_P3_{role.upper()}_PASSWORD"] = password
@@ -54,6 +53,9 @@ def main() -> int:
     if failure:
         print("M05_LIVE_FAILED:" + failure, file=sys.stderr)
         return 1
+    if call(key, "verify", run) is not True:
+        raise RuntimeError("independent zero-residual verification failed")
+    print("ZERO_RESIDUAL_VERIFIED", flush=True)
     print("M05_LIVE_NINE_STEPS_AND_SCOPED_TEARDOWN_PASSED")
     return 0
 
