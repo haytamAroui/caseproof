@@ -17,8 +17,8 @@ from uuid import UUID, uuid4
 from apps.api.signed_supabase_originals import OriginalRef, PrivateStorageDenied, SignedOriginalsStorage
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
 from scripts.verify_dev_ephemeral_auth import PROJECT_REF
-from scripts.verify_dev_live_txt_journey import LiveFixtureError, admin_rpc, success
 from scripts.verify_dev_live_review_roundtrip import _request, _server_start, _server_stop
+from scripts.verify_dev_live_txt_journey import LiveFixtureError, admin_rpc, success
 
 
 def _pdf(objects: list[bytes]) -> bytes:
