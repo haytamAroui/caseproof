@@ -118,7 +118,7 @@ def _isolated_command(command: list[str]) -> list[str]:
         docker = shutil.which("docker")
         if not docker:
             raise OCRUnavailable("ocr_docker_unavailable")
-        workspace = Path(command[-2] if Path(command[0]).name == 'pdftoppm' else command[1]).parent
+        workspace = Path(command[-2] if Path(command[0]).name == "pdftoppm" else command[1]).parent
         # All OCR input and output paths must be under the ephemeral workspace.
         # The caller uses only fixed executable names and trusted local paths.
         mapped = []
