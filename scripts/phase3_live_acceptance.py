@@ -120,7 +120,7 @@ def main():
         w=words[0]
         box={"page_number":1,**{k:w[k] for k in ("left","top","width","height")}}
         status,png=crop(owner,case,doc,version,box)
-        if status!=200 or not png.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+        if status!=200 or not png.startswith(bytes.fromhex("89504e470d0a1a0a")):
             raise RuntimeError(f"P3_AUTH_CROP_FAILED: {status}")
         print("P3_AUTH_CROP_PNG: 200",flush=True)
         _server_stop(proc);proc=None
@@ -131,13 +131,13 @@ def main():
         email=next(u["email"] for u in users if u["id"]==ROLES["owner"][0])
         fresh=signin.sign_in(PasswordCredentials(email=email,password=ROLES["owner"][1])).access_token
         status,png=crop(fresh,case,doc,version,box)
-        if status!=200 or not png.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+        if status!=200 or not png.startswith(bytes.fromhex("89504e470d0a1a0a")):
             raise RuntimeError(f"P3_COLD_RESTART_CROP_FAILED: {status}")
         print("P3_RESTART_RELOGIN_CROP_PNG: 200",flush=True)
         # Denial checks before revocation.
         for role in ("ungranted","foreign"):
             status,body=crop(sessions[role],case,doc,version,box)
-            if status not in (403,404) or body.startswith(b"\\x89PNG"):
+            if status not in (403,404) or body.startswith(bytes.fromhex("89504e47")):
                 raise RuntimeError(f"P3_{role.upper()}_ACCESS_FAILURE: {status}")
             print(f"P3_{role.upper()}_CROP_DENIED: {status}",flush=True)
         status,body=direct(fresh,key,"/rest/v1/ocr_geometry_sidecars?select=*",profile="caseproof")
@@ -151,7 +151,7 @@ def main():
           "p_owner":ROLES["owner"][0],"p_case":case})
         if ok is not True:raise RuntimeError("P3_REVOKE_RPC_FAILED")
         status,body=crop(fresh,case,doc,version,box)
-        if status not in (403,404) or body.startswith(b"\\x89PNG"):
+        if status not in (403,404) or body.startswith(bytes.fromhex("89504e47")):
             raise RuntimeError(f"P3_REVOKED_CROP_NOT_DENIED: {status}")
         print("P3_REVOKED_CROP_DENIED",flush=True)
         print("P3_ALL_NINE_STEPS_PASSED; persistent fixtures retained",flush=True)
