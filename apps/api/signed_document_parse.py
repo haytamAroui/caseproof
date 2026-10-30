@@ -15,8 +15,8 @@ from application.documents.contracts import MAX_BLOCKS, MAX_TEXT_CHARS, PARSER_S
 from application.extraction.contracts import ExtractionError
 from infrastructure.parsers.engines import DOCX_MIME
 from infrastructure.parsers.limited import LimitedDocumentParser
-from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
 from infrastructure.parsers.ocr_geometry_sidecar import GeometryReference, encode_page_geometry
+from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
 BINARY_MEDIA = frozenset({"application/pdf", DOCX_MIME})
