@@ -45,7 +45,7 @@ snapshot rows/crops; backups remain subject to the existing retention limitation
 - Findings and crop bytes persist in the immutable private snapshot. Reopen,
   review, export and crop lookup can use its hash without rerunning OCR. Changed
   bundle/confirmation or revoked grants reject replay. A human review records exact
-  selected region IDs in its rationale and never erases a machine conflict.
+  selected region IDs in a separate bounded attestation and never erases a machine conflict.
 - The UI shows warning text plus icon, escaped layer/OCR text and signed PNG crops;
   loads compare returned crop/source/snapshot hashes, and no automatic support.
 
@@ -58,3 +58,40 @@ control, hidden/white/clipped/overlaid layer, text-only/image-only/dual-view abl
 blur/diagonal/coloured edits and unsupported abstention. Freeze fixture rights/hashes,
 labels and denominators; measure detection and review workload, not legal accuracy.
 Only record real run links/results. Synthetic corpus is not commercial calibration.
+
+## Development installation receipt — 31 October 2026 Brussels
+
+Connected Supabase MCP installed the reviewed function in `caseproof-dev`
+`ldwmocpxwskvhoojndrd` as migration `20261030235107_representation_snapshot_read`.
+Canonical SQL matches `db/proposals/REPRESENTATION_snapshot_read.sql` exactly.
+Read-only catalog inspection verified SECURITY DEFINER, empty search path,
+`anon` execute denied, `authenticated` execute granted and direct authenticated
+SELECT on private snapshots denied. Both dossier tables retain RLS. Disposable
+SQL denial/staleness/retention tests passed in cloud run 41146632949.
+
+Advisors show 27 existing RLS-without-policy informational notices (private RPC
+owned tables), 10 authenticated SECURITY DEFINER warnings (9 before this addition),
+and existing leaked-password-protection warning. The added warning is intentional
+for this guarded read RPC, not a clean-security attestation. See
+[function warning guidance](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
+and [Auth password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+Independent security/human release review remains a separate gate. No production
+project was changed. Signed acceptance evidence is recorded on PR #146 after actual
+execution; catalog checks alone are not signed-user acceptance.
+
+## Structured attestation correction after code review
+
+Review found that controller-only validation could be bypassed through the public
+RPC and 31+ region IDs exhausted rationale length. The additive attestation
+migration adds bounded JSON `reviewed_region_ids` to the existing private
+`_phase4_reference_decisions` row. No new table, FK, index or grant is introduced;
+existing matter isolation, append-only receipt and retention cascade apply.
+The authoritative dossier RPC derives the required IDs from the frozen finding,
+requires exact equality, validates bounds and stores IDs independently of rationale.
+Replays compare that attestation too. Disposable direct-RPC missing/wrong/partial
+IDs and 40-region roundtrip exercise the persistence boundary. Existing decisions
+have empty arrays; rollback requires disabling new review routes before restoring
+the old function, while preserving recorded attestations. Production is not targeted.
+
+A separate review finding fixed long-page uniqueness: normalization-budget overflow
+abstains before anchoring, rather than silently truncating and selecting one crop.

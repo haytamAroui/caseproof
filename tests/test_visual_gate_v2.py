@@ -92,3 +92,12 @@ def test_real_sandboxed_document_to_regional_gate():
         control=select_visual_assessment(result,'1200')
         assert control['state']=='not_assessed',(name,control)
         assert control['regions'] and all(r['extracted_text']=='1200' for r in control['regions'])
+
+
+def test_long_page_cannot_claim_uniqueness_from_truncated_prefix():
+    layer='1000 '+'filler '*600+'1000'
+    page={'layer_text':layer,'regions':[{'region_id':'first','text_start':0,'text_end':4,
+                                        'state':'representation_conflict'}]}
+    result=select_visual_assessment(page,'1000')
+    assert result['state']=='not_assessed' and result['regions']==[]
+    assert result['reason']=='layer_alignment_budget_exceeded'

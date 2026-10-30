@@ -42,8 +42,9 @@ grant select,insert on storage.objects to authenticated;
     retention = next(p for p in paths if 'matter_retention' in p.name)
     fence = next(p for p in paths if 'retention_storage_fence' in p.name)
     dossier = next(p for p in paths if 'complete_dossier_journey' in p.name)
+    attestation = next(p for p in paths if 'regional_review_attestation' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier):
+        if path in (delayed, retention, fence, dossier, attestation):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -52,6 +53,7 @@ grant select,insert on storage.objects to authenticated;
     _run(retention.read_text(), env)
     _run(fence.read_text(), env)
     _run(dossier.read_text(), env)
+    _run(attestation.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""

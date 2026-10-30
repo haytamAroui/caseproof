@@ -9,6 +9,7 @@ import base64
 import hashlib
 import io
 import math
+import os
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -185,6 +186,9 @@ class PDFVisualFidelity:
                 layer: list[RasterWord], ocr: list[RasterWord]) -> dict[str, Any]:
         lines, vector_supported = _vector_lines(raw, page_number, image.width, image.height)
         regions = []
+        representation_id = digest((digest(raw) + str(page_number) + ENGINE + NORMALIZATION +
+                                    os.getenv('CASEPROOF_OCR_BUILD', 'unrecorded') +
+                                    ' '.join(w.text for w in layer)).encode())
         crop_bytes = 0
         # Include layer-only words too: invisible text is exactly a split-view risk.
         targets = layer or ocr
@@ -194,15 +198,16 @@ class PDFVisualFidelity:
             visual = ' '.join(w.text for w in matches)
             score = min((Decimal(w.score or '-1') for w in matches), default=Decimal(-1))
             vector_edit = any(_line_over_word(line, word.box) for line in lines)
-            pixel_edit = has_midline_candidate(image, word.box)
+            word_budget = (word.box[2]-word.box[0])*(word.box[3]-word.box[1]) <= 256_000
+            pixel_edit = has_midline_candidate(image, word.box) if word_budget else False
             edit = vector_edit or pixel_edit
             normalized = normalize_region(word.text).text
             agreement = bool(layer and visual and normalize_region(visual).text == normalized)
             reason = ('painted_line_candidate' if vector_edit else 'pixel_line_candidate' if pixel_edit
-                      else 'no_visual_text' if not visual else 'low_ocr_quality' if score < 60
+                      else 'word_pixel_budget' if not word_budget else 'no_visual_text' if not visual else 'low_ocr_quality' if score < 60
                       else 'text_disagreement' if layer and not agreement else 'uncalibrated_agreement' if layer
                       else 'scan_without_independent_text_layer')
-            status = ('representation_conflict' if edit else 'ocr_unreliable' if not visual or score < 60
+            status = ('representation_conflict' if edit else 'ocr_unreliable' if not word_budget or not visual or score < 60
                       else 'representation_conflict' if layer and not agreement else 'not_assessed')
             left, top, right, bottom = word.box
             pad = 6
@@ -213,7 +218,7 @@ class PDFVisualFidelity:
             crop_bytes += len(crop)
             if crop_bytes > MAX_PAGE_CROP_BYTES:
                 break
-            record = {'original_sha256': digest(raw), 'page_number': page_number,
+            record = {'original_sha256': digest(raw), 'representation_id': representation_id, 'page_number': page_number,
                       'text_start': position, 'text_end': position + len(word.text),
                       'page_image_sha256': digest(png), 'bbox': list(bounds), 'word_bbox': list(word.box),
                       'coordinate_basis': 'raster_pixels_top_left_150dpi',
@@ -225,14 +230,16 @@ class PDFVisualFidelity:
                       'state': status, 'reason': reason, 'edit_candidate': edit,
                       'quality': {'ocr_min_score': str(score), 'text_agreement': agreement,
                                   'calibration_status': 'not_available', 'probability': None},
-                      'detector': ENGINE, 'pypdf_version': version('pypdf'),
+                      'detector': ENGINE, 'runtime_image': os.getenv('CASEPROOF_OCR_BUILD', 'unrecorded'),
+                      'pypdf_version': version('pypdf'),
                       'vector_geometry_supported': vector_supported,
                       'crop_sha256': digest(crop), 'crop_base64': base64.b64encode(crop).decode()}
-            record['region_id'] = digest(str((digest(raw),page_number,word.box,word.text,ENGINE)).encode())
+            record['region_id'] = digest(str((representation_id,page_number,word.box,word.text,ENGINE)).encode())
             regions.append(record)
             position += len(word.text) + 1
         return {'schema': 'caseproof.visual-page.v2', 'engine': ENGINE,
                 'original_sha256': digest(raw), 'page_number': page_number,
+                'representation_id': representation_id,
                 'layer_text': ' '.join(w.text for w in layer),
                 'visual_text': ' '.join(w.text for w in ocr),
                 'regions': regions, 'processed_words': len(regions), 'total_words': len(targets),

@@ -94,6 +94,7 @@ class CitationObservation:
     text_end: int | None
     scope_note: str
     representation_comparisons: tuple[RepresentationComparison, ...] = ()
+    visual_fidelity: str = "not_assessed"
     # EXACT_MATCH is lexical fidelity within one parsed span, NOT
     # semantic support, document authenticity or legal approval.
 
@@ -126,6 +127,8 @@ def _note(reference: DraftReference, state: CitationCheckState,
         span[0] if span else None, span[1] if span else None,
         state.value,
         preview.representation_comparisons if preview else (),
+        state.value if state in {CitationCheckState.REPRESENTATION_CONFLICT,
+                                 CitationCheckState.OCR_UNRELIABLE} else "not_assessed",
     )
 
 

@@ -78,7 +78,7 @@ def main() -> None:
             'reviewed_region_ids':[r['region_id'] for r in selected]}
         json_request(token,'POST',base+'/reviews',review)
         exported=json_request(token,'GET',base+'/export?snapshot_hash='+snapshot)
-        if selected[0]['region_id'] not in exported['human_decisions'][0]['rationale']:
+        if exported['human_decisions'][0].get('reviewed_region_ids') != sorted(review['reviewed_region_ids']):
             raise RuntimeError('VISUAL_ATTESTATION_NOT_PERSISTED')
         _server_stop(proc)
         proc=_server_start()

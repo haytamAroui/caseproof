@@ -109,7 +109,8 @@ def test_no_installed_migration_or_prod_route() -> None:
         "20261030155817_matter_retention.sql",
         "20261030160341_retention_storage_fence.sql",
         "20261030161844_complete_dossier_journey.sql",
-            "20261030234139_representation_snapshot_read.sql",
+            "20261030235107_representation_snapshot_read.sql",
+            "20261030235221_regional_review_attestation.sql",
     }
     assert "S2-008a_disposable_representation_anchor_graph.sql" not in (
         ROOT / "apps/api/main.py"

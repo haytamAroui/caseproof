@@ -45,6 +45,7 @@ window.CaseProofFidelity = {mount({root, api, context}) {
         const response=await api(base()+`/snapshots/${report.snapshot_hash}/regions/${r.region_id}/crop`,{raw:true});
         const bytes=await response.arrayBuffer();if(seq!==sequence)return;
         const hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(x=>x.toString(16).padStart(2,"0")).join("");
+        if(seq!==sequence)return;
         if(hash!==r.crop_sha256||response.headers.get("X-CaseProof-Snapshot")!==report.snapshot_hash||response.headers.get("X-CaseProof-Original-SHA256")!==r.original_sha256)throw Error("crop_integrity");
         const view=node("section","","fidelity-region");
         view.append(node("p",`Page ${r.page_number} · ${r.reason}`,"small"));

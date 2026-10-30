@@ -301,14 +301,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         required = {r['region_id'] for r in finding.get('visual_assessment', {}).get('regions', [])}
         if required and set(body.reviewed_region_ids) != required:
             raise HTTPException(409, 'inspect and explicitly confirm every selected visual region')
-        payload = body.model_dump(mode='json', exclude={'reviewed_region_ids'})
-        if required:
-            # Existing append-only review schema stores this explicit attestation
-            # in the rationale, bound to the frozen snapshot and reference.
-            receipt = ' [Visual regions reviewed: ' + ','.join(sorted(required)) + ']'
-            if len(payload['rationale']) + len(receipt) > 2000:
-                raise HTTPException(422, 'rationale plus visual attestation exceeds limit')
-            payload['rationale'] += receipt
+        payload = body.model_dump(mode='json')
         return s.rpc(bearer, case_id, 'review', payload)
 
     @router.get(base + '/export')

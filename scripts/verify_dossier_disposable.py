@@ -67,6 +67,22 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
     rpc('review', review)
     assert len(json.loads(rpc('decisions', {'snapshot_hash': digest}))['decisions']) == 1
     rpc('review', {**review, 'rationale': 'conflicting replay'}, succeeds=False)
+    # A 40-word selection cannot fit in a rationale string; structured JSON
+    # must preserve it while direct RPC calls without attestation fail.
+    region_ids = [hashlib.sha256(str(i).encode()).hexdigest() for i in range(40)]
+    report['findings'][0]['visual_assessment'] = {'regions': [{'region_id': r} for r in region_ids]}
+    regional_serialized = json.dumps(report, sort_keys=True)
+    regional_hash = hashlib.sha256(regional_serialized.encode()).hexdigest()
+    rpc('snapshot', {'snapshot_hash': regional_hash, 'serialized': regional_serialized})
+    regional = {**review, 'snapshot_hash': regional_hash, 'request_id': str(uuid4())}
+    rpc('review', regional, succeeds=False)
+    rpc('review', {**regional, 'reviewed_region_ids': region_ids[:-1]}, succeeds=False)
+    rpc('review', {**regional, 'reviewed_region_ids': ['f'*64]}, succeeds=False)
+    regional['reviewed_region_ids'] = region_ids
+    rpc('review', regional)
+    persisted = json.loads(rpc('decisions', {'snapshot_hash': regional_hash}))['decisions'][0]
+    assert persisted['reviewed_region_ids'] == sorted(region_ids)
+    assert persisted['rationale'] == regional['rationale']
     confirmed['request_id'] = str(uuid4())
     rpc('confirm', confirmed)
     rpc('review', {**review, 'request_id': str(uuid4())}, succeeds=False)

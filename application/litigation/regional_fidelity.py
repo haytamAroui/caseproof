@@ -26,7 +26,10 @@ def select_visual_assessment(page: dict[str, Any] | None, quote: str | None) -> 
         result['reason'] = 'scan_without_independent_text_layer'
         result['state'] = 'ocr_unreliable'
         return result
-    normalized = normalize_region(layer[:4000])
+    if len(layer) > 4000:
+        result['reason'] = 'layer_alignment_budget_exceeded'
+        return result
+    normalized = normalize_region(layer)
     needle = normalize_region(quote).text
     starts = []
     cursor = 0
