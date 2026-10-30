@@ -39,6 +39,16 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.11"
+      - name: Build isolated OCR egress probe
+        run: docker build -f docker/ocr-egress.Dockerfile -t caseproof-ocr-egress:ci .
+      - name: Prove worker network is disabled
+        run: |
+          set -euo pipefail
+          cid=$(docker create --network none caseproof-ocr-egress:ci)
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          mode=$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$cid")
+          test "$mode" = none
+          docker start -a "$cid"
       - name: Install OCR system dependencies
         run: |
           sudo apt-get update -qq
