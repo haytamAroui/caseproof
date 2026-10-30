@@ -105,7 +105,9 @@ def main():
         success(token, 'POST', f'/dev/live/matters/{case}/sources/{scan["document_id"]}/{scan["version_id"]}/ingest?request_id={uuid4()}')
         body = confirmation(before['bundle_signature'], str(uuid4()), text['version_id'], scan['version_id'])
         if edge_cases:
-            body['entries'][1]['pages'][0]['pdf_page'] = 2
+            # No printed/bundle map may pre-populate the lookup. Only the
+            # physical PDF reference should cause page-2 geometry retrieval.
+            body['entries'][1]['pages'] = []
         json_request(token, 'POST', base + '/confirmation', body)
         report = json_request(token, 'GET', base)
         expected_identities = EXPECTED_IDENTITIES + (['resolved'] if edge_cases else [])
