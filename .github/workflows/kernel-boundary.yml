@@ -2,7 +2,7 @@ name: Kernel boundary
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, feat/m1-live-multisource-acceptance]
 jobs:
   architecture:
     runs-on: ubuntu-latest
