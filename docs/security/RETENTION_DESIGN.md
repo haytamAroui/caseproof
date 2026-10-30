@@ -17,7 +17,8 @@ bounded batches of 100 eligible cases. A legal hold prevents selection and
 finalization. Policy/hold changes require privileged operator review.
 The reaper uses the actual org/case Storage prefix, removes bytes via the Storage
 API, verifies absence, then calls a service-only finalizer. Eligibility is checked
-again under the case lock. Failures retain the deleted case for retry; concurrent
+again under the case lock. Starting the Storage phase freezes hold changes;
+a late hold request fails explicitly rather than implying erased bytes survive. Failures retain the deleted case for retry; concurrent
 purges serialize and repeated completion returns the existing receipt. A failed
 DB transaction cannot restore already removed bytes; the matter remains denied.
 Unknown FK dependencies block the transaction rather than cascade blindly.

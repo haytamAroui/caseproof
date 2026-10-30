@@ -83,6 +83,8 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     _run(f"update caseproof.cases set deleted_at=now()-interval '31 days',legal_hold=true where id='{case}'", env)
     _run(service + finish, env, should_pass=False)
     _run(f"update caseproof.cases set legal_hold=false where id='{case}';", env)
+    _run(service + f"select public.caseproof_retention('plan','{case}')", env)
+    _run(f"update caseproof.cases set legal_hold=true where id='{case}'", env, should_pass=False)
     _run(service + finish, env, should_pass=False)  # files remain
     _run(f"delete from storage.objects where name='{org}/{case}/leftover'", env)
     _run(service + finish, env)
