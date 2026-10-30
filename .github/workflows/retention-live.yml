@@ -4,6 +4,7 @@ on:
   push:
     branches: [feat/production-hardening, feat/final-hardening-and-verification]
     paths:
+      - scripts/m5_benchmark_live_acceptance.py
       - infrastructure/parsers/pdf_ocr.py
       - supabase/migrations/**
       - scripts/retention_live*.py

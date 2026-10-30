@@ -4,6 +4,7 @@ on:
   push:
     branches: [feat/final-hardening-and-verification]
     paths:
+      - scripts/m5_benchmark_live_acceptance.py
       - infrastructure/parsers/pdf_ocr.py
       - apps/api/signed_document_parse.py
       - docker/ocr-worker.Dockerfile

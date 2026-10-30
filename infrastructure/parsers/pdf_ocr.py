@@ -132,7 +132,8 @@ def _isolated_command(command: list[str]) -> list[str]:
         if executable not in ("pdftoppm", "tesseract"):
             raise OCRUnavailable("ocr_executable_not_allowed")
         return [
-            docker, "run", "--rm", "--network", "none", "--memory", "768m",
+            docker, "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}",
+            "--network", "none", "--memory", "768m",
             "--cpus", "1", "--pids-limit", "64", "--read-only",
             "--ulimit", "cpu=30:30", "--ulimit", "fsize=16777216:16777216",
             "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
