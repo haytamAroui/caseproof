@@ -2,7 +2,10 @@
 from datetime import UTC, datetime
 from hashlib import sha256
 from io import BytesIO
+import os
 import subprocess
+
+import pytest
 
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject, NumberObject
@@ -11,6 +14,7 @@ from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
 
+@pytest.mark.skipif(os.getenv("CASEPROOF_REAL_OCR") != "YES", reason="requires local OCR binaries")
 def test_real_ocr_on_image_only_pdf(tmp_path):
     raw_path = tmp_path / "scan.gray"
     subprocess.run(
