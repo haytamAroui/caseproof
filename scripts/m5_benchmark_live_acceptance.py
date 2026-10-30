@@ -193,6 +193,17 @@ def main():
         elapsed_ms = (time.perf_counter() - start) * 1000
         _, peak_bytes = tracemalloc.get_traced_memory()
         tracemalloc.stop()
+        api_peak_rss_kib = None
+        try:
+            status_text = __import__("pathlib").Path(
+                f"/proc/{proc.pid}/status"
+            ).read_text(encoding="utf-8")
+            for line in status_text.splitlines():
+                if line.startswith("VmHWM:"):
+                    api_peak_rss_kib = int(line.split()[1])
+                    break
+        except (OSError, ValueError):
+            pass
         if status != 200:
             raise RuntimeError(f"P4_DISCOVERY_FAILED:{status}")
         findings = discovered.get("findings", [])
@@ -212,6 +223,7 @@ def main():
             "intended_pages": 150, "reference_truth": 60,
             "discovery_ms": round(elapsed_ms, 3),
             "client_python_peak_bytes": peak_bytes,
+            "api_process_peak_rss_kib": api_peak_rss_kib,
             "true_positive": tp, "false_positive": fp, "false_negative": fn,
             "precision": precision, "recall": recall,
             "false_positive_rate": None,
