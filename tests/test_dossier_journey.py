@@ -137,3 +137,14 @@ def test_fixture_pdfs_have_valid_structure_and_distinct_text_coverage():
     assert len(text.pages) == len(scan.pages) == 1
     assert 'STUK 1 INVOICE' in text.pages[0].extract_text()
     assert not scan.pages[0].extract_text().strip()
+
+
+
+def test_annotation_keeps_conflicting_human_decisions_visible():
+    raw = docx('Stuk 1.')
+    report = {**assess(raw, [], None), 'snapshot_hash': 'd' * 64,
+              'human_decisions': [{'reference_id': 'ref-0000', 'decision': decision, 'rationale': 'synthetic'}
+                                  for decision in ('CONFIRMED_SUPPORTED', 'CONFIRMED_CONTRADICTED')]}
+    with ZipFile(io.BytesIO(annotated_docx(raw, report))) as archive:
+        xml = archive.read('word/document.xml')
+        assert b'CONFIRMED_SUPPORTED' in xml and b'CONFIRMED_CONTRADICTED' in xml

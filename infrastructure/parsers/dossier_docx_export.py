@@ -26,14 +26,16 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
                  'Snapshot: ' + report['snapshot_hash'],
                  'Coverage: ' + str(report['coverage']),
                  'No filing, authenticity, fidelity or legal-support certificate.']
-        decisions = {d['reference_id']: d for d in report['human_decisions']}
+        decisions = report['human_decisions']
         for f in report['findings']:
-            decision = decisions.get(f['reference_id'], {})
+            human = [d for d in decisions if d['reference_id'] == f['reference_id']]
             lines.append(f"{f['reference_id']} {f['literal']}: identity={f['identity']}; page={f['page_mapping']}; "
-                         f"fidelity={f['fidelity']}; support={decision.get('decision', 'not_assessed')}; "
+                         f"fidelity={f['fidelity']}; automated support=not_assessed; "
                          f"source={f['version_id']}; OCR={f['ocr_uncertainty']}")
-            if decision:
-                lines.append('Reviewer rationale: ' + decision['rationale'])
+            for decision in human:
+                lines.append('Human decision: ' + decision['decision'] + '; reviewer=' +
+                             str(decision.get('reviewer_id', 'unknown')) + '; timestamp=' +
+                             str(decision.get('timestamp', 'unknown')) + '; rationale=' + decision['rationale'])
         section = next((node for node in body.childNodes
                         if node.namespaceURI == NS and node.localName == 'sectPr'), None)
         for line in lines:

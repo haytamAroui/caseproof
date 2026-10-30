@@ -167,6 +167,7 @@ class DossierStore:
         report = {'schema': 'caseproof-dossier-v1', 'case_id': case, 'brief_id': brief,
                   'bundle_signature': context['bundle_signature'],
                   'confirmation_id': confirmation['request_id'] if confirmation else None,
+                  'inventory_confirmation': {k: confirmation.get(k) for k in ('request_id', 'reviewer_id', 'timestamp')} if confirmation else None,
                   'sources': sources, **found, 'professional_certificate': False, 'filing_status': 'not_assessed'}
         report['coverage']['unprocessed_sources'] = sum(bool(s.get('parse_error')) for s in sources)
         serialized = canonical(report)
