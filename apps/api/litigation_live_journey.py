@@ -218,19 +218,18 @@ class JourneyClient:
         return result
 
     def read_geometry(self, bearer: str, version_id: str, page_number: int) -> tuple[GeometryReference, dict[str, object]]:
-        query = (
-            "/rest/v1/ocr_geometry_sidecars?select=page_number,original_sha256_hex,"
-            "geometry_sha256_hex,coordinate_basis,word_count,payload"
-            "&document_version_id=eq." + _uuid(version_id)
-            + "&page_number=eq." + str(page_number)
-        )
-        # Private schema is selected explicitly; signed JWT is required for RLS.
+        # The browser calls only CaseProof's signed crop API. This server invokes
+        # a narrow SECURITY INVOKER RPC under the caller's JWT; RLS applies.
         con = http.client.HTTPSConnection(HOST, timeout=15)
         try:
-            con.request("GET", query, headers={
-                "apikey": self._key, "Authorization": "Bearer " + bearer,
-                "Accept-Profile": "caseproof", "Cache-Control": "no-store",
-            })
+            con.request(
+                "POST", "/rest/v1/rpc/caseproof_signed_ocr_geometry",
+                body=json.dumps({"p_version": _uuid(version_id), "p_page": page_number}).encode("utf-8"),
+                headers={
+                    "apikey": self._key, "Authorization": "Bearer " + bearer,
+                    "Content-Type": "application/json", "Cache-Control": "no-store",
+                },
+            )
             response = con.getresponse()
             status, raw = response.status, response.read(8 * 1024 * 1024 + 2048)
         except (OSError, TimeoutError, http.client.HTTPException):
