@@ -41,6 +41,13 @@ def dossier_bundle() -> tuple[SyntheticSource, ...]:
     pdf.showPage()
     pdf.save()
     bundle[3] = SyntheticSource(bundle[3].filename, 'exhibit', 'application/pdf', scanned.getvalue())
+    text_pdf = io.BytesIO()
+    text = canvas.Canvas(text_pdf, pagesize=(595, 842), invariant=1)
+    text.drawString(60, 760, 'STUK 1 INVOICE - SYNTHETIC EVIDENCE')
+    text.drawString(60, 720, 'EUR 1250 - PHYSICAL PDF PAGE 1')
+    text.showPage()
+    text.save()
+    bundle[2] = SyntheticSource(bundle[2].filename, 'exhibit', 'application/pdf', text_pdf.getvalue())
     return tuple(bundle)
 
 

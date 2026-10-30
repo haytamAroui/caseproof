@@ -122,3 +122,18 @@ def test_real_docx_export_preserves_namespace_declarations():
     with ZipFile(io.BytesIO(raw)) as old, ZipFile(io.BytesIO(derivative)) as new:
         assert b'xmlns:w14=' in old.read('word/document.xml')
         assert b'xmlns:w14=' in new.read('word/document.xml')
+
+
+
+def test_fixture_pdfs_have_valid_structure_and_distinct_text_coverage():
+    import pytest
+    pytest.importorskip('docx')
+    from pypdf import PdfReader
+
+    from tests.fixtures.dossier_journey import dossier_bundle
+    bundle = dossier_bundle()
+    text = PdfReader(io.BytesIO(bundle[2].content), strict=True)
+    scan = PdfReader(io.BytesIO(bundle[3].content), strict=True)
+    assert len(text.pages) == len(scan.pages) == 1
+    assert 'STUK 1 INVOICE' in text.pages[0].extract_text()
+    assert not scan.pages[0].extract_text().strip()
