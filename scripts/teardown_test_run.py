@@ -34,10 +34,13 @@ def teardown(run_id: str, key: str) -> None:
     entries = rows(key, run_id)
     owners = [e["resource_id"] for e in entries
               if e["resource_type"] == "auth_user" and e["resource_id"].startswith("owner:") and "@" not in e["resource_id"]]
-    if len(owners) != 1:
-        raise RuntimeError("exact owner identity missing")
-    owner = owners[0].split(":", 1)[1]
-    admin_rpc(key, "cleanup", {"p_run": run_id, "p_owner": owner})
+    if len(owners) > 1:
+        raise RuntimeError("ambiguous owner identity")
+    if owners:
+        owner = owners[0].split(":", 1)[1]
+        admin_rpc(key, "cleanup", {"p_run": run_id, "p_owner": owner})
+    elif any(e["resource_type"] == "matter" for e in entries):
+        raise RuntimeError("matter exists without registered owner")
     for entry in entries:
         if entry["resource_type"] == "matter":
             forget(key, run_id, "matter", entry["resource_id"])
@@ -46,8 +49,9 @@ def teardown(run_id: str, key: str) -> None:
         if entry["resource_type"] == "auth_user":
             identity = entry["resource_id"].split(":", 1)[-1]
             if "@" in identity:
-                # Reservation is retained until the exact Auth ID is reconciled.
-                continue
+                # A remote creation may have committed before the response was lost.
+                # Never discard an unresolved reservation or guess an Auth ID.
+                raise RuntimeError("unreconciled Auth email reservation")
             admin.delete(identity)
             forget(key, run_id, "auth_user", entry["resource_id"])
     forget(key, run_id, "run", run_id)
