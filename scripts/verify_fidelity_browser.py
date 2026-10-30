@@ -42,7 +42,7 @@ def main() -> None:
             api:async(url,options)=>{window.calls.push({url,options});
               if(url.endsWith('/crop'))return new Response(Uint8Array.from(atob(png),c=>c.charCodeAt(0)),{headers:{
                 'X-CaseProof-Snapshot':report.snapshot_hash,'X-CaseProof-Original-SHA256':'c'.repeat(64)}});
-              if(url.endsWith('/reviews')){if(window.failSave){window.failSave=false;throw Error('network');}return {saved:true};}
+              if(url.endsWith('/reviews')){if(window.rejectSave){window.rejectSave=false;const e=Error('stale');e.code=409;throw e;}if(window.failSave){window.failSave=false;throw Error('network');}return {saved:true};}
               return report;
             }});
         }''',{'report':report,'png':base64.b64encode(png).decode(),'sha':sha})
@@ -64,6 +64,12 @@ def main() -> None:
         calls=page.evaluate('window.calls.filter(c=>c.url.endsWith("/reviews"))')
         assert calls[0]['options']['json']['request_id']==calls[1]['options']['json']['request_id']
         assert calls[1]['options']['json']['reviewed_region_ids']==['b'*64]
+        page.evaluate('window.rejectSave=true')
+        save.click()
+        expect(page.get_by_text('Review rejected.',exact=False)).to_be_visible()
+        page.get_by_role('button',name='Inspect dossier').click()
+        expect(page.get_by_text('Preserved crop hashes checked.',exact=False)).to_be_visible()
+        expect(page.get_by_role('textbox',name='Rationale')).to_have_value('I inspected the actual crop.')
         page.screenshot(path=str(out/'desktop.png'),full_page=True)
         page.set_viewport_size({'width':390,'height':844})
         expect(save).to_be_visible()

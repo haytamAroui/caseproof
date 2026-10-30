@@ -26,7 +26,10 @@ class DiskStore(DossierStore):
         self.visual=PDFVisualFidelity()
         self.client=SimpleNamespace(read_geometry=self.missing_geometry)
         self.pdf=next(f.pdf for f in corpus() if f.name=='grey')
-        self.draft=docx('Stuk 1, PDF p. 1 "1000". Stuk 1, PDF p. 1 "1200".')
+        path = root/'original-draft.docx'
+        if not path.exists():
+            path.write_bytes(docx('Stuk 1, PDF p. 1 "1000". Stuk 1, PDF p. 1 "1200".'))
+        self.draft=path.read_bytes()
         self.manifest=[{'role':role,'version_id':version,'document_id':version,
                         'sha256':hashlib.sha256(raw).hexdigest(),'page_count':1 if role=='exhibit' else 0}
                        for role,version,raw in [('draft','draft',self.draft),('inventory','inv',b'Stuk 1'),

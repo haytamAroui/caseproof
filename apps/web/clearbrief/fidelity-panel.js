@@ -2,7 +2,7 @@
 /* Shared dossier panel; trusted API supplies observations, never browser flags. */
 window.CaseProofFidelity = {mount({root, api, context}) {
   let report=null, sequence=0, pending=null, busy=false;
-  const urls=new Set();
+  const urls=new Set(), drafts=new Map();
   const node=(tag,text,cls)=>{const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n;};
   const heading=node("h2","Compare text with the source image");
   const status=node("p","Visual fidelity has not been assessed.","notice");status.setAttribute("role","status");
@@ -26,7 +26,8 @@ window.CaseProofFidelity = {mount({root, api, context}) {
     const actionLabel=node("label","Human disposition");const action=document.createElement("select");
     for(const [value,text] of [["CONFIRMED_QUALIFIED","Qualified / needs further evidence"],["CONFIRMED_CONTRADICTED","Contradicted"],["CONFIRMED_SUPPORTED","Supported after human inspection"]]) {const o=node("option",text);o.value=value;action.append(o);}
     actionLabel.append(action);form.append(actionLabel);
-    const rationaleLabel=node("label","Rationale");const rationale=document.createElement("textarea");rationale.maxLength=1000;rationale.rows=4;rationaleLabel.append(rationale);form.append(rationaleLabel);
+    const draftKey=base()+":"+f.reference_id;
+    const rationaleLabel=node("label","Rationale");const rationale=document.createElement("textarea");rationale.maxLength=1000;rationale.rows=4;rationale.value=drafts.get(draftKey)||"";rationale.addEventListener("input",()=>drafts.set(draftKey,rationale.value));rationaleLabel.append(rationale);form.append(rationaleLabel);
     const confirmLabel=node("label","I inspected the displayed source regions for this snapshot.");const confirm=document.createElement("input");confirm.type="checkbox";confirmLabel.prepend(confirm);form.append(confirmLabel);
     const save=node("button","Save human review");save.type="submit";save.disabled=true;form.append(save);article.append(form);
     confirm.addEventListener("change",()=>{save.disabled=busy||!confirm.checked||inspected.length!==assessment.regions.length;});
@@ -37,7 +38,12 @@ window.CaseProofFidelity = {mount({root, api, context}) {
       if(pending&&pending.signature!==signature){cropStatus.textContent="Resolve the previous uncertain save before changing its input.";return;}
       pending=pending||{signature,payload:{...payload,request_id:crypto.randomUUID()}};busy=true;save.disabled=true;load.disabled=true;form.setAttribute("aria-busy","true");
       try{await api(base()+"/reviews",{method:"POST",json:pending.payload});if(seq!==sequence)return;pending=null;cropStatus.textContent="Human review saved. The original conflict remains in the report.";}
-      catch{cropStatus.textContent="Review was not confirmed. Retry the same input; refresh after a snapshot conflict.";}
+      catch(error){
+        if([400,401,403,404,409,422].includes(error?.code)){
+          pending=null;confirm.checked=false;
+          cropStatus.textContent="Review rejected. Load the current snapshot and inspect again. Your rationale is kept in this session.";
+        }else cropStatus.textContent="Review was not confirmed. Retry the same input; refresh after a snapshot conflict.";
+      }
       finally{busy=false;load.disabled=false;form.removeAttribute("aria-busy");save.disabled=!confirm.checked;}
     });
     try{
@@ -66,5 +72,5 @@ window.CaseProofFidelity = {mount({root, api, context}) {
     }catch{clear();fail();}finally{if(seq===sequence)load.disabled=false;}
   });
   root.append(heading,node("p","Inspect uncertainty beside preserved source pixels. A matching quotation alone does not establish visual fidelity.","small"),load,status,list);
-  return {clear(){sequence++;clear();pending=null;status.textContent="Session cleared. Reauthenticate before inspecting.";}};
+  return {clear(){sequence++;clear();pending=null;drafts.clear();status.textContent="Session cleared. Reauthenticate before inspecting.";}};
 }};
