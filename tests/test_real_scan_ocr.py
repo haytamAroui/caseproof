@@ -1,9 +1,9 @@
 """Real OCR smoke test using synthetic pixels, not customer documents."""
+import os
+import subprocess
 from datetime import UTC, datetime
 from hashlib import sha256
 from io import BytesIO
-import os
-import subprocess
 
 import pytest
 
