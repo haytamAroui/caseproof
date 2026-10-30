@@ -20,5 +20,5 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-eng imagemagick fonts-dejavu-core
       - name: Verify image-only synthetic PDF through real OCR
         env:
-          CASEPROOF_REAL_OCR: YES
+          CASEPROOF_REAL_OCR: "YES"
         run: uv run --locked pytest -q tests/test_real_scan_ocr.py
