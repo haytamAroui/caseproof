@@ -17,8 +17,8 @@ jobs:
           python-version: "3.11"
       - name: Format and lint changed Python scripts
         run: |
-          uv run --locked ruff check --fix scripts/phase3_live_acceptance.py scripts/phase3_reset_fixture_passwords.py scripts/provision_phase3_persistent_users.py
           uv run --locked ruff format scripts/phase3_live_acceptance.py scripts/phase3_reset_fixture_passwords.py scripts/provision_phase3_persistent_users.py
+          uv run --locked ruff check --fix scripts/phase3_live_acceptance.py scripts/phase3_reset_fixture_passwords.py scripts/provision_phase3_persistent_users.py
           uv run --locked ruff check scripts/phase3_live_acceptance.py scripts/phase3_reset_fixture_passwords.py scripts/provision_phase3_persistent_users.py
       - name: Commit format fixes
         run: |
