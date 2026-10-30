@@ -240,6 +240,16 @@ def main():
         if status != 200 or reviewed.get("request_id") != review_id:
             raise RuntimeError(f"P4_SIGNED_REVIEW_NOT_PERSISTED:{status}")
         print("P4_DISCOVERY_CROP_AND_SIGNED_REVIEW_PASSED", flush=True)
+        # Sequence security: cross-matter and export access checks use
+        # independently signed users, not a mocked authorization layer.
+        for role in ("ungranted", "foreign"):
+            denied_status, _ = _request(sessions[role], "GET", base + "/discovery")
+            if denied_status not in (403, 404):
+                raise RuntimeError(f"M5_CROSS_MATTER_DENIAL_FAILED:{role}:{denied_status}")
+            denied_status, _ = _request(sessions[role], "GET", base + "/export")
+            if denied_status not in (403, 404):
+                raise RuntimeError(f"M5_EXPORT_PERMISSION_FAILED:{role}:{denied_status}")
+        print("M5_CROSS_MATTER_AND_EXPORT_PERMISSION_PASSED", flush=True)
         words = payload.get("words", [])
         if not words:
             raise RuntimeError("P3_NO_OCR_WORDS")
@@ -297,6 +307,10 @@ def main():
         if status not in (403, 404) or body.startswith(bytes.fromhex("89504e47")):
             raise RuntimeError(f"P3_REVOKED_CROP_NOT_DENIED: {status}")
         print("P3_REVOKED_CROP_DENIED", flush=True)
+        revoked_status, _ = _request(fresh, "GET", base + "/export")
+        if revoked_status not in (403, 404):
+            raise RuntimeError(f"M5_REVOKED_EXPORT_NOT_DENIED:{revoked_status}")
+        print("M5_REVOCATION_EXPORT_PASSED", flush=True)
         print("P3_ALL_NINE_STEPS_PASSED; teardown required", flush=True)
     finally:
         if proc is not None:
