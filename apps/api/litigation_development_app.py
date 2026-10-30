@@ -27,6 +27,7 @@ from apps.api.litigation_workspace_sources import create_clearbrief_sources_rout
 from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
+from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 
 
 def create_litigation_development_app(
@@ -37,6 +38,7 @@ def create_litigation_development_app(
     reviews: SignedReviewWorkspace | None = None,
     publishable_key: str | None = None,
     trusted_ingest_key: str | None = None,
+    ocr: LocalPDFOCR | None = None,
 ) -> FastAPI:
     app = FastAPI(title="CaseProof loopback development", docs_url=None, redoc_url=None, openapi_url=None)
     # One shared checker ensures search and check use the same trust boundary.
@@ -56,7 +58,7 @@ def create_litigation_development_app(
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
     app.include_router(create_live_review_router(publishable_key))
-    app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key))
+    app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key, ocr=ocr))
 
     @app.get("/dev/clearbrief/config", include_in_schema=False)
     def lawyer_config() -> dict[str, str | None]:
