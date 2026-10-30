@@ -24,6 +24,7 @@ def main() -> int:
         for role, (email, password) in generated.items():
             # Reserve identity before remote creation; GoTrue generates its ID.
             # Unknown HTTP outcomes must be reconciled by exact run-tagged email.
+            record(key, run, "auth_user", role + ":" + email, "RESERVED")
             user_id = admin.create_confirmed(email=email, password=password)
             actors[role] = user_id
             record(key, run, "auth_user", role + ":" + user_id, "CREATED")
