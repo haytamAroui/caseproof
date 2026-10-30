@@ -1,5 +1,5 @@
 name: M5 demo CLI real signed four-file acceptance
-# Trigger protected branch acceptance on this commit; do not merge without zero-residual evidence.
+# Final receipt revision: rerun protected acceptance on this exact documentation head.
 on:
   push:
     branches: [feat/final-hardening-and-verification]

@@ -1,5 +1,5 @@
 name: M5 signed 150-page dossier benchmark
-# Trigger protected branch acceptance on this commit; do not merge without zero-residual evidence.
+# Final receipt revision: rerun protected acceptance on this exact documentation head.
 on:
   push:
     branches: [feat/final-hardening-and-verification]

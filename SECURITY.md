@@ -35,15 +35,20 @@ and verified backup-expiry period remain open production gates.
 
 ## OCR worker isolation boundary (PR #140)
 
-The Docker CI egress probe uses `--network none` and verifies an outbound HTTP
-attempt is denied inside that container. This is a **test-runtime** control,
-not evidence that the currently integrated API launches OCR in that container.
-The in-process OCR adapter's subprocess path additionally requires a Linux
-network namespace and fails closed when it cannot create one; this may block
-OCR on restricted hosts. Before deployment, OCR must execute in a separately
-isolated worker/container with no outbound networking, bounded CPU/memory and
-execution time, and explicit source/result transport. Do not enable the
-in-process adapter on a host that lacks its enforced sandbox.
+The required Docker CI egress probe uses `--network none` and proves an outbound
+HTTP connection is denied. The integrated OCR adapter can launch Poppler and
+Tesseract with `CASEPROOF_OCR_SANDBOX=docker`; signed development workflows use
+that mode. Containers run as the ephemeral workspace owner, drop all capabilities,
+use a read-only root, and bound memory (768 MiB), CPU, process count, output file
+size and execution time. Timeout cleanup forcibly removes the named container.
+Docker's launcher is outside the OCR address-space limit; the OCR container keeps
+its own resource constraints. No sandbox failure permits direct binary fallback.
+
+The default Linux namespace path fails closed where user/network namespaces are
+unavailable. These controls are tested development configurations, not evidence
+of an independently reviewed production worker deployment. The API's own parser
+resource behavior, malware controls and production deployment isolation remain
+separate review gates.
 
 Private VPC subnets alone are not proof of zero egress: check NAT, internet
 gateways, IPv6 egress, private endpoints, DNS and service egress policies.

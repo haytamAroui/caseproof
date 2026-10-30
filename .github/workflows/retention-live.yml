@@ -1,5 +1,5 @@
 name: Matter retention signed live acceptance
-# Trigger protected branch acceptance on this commit; do not merge without zero-residual evidence.
+# Final receipt revision: rerun protected acceptance on this exact documentation head.
 on:
   push:
     branches: [feat/production-hardening, feat/final-hardening-and-verification]
