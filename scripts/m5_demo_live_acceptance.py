@@ -5,8 +5,8 @@ from __future__ import annotations
 import base64
 import contextlib
 import hashlib
-import io
 import http.client
+import io
 import json
 import os
 import tempfile
