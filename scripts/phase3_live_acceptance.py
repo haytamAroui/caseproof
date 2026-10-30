@@ -99,7 +99,10 @@ def main():
         ]
         status,body=direct(owner,key,"/rest/v1/rpc/caseproof_dev_register_bundle","POST",
                            {"p_case":case,"p_request":str(uuid4()),"p_sources":metadata})
-        if status!=200:\n            try: detail=json.loads(body).get("message","")[:180]\n            except ValueError: detail="non-json"\n            raise RuntimeError(f"P3_BUNDLE_REGISTER_FAILED: {status} {detail}")
+        if status!=200:
+            try: detail=json.loads(body).get("message","")[:180]
+            except ValueError: detail="non-json"
+            raise RuntimeError(f"P3_BUNDLE_REGISTER_FAILED: {status} {detail}")
         registered=json.loads(body)["sources"]
         if len(registered)!=4:raise RuntimeError("P3_BUNDLE_INCOMPLETE")
         print("P3_BUNDLE_REGISTERED: four source identities",flush=True)
