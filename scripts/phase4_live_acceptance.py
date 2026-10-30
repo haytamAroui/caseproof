@@ -174,7 +174,12 @@ def main():
             raise RuntimeError("P4_REFERENCE_DISCOVERY_MISMATCH")
         scanned = next((f for f in findings if f["number"] == "2"), None)
         if not scanned or not scanned.get("ocr_crop"):
-            raise RuntimeError("P4_REAL_OCR_CROP_NOT_RETURNED")
+            raise RuntimeError("P4_REAL_OCR_CROP_NOT_RETURNED:" + str({
+                "identity": scanned.get("identity") if scanned else None,
+                "page_mapping": scanned.get("page_mapping") if scanned else None,
+                "manifest_ambiguous": scanned.get("ambiguous_manifest") if scanned else None,
+                "ocr_words": len(words) if "words" in locals() else len(payload.get("words", [])),
+            }))
         if scanned["ocr_crop"].get("geometry_sha256") != row["geometry_sha256_hex"]:
             raise RuntimeError("P4_CROP_NOT_BOUND_TO_PERSISTED_SIDECAR")
         review_id = str(uuid4())
