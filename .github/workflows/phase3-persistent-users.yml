@@ -28,4 +28,4 @@ jobs:
         with:
           python-version: "3.11"
       - name: Provision three persistent real GoTrue users and grants
-        run: uv run --locked python -m scripts.provision_phase3_persistent_users
+        run: uv run python -m scripts.provision_phase3_persistent_users
