@@ -19,6 +19,7 @@ import tempfile
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from uuid import uuid4
 
 from pypdf import PdfReader
 
@@ -133,6 +134,8 @@ def _isolated_command(command: list[str]) -> list[str]:
         return [
             docker, "run", "--rm", "--network", "none", "--memory", "768m",
             "--cpus", "1", "--pids-limit", "64", "--read-only",
+            "--ulimit", "cpu=30:30", "--ulimit", "fsize=16777216:16777216",
+            "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m",
             "--mount", f"type=bind,src={workspace},dst=/work",
             os.getenv("CASEPROOF_OCR_IMAGE", "caseproof-ocr-worker:ci"),
@@ -145,13 +148,28 @@ def _isolated_command(command: list[str]) -> list[str]:
 
 
 def _run(command: list[str], *, timeout: int) -> None:
+    isolated = _isolated_command(command)
+    container_name = None
+    if os.getenv("CASEPROOF_OCR_SANDBOX") == "docker":
+        container_name = "caseproof-ocr-" + uuid4().hex
+        isolated[2:2] = ["--name", container_name]
     try:
         completed = subprocess.run(
-            _isolated_command(command), capture_output=True,
+            isolated, capture_output=True,
             timeout=timeout, check=False, preexec_fn=_worker_limits,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise OCRUnavailable("ocr_binary_unavailable_or_timeout") from None
+    finally:
+        if container_name is not None:
+            # Killing a Docker client alone does not stop its container.
+            try:
+                subprocess.run(
+                    [isolated[0], "rm", "--force", container_name],
+                    capture_output=True, timeout=10, check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                raise OCRUnavailable("ocr_container_cleanup_failed") from None
     if completed.returncode != 0:
         # Never log source bytes, OCR text or paths. Keep only bounded engine stderr.
         raise OCRUnavailable("ocr_external_process_failed_or_sandbox_denied")

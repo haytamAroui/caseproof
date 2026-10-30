@@ -249,6 +249,9 @@ def main():
                 report = json.loads(exported[0].read_text(encoding="utf-8"))
                 if not any(d.get("request_id") == review_id for d in report.get("human_decisions", [])):
                     raise RuntimeError("M5_CLI_EXPORTED_REVIEW_MISSING")
+                receipt = Path("/tmp/caseproof-final-receipt")
+                receipt.mkdir(parents=True, exist_ok=True)
+                (receipt / "cli-report.json").write_text(json.dumps(report, sort_keys=True), encoding="utf-8")
                 print("M5_CLI_SIGNED_FOUR_DIMENSIONS_AND_EXPORT_PASSED", flush=True)
         finally:
             __import__("sys").argv = old_argv
