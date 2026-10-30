@@ -22,5 +22,5 @@ begin
  end if;
  raise exception 'unknown operation';
 end $$;
-revoke all on function public.caseproof_m05_registry(text,uuid,text,text,timestamptz,timestamptz) from public,anon,authenticated;
-grant execute on function public.caseproof_m05_registry(text,uuid,text,text,timestamptz,timestamptz) to service_role;
+revoke all on function public.caseproof_m05_registry(text,uuid,text,text,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.caseproof_m05_registry(text,uuid,text,text,text,timestamptz) to service_role;
