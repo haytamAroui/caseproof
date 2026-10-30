@@ -51,6 +51,17 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
     serialized = json.dumps(report, sort_keys=True)
     digest = hashlib.sha256(serialized.encode()).hexdigest()
     rpc('snapshot', {'snapshot_hash': digest, 'serialized': serialized})
+    def read_snapshot(*, user=actor, succeeds=True, target_case=case):
+        return _run(f"begin; set local role authenticated; set local request.jwt.claim.sub='{user}';"
+                    "set local request.jwt.claims='{\"role\":\"authenticated\"}';"
+                    f"select public.caseproof_dossier_snapshot_read('{target_case}','{digest}'); commit;",
+                    env, should_pass=succeeds)
+
+    assert json.loads(read_snapshot())['serialized'] == serialized
+    read_snapshot(user=other, succeeds=False)
+    read_snapshot(target_case=str(uuid4()), succeeds=False)
+    _run(f"begin; set local role anon; select public.caseproof_dossier_snapshot_read('{case}','{digest}'); commit;",
+         env, should_pass=False)
     review = {'snapshot_hash': digest, 'reference_id': 'ref-0000', 'request_id': str(uuid4()),
               'decision': 'CONFIRMED_SUPPORTED', 'rationale': 'Synthetic original inspected'}
     rpc('review', review)
@@ -60,6 +71,7 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
     rpc('confirm', confirmed)
     rpc('review', {**review, 'request_id': str(uuid4())}, succeeds=False)
     rpc('decisions', {'snapshot_hash': digest}, succeeds=False)
+    read_snapshot(succeeds=False)
     # Exact source metadata changes invalidate both confirmation and snapshots.
     _run(f"update caseproof.document_versions set original_sha256_hex=repeat('b',64) where id='{versions[1]}'", env)
     assert json.loads(rpc('context'))['confirmation'] is None
@@ -68,6 +80,7 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
          "set local request.jwt.claims='{\"role\":\"authenticated\"}';"
          f"select public.caseproof_soft_delete_matter('{case}'); commit;", env)
     rpc('context', succeeds=False)
+    read_snapshot(succeeds=False)
     _run(f"update caseproof.cases set deleted_at=now()-interval '31 days' where id='{case}';"
          "set request.jwt.claims='{\"role\":\"service_role\"}';"
          f"select public.caseproof_retention('plan','{case}'); select public.caseproof_retention('finalize','{case}');", env)

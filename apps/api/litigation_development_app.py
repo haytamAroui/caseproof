@@ -87,7 +87,7 @@ def create_litigation_development_app(
 
     @app.get("/dev/clearbrief/{asset}", include_in_schema=False)
     def lawyer_asset(asset: str) -> FileResponse:
-        if asset not in {"workspace.css", "workspace.js"}:
+        if asset not in {"workspace.css", "workspace.js", "fidelity-panel.js"}:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return FileResponse(_workspace / asset)
 

@@ -13,7 +13,7 @@ from tests.fixtures.run_lifecycle import credentials, new_run_id
 
 
 def main() -> int:
-    if os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof" or os.getenv("GITHUB_REF") not in {"refs/heads/feat/complete-dossier-journey", "refs/heads/fix/dossier-ranges-mixed", "refs/heads/main", "refs/heads/feat/final-hardening-and-verification"}:
+    if os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof" or os.getenv("GITHUB_REF") not in {"refs/heads/feat/complete-representation-gate", "refs/heads/feat/complete-dossier-journey", "refs/heads/fix/dossier-ranges-mixed", "refs/heads/main", "refs/heads/feat/final-hardening-and-verification"}:
         raise RuntimeError("protected M0.5 branch required")
     key = os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"]
     run = new_run_id()
@@ -40,7 +40,10 @@ def main() -> int:
         org = str(UUID(setup["org_id"]))
         os.environ["CASEPROOF_P3_ORG_ID"] = org
         os.environ["CASEPROOF_P3_RUN_ID"] = run
-        from scripts.dossier_live_acceptance import main as phase3
+        if os.getenv("CASEPROOF_VISUAL_LIVE") == "YES":
+            from scripts.visual_gate_live_acceptance import main as phase3
+        else:
+            from scripts.dossier_live_acceptance import main as phase3
         phase3()
     except Exception as exc:
         failure = type(exc).__name__ + ":" + str(exc)

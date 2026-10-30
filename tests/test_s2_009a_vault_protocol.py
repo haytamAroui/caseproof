@@ -467,4 +467,5 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
         "20261030155817_matter_retention.sql",
         "20261030160341_retention_storage_fence.sql",
         "20261030161844_complete_dossier_journey.sql",
+            "20261030234139_representation_snapshot_read.sql",
     }

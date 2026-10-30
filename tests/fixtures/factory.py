@@ -49,7 +49,7 @@ def generate_bundle() -> tuple[SyntheticSource, ...]:
 
     image = Image.new("RGB", (1500, 650), "white")
     draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 54)
+    font = ImageFont.truetype("DejaVuSans.ttf", 54)
     draw.text((80, 90), "PIECE 2 SCANNED RECEIPT", fill="black", font=font)
     draw.text((80, 190), "PAYMENT RECEIVED EUR 1250", fill="black", font=font)
     draw.text((80, 290), "14 OCTOBER 2026", fill="black", font=font)
@@ -160,7 +160,7 @@ def generate_fidelity_bundle() -> tuple[SyntheticSource, ...]:
                                        "exhibit", "application/pdf", output.getvalue()))
     image = Image.new("RGB", (1200, 600), "white")
     draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 44)
+    font = ImageFont.truetype("DejaVuSans.ttf", 44)
     draw.text((50, 100), "Monthly rent EUR", font=font, fill="black")
     draw.text((50, 180), "1000", font=font, fill="black")
     draw.line((45, 207, 170, 207), fill="black", width=4)

@@ -1,10 +1,13 @@
-## Representation fidelity candidate — 30 October 2026
+## Representation fidelity v2 — 31 October 2026
 
-Feature branch `feat/representation-conflict`: paired clean/redlined/scan fixture
-factory, conservative pixel midline candidate detector, source-bound regional
-comparison and unresolved literal-check gate. See [ADR 0019](adr/0019-representation-conflict-gate.md).
-Live adapter/persistence/UI wiring remains open; no M3 completion or detector
-accuracy claim. Exact CI evidence belongs to the feature PR.
+PR #142 merged v1 at `53354f0`: optional comparison contract and fixture foundation.
+The current `feat/complete-representation-gate` candidate adds signed dossier
+integration, bounded region/crop provenance, conservative normalization, immutable
+snapshot readback, human inspection UI, executable corpus measurement and signed
+acceptance. See [v2 acceptance](m3/REPRESENTATION_GATE_ACCEPTANCE.md).
+No calibrated legal-corpus artifact ships; agreement stays unassessed. Local OCR
+sandbox/browser were unavailable; required cloud executable evidence is pending.
+No M3 closure, customer-data authorization or production deployment is claimed.
 
 <!-- PR #140 verification receipt; measured code head, not production authorization. -->
 ## PR #140 OCR hardening verification (30 October 2026)

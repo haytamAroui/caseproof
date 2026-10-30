@@ -1,6 +1,7 @@
 """Signed dossier orchestration; original bytes and current grants on every request."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import http.client
 import io
@@ -13,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pypdf import PdfReader, PdfWriter
 from pypdf.errors import PdfReadError
 
+from application.litigation.regional_fidelity import select_visual_assessment
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
@@ -23,6 +25,8 @@ from domains.disputes.reference_detection import detect_exhibit_references
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from infrastructure.parsers.dossier_docx_export import annotated_docx
+from infrastructure.parsers.pdf_ocr import OCRUnavailable
+from infrastructure.parsers.pdf_visual_fidelity import PDFVisualFidelity
 
 
 def canonical(value: object) -> str:
@@ -53,16 +57,23 @@ class InventoryConfirmation(BaseModel):
     entries: list[IdentityConfirmation] = Field(max_length=512)
 
 
+class VisualDecisionBody(DecisionBody):
+    reviewed_region_ids: list[str] = Field(default_factory=list, max_length=96)
+
+
 class DossierStore:
     def __init__(self, key: str):
         self.key = key
         self.client = JourneyClient(key)
+        self.visual = PDFVisualFidelity()
 
     def rpc(self, bearer: str, case: str, action: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         con = http.client.HTTPSConnection(HOST, timeout=30)
         try:
-            con.request('POST', '/rest/v1/rpc/caseproof_dossier',
-                        canonical({'p_case': case, 'p_action': action, 'p_data': data or {}}).encode(),
+            function = 'caseproof_dossier_snapshot_read' if action == 'read' else 'caseproof_dossier'
+            params = ({'p_case': case, 'p_snapshot': (data or {}).get('snapshot_hash')} if action == 'read'
+                      else {'p_case': case, 'p_action': action, 'p_data': data or {}})
+            con.request('POST', '/rest/v1/rpc/' + function, canonical(params).encode(),
                         {'apikey': self.key, 'Authorization': 'Bearer ' + bearer,
                          'Content-Type': 'application/json', 'Cache-Control': 'no-store'})
             res = con.getresponse()
@@ -81,6 +92,21 @@ class DossierStore:
         if not isinstance(result, dict):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
+
+    def reopen(self, bearer: str, case: str, brief: str, snapshot: str) -> tuple[dict[str, Any], bytes]:
+        stored = self.rpc(bearer, case, 'read', {'snapshot_hash': snapshot})
+        serialized = stored.get('serialized')
+        if not isinstance(serialized, str) or hashlib.sha256(serialized.encode()).hexdigest() != snapshot:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        report = json.loads(serialized)
+        if report.get('case_id') != case or report.get('brief_id') != brief:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        sources, originals = self.sources(bearer, case)
+        current = {(s['version_id'], s['sha256']) for s in sources}
+        if any((s['version_id'], s['sha256']) not in current for s in report['sources']):
+            raise HTTPException(409, 'source snapshot changed')
+        report['snapshot_hash'] = snapshot
+        return report, originals[brief]
 
     def sources(self, bearer: str, case: str) -> tuple[list[dict[str, Any]], dict[str, bytes]]:
         manifest = self.client.bundle_manifest(bearer, case)['sources']
@@ -169,13 +195,51 @@ class DossierStore:
                             'geometry_sha256': ref.geometry_sha256}}
                 source['geometry'] = geometry
         found = build_findings(discovery, regions, sources, confirmation)
+        # Both text-layer PDFs and scans take the visual path. Inputs come only
+        # from verified private originals; unavailable engines never count as pass.
+        visual_pages: dict[tuple[str, int], dict[str, Any]] = {}
+        visual_budget = 4
+        for finding in found['findings']:
+            version, page_number = finding['version_id'], finding['pdf_page']
+            if version is None or page_number is None:
+                finding['visual_assessment'] = select_visual_assessment(None, None)
+                continue
+            key = (version, page_number)
+            if key not in visual_pages:
+                source = next(s for s in sources if s['version_id'] == version)
+                try:
+                    if len(visual_pages) >= visual_budget:
+                        raise OCRUnavailable('visual_page_budget_exceeded')
+                    visual_pages[key] = getattr(self, "visual", PDFVisualFidelity()).inspect(originals[version],
+                        original_sha256=source['sha256'], page_number=page_number)
+                except OCRUnavailable as error:
+                    visual_pages[key] = {'error': str(error)}
+            region = regions.get(finding['region'], '')
+            tail = region[finding['offsets']['end']:]
+            import re
+
+            # Only an explicitly delimited quotation immediately following the
+            # page reference is linked. No inferred quote from nearby prose.
+            quoted = re.match(r'^\s*[,;:]?\s*(?:(?:PDF|printed|gedrukte|imprimée|bundle|bundel|liasse)\s+)?(?:pp?|pages?)\.?\s*\d+\s*[,;:.]?\s*["“«]([^"”»]{1,1000})["”»]', tail, re.I)
+            assessment = select_visual_assessment(visual_pages[key], quoted[1] if quoted else None)
+            finding['visual_assessment'] = assessment
+            if assessment['state'] != 'not_assessed':
+                finding['fidelity'] = assessment['state']
+            # Identity/pinpoint remain independently checked; visual conflict
+            # never changes exhibit identity or claims human semantic support.
+        found['coverage']['visual_pages_attempted'] = len(visual_pages)
+        found['coverage']['visual_pages_completed'] = sum(not p.get('error') for p in visual_pages.values())
+        found['coverage']['visual_findings_not_assessed'] = sum(
+            f['visual_assessment']['state'] == 'not_assessed' for f in found['findings'])
         report = {'schema': 'caseproof-dossier-v1', 'case_id': case, 'brief_id': brief,
                   'bundle_signature': context['bundle_signature'],
                   'confirmation_id': confirmation['request_id'] if confirmation else None,
                   'inventory_confirmation': {k: confirmation.get(k) for k in ('request_id', 'reviewer_id', 'timestamp')} if confirmation else None,
-                  'sources': sources, **found, 'professional_certificate': False, 'filing_status': 'not_assessed'}
+                  'sources': sources, 'visual_pages': {v + ':' + str(p): data for (v,p),data in visual_pages.items()}, **found, 'professional_certificate': False, 'filing_status': 'not_assessed'}
         report['coverage']['unprocessed_sources'] = sum(bool(s.get('parse_error')) for s in sources)
         serialized = canonical(report)
+        if len(serialized.encode()) > 1_900_000:
+            raise HTTPException(422, 'visual snapshot budget exceeded; reduce assessed pages')
         report['snapshot_hash'] = hashlib.sha256(serialized.encode()).hexdigest()
         self.rpc(bearer, case, 'snapshot', {'serialized': serialized, 'snapshot_hash': report['snapshot_hash']})
         return report, raw
@@ -191,9 +255,10 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         return store, _token(header)
 
     @router.get(base)
-    def dossier(case_id: str, brief_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    def dossier(case_id: str, brief_id: str, snapshot_hash: str | None = None, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         s, bearer = active(authorization)
-        return s.load(bearer, case_id, brief_id)[0]
+        return (s.reopen(bearer, case_id, brief_id, snapshot_hash) if snapshot_hash
+                else s.load(bearer, case_id, brief_id))[0]
 
     @router.post(base + '/confirmation')
     def confirm(case_id: str, brief_id: str, body: InventoryConfirmation,
@@ -224,22 +289,34 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
                      'request_id': body.request_id, 'payload': payload})
 
     @router.post(base + '/reviews')
-    def review(case_id: str, brief_id: str, body: DecisionBody,
+    def review(case_id: str, brief_id: str, body: VisualDecisionBody,
                authorization: str | None = Header(default=None)) -> dict[str, Any]:
         s, bearer = active(authorization)
-        report, _ = s.load(bearer, case_id, brief_id)
+        report, _ = s.reopen(bearer, case_id, brief_id, body.snapshot_hash)
         finding = next((f for f in report['findings'] if f['reference_id'] == body.reference_id), None)
         if report['snapshot_hash'] != body.snapshot_hash or finding is None:
             raise HTTPException(409, 'stale or unknown finding')
         if body.decision == 'CONFIRMED_SUPPORTED' and finding['technical_check'] != 'checked':
             raise HTTPException(409, 'resolve identity and pinpoint before confirming support')
-        return s.rpc(bearer, case_id, 'review', body.model_dump(mode='json'))
+        required = {r['region_id'] for r in finding.get('visual_assessment', {}).get('regions', [])}
+        if required and set(body.reviewed_region_ids) != required:
+            raise HTTPException(409, 'inspect and explicitly confirm every selected visual region')
+        payload = body.model_dump(mode='json', exclude={'reviewed_region_ids'})
+        if required:
+            # Existing append-only review schema stores this explicit attestation
+            # in the rationale, bound to the frozen snapshot and reference.
+            receipt = ' [Visual regions reviewed: ' + ','.join(sorted(required)) + ']'
+            if len(payload['rationale']) + len(receipt) > 2000:
+                raise HTTPException(422, 'rationale plus visual attestation exceeds limit')
+            payload['rationale'] += receipt
+        return s.rpc(bearer, case_id, 'review', payload)
 
     @router.get(base + '/export')
-    def export(case_id: str, brief_id: str, format: Literal['json', 'markdown', 'docx'] = 'json',
+    def export(case_id: str, brief_id: str, format: Literal['json', 'markdown', 'docx'] = 'json', snapshot_hash: str | None = None,
                authorization: str | None = Header(default=None)) -> Response:
         s, bearer = active(authorization)
-        report, original = s.load(bearer, case_id, brief_id)
+        report, original = (s.reopen(bearer, case_id, brief_id, snapshot_hash) if snapshot_hash
+                            else s.load(bearer, case_id, brief_id))
         report['human_decisions'] = s.rpc(bearer, case_id, 'decisions', {'snapshot_hash': report['snapshot_hash']})['decisions']
         headers = {'X-CaseProof-Snapshot': report['snapshot_hash'], 'Cache-Control': 'no-store'}
         if format == 'docx':
@@ -253,9 +330,35 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             text = '# CaseProof scoped dossier report\n\n' + canonical(report['coverage']) + '\n\n'
             text += '\n'.join(f"- {f['reference_id']}: {f['literal']} — {f['identity']}; {f['page_mapping']}; {f['fidelity']}; {f['support']}"
                               for f in report['findings'])
+            text += '\n\nVisual assessments\n' + canonical([{
+                'reference_id': f['reference_id'], 'assessment': {
+                    **f.get('visual_assessment', {}), 'regions': [{k: v for k, v in r.items()
+                        if k != 'crop_base64'} for r in f.get('visual_assessment', {}).get('regions', [])]}}
+                for f in report['findings']])
             text += '\n\nHuman decisions\n' + canonical(report['human_decisions'])
             return Response(text, media_type='text/markdown', headers=headers)
         return Response(canonical(report), media_type='application/json', headers=headers)
+
+    @router.get(base + '/snapshots/{snapshot_hash}/regions/{region_id}/crop')
+    def visual_crop(case_id: str, brief_id: str, snapshot_hash: str, region_id: str,
+                    authorization: str | None = Header(default=None)) -> Response:
+        s, bearer = active(authorization)
+        report, _ = s.reopen(bearer, case_id, brief_id, snapshot_hash)
+        matches = [r for page in report.get('visual_pages', {}).values()
+                   for r in page.get('regions', []) if r['region_id'] == region_id]
+        if len(matches) != 1:
+            raise HTTPException(404, 'visual region unavailable')
+        region = matches[0]
+        try:
+            png = base64.b64decode(region['crop_base64'], validate=True)
+        except (ValueError, KeyError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if hashlib.sha256(png).hexdigest() != region['crop_sha256']:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return Response(png, media_type='image/png', headers={'Cache-Control': 'no-store',
+            'X-CaseProof-Crop-SHA256': region['crop_sha256'],
+            'X-CaseProof-Original-SHA256': region['original_sha256'],
+            'X-CaseProof-Snapshot': snapshot_hash, 'X-Content-Type-Options': 'nosniff'})
 
     @router.get(base + '/sources/{version_id}/original')
     def original(case_id: str, brief_id: str, version_id: str,

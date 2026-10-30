@@ -123,6 +123,7 @@ def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
         "20261030155817_matter_retention.sql",
         "20261030160341_retention_storage_fence.sql",
         "20261030161844_complete_dossier_journey.sql",
+            "20261030234139_representation_snapshot_read.sql",
     }
     assert not (ROOT / "apps/api/vault_repository.py").exists()
     assert "evidence_vault_protocol" not in (ROOT / "apps/api/main.py").read_text()

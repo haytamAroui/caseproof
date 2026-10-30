@@ -41,7 +41,11 @@
     }
     return options.raw ? response : response.json();
   }
+  const fidelityPanel=window.CaseProofFidelity?.mount({root:$("fidelity-panel"),
+    api:async(url,options)=>{await authenticate();return api(url,options);},
+    context:()=>({caseId:$("case-id").value.trim(),briefId:$("brief-id").value.trim()})});
   function clearView() {
+    fidelityPanel?.clear();
     state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null;
     state.previewSeq+=1;state.loading=false;
     $("check-scope").textContent="Check source scope not assessed.";

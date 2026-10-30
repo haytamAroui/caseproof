@@ -62,7 +62,7 @@ def test_pixel_detector_flags_midline_but_not_clean_or_underline():
 
     from infrastructure.parsers.visual_edit_candidates import has_midline_candidate
 
-    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 44)
+    font = ImageFont.truetype("DejaVuSans.ttf", 44)
     clean = Image.new("RGB", (200, 100), "white")
     draw = ImageDraw.Draw(clean)
     draw.text((20, 20), "1000", fill="black", font=font)
@@ -86,17 +86,42 @@ def test_resolver_blocks_exact_match_and_retains_crop(reliable, edit, expected):
     brief, register, previews = rig()
     preview = previews[0]
     item = comparison(original_sha256=preview.row.original_sha256,
-                      visual_reliable=reliable, meaning_bearing_edit=edit)
+                      visual_reliable=reliable, meaning_bearing_edit=edit,
+                      extracted_text=preview.text, visual_text=preview.text,
+                      text_start=0, text_end=len(preview.text), bbox=(0,0,100,30))
     report = check(brief, register, (replace(preview, representation_comparisons=(item,)),))
     assert report.observations[0].state.value == expected
     assert report.exact_count == 0 and report.unresolved_count == 1
     assert report.observations[0].representation_comparisons[0].crop_sha256 == "b" * 64
 
 
-def test_stale_comparison_rejected():
-    from application.litigation.brief_checks import DraftCheckError
+def test_stale_comparison_abstains_for_affected_reference():
     from tests.test_litigation_m2_brief_checks import check, rig
 
     brief, register, previews = rig()
-    with pytest.raises(DraftCheckError, match="stale"):
-        check(brief, register, (replace(previews[0], representation_comparisons=(comparison(),)),))
+    preview = previews[0]
+    stale = comparison(extracted_text=preview.text, visual_text=preview.text,
+                       text_start=0, text_end=len(preview.text))
+    report = check(brief, register, (replace(preview, representation_comparisons=(stale,)),))
+    assert report.observations[0].state.value == "incomplete_extraction"
+    assert report.exact_count == 0
+
+
+def test_unrelated_region_does_not_block_literal_quote():
+    from tests.test_litigation_m2_brief_checks import check, rig
+
+    brief, register, previews = rig()
+    preview = previews[0]
+    start = preview.text.index("Ensuite")
+    unrelated = comparison(original_sha256=preview.row.original_sha256,
+                           extracted_text=preview.text[start:], visual_text="changed footer",
+                           text_start=start, text_end=len(preview.text))
+    report = check(brief, register, (replace(preview, representation_comparisons=(unrelated,)),))
+    assert report.observations[0].state.value == "exact_match"
+
+
+def test_whitespace_and_canonical_unicode_do_not_hide_values_or_edits():
+    assert comparison(extracted_text="é 1000", visual_text="e\u0301   1000 ").state.value == "not_assessed"
+    assert comparison(extracted_text="1000", visual_text="1200").state.value == "representation_conflict"
+    assert comparison(extracted_text="-1000", visual_text="1000").state.value == "representation_conflict"
+    assert comparison(meaning_bearing_edit=True).state.value == "representation_conflict"

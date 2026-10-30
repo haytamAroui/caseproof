@@ -184,6 +184,11 @@ def test_mixed_pdf_physical_reference_looks_up_its_actual_scanned_page():
     class MixedStore(DossierStore):
         def __init__(self, available):
             self.client = GeometryClient(available)
+            from infrastructure.parsers.pdf_ocr import OCRUnavailable
+
+            def unavailable(*args, **kwargs):
+                raise OCRUnavailable("test_geometry_only")
+            self.visual = SimpleNamespace(inspect=unavailable)
 
         def rpc(self, token, case, action, data=None):
             return {'bundle_signature': 'c' * 64, 'confirmation': {
@@ -194,7 +199,7 @@ def test_mixed_pdf_physical_reference_looks_up_its_actual_scanned_page():
             return ([{'role': 'draft', 'version_id': 'draft'}, {'role': 'inventory', 'version_id': 'inv'},
                      {'role': 'exhibit', 'version_id': 'mixed', 'document_id': 'doc', 'sha256': 'a' * 64,
                       'page_count': 2, 'image_only': False, 'image_only_pages': [2]}],
-                    {'draft': docx('Pièce 2, PDF p. 2.'), 'inv': b'Piece 2 scan'})
+                    {'draft': docx('Pièce 2, PDF p. 2.'), 'inv': b'Piece 2 scan', 'mixed': b'geometry-only test double'})
 
     for available in (True, False):
         store = MixedStore(available)

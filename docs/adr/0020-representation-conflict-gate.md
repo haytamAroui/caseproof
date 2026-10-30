@@ -1,6 +1,8 @@
-# ADR 0019 — Bounded representation disagreement gate
+# ADR 0020 — Bounded representation disagreement gate
 
-Status: feature-branch implementation proposal, subject to review; 30 October 2026.
+Status: bounded v1 merged in PR #142; v2 integration under review, 31 October 2026.
+
+Renumbered from 0019 to reserve that number for the earlier product ADR in PR #141.
 
 Owner requested a semantic/visual fidelity gate. This extends M2/M3 fidelity
 review within ADR 0018, without changing market scope or the pure kernel.
@@ -51,3 +53,6 @@ Acceptance: real generated clean/redlined PDF and strike-marked DOCX plus image-
 scan; positive and negative pixel candidates; equal-text edit conflict; unreliable
 abstention; stale-source rejection; literal-match blocking; existing four dimensions
 and current literal behavior preserved when no comparison exists. Synthetic only.
+
+
+V2 supersedes the v1 page-wide comparison design. See [v2 acceptance and data review](../m3/REPRESENTATION_GATE_ACCEPTANCE.md).

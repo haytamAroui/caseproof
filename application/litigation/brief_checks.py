@@ -184,21 +184,6 @@ def check_brief_references(
             observations.append(_note(reference, CitationCheckState.INCOMPLETE_EXTRACTION,
                                       exhibit_id=resolved.exhibit_id, preview=matched_preview))
             continue
-        relevant = []
-        for comparison in matched_preview.representation_comparisons:
-            if (comparison.original_sha256 != row.original_sha256
-                    or comparison.representation_id != row.representation_id):
-                raise DraftCheckError("stale representation comparison")
-            if comparison.pdf_page == page.pdf_page:
-                relevant.append(comparison)
-        blocked = {item.state for item in relevant}
-        if blocked - {RepresentationState.NOT_ASSESSED}:
-            state = (CitationCheckState.REPRESENTATION_CONFLICT
-                     if RepresentationState.REPRESENTATION_CONFLICT in blocked
-                     else CitationCheckState.OCR_UNRELIABLE)
-            observations.append(_note(reference, state, exhibit_id=resolved.exhibit_id,
-                                      preview=matched_preview))
-            continue
         # Derived representation text must have source-linked bounds.
         if any(
             type(start) is not int or type(end) is not int
@@ -236,6 +221,22 @@ def check_brief_references(
             state = CitationCheckState.EXACT_MATCH
         else:
             state = CitationCheckState.QUOTE_NOT_FOUND
+        if len(matches) == 1:
+            begin, end = matches[0]
+            relevant = [c for c in matched_preview.representation_comparisons
+                        if c.pdf_page == expected_pdf_page and c.text_start is not None
+                        and c.text_end is not None and c.text_start < end and begin < c.text_end]
+            if any(c.original_sha256 != row.original_sha256
+                   or c.representation_id != row.representation_id for c in relevant):
+                state = CitationCheckState.INCOMPLETE_EXTRACTION
+            elif any(c.text_end is None or c.text_end > len(matched_preview.text)
+                     or matched_preview.text[c.text_start:c.text_end] != c.extracted_text
+                     for c in relevant):
+                raise DraftCheckError("comparison not bound to represented text")
+            elif any(c.state is RepresentationState.REPRESENTATION_CONFLICT for c in relevant):
+                state = CitationCheckState.REPRESENTATION_CONFLICT
+            elif any(c.state is RepresentationState.OCR_UNRELIABLE for c in relevant):
+                state = CitationCheckState.OCR_UNRELIABLE
         observations.append(_note(
             reference, state, exhibit_id=resolved.exhibit_id, preview=matched_preview,
             span=matches[0] if len(matches) == 1 else None,
