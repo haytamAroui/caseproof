@@ -164,10 +164,11 @@ def main(*, retention_check=None):
             print("P3_UPLOAD_VERIFIED: " + filename, flush=True)
         print("P3_FOUR_SOURCES_UPLOADED", flush=True)
         doc, version = scan
-        success(
+        ingest_result = success(
             owner, "POST", f"/dev/live/matters/{case}/sources/{doc}/{version}/ingest?request_id={uuid4()}"
         )
         print("P3_INGEST_RPC_SUCCEEDED", flush=True)
+        print("P3_INGEST_OCR_STATUS:" + json.dumps(ingest_result.get("manifest", {}).get("ocr_candidates", []))[:1000], flush=True)
         status, raw = direct(
             owner,
             key,
