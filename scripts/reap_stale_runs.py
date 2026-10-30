@@ -1,9 +1,11 @@
 """Reap exact-owned development runs older than four hours."""
 from __future__ import annotations
+
 import argparse
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 from scripts.m05_registry import stale_runs
 from scripts.teardown_test_run import teardown
 
@@ -15,7 +17,7 @@ def main():
     if args.older_than_hours < 4:
         raise RuntimeError("minimum stale age is four hours")
     key = os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"]
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=args.older_than_hours)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(hours=args.older_than_hours)).isoformat()
     runs = stale_runs(key, cutoff)
     failed = 0
     for run_id in runs:
