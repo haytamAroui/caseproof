@@ -128,6 +128,7 @@ def main():
             (artifacts / source.filename).write_bytes(source.content)
         (artifacts / 'report.json').write_text(json.dumps(exported, ensure_ascii=False, indent=2), encoding='utf-8')
         (artifacts / 'report.md').write_bytes(markdown)
+        (artifacts / 'scan-crop.png').write_bytes(png)
         (artifacts / 'caseproof-annotated.docx').write_bytes(derivative)
         status, original_after_export = request(token, 'GET', base + f'/sources/{versions["draft"]}/original')
         if status != 200 or hashlib.sha256(original_after_export).hexdigest() != bundle[0].sha256:

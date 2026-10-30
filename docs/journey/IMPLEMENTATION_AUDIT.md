@@ -10,7 +10,7 @@ Baseline: main `ae23e70`. Backend/API only; no new UI or production deployment.
 | 4. Source review | Original byte/hash checks; persisted OCR geometry and crop endpoint | Signed original-source PDF pages and original downloads; OCR uncertainty; no crop-to-pinpoint inference | Source hashes and PDF/PNG response checks |
 | 5. Exact decision binding | Signed human review ledger | Immutable candidate snapshots bind all original versions/hashes, inventory and confirmation revision; stale decisions rejected | SQL source-change and confirmation-change tests; live revision test |
 | 6. Export/reopen | Restart/sign-in helpers | Scoped JSON/Markdown and separate annotated DOCX; original unchanged; same exported report after cold restart | Parser/namespace tests and live byte/report equality |
-| 7. Signed acceptance | Ephemeral GoTrue users, matter grants, private Storage and finally teardown | New protected complete-dossier and unreadable-draft workflow | Live evidence pending until an executed run passes |
+| 7. Signed acceptance | Ephemeral GoTrue users, matter grants, private Storage and finally teardown | New protected complete-dossier and unreadable-draft workflow | Passed: see ACCEPTANCE_RECEIPT.md |
 | 8. Evidence/integration | Required GitHub cloud regressions and migration workflow | One PR, downloadable synthetic demo artifacts, dated run/commit/counts and denial/cleanup receipt | Merge only after final-head CI and signed acceptance |
 
 New snapshots are **candidate derivations**, not professional certification.
