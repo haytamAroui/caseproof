@@ -10,10 +10,10 @@ import os
 from uuid import uuid4
 
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
+from scripts.m05_registry import record
 from scripts.verify_dev_ephemeral_auth import PROJECT_REF
 from scripts.verify_dev_live_review_roundtrip import _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import success
-from scripts.m05_registry import record
 
 ROLES = ("owner", "ungranted", "foreign")
 
