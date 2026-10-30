@@ -122,6 +122,8 @@ def main():
         if len(registered) != 4:
             raise RuntimeError("P3_BUNDLE_INCOMPLETE")
         print("P3_BUNDLE_REGISTERED: four source identities", flush=True)
+        if os.getenv("FORCE_FAILURE") == "YES":
+            raise RuntimeError("P3_INJECTED_FAILURE_STEP_3")
         scan = None
         for (filename, _media, raw), item in zip(bundle, registered, strict=True):
             doc, version = item["document_id"], item["version_id"]
