@@ -64,6 +64,7 @@ def discover(payload: bytes, manifest: list[dict[str, Any]]) -> dict[str, Any]:
             "offsets": {"start": ref.start, "end": ref.end},
             "identity": identity, "source_id": source.get("source_id") if source else None,
             "version_id": source.get("version_id") if source else None,
+            "source_sha256": source.get("source_sha256") if source else None,
             "page_mapping": "pdf_page_verified" if source and source.get("ocr_crop") else "page_unmapped",
             "pdf_page": source["ocr_crop"]["page_number"] if source and source.get("ocr_crop") else None,
             "printed_page": None, "bundle_page": None,
