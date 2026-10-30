@@ -1,8 +1,10 @@
 """Protected M0.5 registry RPC. Only service-role requests may mutate ledger."""
 from __future__ import annotations
+
 import http.client
 import json
 from uuid import UUID
+
 from scripts.verify_dev_ephemeral_auth import PROJECT_REF
 
 HOST = f"{PROJECT_REF}.supabase.co"
