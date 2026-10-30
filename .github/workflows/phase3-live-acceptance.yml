@@ -10,6 +10,7 @@ on:
       - scripts/teardown_test_run.py
       - scripts/reap_stale_runs.py
       - supabase/migrations/20261030115000_m05_protected_registry_rpc.sql
+      - supabase/migrations/20261030120000_m05_verify_empty.sql
       - scripts/verify_dev_ephemeral_auth.py
       - tests/fixtures/run_lifecycle.py
       - tests/fixtures/factory.py
