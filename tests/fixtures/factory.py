@@ -8,8 +8,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 from uuid import uuid4
 
 
