@@ -2,14 +2,39 @@
 from __future__ import annotations
 
 import argparse
+import http.client
+import json
 import os
 from uuid import UUID
 
 from apps.api.signed_supabase_originals import OriginalRef
-from scripts.m05_registry import forget, rows
+from scripts.m05_registry import HOST, forget, rows
 from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin
 from scripts.verify_dev_live_txt_journey import admin_rpc
 from scripts.verify_m1_live_positive_original import _remove_original
+
+
+
+def verify_storage_empty(key: str, paths: list[str]) -> None:
+    """Independently list the exact owned Storage prefixes after deletion."""
+    prefixes = {"/".join(path.split("/")[:2]) + "/" for path in paths}
+    for prefix in sorted(prefixes):
+        headers = {"apikey": key, "Content-Type": "application/json"}
+        if key.startswith("eyJ"):
+            headers["Authorization"] = "Bearer " + key
+        conn = http.client.HTTPSConnection(HOST, timeout=20)
+        try:
+            conn.request("POST", "/storage/v1/object/list/caseproof-originals-dev",
+                         json.dumps({"prefix": prefix, "limit": 1000}).encode(), headers)
+            response = conn.getresponse()
+            status, raw = response.status, response.read(100001)
+        finally:
+            conn.close()
+        if status != 200 or len(raw) > 100000:
+            raise RuntimeError("independent Storage listing failed")
+        items = json.loads(raw)
+        if not isinstance(items, list) or items:
+            raise RuntimeError("owned Storage prefix is not empty")
 
 
 def teardown(run_id: str, key: str) -> None:
@@ -19,6 +44,7 @@ def teardown(run_id: str, key: str) -> None:
         return
     if not any(e["resource_type"] == "run" and e["resource_id"] == run_id for e in entries):
         raise RuntimeError("run ownership root missing")
+    owned_paths = [e["resource_id"] for e in entries if e["resource_type"] == "storage_file"]
     for entry in entries:
         if entry["resource_type"] == "storage_file":
             path = entry["resource_id"]
@@ -29,6 +55,8 @@ def teardown(run_id: str, key: str) -> None:
                               UUID(parts[3]), parts[4], "application/pdf")
             _remove_original(key, ref)
             forget(key, run_id, "storage_file", path)
+    verify_storage_empty(key, owned_paths)
+    print("M05_STORAGE_EMPTY_VERIFIED", flush=True)
     # A matter is only deleted through the existing run+owner-checked
     # fixture cleanup RPC. Never issue an unscoped DELETE on cases.
     entries = rows(key, run_id)
