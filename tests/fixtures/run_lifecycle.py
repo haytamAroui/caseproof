@@ -5,6 +5,7 @@ has no durable manifest must not be reaped by guessing email domains or paths.
 """
 from __future__ import annotations
 
+
 import json
 import os
 import secrets
@@ -34,7 +35,7 @@ def credentials(run_id: str) -> dict[str, tuple[str, str]]:
 @dataclass
 class RunManifest:
     run_id: str
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     state: str = "CREATING"
     users: dict[str, str] = field(default_factory=dict)
     matter_id: str | None = None
@@ -60,7 +61,7 @@ class RunManifest:
         temp.replace(path)
 
     @classmethod
-    def load(cls, path: Path) -> "RunManifest":
+    def load(cls, path: Path) -> RunManifest:
         data = json.loads(path.read_text(encoding="utf-8"))
         if set(data) != {"run_id", "created_at", "state", "users", "matter_id", "org_id", "originals"}:
             raise ValueError("invalid manifest fields")
