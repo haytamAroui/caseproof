@@ -227,6 +227,9 @@ def main(*, retention_check=None):
         recall = tp / (tp + fn) if tp + fn else 0.0
         print("M5_BENCHMARK_JSON:" + json.dumps({
             "intended_pages": 150, "reference_truth": 60,
+            "tested_commit": os.environ.get("GITHUB_SHA"),
+            "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+            "input_sha256": {entry["filename"]: entry["sha256"] for entry in metadata},
             "discovery_ms": round(elapsed_ms, 3),
             "client_python_peak_bytes": peak_bytes,
             "api_process_peak_rss_kib": api_peak_rss_kib,
