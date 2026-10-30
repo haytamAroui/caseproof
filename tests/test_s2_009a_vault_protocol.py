@@ -463,4 +463,5 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
         "20261030113000_m05_test_run_registry.sql",
         "20261030114000_m05_ocr_sidecar_cleanup_fk.sql",
         "20261030115000_m05_protected_registry_rpc.sql",
+        "20261030120000_m05_verify_empty.sql",
     }
