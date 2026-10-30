@@ -128,6 +128,7 @@ def test_no_new_live_route_or_staged_migration() -> None:
         "20261030120000_m05_verify_empty.sql",
         "20261030155817_matter_retention.sql",
         "20261030160341_retention_storage_fence.sql",
+        "20261030161844_complete_dossier_journey.sql",
         "20261030095000_caseproof_dev_bundle_cleanup.sql",
         "20261030101500_caseproof_dev_bundle_manifest.sql",
         "20261030103000_caseproof_durable_bundle_roles.sql",

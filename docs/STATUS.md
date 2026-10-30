@@ -18,6 +18,18 @@ See [retention design](security/RETENTION_DESIGN.md) and [backup limitations](..
 This does not approve confidential client data, full worker egress, legal
 accuracy, a production restore procedure or a commercial launch.
 
+
+**30 October 2026 connected dossier update (PR #138):** The signed backend/API
+journey passed on synthetic DOCX + inventory + text PDF + image-only scan:
+8 detected, 3 identity/page checks, 5 unresolved, 8 unprocessed DOCX parts; original
+hash readbacks, OCR crop, persisted decision, scoped JSON/Markdown/annotated DOCX,
+identical cold-restart reopening, stale-review rejection, ungranted/revoked denial
+and finally teardown. The separate live unreadable-DOCX negative also passed.
+See [exact acceptance evidence and limitations](journey/ACCEPTANCE_RECEIPT.md)
+and [eight-task integration audit](journey/IMPLEMENTATION_AUDIT.md).
+This proves the stated synthetic backend journey, not full M1–M5 completion,
+confidential-client readiness, arbitrary reference recall or commercial demand.
+
 ---
 
 ## Historical dated status log (retained; superseded for product direction)

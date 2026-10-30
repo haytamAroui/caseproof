@@ -1,0 +1,42 @@
+name: Complete dossier disposable and adversarial acceptance
+on:
+  pull_request:
+  push:
+    branches: [feat/complete-dossier-journey]
+permissions:
+  contents: read
+jobs:
+  retention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: caseproof_s2_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: caseproof_ephemeral_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caseproof_s2_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 8
+    env:
+      CASEPROOF_DISPOSABLE_DB: "YES"
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: caseproof_s2_ci
+      PGUSER: postgres
+      PGPASSWORD: caseproof_ephemeral_ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - run: uv run --locked python -m scripts.verify_dossier_disposable
+      - name: Test deterministic dossier, original preservation and annotations
+        run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_dossier_journey.py
+      - name: Type and lint changed dossier code
+        run: |
+          uv run --locked ruff check .
+          uv run --locked mypy --explicit-package-bases apps/api/dossier_journey.py domains/disputes/dossier_verification.py infrastructure/parsers/dossier_docx_export.py

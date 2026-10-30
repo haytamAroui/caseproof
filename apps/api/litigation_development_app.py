@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.dossier_journey import DossierStore, create_dossier_router
 from apps.api.litigation_check_app import create_litigation_check_app
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
 from apps.api.litigation_evidence_app import EvidenceReader, _token, create_evidence_app
@@ -59,6 +60,7 @@ def create_litigation_development_app(
     ):
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
+    app.include_router(create_dossier_router(DossierStore(publishable_key) if publishable_key else None))
     app.include_router(create_headless_review_router(headless))
     app.include_router(create_live_review_router(publishable_key))
     app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key, ocr=ocr))
