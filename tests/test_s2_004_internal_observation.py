@@ -126,6 +126,7 @@ def test_no_new_live_route_or_staged_migration() -> None:
         "20261030114000_m05_ocr_sidecar_cleanup_fk.sql",
         "20261030115000_m05_protected_registry_rpc.sql",
         "20261030120000_m05_verify_empty.sql",
+        "20261030155817_matter_retention.sql",
         "20261030095000_caseproof_dev_bundle_cleanup.sql",
         "20261030101500_caseproof_dev_bundle_manifest.sql",
         "20261030103000_caseproof_durable_bundle_roles.sql",

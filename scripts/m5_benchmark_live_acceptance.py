@@ -77,7 +77,7 @@ def crop(token, case, doc, version, box):
         con.close()
 
 
-def main():
+def main(*, retention_check=None):
     if (
         os.getenv("CASEPROOF_PHASE3_LIVE") != "YES"
         or os.getenv("GITHUB_REF") != "refs/heads/feat/production-hardening"
@@ -287,6 +287,9 @@ def main():
         ):
             raise RuntimeError(f"P4_COLD_RESTART_EXPORT_MISSING_REVIEW:{status}")
         print("P4_COLD_RESTART_SIGNED_EXPORT_PASSED", flush=True)
+        if retention_check is not None:
+            retention_check(owner, sessions, key, case, base, doc, version, box, registered)
+            return
         # Denial checks before revocation.
         for role in ("ungranted", "foreign"):
             status, body = crop(sessions[role], case, doc, version, box)

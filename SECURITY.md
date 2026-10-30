@@ -17,8 +17,12 @@ verifies the prefix is empty, and transactionally purges its database data.
 Failed operations remain denied and retryable. Legal holds prevent purge.
 Only a minimal pseudonymous erasure receipt is retained.
 
-**The actual project's backup retention is not yet verified.** Do not substitute
-a guessed number of days or promise automatic expiry without provider evidence.
+**Verified 30 October 2026:** the connected organization reports the Free plan.
+Supabase documents managed daily backups for Pro/Team/Enterprise, not Free.
+Therefore a claim that this development project has daily backups retained for
+X days would be false. External exports, PITR and provider-internal disaster
+recovery retention have not been independently inventoried. Do not promise an
+expiry period without evidence for the actual environment.
 Supabase database backups and Storage object backups are separate concerns;
 a database backup does not itself back up Storage file bytes. Verify the exact
 plan, PITR settings, external exports and object replication/lifecycle before a
