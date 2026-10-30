@@ -6,7 +6,6 @@ from hashlib import sha256
 from io import BytesIO
 
 import pytest
-
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject, NumberObject
 
