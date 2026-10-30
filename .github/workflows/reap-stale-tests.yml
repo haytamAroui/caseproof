@@ -2,6 +2,10 @@ name: M0.5 stale fixture reaper
 on:
   schedule:
     - cron: "17 */4 * * *"
+  push:
+    branches: [feat/m05-ephemeral-fixture-hardening]
+    paths:
+      - .github/workflows/reap-stale-tests.yml
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,7 +18,7 @@ jobs:
     environment: caseproof-dev
     timeout-minutes: 15
     env:
-      CASEPROOF_DEV_AUTH_ADMIN_KEY: \${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.3.2
