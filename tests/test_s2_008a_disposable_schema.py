@@ -102,6 +102,9 @@ def test_no_installed_migration_or_prod_route() -> None:
             "20261030101500_caseproof_dev_bundle_manifest.sql",
             "20261030103000_caseproof_durable_bundle_roles.sql",
             "20261030110000_caseproof_dev_atomic_bundle_registration.sql",
+        "20261030113000_m05_test_run_registry.sql",
+        "20261030114000_m05_ocr_sidecar_cleanup_fk.sql",
+        "20261030115000_m05_protected_registry_rpc.sql",
     }
     assert "S2-008a_disposable_representation_anchor_graph.sql" not in (
         ROOT / "apps/api/main.py"
