@@ -1,0 +1,31 @@
+name: Phase 3 persistent Auth provisioning (dev only)
+on:
+  push:
+    branches: [feat/phase3-ocr-geometry-crops]
+    paths:
+      - scripts/provision_phase3_persistent_users.py
+      - .github/workflows/phase3-persistent-users.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: caseproof-phase3-persistent-provision
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 12
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+      CASEPROOF_PHASE3_PERSISTENT_PROVISION: "YES"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Provision three persistent real GoTrue users and grants
+        run: uv run --locked python -m scripts.provision_phase3_persistent_users
