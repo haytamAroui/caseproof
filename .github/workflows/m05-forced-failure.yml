@@ -1,0 +1,49 @@
+name: M0.5 forced-failure recovery acceptance
+on:
+  push:
+    branches: [feat/m05-ephemeral-fixture-hardening]
+    paths:
+      - scripts/m05_live.py
+      - scripts/phase3_live_acceptance.py
+      - scripts/teardown_test_run.py
+      - .github/workflows/m05-forced-failure.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  failure-recovery:
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 20
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+      CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+      CASEPROOF_PHASE3_LIVE: "YES"
+      FORCE_FAILURE: "YES"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Install OCR dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-nld tesseract-ocr-fra poppler-utils fonts-dejavu-core
+      - name: Run forced step-three failure
+        id: injected
+        shell: bash
+        run: |
+          set +e
+          uv run --with python-docx --with reportlab --with pillow python -m scripts.m05_live > /tmp/m05-failure.log 2>&1
+          result=$?
+          cat /tmp/m05-failure.log
+          test "$result" -ne 0
+      - name: Verify teardown ran despite injected failure
+        if: always()
+        shell: bash
+        run: |
+          test -f /tmp/m05-failure.log
+          grep -q 'P3_INJECTED_FAILURE_STEP_3' /tmp/m05-failure.log
+          grep -q 'M05_STORAGE_EMPTY_VERIFIED' /tmp/m05-failure.log
+          grep -q 'ZERO_RESIDUAL_VERIFIED' /tmp/m05-failure.log
+          echo 'M05_FORCED_FAILURE_RECOVERED'
