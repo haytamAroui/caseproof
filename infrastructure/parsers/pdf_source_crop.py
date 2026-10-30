@@ -14,7 +14,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from infrastructure.parsers.pdf_ocr import OCRUnavailable, RASTER_DPI, _run
+from infrastructure.parsers.pdf_ocr import RASTER_DPI, OCRUnavailable, _run
 
 MAX_CROP_PIXELS = 4_000_000
 MAX_SOURCE_BYTES = 3 * 1024 * 1024
