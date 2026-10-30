@@ -213,7 +213,7 @@ def test_all_new_code_is_unwired_and_migration_unchanged() -> None:
         "20261030120000_m05_verify_empty.sql",
         "20261030155817_matter_retention.sql",
         "20261030160341_retention_storage_fence.sql",
-        "20261030161346_complete_dossier_journey.sql",
+        "20261030161844_complete_dossier_journey.sql",
     }
     workflow = (root / ".github/workflows/kernel-boundary.yml").read_text()
     assert "scripts.verify_s2_008a3_reader" in workflow

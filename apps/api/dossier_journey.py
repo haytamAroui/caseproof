@@ -116,6 +116,28 @@ class DossierStore:
         if len(drafts) != 1:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         confirmation = context.get('confirmation')
+        inventory = next((x for x in sources if x['role'] == 'inventory'), None)
+        inventory_readable = False
+        inventory_identities: set[tuple[str, str]] = set()
+        if inventory is not None:
+            try:
+                inventory_text = originals[inventory['version_id']].decode('utf-8')
+                inventory_identities = {('stuk' if r.label.startswith('stuk') else 'piece', r.number)
+                                        for r in detect_exhibit_references(inventory_text, region='inventory')}
+                inventory_readable = True
+            except UnicodeError:
+                inventory['parse_error'] = 'unreadable_utf8_inventory'
+        if confirmation:
+            supplied = confirmation['payload']['entries']
+            supplied_identities = {(e['label'], e['number']) for e in supplied}
+            # Never infer absence from an omitted confirmation row. Inventory
+            # bytes, not client JSON, establish known inventory membership.
+            normalized = [e for e in supplied if (e['label'], e['number']) in inventory_identities]
+            normalized += [{'label': label, 'number': number, 'source_version_id': None, 'pages': []}
+                           for label, number in sorted(inventory_identities - supplied_identities)]
+            confirmation = {**confirmation, 'payload': {**confirmation['payload'], 'entries': normalized,
+                'inventory_complete': bool(inventory_readable and confirmation['payload']['inventory_complete']
+                                           and supplied_identities == inventory_identities)}}
         if confirmation:
             # Only retrieve stored geometry for explicitly mapped physical pages.
             for source in sources:
@@ -146,6 +168,7 @@ class DossierStore:
                   'bundle_signature': context['bundle_signature'],
                   'confirmation_id': confirmation['request_id'] if confirmation else None,
                   'sources': sources, **found, 'professional_certificate': False, 'filing_status': 'not_assessed'}
+        report['coverage']['unprocessed_sources'] = sum(bool(s.get('parse_error')) for s in sources)
         serialized = canonical(report)
         report['snapshot_hash'] = hashlib.sha256(serialized.encode()).hexdigest()
         self.rpc(bearer, case, 'snapshot', {'serialized': serialized, 'snapshot_hash': report['snapshot_hash']})
@@ -188,6 +211,8 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
                     raise ValueError('page outside preserved source')
         except (ValueError, UnicodeError):
             raise HTTPException(422, 'invalid inventory/source/page confirmation') from None
+        if body.inventory_complete and {(e.label, e.number) for e in body.entries} != identities:
+            raise HTTPException(422, 'complete inventory confirmation must include every discovered inventory identity')
         payload = body.model_dump(exclude={'bundle_signature', 'request_id'})
         return s.rpc(bearer, case_id, 'confirm', {'bundle_signature': body.bundle_signature,
                      'request_id': body.request_id, 'payload': payload})
@@ -231,6 +256,8 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
                  authorization: str | None = Header(default=None)) -> Response:
         s, bearer = active(authorization)
         sources, files = s.sources(bearer, case_id)
+        if not any(x['role'] == 'draft' and x['version_id'] == brief_id for x in sources):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         source = next((x for x in sources if x['version_id'] == version_id), None)
         if source is None:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
@@ -243,6 +270,8 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
              authorization: str | None = Header(default=None)) -> Response:
         s, bearer = active(authorization)
         sources, files = s.sources(bearer, case_id)
+        if not any(x['role'] == 'draft' and x['version_id'] == brief_id for x in sources):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         source = next((x for x in sources if x['version_id'] == version_id), None)
         if not source or not 1 <= page_number <= source.get('page_count', 0):
             raise HTTPException(404, 'source page unavailable')

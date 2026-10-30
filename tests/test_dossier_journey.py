@@ -80,3 +80,27 @@ def test_fixed_dossier_ground_truth():
     assert [f['identity'] for f in report['findings']] == EXPECTED_IDENTITIES
     assert {k: report['coverage'][k] for k in EXPECTED_COUNTS} == EXPECTED_COUNTS
     assert report['coverage']['unprocessed_regions'] >= 1
+
+
+def test_omitted_confirmation_entry_cannot_become_absent_inventory():
+    from apps.api.dossier_journey import DossierStore
+
+    class FixtureStore(DossierStore):
+        def __init__(self):
+            pass
+
+        def rpc(self, bearer, case, action, data=None):
+            if action == 'context':
+                return {'bundle_signature': 'a' * 64, 'confirmation': {
+                    'request_id': 'confirmed', 'payload': {'inventory_complete': True, 'entries': []}}}
+            return {}
+
+        def sources(self, bearer, case):
+            raw = docx('Stuk 1, PDF p. 1.')
+            return ([{'role': 'draft', 'version_id': 'draft'},
+                     {'role': 'inventory', 'version_id': 'inventory'}],
+                    {'draft': raw, 'inventory': b'Stuk 1 invoice'})
+
+    report, _ = FixtureStore().load('signed-test-double', 'case', 'draft')
+    assert report['findings'][0]['identity'] == 'source_missing'
+    assert not report['coverage']['inventory_confirmed_complete']

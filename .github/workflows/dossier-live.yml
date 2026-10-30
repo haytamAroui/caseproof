@@ -1,0 +1,36 @@
+name: Complete signed dossier live acceptance
+# Trigger protected branch acceptance on this commit; do not merge without zero-residual evidence.
+on:
+  push:
+    branches: [feat/complete-dossier-journey]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 20
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+      CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+      CASEPROOF_PHASE3_LIVE: "YES"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Install OCR system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-nld tesseract-ocr-fra poppler-utils fonts-dejavu-core
+      - name: Validate reusable fixture factory offline
+        run: uv run --locked --with pytest --with python-docx --with reportlab --with pillow python -m pytest -q tests/test_fixture_factory.py tests/test_dossier_journey.py
+      - name: Hostile DOCX injection and discovery egress regression
+        run: uv run --locked --with pytest --with python-docx python -m pytest -q tests/test_m5_discovery_sequence_security.py
+      - name: Execute signed 150-page 60-reference stress dossier and teardown
+        run: uv run --with python-docx --with reportlab --with pillow python -m scripts.dossier_live
+      - name: Unreadable original must remain unprocessed in the live API
+        env:
+          CASEPROOF_DOSSIER_UNREADABLE: "YES"
+        run: uv run --locked --with python-docx --with reportlab --with pillow python -m scripts.dossier_live
