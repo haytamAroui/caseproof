@@ -7,7 +7,7 @@ This adapter never issues grants, registers source rows or uses service keys.
 from dataclasses import dataclass
 
 from apps.api.signed_supabase_originals import OriginalRef, SignedOriginalsStorage
-from domains.disputes.multisource_manifest import MultiSourceManifest, SourceRole
+from domains.disputes.multisource_manifest import MultiSourceManifest
 
 
 @dataclass(frozen=True, slots=True)
