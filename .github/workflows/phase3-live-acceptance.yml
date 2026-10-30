@@ -1,4 +1,5 @@
 name: M0.5 Phase 3 ephemeral nine-step live acceptance
+# Trigger protected branch acceptance on this commit; do not merge without zero-residual evidence.
 on:
   push:
     branches: [feat/m05-ephemeral-fixture-hardening]
