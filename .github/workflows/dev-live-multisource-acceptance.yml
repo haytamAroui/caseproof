@@ -1,0 +1,30 @@
+name: M1 live multi-source acceptance (protected draft)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: caseproof-dev-live-multisource
+  cancel-in-progress: false
+
+jobs:
+  live-multisource:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: caseproof-dev
+    env:
+      CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+      CASEPROOF_DEV_LIVE_MULTISOURCE: "YES"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install project dependencies
+        run: pip install -e '.[dev]'
+      - name: Protected live multi-source acceptance (fails closed until five checks implemented)
+        run: python -m scripts.verify_dev_live_multisource
