@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from application.documents.contracts import DocumentParser, ParsedDocument, restore
 from application.documents.intake import CapturedDocument
 from application.extraction.contracts import ExtractionError
+from application.litigation.representation_fidelity import RepresentationComparison
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +42,7 @@ class EvidencePreview:
     row: EvidenceRow
     text: str
     spans: tuple[tuple[int, int, str, int | None], ...]
+    representation_comparisons: tuple[RepresentationComparison, ...] = ()
     # Text is an unapproved representation, not evidence of source authenticity.
 
 
