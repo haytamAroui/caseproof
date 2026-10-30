@@ -1,4 +1,4 @@
-"""Persistent Phase 3 live OCR acceptance. NEVER delete users or fixture data."""
+"""Ephemeral Phase 3 OCR acceptance; cleanup managed by M0.5 wrapper."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from apps.api.supabase_password_signin import PasswordCredentials, SupabasePassw
 from scripts.verify_dev_ephemeral_auth import PROJECT_REF
 from scripts.verify_dev_live_review_roundtrip import _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import success
+from scripts.m05_registry import record
 
 ROLES = ("owner", "ungranted", "foreign")
 
@@ -87,6 +88,7 @@ def main():
             "/dev/live/matters",
             {"org_id": os.environ["CASEPROOF_P3_ORG_ID"], "name": "CaseProof CI " + os.environ["CASEPROOF_P3_RUN_ID"], "request_id": str(uuid4())},
         )["case_id"]
+        record(os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"], os.environ["CASEPROOF_P3_RUN_ID"], "matter", case, "CREATED")
         print("P3_MATTER_CREATED: " + case, flush=True)
         bundle = sources()
         metadata = [
@@ -123,6 +125,9 @@ def main():
         scan = None
         for (filename, _media, raw), item in zip(bundle, registered, strict=True):
             doc, version = item["document_id"], item["version_id"]
+            digest = hashlib.sha256(raw).hexdigest()
+            storage_path = "/".join((os.environ["CASEPROOF_P3_ORG_ID"], case, doc, version, digest))
+            record(os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"], os.environ["CASEPROOF_P3_RUN_ID"], "storage_file", storage_path)
             uploaded = success(
                 owner,
                 "POST",
