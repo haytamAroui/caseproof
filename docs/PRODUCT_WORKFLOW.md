@@ -6,6 +6,14 @@
 
 **First commercial experience:** web workspace, `upload → verify → inspect source → review → export`. Word is **not required** to perform this journey. Accept genuine DOCX and text/image PDF as bounded input formats, not as license to silently alter or regenerate legal conclusions. The supported subset of DOCX formatting must be declared.
 
+## Vision, first task and expansion boundary
+
+CaseProof's long-term vision is source-traceable document verification with explicit uncertainty and accountable human review. **Belgian litigation is the first market, not a limit imposed on the reusable kernel.** The commercial task remains a draft, confirmed inventory and actual exhibits before filing. [ADR 0019](adr/0019-evidence-engine-and-first-market.md) sets the expansion decision gate: customer pull, technical reuse, measured benefit and commercial commitment, followed by explicit owner approval. No other workflow is opened by this document.
+
+The engine locates and matches within a declared scope. It does not prove every citation, factual truth, authenticity or legal adequacy. No interface supplies evidence authority. API is the common contract; web is the first commercial experience; Word and MCP remain optional future clients. This is a workflow specification, not authorization to build UI during an unrelated backend task.
+
+**Current implemented subset:** [PR #140](https://github.com/haytamAroui/caseproof/pull/140) and the [signed dossier receipt](https://github.com/haytamAroui/caseproof/actions/runs/41105503131) prove a bounded synthetic API journey with text and scanned PDFs, saved review, scoped report/DOCX appendix and cold reopening. Inventory is UTF-8 text in that fixture, mappings are explicitly confirmed, ranges abstain and unsupported DOCX regions are disclosed. Inline comments/corrections, arbitrary inventory formats, complete discovery recall and the full web journey are not established by that run. Keep the future acceptance below distinct from delivered behavior.
+
 ## Inputs, exact coverage and output contract
 
 | Artifact | Authority and handling | What absence means |
@@ -30,7 +38,7 @@ Languages: support NL/FR citation labels and case text, including mixed-language
 
 ### 1. Upload and preserve the source universe (M1)
 
-**Action:** upload `conclusions.docx`, separately identifiable inventory, original PDF/text/scanned exhibits. **For confidential client sources the intended OCR path is an isolated self-hosted CaseProof processing worker inside an approved processing boundary, no default third-party OCR endpoint or uncontrolled outbound egress** (design, not yet delivered); record hosting/provider/region and security approval before accepting client material. [Exact processing contract](contracts/PRE_M3_VERIFICATION_SPEC.md#p3-02--ocr-location-provider-and-processing-boundary). Each original is immutable, SHA-256 checked on readback; never replace bytes in place. Keep PDF page 1-based display distinct from internal 0-based parser locator and from printed/bundle numbers. Upload and processing have stable operation IDs.
+**Action:** upload `conclusions.docx`, separately identifiable inventory, original PDF/text/scanned exhibits. **For confidential client sources the intended OCR path is an isolated self-hosted CaseProof processing worker inside an approved processing boundary, no default third-party OCR endpoint or uncontrolled outbound egress** (isolated Docker mode is accepted for synthetic development; client-processing approval remains open); record hosting/provider/region and security approval before accepting client material. [Exact processing contract](contracts/PRE_M3_VERIFICATION_SPEC.md#p3-02--ocr-location-provider-and-processing-boundary). Each original is immutable, SHA-256 checked on readback; never replace bytes in place. Keep PDF page 1-based display distinct from internal 0-based parser locator and from printed/bundle numbers. Upload and processing have stable operation IDs.
 
 **User sees:** clear file types, accepted/rejected, pages processed, pages `needs OCR`, crop availability, originals vs generated text, duplicate labels, corrupt files, permissions and file budgets. Processing progress is not an evidentiary approval.
 
@@ -165,6 +173,14 @@ A genuinely signed user in an approved staging environment:
 **Before M5 closes:** [P5-01..04](ROADMAP.md#pre-m5-hard-prerequisites--the-commercial-experiment-must-have-an-exit) must be evidenced: written exact *next action* for PROCEED/REFINE/RECONSIDER; unambiguous NL/FR/EN same-role Decimal/date normalization; dossiers at practitioner-observed scale including representative 50–200-page source volumes if observations confirm; and approved SEC-01..16 for any client-confidential trial.
 
 **PROCEED** means owner-approved proposal for a **bounded paid design-partner beta**, not launch, production upload, fundraising claim or M6. **REFINE** means a recorded minimal workflow/pricing/security correction and rerun. **RECONSIDER** means halt the niche and request a separate owner decision, not an automatic pivot. **Proceed** only with repeated pain, satisfactory safe verification and a credible commitment; **refine** workflow/pricing/deployment if value exists; **reconsider niche** if rare/unpaid/adequately solved. No automatic product pivot based on fresh competitors. [M5 in roadmap](ROADMAP.md).
+
+## Practitioner evaluation of this exact task
+
+Run five interviews and observe two workflows before locking a controlled cohort. Recruitment target: one design partner and two independent firms; initial cohort: 3–5 dossiers total with two independent lawyer reviewers and adjudicated ground truth. Keep clean controls and seeded faults distinct from unaltered historical dossiers. Confirm privacy/security and data rights before any client file, including already-filed matters.
+
+Measure missed references, wrong matches/maps, false alerts, unresolved counts and useful coverage, plus total upload/confirmation/OCR/review/correction/export time and operating cost against manual checking. Record reviewer disagreement, appropriate rechecking, purchasing authority, the firm's required review-record contents and actual price/commitment. Abstention must remain honest without concealing low usefulness. A free evaluation or a conditional letter is not a paid pilot.
+
+Use failures for root-cause analysis and rights-cleared regression tests; pause the affected capability until the regression passes. Do not reuse client content or identifiable review records merely because a pilot happened. Outcome is PROCEED/REFINE/RECONSIDER under M5; no automated expansion, release or new-client approval.
 
 ## Milestone mapping / source-of-truth
 

@@ -1,3 +1,11 @@
+## 30 October 2026 — product vision and current evidence
+
+[ADR 0019](adr/0019-evidence-engine-and-first-market.md), [roadmap](ROADMAP.md) and [workflow](PRODUCT_WORKFLOW.md) now separate the reusable engine ambition from Belgian litigation as the first market. Expansion is conditional on customer pull, technical reuse, measured benefit and commercial commitment with explicit owner approval. This documentation update adds no product features, UI, migration, client-data permission or release.
+
+Latest merged engineering proof: PR #140, merge `5ab54710c21d797bd41295754e7a95e4331c0449`; tested head `82330f205084ffa7204540c2cd0bfe6131793d09`, all 15 workflows green. [Dossier](https://github.com/haytamAroui/caseproof/actions/runs/41105503131), [benchmark](https://github.com/haytamAroui/caseproof/actions/runs/41105503677), [CLI](https://github.com/haytamAroui/caseproof/actions/runs/41105503385), [retention](https://github.com/haytamAroui/caseproof/actions/runs/41105503401). Benchmark discovery: 2,627.645 ms, 89,060 KiB API peak RSS, synthetic reference detection 60 TP / 0 FP / 0 FN. Dossier normal/edge counts: 8/9 detected, 3/3 identity-page checked, 5/6 unresolved; fully checked remains false. These are scoped development observations, not legal accuracy, browser acceptance, confidential-client approval or commercial proof. Earlier dated baselines below remain historical.
+
+Next work: validate practitioner pain and total effort; close supported verification/coverage and output gaps for the existing task. Web implementation remains a separately scoped task; no UI work is initiated by this update.
+
 <!-- PR #140 verification receipt; measured code head, not production authorization. -->
 ## PR #140 OCR hardening verification (30 October 2026)
 
@@ -27,7 +35,7 @@ Independent security/privacy review and verified backup restore/erasure replay r
 
 **Active product direction:** [ADR 0018](adr/0018-pre-submission-verification-freeze.md), [ROADMAP M0–M6](ROADMAP.md) and [web workflow](PRODUCT_WORKFLOW.md): pre-submission factual exhibit verification, web-first, Word/MCP optional. The dated reports below are **historical engineering receipts**, not a current Word-mandatory, finance-first or broader litigation product instruction. Follow the roadmap for live-vs-open gate distinctions.
 
-**Most recent stated narrow proof:** [PR #119](https://github.com/haytamAroui/caseproof/pull/119) and [signed synthetic TXT live receipt](m2/LIVE_SIGNED_CORRECTION_RECHECK_2026-10-28.md) establish a particular authenticated TXT source/brief/review/correction/recheck/restart scenario. **Open:** verified full PDF/DOCX/scanned corpus and OCR cropping, reference/page split, web reviewer, released actual DOCX/report, confidentiality review, pilot and paid demand. No claim that other historical M1/M2 status below is current; dates and exact receipts decide what was actually tested.
+**Historical 28 October narrow proof (superseded by the current receipt above):** [PR #119](https://github.com/haytamAroui/caseproof/pull/119) and [signed synthetic TXT live receipt](m2/LIVE_SIGNED_CORRECTION_RECHECK_2026-10-28.md) establish a particular authenticated TXT source/brief/review/correction/recheck/restart scenario. **Open:** verified full PDF/DOCX/scanned corpus and OCR cropping, reference/page split, web reviewer, released actual DOCX/report, confidentiality review, pilot and paid demand. No claim that other historical M1/M2 status below is current; dates and exact receipts decide what was actually tested.
 
 
 **30 October 2026 retention engineering update (PR #136):** Two-phase matter

@@ -6,6 +6,16 @@
 
 **Customer-facing promise:** “Before you file, CaseProof checks exhibit references against your actual bundle and shows exactly which it could not substantiate.” Coverage limits must always accompany this promise; uploading a partial bundle cannot yield a whole-dossier pass.
 
+## Vision and first market (30 October 2026)
+
+**Vision:** CaseProof helps legal professionals check that important statements and references are traceable to the right source documents, inspect uncertainty and preserve accountable human review. It starts with pre-filing exhibit verification for Belgian litigation.
+
+**One reusable kernel, one focused product today, evidence-led expansion.** [ADR 0019](adr/0019-evidence-engine-and-first-market.md) clarifies the long-term ambition without opening another vertical. The kernel supplies sector-neutral identity, anchors, provenance, versions and coverage; application services own authorization, durable review and recovery; the litigation domain owns Belgian inventory/reference/page rules. Locating a contract clause does not establish its legal adequacy. No generic platform refactor follows from this vision.
+
+**Current order:** finish the supported Belgian litigation task and measure practitioner value; consider an adjacent litigation task when demanded; consider another domain only through the M6 expansion gate. No corporate-law, compliance, accounting, research or AI-law-firm product is authorized by market news.
+
+**Candidate advantage, not a moat claim:** useful source resolution and honest abstention under OCR uncertainty, improved through practitioner feedback converted into permissioned regression tests, at acceptable total cost and with less lawyer effort. Measure it against the firm's current method and genuinely comparable products. Development effort, Belgian terminology, Word/MCP integration and competitor positioning do not themselves establish defensibility.
+
 ## Decision lock — how to prevent another pivot
 
 - **First buyer hypothesis:** Belgian civil/commercial litigation firms preparing exhibit-heavy conclusions, initially 50–200-page-scale dossiers as a *research assumption*, not a verified market norm. Practitioner interviews must test volume, review cost, frequency, payor and payment intent.
@@ -56,7 +66,9 @@ Keep `communication_proven`, `filing_proven`, `source_in_custody`, `listed_in_in
 | **Commercially validated** | Firms use and are willing to pay | Measured repeatable task results and signed paid/conditional commitment |
 | **Released** | Supported customer service | Security, recovery, support, billing, tested artifact correctness and release authority |
 
-**Current verified engineering baseline (28 October 2026; not a release):** protected signed **synthetic TXT** private-matter creation, immutable upload/readback and versioned reviewer correction/recheck/restart passed in [PRs #114–119](https://github.com/haytamAroui/caseproof/pull/119) and [live run #40679567871](https://github.com/haytamAroui/caseproof/actions/runs/40679567871). This does **not** close full PDF/DOCX/scan intake, OCR/crop confirmation, all-reference extraction, identity/pinpoint split, end-to-end web reviewer/export, customer confidentiality or Word host. [Technical receipts](m2/LIVE_SIGNED_CORRECTION_RECHECK_2026-10-28.md) remain the authority for the precise narrow pass. Some earlier narrative status lines are historical; never infer a capability from an older pass.
+**Current verified engineering baseline (30 October 2026; not a release):** [PR #140](https://github.com/haytamAroui/caseproof/pull/140) merged as `5ab5471`; all 15 workflows passed on tested head `82330f205084ffa7204540c2cd0bfe6131793d09`. The signed synthetic [complete dossier run](https://github.com/haytamAroui/caseproof/actions/runs/41105503131) proves original readback, explicit inventory/source confirmation, bounded discovery, page/crop review, saved decisions, scoped JSON/Markdown/DOCX appendix export, restart/reopening, access denial and cleanup. Normal fixture: 8 detected, 3 identity/page checked, 5 unresolved; range/mixed-page fixture: 9 detected, 3 checked, 6 unresolved. These checked counts do not establish literal fidelity or semantic support. Unreadable input remains incomplete; page ranges abstain.
+
+The [signed benchmark](https://github.com/haytamAroui/caseproof/actions/runs/41105503677) measured reference detection only: 60 TP / 0 FP / 0 FN, 2,627.645 ms discovery and 89,060 KiB API peak RSS. The [signed CLI](https://github.com/haytamAroui/caseproof/actions/runs/41105503385) and [retention](https://github.com/haytamAroui/caseproof/actions/runs/41105503401) also passed with cleanup. These do not prove arbitrary corpus recall, every planned fidelity/value rule, supported inline DOCX correction, full browser acceptance, production deployment or confidential-client readiness. All M1–M5 exit criteria below remain individually evidenced rather than automatically closed by this run. [STATUS.md](STATUS.md) and exact receipts govern implementation truth.
 
 ## M0 — Freeze scope, rights and evaluation baseline
 
@@ -73,12 +85,12 @@ Keep `communication_proven`, `filing_proven`, `source_in_custody`, `listed_in_in
 
 **Outcome:** a lawyer can securely supply the *three distinct inputs*: conclusions DOCX, inventory and individual exhibits/bundle scans.
 
-- **Build:** signed private matter and per-matter actions; immutable original byte upload/readback with SHA-256; bounded parser for DOCX and text PDF; **self-hosted OCR in an isolated approved CaseProof processing worker, with no default external OCR API or unauthorized egress** (target design; not currently implemented); safe image-backed PDF OCR with explicit `needs_ocr`, low-confidence and failed-page states; crop coordinates/preview of original image; parsed representation provenance; visible per-page coverage and restart/idempotent worker recovery.
+- **Build:** signed private matter and per-matter actions; immutable original byte upload/readback with SHA-256; bounded parser for DOCX and text PDF; **self-hosted OCR in an isolated approved CaseProof processing worker, with no default external OCR API or unauthorized egress** (isolated Docker mode accepted for synthetic development; client deployment approval remains open); safe image-backed PDF OCR with explicit `needs_ocr`, low-confidence and failed-page states; crop coordinates/preview of original image; parsed representation provenance; visible per-page coverage and restart/idempotent worker recovery.
 - **Inventory:** extract a *candidate* Stuk/Pièce inventory, bind it only after human confirmation; **no inventory, incomplete/unconfirmed/unparseable inventory → identity `NOT_ASSESSED` with reason**; `NOT_IN_INVENTORY` requires a reviewer-confirmed complete scoped inventory and an absent entry. Stable `exhibit_id` separate from displayed label/aliases; distinguish missing inventory listing, absent original, multiple aliases, separate communication and filing status. Reconcile `pdf_page`, `printed_page`, `bundle_page` with evidence, do not fabricate DOCX physical page numbers.
 - **Security:** pilot processing must satisfy the independently signed-off [SEC-01–16 security appendix](security/PILOT_DATA_SECURITY_GATE.md); the checks below are engineering prerequisites rather than live-client approval. Malicious/oversized/corrupt files, decompression bombs, OCR failure, PDF rotation/crop, unsupported format, missing text layer, duplicate originals, cross-matter/cross-tenant and revoked permissions fail safely; enforce budgets and audit. Service-only promotion cannot be self-certified by user.
 - **Exit:** real signed staging matter with an authorized synthetic NL/FR sample DOCX + inventory + text PDF + **image-only scan**, preserved originals and reopenable page crops/mappings after process restart; ungranted and revoked access denied; zero false fully-processed flags on an incomplete sample; independent security review for any non-synthetic pilot.
 - **Proof:** parser/geometry/crop fixture matrix, signed RLS/Storage results, SHA readbacks, negative/security cases, restart proof. M1-A contracts, M1-B integrated backend and M1-C confidentiality/release approval remain separately tracked.
-- **Status:** narrow TXT live path **passed**; full M1 **OPEN**.
+- **Status:** signed mixed DOCX/text-PDF/scan synthetic journey and isolated Docker OCR accepted within the baseline above; full M1 corpus and confidential-client gates remain **OPEN**.
 
 ## M2 — Whole-draft reference resolution and deterministic evidence checks
 
@@ -90,7 +102,7 @@ Keep `communication_proven`, `filing_proven`, `source_in_custody`, `listed_in_in
 - **Coverage:** include zero-quote drafts, quote-heavy, good clean controls, French/Dutch mixed text, contradictory numerals, missing pieces, re-numbered inventory, duplicate citations, unreadable page, empty/no-citation briefs and scoped partial results. Detect and disclose missed-reference limitations, with seeded detection-recall checks.
 - **Exit:** real signed staging unified run on the frozen multi-source M1 fixture with per-reference typed outputs and exact crop/source links; re-run determinism, no false location or exact-match on the acceptance corpus, all seeded critical errors found **or marked unresolved**, and unknown scope never reported as fully checked. Do not claim a population zero-error rate.
 - **Proof:** pinned results and tests with denominators (`0/N` false matches, not “zero risk”), source/representation/engine versions, checker coverage, changed-revision invalidation and authorized actor audit.
-- **Status:** synthetic TXT literal and correction components exist; full M2 **OPEN**.
+- **Status:** bounded signed dossier discovery, independent identity/page states and saved review/reopening accepted; full detection coverage and planned fidelity/value contracts remain **OPEN**.
 
 ## Pre-M3 hard prerequisites — explicit contract closure
 
@@ -124,7 +136,7 @@ Keep `communication_proven`, `filing_proven`, `source_in_custody`, `listed_in_in
 - **Authority:** reviewer decision, draft edit, export, external share and filing are distinct; only authorized export is in v1. Recipient sharing is an additional separate permission and acceptance, **not required** for the first paid pilot. Court submission remains human/manual and outside CaseProof.
 - **Exit:** authenticated web M1→M4 signed end-to-end on real-format synthetic originals; corrected/annotated output and report downloaded and reopened, mapped links actually land on intended preserved pages, changed original/inventory/draft makes stale release impossible, restart and revoked grants denied.
 - **Proof:** released artifact hashes and reopen validation, immutable manifest, human reviewer receipt, link-target test, scope denominator, negative/security and interrupted-render recovery tests.
-- **Status:** full M4 **OPEN**. [Delivery contract](m4/DELIVERY_ACCEPTANCE.md).
+- **Status:** scoped JSON/Markdown and separate DOCX review appendix accepted in the synthetic API journey; full M4 formatting/link/correction acceptance remains **OPEN**. [Delivery contract](m4/DELIVERY_ACCEPTANCE.md).
 
 ## M5 — Five-week practitioner experiment and conditional commercial pilot
 
@@ -137,6 +149,14 @@ Keep `communication_proven`, `filing_proven`, `source_in_custody`, `listed_in_in
 - **Commercial gate:** at least one written priced paid/conditional commitment with price and conditions recorded; one free reference partner alone is insufficient. Track per-dossier cost/margins and second-use interest. **Proceed** only if repeat pain + technical success + purchase signal; **refine** if problem exists but workflow/security/pricing fails; **reconsider niche** if no credible pain or paid demand. One failure of this niche does not invalidate the kernel.
 - **Consent and pilot authorization:** only synthetic or genuinely rights-cleared material until all [SEC-01–16 pilot controls](security/PILOT_DATA_SECURITY_GATE.md) have dated evidence and appropriate professional-secrecy/GDPR/security and firm approval for the exact client environment. A paid commitment alone does not authorize client-source upload.
 - **Status:** not run; no paying customer or commercial moat is claimed.
+
+### Pilot measurement contract
+
+Before evaluation, agree one design partner plus two independent evaluator firms as a recruitment target, not existing traction. Plan 3–5 dossiers **total** initially, with NL/FR, text and scanned sources, independent clean controls and deliberately seeded faults; revise the cohort explicitly if recruitment or observed work differs. Use two lawyer reviewers to establish independent reference/source/page ground truth and adjudicate disagreements. Keep seeded tests separate from unaltered historical dossiers; already-filed files still require confidentiality approval.
+
+Report detection misses, wrong identity/page/fidelity findings, abstentions and useful coverage with denominators. A resolver that abstains on everything is not useful. Count human support decisions separately; no global verified badge. Any confidently incorrect finding pauses the affected capability for root-cause analysis and a regression before reuse; it is neither an automatic company failure nor a negotiable safety tolerance. Include setup, inventory confirmation, OCR, review, correction, export/retry and infrastructure/support costs in the baseline comparison. Avoid familiarity effects when the same reviewer sees both conditions. Measure appropriate rechecking and total effort, not blind trust.
+
+The firm defines the review record it needs; risk-committee acceptance is not assumed. Pricing is a hypothesis until anchored in observed work and a recorded commitment; distinguish a paid pilot from a conditional letter. Reuse feedback only within the data-rights contract in ADR 0019. These measurements refine M5, not a new feature list.
 
 ## Pre-M5 hard prerequisites — the commercial experiment must have an exit
 
@@ -171,6 +191,9 @@ The [SEC-01–SEC-16 checklist](security/PILOT_DATA_SECURITY_GATE.md) is **OPEN*
 ## M6 — Optional channels and expansions (not v1 or pilot blockers)
 
 **Trigger:** after M5 evidence and explicit owner decision for each channel, not after a competitor announcement.
+
+**Additional-workflow gate:** repeated customer pull and permissioned examples; demonstrated technical reuse with domain-specific fit/gap analysis; measured correctness, useful coverage, total lawyer effort and operating cost; and a priced paid/conditional commitment for that task. All four are required in a written owner decision packet under [ADR 0019](adr/0019-evidence-engine-and-first-market.md). The packet must state opportunity cost to the first product, data/security rights and acceptance criteria. It authorizes a decision, not automatic development or release. Prefer adjacent litigation work when evidence supports it; neither another sector nor a generic framework is preapproved.
+
 
 - **Word add-in:** `apps/word_addin/` remains as reusable early spike; enable a real Word client only if a practitioner task demonstrates net value. Word select/inspect/insert/save/undo/reopen has its own supported-host acceptance, but never owns verification truth.
 - **MCP server:** design secure tool schemas from shared ports, and add a deployed adapter only for a validated channel need; client cannot provide authoritative tenant, review or evidence claims.
