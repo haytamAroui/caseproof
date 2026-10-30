@@ -82,6 +82,31 @@ def _sources() -> tuple[tuple[str, str, bytes], ...]:
     )
 
 
+
+def _manifest(token: str, publishable: str, case: str) -> tuple[int, dict]:
+    con = http.client.HTTPSConnection(f"{PROJECT_REF}.supabase.co", timeout=15)
+    try:
+        con.request("POST", "/rest/v1/rpc/caseproof_dev_bundle_manifest",
+                    json.dumps({"p_case": case}).encode(), headers={
+                        "apikey": publishable, "Authorization": "Bearer " + token,
+                        "Content-Type": "application/json", "Cache-Control": "no-store",
+                    })
+        response = con.getresponse()
+        status, raw = response.status, response.read(32769)
+    finally:
+        con.close()
+    if len(raw) > 32768:
+        raise LiveFixtureError("manifest response oversized")
+    if status != 200:
+        return status, {}
+    try:
+        result = json.loads(raw)
+    except (ValueError, UnicodeError):
+        raise LiveFixtureError("manifest response invalid") from None
+    if not isinstance(result, dict):
+        raise LiveFixtureError("manifest response invalid")
+    return status, result
+
 def verify_registration(
     credentials: tuple[PasswordCredentials, PasswordCredentials, PasswordCredentials],
     *, admin_key: str, publishable: str,
@@ -180,6 +205,30 @@ def verify_registration(
             if stored.get_verified(ref, fresh.access_token) != payload:
                 raise LiveFixtureError("cold restart original bytes changed")
         print("LIVE_MULTISOURCE_REOPEN: cold process restart and fresh signed readback")
+        # Rediscover from durable database records, not the pre-restart refs list.
+        for outsider in outsiders:
+            denied, _ = _manifest(outsider, publishable, case)
+            if denied == 200:
+                raise LiveFixtureError("outsider read persisted bundle manifest")
+        manifest_status, manifest = _manifest(fresh.access_token, publishable, case)
+        if manifest_status != 200 or manifest.get("case_id") != case:
+            raise LiveFixtureError("signed cold manifest rediscovery failed")
+        actual = manifest.get("sources")
+        if not isinstance(actual, list) or len(actual) != 4:
+            raise LiveFixtureError("persisted bundle incomplete")
+        expected = [dict(item, version_number=1) for item in registered["sources"]]
+        if actual != expected:
+            raise LiveFixtureError("persisted manifest differs from registration")
+        rediscovered = []
+        for item, (_, _, payload) in zip(actual, sources, strict=True):
+            ref = OriginalRef(UUID(org), UUID(case), UUID(item["document_id"]),
+                              UUID(item["version_id"]), item["sha256"], item["media_type"])
+            rediscovered.append(ref)
+            if stored.get_verified(ref, fresh.access_token) != payload:
+                raise LiveFixtureError("persisted manifest source readback mismatch")
+        print("LIVE_MULTISOURCE_MANIFEST_REOPEN: durable identities, roles and four hashes")
+        print("LIVE_MULTISOURCE_MANIFEST_DENIED: foreign and ungranted identities")
+
 
         if admin_rpc(admin_key, "revoke", {
             "p_run": run_id, "p_owner": actors[0], "p_case": case,
@@ -192,7 +241,10 @@ def verify_registration(
                 pass
             else:
                 raise LiveFixtureError("revoked owner still reads a bundle member")
-        print("LIVE_MULTISOURCE_REVOKED: all four original paths denied")
+        denied, _ = _manifest(fresh.access_token, publishable, case)
+        if denied == 200:
+            raise LiveFixtureError("revoked owner still reads persisted manifest")
+        print("LIVE_MULTISOURCE_REVOKED: all four original paths and manifest denied")
 
 
     finally:
