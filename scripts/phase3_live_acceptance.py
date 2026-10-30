@@ -116,7 +116,7 @@ def main():
             print("P3_UPLOAD_VERIFIED: "+filename,flush=True)
         print("P3_FOUR_SOURCES_UPLOADED",flush=True)
         doc,version=scan
-        ingest=success(owner,"POST",f"/dev/live/matters/{case}/sources/{doc}/{version}/ingest?request_id={uuid4()}")
+        success(owner,"POST",f"/dev/live/matters/{case}/sources/{doc}/{version}/ingest?request_id={uuid4()}")
         print("P3_INGEST_RPC_SUCCEEDED",flush=True)
         status,raw=direct(owner,key,"/rest/v1/rpc/caseproof_signed_ocr_geometry",method="POST",
                           payload={"p_version":version,"p_page":1})

@@ -1,0 +1,31 @@
+name: Phase 3 lint reconciliation
+on:
+  push:
+    branches: [feat/phase3-ocr-geometry-crops]
+    paths:
+      - .github/workflows/phase3-format-repair.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Format and lint changed Python scripts
+        run: |
+          uv run --locked ruff check --fix scripts/phase3_live_acceptance.py scripts/phase3_reset_fixture_passwords.py scripts/provision_phase3_persistent_users.py
+          uv run --locked ruff format scripts/phase3_live_acceptance.py scripts/phase3_reset_fixture_passwords.py scripts/provision_phase3_persistent_users.py
+          uv run --locked ruff check scripts/phase3_live_acceptance.py scripts/phase3_reset_fixture_passwords.py scripts/provision_phase3_persistent_users.py
+      - name: Commit format fixes
+        run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add scripts/phase3_live_acceptance.py scripts/phase3_reset_fixture_passwords.py scripts/provision_phase3_persistent_users.py
+            git commit -m "style(phase3): satisfy kernel Ruff checks"
+            git push origin HEAD:feat/phase3-ocr-geometry-crops
+          fi

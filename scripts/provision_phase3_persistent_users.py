@@ -34,7 +34,7 @@ def main() -> int:
         print(f"PHASE3_AUTH_CREATED: {role} (credentials withheld)")
     # Existing protected setup RPC creates organization memberships and
     # grants only to the owner. It must not delete identities.
-    setup = admin_rpc(key, "setup", {
+    admin_rpc(key, "setup", {
         "p_run": str(run), "p_owner": actors[0],
         "p_guest": actors[1], "p_foreign": actors[2],
     })
