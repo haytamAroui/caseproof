@@ -30,6 +30,8 @@ def main() -> int:
             user_id = admin.create_confirmed(email=email, password=password)
             actors[role] = user_id
             record(key, run, "auth_user", role + ":" + user_id, "CREATED")
+            from scripts.m05_registry import forget
+            forget(key, run, "auth_user", role + ":" + email)
             os.environ[f"CASEPROOF_P3_{role.upper()}_EMAIL"] = email
             os.environ[f"CASEPROOF_P3_{role.upper()}_PASSWORD"] = password
         setup = admin_rpc(key, "setup", {
