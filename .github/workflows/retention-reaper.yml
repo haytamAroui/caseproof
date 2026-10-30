@@ -1,0 +1,25 @@
+name: Matter retention dev reaper
+on:
+  schedule:
+    - cron: '43 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: caseproof-dev-matter-retention
+  cancel-in-progress: false
+jobs:
+  purge:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 15
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - name: Purge eligible deleted matters (bounded batch, holds respected)
+        run: uv run --locked python -m scripts.purge_deleted_matters

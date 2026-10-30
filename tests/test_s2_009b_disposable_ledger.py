@@ -120,6 +120,8 @@ def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
         "20261030114000_m05_ocr_sidecar_cleanup_fk.sql",
         "20261030115000_m05_protected_registry_rpc.sql",
         "20261030120000_m05_verify_empty.sql",
+        "20261030155817_matter_retention.sql",
+        "20261030160341_retention_storage_fence.sql",
     }
     assert not (ROOT / "apps/api/vault_repository.py").exists()
     assert "evidence_vault_protocol" not in (ROOT / "apps/api/main.py").read_text()
