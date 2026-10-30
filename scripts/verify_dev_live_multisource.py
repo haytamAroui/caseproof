@@ -210,7 +210,9 @@ def verify_registration(
         except Exception as exc:
             cleanup_errors.append("fixture:" + type(exc).__name__)
         if cleanup_errors:
-            raise LiveFixtureError("cleanup failed: " + ", ".join(cleanup_errors))
+            print("LIVE_MULTISOURCE_TEARDOWN: " + ", ".join(cleanup_errors), file=sys.stderr)
+            raise LiveFixtureError("scoped bundle cleanup failed")
+        print("LIVE_MULTISOURCE_TEARDOWN: storage and fixture cleanup completed", flush=True)
 
 def main() -> int:
     if (
