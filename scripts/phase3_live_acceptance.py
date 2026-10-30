@@ -14,7 +14,6 @@ from scripts.verify_dev_ephemeral_auth import PROJECT_REF
 from scripts.verify_dev_live_review_roundtrip import _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import success
 
-ORG = "db0fe3b9-3bfc-4f69-b9ef-65a6949d67bc"
 ROLES = ("owner", "ungranted", "foreign")
 
 
@@ -77,7 +76,7 @@ def main():
         actors[role] = str(session.user_id)
     if len(set(actors.values())) != 3:
         raise RuntimeError("P3_DISTINCT_AUTH_USERS_REQUIRED")
-    print("P3_AUTH_SIGNED: three existing persistent users", flush=True)
+    print("P3_AUTH_SIGNED: three ephemeral users", flush=True)
     proc = None
     try:
         proc = _server_start()
@@ -193,7 +192,7 @@ def main():
         elif status not in (401, 403, 404):
             raise RuntimeError(f"P3_PRIVATE_POSTGREST_EXPOSED: {status}")
         print("P3_PRIVATE_POSTGREST_DENIED", flush=True)
-        # Intentionally retain revoked grant row and every fixture.
+        # Revocation is tested before scoped teardown by the caller.
         from scripts.verify_dev_live_txt_journey import admin_rpc
 
         # revoke RPC requires the fixture run and owner identity.
@@ -208,7 +207,7 @@ def main():
         if status not in (403, 404) or body.startswith(bytes.fromhex("89504e47")):
             raise RuntimeError(f"P3_REVOKED_CROP_NOT_DENIED: {status}")
         print("P3_REVOKED_CROP_DENIED", flush=True)
-        print("P3_ALL_NINE_STEPS_PASSED; persistent fixtures retained", flush=True)
+        print("P3_ALL_NINE_STEPS_PASSED; teardown required", flush=True)
     finally:
         if proc is not None:
             _server_stop(proc)
