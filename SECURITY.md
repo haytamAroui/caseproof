@@ -32,3 +32,32 @@ client environment is approved. Reference:
 No restored application may serve requests until deletion has been replayed
 against an independently preserved erasure register and verified. A restore drill
 and verified backup-expiry period remain open production gates.
+
+## OCR worker isolation boundary (PR #140)
+
+The required Docker CI egress probe uses `--network none` and proves an outbound
+HTTP connection is denied. The integrated OCR adapter can launch Poppler and
+Tesseract with `CASEPROOF_OCR_SANDBOX=docker`; signed development workflows use
+that mode. Containers run as the ephemeral workspace owner, drop all capabilities,
+use a read-only root, and bound memory (768 MiB), CPU, process count, output file
+size and execution time. Timeout cleanup forcibly removes the named container.
+Docker's launcher is outside the OCR address-space limit; the OCR container keeps
+its own resource constraints. No sandbox failure permits direct binary fallback.
+
+The default Linux namespace path fails closed where user/network namespaces are
+unavailable. These controls are tested development configurations, not evidence
+of an independently reviewed production worker deployment. The API's own parser
+resource behavior, malware controls and production deployment isolation remain
+separate review gates.
+
+Private VPC subnets alone are not proof of zero egress: check NAT, internet
+gateways, IPv6 egress, private endpoints, DNS and service egress policies.
+Cloud Run internal ingress controls incoming requests and do not by themselves
+block outgoing traffic. Production isolation remains an independent gate.
+
+Backup expiry is **not known** for this development environment. Hard deletion
+removes live matter objects and database records after the configured grace
+period; it does not guarantee deletion from backups, PITR, external exports or
+provider disaster-recovery copies. An `X days` expiry promise must not be
+invented. Obtain the provider's actual retention policy and verify restore
+replay of the erasure register before authorizing real client data.

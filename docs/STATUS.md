@@ -1,3 +1,28 @@
+<!-- PR #140 verification receipt; measured code head, not production authorization. -->
+## PR #140 OCR hardening verification (30 October 2026)
+
+Code head `d4e0a4d061f2caaebc36ecfa30342c5c6b6a4738` passed signed benchmark,
+CLI and retention acceptance. Benchmark run [41104740806](https://github.com/haytamAroui/caseproof/actions/runs/41104740806)
+measured 3,248.863 ms discovery and 88,928 KiB API peak RSS, with 60/0/0
+reference-detection TP/FP/FN on the synthetic intended-150-page draft.
+This is extraction evidence, not legal support accuracy or general corpus recall.
+[Raw benchmark artifact](https://github.com/haytamAroui/caseproof/actions/runs/41104740806/artifacts/13001455392)
+contains the tested SHA, run ID and input hashes.
+[Signed CLI run](https://github.com/haytamAroui/caseproof/actions/runs/41104740765)
+verified separate dimensions, saved review, restart, downloaded report and cleanup;
+[report artifact](https://github.com/haytamAroui/caseproof/actions/runs/41104740765/artifacts/12999997734).
+[Signed retention run](https://github.com/haytamAroui/caseproof/actions/runs/41104740935)
+proved immediate access denial, Storage/DB purge, retry and minimal receipt, followed
+by zero-residual verification. Full final-head workflow status is recorded in PR #140.
+
+OCR Docker mode uses no networking, the workspace owner's UID/GID, dropped
+capabilities, a read-only root, CPU/memory/process/file limits and forced container
+cleanup after timeout. A missing sandbox fails closed. The Docker launcher itself
+must not inherit the OCR binary address-space limit. Real scan CI includes hostile
+PDF metadata/URI data; the separate required network probe proves HTTP denial.
+No client-data or production approval follows from these synthetic tests.
+Independent security/privacy review and verified backup restore/erasure replay remain open.
+
 # CaseProof — current product scope and status pointer (28 October 2026)
 
 **Active product direction:** [ADR 0018](adr/0018-pre-submission-verification-freeze.md), [ROADMAP M0–M6](ROADMAP.md) and [web workflow](PRODUCT_WORKFLOW.md): pre-submission factual exhibit verification, web-first, Word/MCP optional. The dated reports below are **historical engineering receipts**, not a current Word-mandatory, finance-first or broader litigation product instruction. Follow the roadmap for live-vs-open gate distinctions.

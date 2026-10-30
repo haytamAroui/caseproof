@@ -1,9 +1,13 @@
 name: M5 demo CLI real signed four-file acceptance
-# Trigger protected branch acceptance on this commit; do not merge without zero-residual evidence.
+# Final receipt revision: rerun protected acceptance on this exact documentation head.
 on:
   push:
-    branches: [feat/demo-cli]
+    branches: [feat/final-hardening-and-verification]
     paths:
+      - scripts/m5_benchmark_live_acceptance.py
+      - infrastructure/parsers/pdf_ocr.py
+      - apps/api/signed_document_parse.py
+      - docker/ocr-worker.Dockerfile
       - scripts/m5_demo_live_acceptance.py
       - scripts/m5_demo_cli.py
       - scripts/m5_demo_live.py
@@ -33,11 +37,15 @@ jobs:
       CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
       CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
       CASEPROOF_PHASE3_LIVE: "YES"
+      CASEPROOF_OCR_SANDBOX: docker
+      CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.11"
+      - name: Build isolated OCR runtime
+        run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
       - name: Install OCR system dependencies
         run: |
           sudo apt-get update -qq
@@ -45,4 +53,15 @@ jobs:
       - name: Validate reusable fixture factory offline
         run: uv run --locked --with pytest --with python-docx --with reportlab --with pillow python -m pytest -q tests/test_fixture_factory.py
       - name: Execute signed four-file CLI discovery and export with zero-residual teardown
-        run: uv run --with python-docx --with reportlab --with pillow python -m scripts.m5_demo_live
+        run: |
+          mkdir -p /tmp/caseproof-final-receipt
+          set -o pipefail
+          uv run --with python-docx --with reportlab --with pillow python -m scripts.m5_demo_live | tee /tmp/caseproof-final-receipt/cli.log
+
+      - name: Upload signed acceptance log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5-final-cli-receipt
+          path: /tmp/caseproof-final-receipt/*
+          if-no-files-found: warn

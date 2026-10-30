@@ -9,13 +9,17 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import os
+import resource
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from uuid import uuid4
 
 from pypdf import PdfReader
 
@@ -97,16 +101,80 @@ def parse_tsv(raw: bytes, *, width: int, height: int) -> tuple[OCRWord, ...]:
         raise OCRUnavailable("ocr_malformed_tsv") from None
 
 
+def _worker_limits() -> None:
+    """Bound the child process, never the API process."""
+    resource.setrlimit(resource.RLIMIT_AS, (768 * 1024 * 1024, 768 * 1024 * 1024))
+    resource.setrlimit(resource.RLIMIT_CPU, (30, 30))
+    resource.setrlimit(resource.RLIMIT_FSIZE, (16 * 1024 * 1024, 16 * 1024 * 1024))
+
+
+def _isolated_command(command: list[str]) -> list[str]:
+    """Enforce network isolation using a dedicated container or user namespace.
+
+    Never execute the OCR binaries directly when isolation is unavailable.
+    """
+    if sys.platform != "linux":
+        raise OCRUnavailable("ocr_linux_sandbox_required")
+    if os.getenv("CASEPROOF_OCR_SANDBOX") == "docker":
+        docker = shutil.which("docker")
+        if not docker:
+            raise OCRUnavailable("ocr_docker_unavailable")
+        workspace = Path(command[-2] if Path(command[0]).name == "pdftoppm" else command[1]).parent
+        # All OCR input and output paths must be under the ephemeral workspace.
+        # The caller uses only fixed executable names and trusted local paths.
+        mapped = []
+        for arg in command[1:]:
+            if arg.startswith(str(workspace) + "/"):
+                mapped.append("/work/" + Path(arg).name)
+            else:
+                mapped.append(arg)
+        executable = Path(command[0]).name
+        if executable not in ("pdftoppm", "tesseract"):
+            raise OCRUnavailable("ocr_executable_not_allowed")
+        return [
+            docker, "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}",
+            "--network", "none", "--memory", "768m",
+            "--cpus", "1", "--pids-limit", "64", "--read-only",
+            "--ulimit", "cpu=30:30", "--ulimit", "fsize=16777216:16777216",
+            "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+            "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m",
+            "--mount", f"type=bind,src={workspace},dst=/work",
+            os.getenv("CASEPROOF_OCR_IMAGE", "caseproof-ocr-worker:ci"),
+            executable, *mapped,
+        ]
+    unshare = shutil.which("unshare")
+    if not unshare:
+        raise OCRUnavailable("ocr_network_sandbox_unavailable")
+    return [unshare, "--user", "--map-root-user", "--net", "--", *command]
+
+
 def _run(command: list[str], *, timeout: int) -> None:
+    isolated = _isolated_command(command)
+    container_name = None
+    if os.getenv("CASEPROOF_OCR_SANDBOX") == "docker":
+        container_name = "caseproof-ocr-" + uuid4().hex
+        isolated[2:2] = ["--name", container_name]
     try:
         completed = subprocess.run(
-            command, capture_output=True,
+            isolated, capture_output=True,
             timeout=timeout, check=False,
+            preexec_fn=None if container_name is not None else _worker_limits,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise OCRUnavailable("ocr_binary_unavailable_or_timeout") from None
+    finally:
+        if container_name is not None:
+            # Killing a Docker client alone does not stop its container.
+            try:
+                subprocess.run(
+                    [isolated[0], "rm", "--force", container_name],
+                    capture_output=True, timeout=10, check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                raise OCRUnavailable("ocr_container_cleanup_failed") from None
     if completed.returncode != 0:
-        raise OCRUnavailable("ocr_external_process_failed")
+        # Never log source bytes, OCR text or paths. Keep only bounded engine stderr.
+        raise OCRUnavailable("ocr_external_process_failed_or_sandbox_denied")
 
 
 class LocalPDFOCR:

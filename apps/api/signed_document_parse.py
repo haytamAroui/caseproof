@@ -153,8 +153,13 @@ def parse_verified_original(
                     "geometry_sha256": reference.geometry_sha256,
                     "word_count": reference.word_count,
                 })
-            except OCRUnavailable:
-                candidates.append({"pdf_page": number, "status": "ocr_unavailable"})
+            except OCRUnavailable as exc:
+                # Expose only the stable reason code, never OCR text or paths.
+                reason = str(exc).split(":", 1)[0][:80]
+                candidates.append({"pdf_page": number, "status": "ocr_unavailable", "reason": reason})
+                if __import__("os").environ.get("CASEPROOF_OCR_DIAGNOSTICS") == "YES":
+                    with open("/tmp/caseproof-ocr-diagnostic.txt", "a", encoding="utf-8") as diagnostic:
+                        diagnostic.write(f"page={number} reason={reason}\n")
         manifest["ocr_candidates"] = candidates
     import json
     if len(json.dumps(manifest, ensure_ascii=False).encode("utf-8")) > MAX_MANIFEST_BYTES:

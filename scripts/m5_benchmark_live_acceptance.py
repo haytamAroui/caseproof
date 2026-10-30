@@ -80,7 +80,7 @@ def crop(token, case, doc, version, box):
 def main(*, retention_check=None):
     if (
         os.getenv("CASEPROOF_PHASE3_LIVE") != "YES"
-        or os.getenv("GITHUB_REF") != "refs/heads/feat/production-hardening"
+        or os.getenv("GITHUB_REF") not in {"refs/heads/feat/final-hardening-and-verification", "refs/heads/feat/production-hardening"}
         or os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof"
     ):
         raise RuntimeError("protected Phase 3 branch required")
@@ -164,10 +164,11 @@ def main(*, retention_check=None):
             print("P3_UPLOAD_VERIFIED: " + filename, flush=True)
         print("P3_FOUR_SOURCES_UPLOADED", flush=True)
         doc, version = scan
-        success(
+        ingest_result = success(
             owner, "POST", f"/dev/live/matters/{case}/sources/{doc}/{version}/ingest?request_id={uuid4()}"
         )
         print("P3_INGEST_RPC_SUCCEEDED", flush=True)
+        print("P3_INGEST_OCR_STATUS:" + json.dumps(ingest_result.get("manifest", {}).get("ocr_candidates", []))[:1000], flush=True)
         status, raw = direct(
             owner,
             key,
@@ -179,7 +180,10 @@ def main(*, retention_check=None):
             raise RuntimeError(f"P3_GEOMETRY_RPC_FAILED: {status}")
         rows = json.loads(raw)
         if not rows:
-            raise RuntimeError("P3_SIDECAR_MISSING: no persisted geometry")
+            from pathlib import Path
+            diagnostic = Path("/tmp/caseproof-ocr-diagnostic.txt")
+            reason = diagnostic.read_text(encoding="utf-8")[-500:] if diagnostic.exists() else "no OCR diagnostic recorded"
+            raise RuntimeError("P3_SIDECAR_MISSING: no persisted geometry; " + reason)
         row = rows[0]
         payload = json.loads(row["payload"])
         if hashlib.sha256(row["payload"].encode()).hexdigest() != row["geometry_sha256_hex"]:
@@ -204,6 +208,8 @@ def main(*, retention_check=None):
                     break
         except (OSError, ValueError):
             pass
+        if api_peak_rss_kib is None:
+            raise RuntimeError("M5_SERVER_PEAK_RSS_UNAVAILABLE")
         if status != 200:
             raise RuntimeError(f"P4_DISCOVERY_FAILED:{status}")
         findings = discovered.get("findings", [])
@@ -221,6 +227,9 @@ def main(*, retention_check=None):
         recall = tp / (tp + fn) if tp + fn else 0.0
         print("M5_BENCHMARK_JSON:" + json.dumps({
             "intended_pages": 150, "reference_truth": 60,
+            "tested_commit": os.environ.get("GITHUB_SHA"),
+            "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+            "input_sha256": {entry["filename"]: entry["sha256"] for entry in metadata},
             "discovery_ms": round(elapsed_ms, 3),
             "client_python_peak_bytes": peak_bytes,
             "api_process_peak_rss_kib": api_peak_rss_kib,
@@ -228,7 +237,7 @@ def main(*, retention_check=None):
             "precision": precision, "recall": recall,
             "false_positive_rate": None,
             "false_negative_rate": fn / (tp + fn) if tp + fn else None,
-            "note": "Client Python peak only; not server RSS. FPR needs TN ground truth. Accuracy is reference detection only."
+            "note": "API process RSS from Linux VmHWM; client Python allocation peak reported separately. FPR needs TN ground truth. Accuracy is reference detection only."
         }, sort_keys=True), flush=True)
         if tp != 60 or fp or fn:
             raise RuntimeError("M5_REFERENCE_EXTRACTION_BENCHMARK_FAILED")

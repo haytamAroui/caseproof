@@ -1,9 +1,14 @@
 name: M5 signed 150-page dossier benchmark
-# Trigger protected branch acceptance on this commit; do not merge without zero-residual evidence.
+# Final receipt revision: rerun protected acceptance on this exact documentation head.
 on:
   push:
-    branches: [feat/production-hardening]
+    branches: [feat/final-hardening-and-verification]
     paths:
+      - apps/api/signed_document_parse.py
+      - infrastructure/parsers/pdf_ocr.py
+      - tests/test_ocr_docker_egress.py
+      - docker/ocr-egress.Dockerfile
+      - docker/ocr-worker.Dockerfile
       - scripts/m5_benchmark_live_acceptance.py
       - scripts/m5_generate_stress_docx.py
       - tests/test_m5_discovery_sequence_security.py
@@ -34,11 +39,28 @@ jobs:
       CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
       CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
       CASEPROOF_PHASE3_LIVE: "YES"
+      CASEPROOF_OCR_DIAGNOSTICS: "YES"
+      CASEPROOF_OCR_SANDBOX: docker
+      CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.11"
+      - name: Build isolated OCR egress probe
+        run: docker build -f docker/ocr-egress.Dockerfile -t caseproof-ocr-egress:ci .
+      - name: Prove worker network is disabled
+        run: |
+          set -euo pipefail
+          cid=$(docker create --network none caseproof-ocr-egress:ci)
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          mode=$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$cid")
+          test "$mode" = none
+          docker start -a "$cid"
+          code=$(docker inspect -f '{{.State.ExitCode}}' "$cid")
+          test "$code" = 0
+      - name: Build isolated OCR runtime
+        run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
       - name: Install OCR system dependencies
         run: |
           sudo apt-get update -qq
@@ -48,4 +70,16 @@ jobs:
       - name: Hostile DOCX injection and discovery egress regression
         run: uv run --locked --with pytest --with python-docx python -m pytest -q tests/test_m5_discovery_sequence_security.py
       - name: Execute signed 150-page 60-reference stress dossier and teardown
-        run: uv run --with python-docx --with reportlab --with pillow python -m scripts.m5_benchmark_live
+        run: |
+          mkdir -p /tmp/caseproof-final-receipt
+          set -o pipefail
+          uv run --with python-docx --with reportlab --with pillow python -m scripts.m5_benchmark_live | tee /tmp/caseproof-final-receipt/benchmark.log
+          grep '^M5_BENCHMARK_JSON:' /tmp/caseproof-final-receipt/benchmark.log | tail -1 | sed 's/^M5_BENCHMARK_JSON://' > /tmp/caseproof-final-receipt/benchmark.json
+
+      - name: Upload signed acceptance log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5-final-benchmark-receipt
+          path: /tmp/caseproof-final-receipt/*
+          if-no-files-found: warn

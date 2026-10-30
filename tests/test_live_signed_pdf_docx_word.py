@@ -93,7 +93,7 @@ def test_ocr_failure_preserves_incomplete_scan_coverage() -> None:
     )
     assert text == ""
     assert manifest["complete"] is False
-    assert manifest["ocr_candidates"] == [{"pdf_page": 1, "status": "ocr_unavailable"}]
+    assert manifest["ocr_candidates"] == [{"pdf_page": 1, "status": "ocr_unavailable", "reason": "offline"}]
 
 
 @pytest.mark.parametrize(("data", "mime"), [

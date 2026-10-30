@@ -13,7 +13,7 @@ from tests.fixtures.run_lifecycle import credentials, new_run_id
 
 
 def main() -> int:
-    if os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof" or os.getenv("GITHUB_REF") != "refs/heads/feat/production-hardening":
+    if os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof" or os.getenv("GITHUB_REF") != "refs/heads/feat/final-hardening-and-verification":
         raise RuntimeError("protected M0.5 branch required")
     key = os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"]
     run = new_run_id()

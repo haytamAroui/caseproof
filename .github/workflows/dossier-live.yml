@@ -1,8 +1,8 @@
 name: Complete signed dossier live acceptance
-# Trigger protected branch acceptance on this commit; do not merge without zero-residual evidence.
+# Final receipt revision: rerun protected acceptance on this exact documentation head.
 on:
   push:
-    branches: [feat/complete-dossier-journey, fix/dossier-ranges-mixed]
+    branches: [feat/complete-dossier-journey, fix/dossier-ranges-mixed, feat/final-hardening-and-verification]
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,11 +15,15 @@ jobs:
       CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
       CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
       CASEPROOF_PHASE3_LIVE: "YES"
+      CASEPROOF_OCR_SANDBOX: docker
+      CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.11"
+      - name: Build isolated OCR runtime
+        run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
       - name: Install OCR system dependencies
         run: |
           sudo apt-get update -qq
