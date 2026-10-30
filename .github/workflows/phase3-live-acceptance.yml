@@ -1,9 +1,10 @@
-name: Phase 3 persistent nine-step live acceptance
+name: M0.5 Phase 3 nine-step acceptance (requires ephemeral provisioning)
 on:
   push:
-    branches: [feat/phase3-ocr-geometry-crops]
+    branches: [feat/m05-ephemeral-fixture-hardening]
     paths:
       - scripts/phase3_live_acceptance.py
+      - tests/fixtures/run_lifecycle.py
       - tests/fixtures/factory.py
       - tests/test_fixture_factory.py
       - .github/workflows/phase3-live-acceptance.yml
@@ -30,5 +31,9 @@ jobs:
           sudo apt-get install -y tesseract-ocr tesseract-ocr-nld tesseract-ocr-fra poppler-utils fonts-dejavu-core
       - name: Validate reusable fixture factory offline
         run: uv run --locked --with pytest --with python-docx --with reportlab --with pillow python -m pytest -q tests/test_fixture_factory.py
-      - name: Execute persistent live OCR acceptance (NO teardown)
-        run: uv run --with python-docx --with reportlab --with pillow python -m scripts.phase3_live_acceptance
+      # Fail closed: a standalone nine-step run would leave data behind.
+      # Do not enable live acceptance until durable registry + teardown exist.
+      - name: Block unsafe live acceptance until M0.5 lifecycle is complete
+        run: |
+          echo "::error::M0.5 BLOCKED: durable cloud registry and scoped teardown not yet implemented"
+          exit 1
