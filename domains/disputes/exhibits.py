@@ -85,6 +85,8 @@ class ExhibitResolution:
     state: MappingState
     exhibit_id: str | None = None
     page: ExhibitPage | None = None
+    # Identity can be confirmed while the requested pinpoint remains unmapped.
+    identity_confirmed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,8 +124,9 @@ class ExhibitRegister:
             return ExhibitResolution(
                 MappingState.PAGE_UNMAPPED if not pages else MappingState.AMBIGUOUS,
                 entry.exhibit_id,
+                identity_confirmed=True,
             )
-        return ExhibitResolution(MappingState.CONFIRMED, entry.exhibit_id, pages[0])
+        return ExhibitResolution(MappingState.CONFIRMED, entry.exhibit_id, pages[0], True)
 
     def revise(self, *, expected_revision: int, entries: tuple[ExhibitEntry, ...]) -> ExhibitRegister:
         """Pure CAS proposal; actual auth, transaction and audit belong to application."""
