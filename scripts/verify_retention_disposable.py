@@ -59,6 +59,7 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
 insert into caseproof.documents(id,org_id,case_id,source_label) values('{doc}','{org}','{case}','Synthetic');
 insert into caseproof.document_versions(id,org_id,document_id,version_number,original_sha256_hex,byte_length,media_type)
  values('{version}','{org}','{doc}',1,repeat('a',64),10,'application/pdf');
+insert into storage.objects values('caseproof-originals-dev','{org}/{case}/leftover');
 """, env)
 
     def actor(user, sql):
@@ -75,12 +76,13 @@ insert into caseproof.document_versions(id,org_id,document_id,version_number,ori
         raise AssertionError('deleted original metadata visible')
     _run(f"update caseproof._m1_matter_grants set active=true where case_id='{case}'", env, should_pass=False)
     _run(f"insert into caseproof.documents(org_id,case_id,source_label) values('{org}','{case}','late write')", env, should_pass=False)
+    _run(f"insert into storage.objects values('caseproof-originals-dev','{org}/{case}/late-upload')", env, should_pass=False)
     finish = f"select public.caseproof_retention('finalize','{case}')"
     _run(actor(owner, finish), env, should_pass=False)
     _run(service + finish, env, should_pass=False)  # grace not elapsed
     _run(f"update caseproof.cases set deleted_at=now()-interval '31 days',legal_hold=true where id='{case}'", env)
     _run(service + finish, env, should_pass=False)
-    _run(f"update caseproof.cases set legal_hold=false where id='{case}'; insert into storage.objects values('caseproof-originals-dev','{org}/{case}/leftover');", env)
+    _run(f"update caseproof.cases set legal_hold=false where id='{case}';", env)
     _run(service + finish, env, should_pass=False)  # files remain
     _run(f"delete from storage.objects where name='{org}/{case}/leftover'", env)
     _run(service + finish, env)
