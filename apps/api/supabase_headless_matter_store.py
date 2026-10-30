@@ -69,7 +69,7 @@ class SupabaseHeadlessMatterStore:
         # Inventory is authoritative for numbering, but filename matching
         # cannot be trusted as legal identity. Keep ambiguous sources unresolved.
         mentions = re.findall(
-            r"(?i)\\b(stuk|pi[eè]ce)\\s+(\\d{1,4})\\s+([^;\\n]+)", text,
+            r"(?i)\b(stuk|pi[eè]ce)\s+(\d{1,4})\s+([^;\n]+)", text,
         )
         results: list[dict[str, Any]] = []
         for label, number, description in mentions:
