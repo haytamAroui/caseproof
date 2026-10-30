@@ -108,9 +108,36 @@ def _worker_limits() -> None:
 
 
 def _isolated_command(command: list[str]) -> list[str]:
-    """Use a kernel network namespace; fail closed if isolation unavailable."""
+    """Enforce network isolation using a dedicated container or user namespace.
+
+    Never execute the OCR binaries directly when isolation is unavailable.
+    """
     if sys.platform != "linux":
         raise OCRUnavailable("ocr_linux_sandbox_required")
+    if os.getenv("CASEPROOF_OCR_SANDBOX") == "docker":
+        docker = shutil.which("docker")
+        if not docker:
+            raise OCRUnavailable("ocr_docker_unavailable")
+        workspace = Path(command[-2] if Path(command[0]).name == 'pdftoppm' else command[1]).parent
+        # All OCR input and output paths must be under the ephemeral workspace.
+        # The caller uses only fixed executable names and trusted local paths.
+        mapped = []
+        for arg in command[1:]:
+            if arg.startswith(str(workspace) + "/"):
+                mapped.append("/work/" + Path(arg).name)
+            else:
+                mapped.append(arg)
+        executable = Path(command[0]).name
+        if executable not in ("pdftoppm", "tesseract"):
+            raise OCRUnavailable("ocr_executable_not_allowed")
+        return [
+            docker, "run", "--rm", "--network", "none", "--memory", "768m",
+            "--cpus", "1", "--pids-limit", "64", "--read-only",
+            "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m",
+            "--mount", f"type=bind,src={workspace},dst=/work",
+            os.getenv("CASEPROOF_OCR_IMAGE", "caseproof-ocr-worker:ci"),
+            executable, *mapped,
+        ]
     unshare = shutil.which("unshare")
     if not unshare:
         raise OCRUnavailable("ocr_network_sandbox_unavailable")
