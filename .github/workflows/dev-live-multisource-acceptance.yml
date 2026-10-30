@@ -20,11 +20,8 @@ jobs:
       CASEPROOF_DEV_LIVE_MULTISOURCE: "YES"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
-          python-version: '3.12'
-          cache: pip
-      - name: Install project dependencies
-        run: pip install -e .
-      - name: Protected live multi-source acceptance (fails closed until five checks implemented)
-        run: python -m scripts.verify_dev_live_multisource
+          python-version: "3.11"
+      - name: Protected live multi-source acceptance
+        run: uv run --locked python -m scripts.verify_dev_live_multisource
