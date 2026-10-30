@@ -1,6 +1,7 @@
 """Provision persistent Phase 3 test identities through GoTrue Admin, never SQL.
 Run only in protected caseproof-dev Actions. No deletion/cleanup by design.
 """
+
 from __future__ import annotations
 
 import os
@@ -34,10 +35,16 @@ def main() -> int:
         print(f"PHASE3_AUTH_CREATED: {role} (credentials withheld)")
     # Existing protected setup RPC creates organization memberships and
     # grants only to the owner. It must not delete identities.
-    admin_rpc(key, "setup", {
-        "p_run": str(run), "p_owner": actors[0],
-        "p_guest": actors[1], "p_foreign": actors[2],
-    })
+    admin_rpc(
+        key,
+        "setup",
+        {
+            "p_run": str(run),
+            "p_owner": actors[0],
+            "p_guest": actors[1],
+            "p_foreign": actors[2],
+        },
+    )
     print("PHASE3_ORG_READY: organization membership fixture created")
     print("PHASE3_FIXTURE_RUN: " + str(run))
     print("PHASE3_AUTH_PERSISTENT: no cleanup or delete operations invoked")
