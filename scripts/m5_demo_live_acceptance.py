@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
+import io
 import http.client
 import json
 import os
+import tempfile
+from pathlib import Path
 from uuid import uuid4
 
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
 from scripts.m05_registry import record
+from scripts.m5_demo_cli import main as demo_main
 from scripts.verify_dev_ephemeral_auth import PROJECT_REF
 from scripts.verify_dev_live_review_roundtrip import _request, _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import success
@@ -219,11 +224,6 @@ def main():
         print("P4_COLD_RESTART_SIGNED_EXPORT_PASSED", flush=True)
         # Exercise the real CLI, not an imported mock: signed discovery and
         # disk export must use the same live matter and restarted API.
-        import contextlib
-        import io
-        import tempfile
-        from pathlib import Path
-        from scripts.m5_demo_cli import main as demo_main
         old_token = os.environ.get("CASEPROOF_DEMO_BEARER")
         old_argv = __import__("sys").argv
         try:
