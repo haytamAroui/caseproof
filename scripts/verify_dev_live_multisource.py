@@ -239,7 +239,8 @@ def main() -> int:
         print("LIVE_MULTISOURCE_PROBE_PASSED: signed four-source storage/revocation/restart")
         return 0
     except Exception as exc:
-        print(f"LIVE_MULTISOURCE_FAILED: {type(exc).__name__}", file=sys.stderr)
+        stage = "ephemeral_auth_cleanup" if isinstance(exc, RuntimeError) and str(exc) == "ephemeral dev identity cleanup failed" else "probe_or_fixture"
+        print(f"LIVE_MULTISOURCE_FAILED: stage={stage} type={type(exc).__name__}", file=sys.stderr)
         return 1
 
 
