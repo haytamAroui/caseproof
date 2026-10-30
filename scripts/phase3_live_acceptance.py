@@ -90,12 +90,22 @@ def main():
         owner=sessions["owner"]
         case=success(owner,"POST","/dev/live/matters",{"org_id":ORG,"name":"Persistent Phase 3 OCR acceptance","request_id":str(uuid4())})["case_id"]
         print("P3_MATTER_CREATED: "+case,flush=True)
+        bundle=sources()
+        metadata=[
+          {"role":"draft" if name.endswith(".docx") else "inventory" if name.endswith(".txt") else "exhibit",
+           "filename":name,"media_type":media,"byte_length":len(raw),
+           "sha256":hashlib.sha256(raw).hexdigest()}
+          for name,media,raw in bundle
+        ]
+        status,body=direct(owner,key,"/rest/v1/rpc/caseproof_dev_register_bundle","POST",
+                           {"p_case":case,"p_request":str(uuid4()),"p_sources":metadata})
+        if status!=200:raise RuntimeError(f"P3_BUNDLE_REGISTER_FAILED: {status}")
+        registered=json.loads(body)["sources"]
+        if len(registered)!=4:raise RuntimeError("P3_BUNDLE_INCOMPLETE")
+        print("P3_BUNDLE_REGISTERED: four source identities",flush=True)
         scan=None
-        for filename,media,raw in sources():
-            registered=success(owner,"POST",f"/dev/live/matters/{case}/sources",{
-                "filename":filename,"media_type":media,"sha256":hashlib.sha256(raw).hexdigest(),
-                "byte_length":len(raw),"request_id":str(uuid4())})
-            doc,version=registered["document_id"],registered["version_id"]
+        for (filename,media,raw),item in zip(bundle,registered,strict=True):
+            doc,version=item["document_id"],item["version_id"]
             uploaded=success(owner,"POST",f"/dev/live/matters/{case}/sources/{doc}/{version}/upload",{
                 "content_base64":base64.b64encode(raw).decode()})
             if uploaded.get("verified") is not True: raise RuntimeError("P3_UPLOAD_SHA_FAILED")
