@@ -40,14 +40,16 @@ grant select,insert on storage.objects to authenticated;
     paths = sorted((ROOT / 'supabase/migrations').glob('*.sql'))
     delayed = next(p for p in paths if 'm05_ocr_sidecar_cleanup_fk' in p.name)
     retention = next(p for p in paths if 'matter_retention' in p.name)
+    fence = next(p for p in paths if 'retention_storage_fence' in p.name)
     for path in paths:
-        if path in (delayed, retention):
+        if path in (delayed, retention, fence):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
     _run(delayed.read_text(), env)
     _run((ROOT / 'supabase/phase4_reviewed/caseproof_phase4_signed_reference_review.sql').read_text(), env)
     _run(retention.read_text(), env)
+    _run(fence.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
