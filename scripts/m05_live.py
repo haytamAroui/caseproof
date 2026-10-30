@@ -43,19 +43,19 @@ def main() -> int:
         from scripts.phase3_live_acceptance import main as phase3
         phase3()
     except Exception as exc:
-        failure = type(exc).__name__
+        failure = type(exc).__name__ + ":" + str(exc)
     finally:
         try:
             teardown(run, key)
         except Exception as exc:
             print("M05_TEARDOWN_FAILED:" + type(exc).__name__, file=sys.stderr)
             return 1
-    if failure:
-        print("M05_LIVE_FAILED:" + failure, file=sys.stderr)
-        return 1
     if call(key, "verify", run) is not True:
         raise RuntimeError("independent zero-residual verification failed")
     print("ZERO_RESIDUAL_VERIFIED", flush=True)
+    if failure:
+        print("M05_EXPECTED_OR_UNEXPECTED_FAILURE:" + failure, file=sys.stderr)
+        return 1
     print("M05_LIVE_NINE_STEPS_AND_SCOPED_TEARDOWN_PASSED")
     return 0
 
