@@ -104,3 +104,21 @@ def test_omitted_confirmation_entry_cannot_become_absent_inventory():
     report, _ = FixtureStore().load('signed-test-double', 'case', 'draft')
     assert report['findings'][0]['identity'] == 'source_missing'
     assert not report['coverage']['inventory_confirmed_complete']
+
+
+
+def test_real_docx_export_preserves_namespace_declarations():
+    import pytest
+    pytest.importorskip('docx')
+    from docx import Document
+    original = Document()
+    original.add_paragraph('Stuk 1, PDF p. 1.')
+    data = io.BytesIO()
+    original.save(data)
+    raw = data.getvalue()
+    report = {**assess(raw, [], None), 'snapshot_hash': 'c' * 64, 'human_decisions': []}
+    derivative = annotated_docx(raw, report)
+    assert 'scoped review annotations' in '\n'.join(p.text for p in Document(io.BytesIO(derivative)).paragraphs)
+    with ZipFile(io.BytesIO(raw)) as old, ZipFile(io.BytesIO(derivative)) as new:
+        assert b'xmlns:w14=' in old.read('word/document.xml')
+        assert b'xmlns:w14=' in new.read('word/document.xml')

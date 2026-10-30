@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import io
-import xml.etree.ElementTree as ET
 from typing import Any
+from xml.dom import minidom
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 
-NS = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 
 def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
@@ -16,10 +16,12 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
     if not any(r.part == 'word/document.xml' for r in extracted.regions):
         raise ValueError('draft cannot be annotated')
     with ZipFile(io.BytesIO(original)) as source:
-        root = ET.fromstring(source.read('word/document.xml'))
-        body = root.find(NS + 'body')
-        if body is None:
+        document = minidom.parseString(source.read('word/document.xml'))
+        bodies = document.getElementsByTagNameNS(NS, 'body')
+        if len(bodies) != 1:
             raise ValueError('missing body')
+        body = bodies[0]
+        prefix = (body.prefix + ':') if body.prefix else ''
         lines = ['CaseProof — scoped review annotations (derivative; original preserved)',
                  'Snapshot: ' + report['snapshot_hash'],
                  'Coverage: ' + str(report['coverage']),
@@ -32,14 +34,19 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
                          f"source={f['version_id']}; OCR={f['ocr_uncertainty']}")
             if decision:
                 lines.append('Reviewer rationale: ' + decision['rationale'])
-        section = body.find(NS + 'sectPr')
+        section = next((node for node in body.childNodes
+                        if node.namespaceURI == NS and node.localName == 'sectPr'), None)
         for line in lines:
-            paragraph = ET.Element(NS + 'p')
-            ET.SubElement(ET.SubElement(paragraph, NS + 'r'), NS + 't').text = line
-            body.insert(list(body).index(section) if section is not None else len(body), paragraph)
+            paragraph = document.createElementNS(NS, prefix + 'p')
+            run = document.createElementNS(NS, prefix + 'r')
+            text = document.createElementNS(NS, prefix + 't')
+            text.appendChild(document.createTextNode(line))
+            run.appendChild(text)
+            paragraph.appendChild(run)
+            body.insertBefore(paragraph, section)
         output = io.BytesIO()
         with ZipFile(output, 'w', ZIP_DEFLATED) as target:
             for item in source.infolist():
-                target.writestr(item, ET.tostring(root, encoding='utf-8', xml_declaration=True)
+                target.writestr(item, document.toxml(encoding='utf-8')
                                 if item.filename == 'word/document.xml' else source.read(item))
     return output.getvalue()
