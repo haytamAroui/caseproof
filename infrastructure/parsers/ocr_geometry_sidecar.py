@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass
+from typing import Any
 
 from infrastructure.parsers.pdf_ocr import OCRPage
 
@@ -64,7 +65,7 @@ def encode_page_geometry(page: OCRPage) -> tuple[GeometryReference, bytes]:
     return reference, encoded
 
 
-def verify_page_geometry(reference: GeometryReference, encoded: bytes) -> dict:
+def verify_page_geometry(reference: GeometryReference, encoded: bytes) -> dict[str, Any]:
     if len(encoded) > MAX_GEOMETRY_BYTES or hashlib.sha256(encoded).hexdigest() != reference.geometry_sha256:
         raise GeometryRejected("geometry_integrity_failed")
     try:
