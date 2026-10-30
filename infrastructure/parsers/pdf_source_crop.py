@@ -67,7 +67,7 @@ def crop_scanned_pdf(original: bytes, *, page_number: int, box: CropBox) -> byte
             str(root / "original.pdf"), str(prefix),
         ], timeout=12)
         png = (root / "page.png").read_bytes()
-        if not 24 <= len(png) <= 12 * 1024 * 1024 or png[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
+        if not 24 <= len(png) <= 12 * 1024 * 1024 or png[:8] != bytes((137, 80, 78, 71, 13, 10, 26, 10)):
             raise OCRUnavailable("crop_invalid_raster")
         width, height = struct.unpack(">II", png[16:24])
         if not (0 < width <= 5000 and 0 < height <= 6500):
