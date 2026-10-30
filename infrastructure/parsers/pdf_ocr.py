@@ -154,8 +154,7 @@ def _run(command: list[str], *, timeout: int) -> None:
         raise OCRUnavailable("ocr_binary_unavailable_or_timeout") from None
     if completed.returncode != 0:
         # Never log source bytes, OCR text or paths. Keep only bounded engine stderr.
-        diagnostic = completed.stderr.decode("utf-8", errors="replace")[-400:]
-        raise OCRUnavailable(f"ocr_external_process_failed_or_sandbox_denied:{completed.returncode}:{diagnostic}")
+        raise OCRUnavailable("ocr_external_process_failed_or_sandbox_denied")
 
 
 class LocalPDFOCR:

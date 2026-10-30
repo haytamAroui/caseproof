@@ -208,6 +208,8 @@ def main(*, retention_check=None):
                     break
         except (OSError, ValueError):
             pass
+        if api_peak_rss_kib is None:
+            raise RuntimeError("M5_SERVER_PEAK_RSS_UNAVAILABLE")
         if status != 200:
             raise RuntimeError(f"P4_DISCOVERY_FAILED:{status}")
         findings = discovered.get("findings", [])
@@ -232,7 +234,7 @@ def main(*, retention_check=None):
             "precision": precision, "recall": recall,
             "false_positive_rate": None,
             "false_negative_rate": fn / (tp + fn) if tp + fn else None,
-            "note": "Client Python peak only; not server RSS. FPR needs TN ground truth. Accuracy is reference detection only."
+            "note": "API process RSS from Linux VmHWM; client Python allocation peak reported separately. FPR needs TN ground truth. Accuracy is reference detection only."
         }, sort_keys=True), flush=True)
         if tp != 60 or fp or fn:
             raise RuntimeError("M5_REFERENCE_EXTRACTION_BENCHMARK_FAILED")
