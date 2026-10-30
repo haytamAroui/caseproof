@@ -96,10 +96,10 @@ class SupabaseHeadlessMatterStore:
                             bearer, source["version_id"], 1,
                         )
                         words = geometry["words"]
+                        expected = {"piece", "pièce", number, *re.findall(r"[a-z]{4,}", description.casefold())}
                         matches = [
                             w for w in words if isinstance(w, dict)
-                            and str(w.get("text", "")).casefold().strip(".,:") in
-                            {"piece", "pièce", number}
+                            and str(w.get("text", "")).casefold().strip(".,:") in expected
                         ]
                         if matches:
                             w = matches[0]
