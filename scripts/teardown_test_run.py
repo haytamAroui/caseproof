@@ -32,7 +32,7 @@ def teardown(run_id: str, key: str) -> None:
     # fixture cleanup RPC. Never issue an unscoped DELETE on cases.
     entries = rows(key, run_id)
     owners = [e["resource_id"] for e in entries
-              if e["resource_type"] == "auth_user" and e["resource_id"].startswith("owner:")]
+              if e["resource_type"] == "auth_user" and e["resource_id"].startswith("owner:") and "@" not in e["resource_id"]]
     if len(owners) != 1:
         raise RuntimeError("exact owner identity missing")
     owner = owners[0].split(":", 1)[1]
@@ -43,7 +43,11 @@ def teardown(run_id: str, key: str) -> None:
     admin = GoTrueDevAdmin(key)
     for entry in rows(key, run_id):
         if entry["resource_type"] == "auth_user":
-            admin.delete(entry["resource_id"].split(":", 1)[-1])
+            identity = entry["resource_id"].split(":", 1)[-1]
+            if "@" in identity:
+                # Reservation is retained until the exact Auth ID is reconciled.
+                continue
+            admin.delete(identity)
             forget(key, run_id, "auth_user", entry["resource_id"])
     forget(key, run_id, "run", run_id)
     if rows(key, run_id):
