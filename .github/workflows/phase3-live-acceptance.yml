@@ -1,0 +1,30 @@
+name: Phase 3 persistent nine-step live acceptance
+on:
+  push:
+    branches: [feat/phase3-ocr-geometry-crops]
+    paths:
+      - scripts/phase3_live_acceptance.py
+      - .github/workflows/phase3-live-acceptance.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 20
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+      CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+      CASEPROOF_PHASE3_LIVE: "YES"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Install OCR system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr poppler-utils fonts-dejavu-core
+      - name: Execute persistent live OCR acceptance (NO teardown)
+        run: uv run --with python-docx --with reportlab --with pillow python -m scripts.phase3_live_acceptance
