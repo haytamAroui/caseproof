@@ -5,9 +5,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import http.client
+import io
 import json
 import os
-import io
 import time
 import tracemalloc
 from uuid import uuid4
@@ -23,10 +23,10 @@ ROLES = ("owner", "ungranted", "foreign")
 
 def sources():
     """Use the same synthetic originals as the reusable fixture factory."""
-    from tests.fixtures.factory import generate_bundle
-
     from docx import Document
     from docx.enum.text import WD_BREAK
+
+    from tests.fixtures.factory import generate_bundle
     bundle = list(generate_bundle())
     doc = Document()
     for page in range(1, 151):
