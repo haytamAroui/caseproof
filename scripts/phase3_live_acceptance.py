@@ -154,7 +154,13 @@ def main():
                 raise RuntimeError(f"P3_{role.upper()}_ACCESS_FAILURE: {status}")
             print(f"P3_{role.upper()}_CROP_DENIED: {status}",flush=True)
         status,body=direct(fresh,key,"/rest/v1/ocr_geometry_sidecars?select=*",profile="caseproof")
-        if status not in (401,403,404):raise RuntimeError(f"P3_PRIVATE_POSTGREST_EXPOSED: {status}")
+        if status==406:
+            try: rejection=json.loads(body)
+            except ValueError: rejection={}
+            if rejection.get("code")!="PGRST106":
+                raise RuntimeError(f"P3_POSTGREST_UNEXPECTED_406: {rejection.get('code')}")
+        elif status not in (401,403,404):
+            raise RuntimeError(f"P3_PRIVATE_POSTGREST_EXPOSED: {status}")
         print("P3_PRIVATE_POSTGREST_DENIED",flush=True)
         # Intentionally retain revoked grant row and every fixture.
         from scripts.verify_dev_live_txt_journey import admin_rpc
