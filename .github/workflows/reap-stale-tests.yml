@@ -1,4 +1,4 @@
-name: M0.5 stale fixture reaper (blocked until scoped cleanup ready)
+name: M0.5 stale fixture reaper
 on:
   schedule:
     - cron: "17 */4 * * *"
@@ -13,10 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 15
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: \${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.11"
-      - name: Reconcile stale CI fixtures (fail closed until teardown ready)
+      - name: Reconcile stale CI fixtures
         run: uv run --locked python -m scripts.reap_stale_runs --older-than-hours 4
