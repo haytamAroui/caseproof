@@ -25,6 +25,6 @@ jobs:
           python-version: '3.12'
           cache: pip
       - name: Install project dependencies
-        run: pip install -e '.[dev]'
+        run: pip install -e .
       - name: Protected live multi-source acceptance (fails closed until five checks implemented)
         run: python -m scripts.verify_dev_live_multisource
