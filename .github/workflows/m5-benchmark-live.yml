@@ -48,7 +48,11 @@ jobs:
       - name: Hostile DOCX injection and discovery egress regression
         run: uv run --locked --with pytest --with python-docx python -m pytest -q tests/test_m5_discovery_sequence_security.py
       - name: Execute signed 150-page 60-reference stress dossier and teardown
-        run: uv run --with python-docx --with reportlab --with pillow python -m scripts.m5_benchmark_live
+        run: |
+          mkdir -p /tmp/caseproof-final-receipt
+          set -o pipefail
+          uv run --with python-docx --with reportlab --with pillow python -m scripts.m5_benchmark_live | tee /tmp/caseproof-final-receipt/benchmark.log
+          grep '^M5_BENCHMARK_JSON:' /tmp/caseproof-final-receipt/benchmark.log | tail -1 | sed 's/^M5_BENCHMARK_JSON://' > /tmp/caseproof-final-receipt/benchmark.json
 
       - name: Upload signed acceptance log
         if: always()
