@@ -4,9 +4,9 @@ The manifest does not grant access or perform uploads. The signed transport must
 independently authorize each source and verify its original-byte SHA-256.
 """
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
-import re
 
 
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
