@@ -180,7 +180,10 @@ def main(*, retention_check=None):
             raise RuntimeError(f"P3_GEOMETRY_RPC_FAILED: {status}")
         rows = json.loads(raw)
         if not rows:
-            raise RuntimeError("P3_SIDECAR_MISSING: no persisted geometry")
+            from pathlib import Path
+            diagnostic = Path("/tmp/caseproof-ocr-diagnostic.txt")
+            reason = diagnostic.read_text(encoding="utf-8")[-500:] if diagnostic.exists() else "no OCR diagnostic recorded"
+            raise RuntimeError("P3_SIDECAR_MISSING: no persisted geometry; " + reason)
         row = rows[0]
         payload = json.loads(row["payload"])
         if hashlib.sha256(row["payload"].encode()).hexdigest() != row["geometry_sha256_hex"]:
