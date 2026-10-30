@@ -1,7 +1,7 @@
 create or replace function public.caseproof_m05_verify_empty(p_run uuid)
 returns boolean language plpgsql security definer set search_path='' as $$
 begin
- if current_setting('request.jwt.claim.role',true) is distinct from 'service_role' then
+ if auth.role() <> 'service_role' then
   raise exception 'service role required' using errcode='42501';
  end if;
  return not exists(select 1 from caseproof.test_run_registry where run_id=p_run)
