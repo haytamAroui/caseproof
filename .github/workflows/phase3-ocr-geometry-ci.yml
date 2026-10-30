@@ -1,0 +1,24 @@
+name: Phase 3 OCR geometry CI
+on:
+  push:
+    branches: [feat/phase3-ocr-geometry-crops]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  geometry-and-crops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Install PDF rasterizer
+        run: sudo apt-get update -qq && sudo apt-get install -y poppler-utils
+      - name: Run Phase 3 unit and boundary tests
+        run: uv run pytest -q tests/test_ocr_geometry_sidecar.py tests/test_pdf_source_crop.py tests/test_real_scan_ocr.py
+      - name: Lint changed Python modules
+        run: uv run ruff check infrastructure/parsers/ocr_geometry_sidecar.py infrastructure/parsers/pdf_source_crop.py apps/api/signed_document_parse.py apps/api/litigation_live_journey.py

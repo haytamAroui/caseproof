@@ -192,3 +192,13 @@ The [SEC-01–SEC-16 checklist](security/PILOT_DATA_SECURITY_GATE.md) is **OPEN*
 - [ADR 0016](adr/0016-belgian-litigation-product-pivot.md) records the previous Clearbrief-class Word-first commercial plan; **ADR 0018 supersedes only that commercial scope and channel gate**, not kernel/security architecture.
 - [ADR 0017](adr/0017-default-private-litigation-matters.md) remains applicable to matter confidentiality and grants.
 - [F01–F42 matrix](FEATURE_DELIVERY_MATRIX.md), [M0 baseline](m0/BASELINE.md), [PIV issue history](https://github.com/haytamAroui/caseproof/issues), [earlier roadmap at main@486b239](https://github.com/haytamAroui/caseproof/blob/486b239926b681d76e1e3f79d30e3dc7098ab6d8/docs/ROADMAP.md), and [prior workflow](https://github.com/haytamAroui/caseproof/blob/486b239926b681d76e1e3f79d30e3dc7098ab6d8/docs/PRODUCT_WORKFLOW.md) remain inspectable. Historic PIV-00–20 work is retained as compatibility/technical backlog, not automatic v1 authorization.
+
+
+## M0 — reusable synthetic fixture factory (engineering standard, 30 October 2026)
+
+- **Source of truth:** `tests/fixtures/factory.py` generates synthetic DOCX, TXT inventory, text PDF, and image-only scanned PDF; `tests/test_fixture_factory.py` validates signed registration, SHA-256 binding and fail-closed upload behavior.
+- **Provisioning:** `python -m scripts.manage_fixtures create-bundle` uses a signed owner JWT, existing organization grant, CaseProof's authenticated matter API, private Storage upload endpoint and protected bundle-registration RPC. It never directly inserts into application tables or bypasses RLS with a service key.
+- **Auth:** `create-users` delegates to the existing protected GoTrue fixture provisioner; no fixed credentials should be embedded in new fixtures. CI development secrets are environment-scoped and never exposed to forked PRs.
+- **Lifecycle:** disposable runs need explicit run ownership and a dedicated scoped teardown before automated deletion is enabled. The CLI deliberately rejects `delete-all` rather than risk destroying persistent Phase 3 acceptance evidence.
+- **Acceptance:** protected Phase 3 workflow regenerates the synthetic bundle and executes the signed nine-step OCR/crop round-trip; offline tests run first. The persistent acceptance run is **not** a disposable isolated run. Future milestones must introduce separate run-scoped cleanup with auditable ownership and no cross-run deletion.
+- **Status:** factory implementation and workflow wiring are engineering work; no claim of all-CI-green or complete zero-manual Auth lifecycle until a run on the committed revision passes.

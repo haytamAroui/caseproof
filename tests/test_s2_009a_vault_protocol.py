@@ -420,6 +420,11 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
     assert "evidence_vault_protocol" not in app
     assert "/v2/" not in app
     assert {p.name for p in (root / "supabase/migrations").glob("*.sql")} == {
+        "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
+        "20261030141500_caseproof_phase3_geometry_text_payload.sql",
+        "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",
+        "20261030150000_caseproof_phase3_signed_geometry_read.sql",
+        "20261030153000_caseproof_phase3_four_source_draft_bundle.sql",
         "20261022001009_caseproof_tenant_foundation.sql",
         "20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
         "20261027195417_caseproof_m2_dev_atomic_private_review.sql",

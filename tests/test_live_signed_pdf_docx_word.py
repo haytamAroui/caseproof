@@ -155,7 +155,8 @@ def test_pdf_promotion_requires_server_verified_storage_bytes_and_service_key(mo
     assert result == {"ok": True}
     method, path, payload, headers = connection.request_data
     assert method == "POST"
-    assert path == "/rest/v1/rpc/caseproof_dev_ingest_parsed_verified"
+    assert path == "/rest/v1/rpc/caseproof_dev_ingest_parsed_with_geometry"
+    assert payload["p_geometry"] == []
     assert base64.b64decode(payload["p_content_base64"]) == raw
     assert payload["p_manifest"]["media_type"] == "application/pdf"
     assert payload["p_representation"].find("125 EUR") >= 0
@@ -198,7 +199,9 @@ def test_signed_scan_persists_ocr_as_unverified_candidate(monkeypatch) -> None:
     payload = connection.request_data[2]
     manifest = payload["p_manifest"]
     assert manifest["complete"] is False
-    assert manifest["ocr_candidates"][0]["status"] == "requires_human_review"
+    assert manifest["ocr_candidates"][0]["status"] == "OCR_UNRELIABLE"
+    assert len(payload["p_geometry"]) == 1
+    assert payload["p_geometry"][0]["geometry_sha256"] == manifest["ocr_candidates"][0]["geometry_sha256"]
     assert manifest["ocr_candidates"][0]["original_sha256"] == hashlib.sha256(output.getvalue()).hexdigest()
     assert payload["p_representation"] == ""
 
