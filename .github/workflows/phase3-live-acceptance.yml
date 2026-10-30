@@ -33,7 +33,5 @@ jobs:
         run: uv run --locked --with pytest --with python-docx --with reportlab --with pillow python -m pytest -q tests/test_fixture_factory.py
       # Fail closed: a standalone nine-step run would leave data behind.
       # Do not enable live acceptance until durable registry + teardown exist.
-      - name: Block unsafe live acceptance until M0.5 lifecycle is complete
-        run: |
-          echo "::error::M0.5 BLOCKED: durable cloud registry and scoped teardown not yet implemented"
-          exit 1
+      - name: Execute protected M0.5 ephemeral nine-step journey and teardown
+        run: uv run --with python-docx --with reportlab --with pillow python -m scripts.m05_live
