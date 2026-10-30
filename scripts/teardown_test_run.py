@@ -10,9 +10,8 @@ from uuid import UUID
 from apps.api.signed_supabase_originals import OriginalRef
 from scripts.m05_registry import HOST, forget, rows
 from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin
-from scripts.verify_m1_live_positive_original import _remove_original
 from scripts.verify_dev_live_txt_journey import admin_rpc
-
+from scripts.verify_m1_live_positive_original import _remove_original
 
 
 def verify_storage_empty(key: str, paths: list[str]) -> None:
