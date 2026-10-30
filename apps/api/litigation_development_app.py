@@ -17,6 +17,7 @@ from apps.api.litigation_check_app import create_litigation_check_app
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
 from apps.api.litigation_evidence_app import EvidenceReader, _token, create_evidence_app
 from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
+from apps.api.litigation_headless_verification import HeadlessMatterStore, create_headless_review_router
 from apps.api.litigation_live_journey import create_live_journey_router
 from apps.api.litigation_live_roundtrip import create_live_review_router
 from apps.api.litigation_original_reader import AuthorizedOriginalReader
@@ -39,6 +40,7 @@ def create_litigation_development_app(
     publishable_key: str | None = None,
     trusted_ingest_key: str | None = None,
     ocr: LocalPDFOCR | None = None,
+    headless: HeadlessMatterStore | None = None,
 ) -> FastAPI:
     app = FastAPI(title="CaseProof loopback development", docs_url=None, redoc_url=None, openapi_url=None)
     # One shared checker ensures search and check use the same trust boundary.
@@ -57,6 +59,7 @@ def create_litigation_development_app(
     ):
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
+    app.include_router(create_headless_review_router(headless))
     app.include_router(create_live_review_router(publishable_key))
     app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key, ocr=ocr))
 
