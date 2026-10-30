@@ -7,6 +7,8 @@ journey is wired and run in protected CI.
 from __future__ import annotations
 
 import hashlib
+import http.client
+import json
 from uuid import UUID, uuid4
 
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
@@ -46,17 +48,36 @@ def verify_registration(
             "org_id": org, "name": "Synthetic multi-source matter", "request_id": str(uuid4()),
         })
         case = str(UUID(created["case_id"]))
-        for filename, media_type, payload in SOURCES:
-            request = {
-                "request_id": str(uuid4()), "filename": filename,
-                "media_type": media_type, "byte_length": len(payload),
+        metadata = [
+            {
+                "role": "inventory" if index == 0 else "exhibit",
+                "filename": filename,
+                "media_type": media_type,
+                "byte_length": len(payload),
                 "sha256": hashlib.sha256(payload).hexdigest(),
             }
-            status, result = _request(owner, "POST", f"/dev/live/matters/{case}/sources", request)
-            if status != 200:
-                raise LiveFixtureError("MULTISOURCE_BLOCKED: signed registration rejected a bundle member")
-            if not all(result.get(key) for key in ("document_id", "version_id")):
-                raise LiveFixtureError("signed registration returned incomplete identity")
+            for index, (filename, media_type, payload) in enumerate(SOURCES)
+        ]
+        con = http.client.HTTPSConnection(f"{PROJECT_REF}.supabase.co", timeout=15)
+        try:
+            con.request(
+                "POST", "/rest/v1/rpc/caseproof_dev_register_bundle",
+                json.dumps({"p_case": case, "p_request": str(uuid4()), "p_sources": metadata}).encode(),
+                headers={
+                    "apikey": publishable,
+                    "Authorization": "Bearer " + owner,
+                    "Content-Type": "application/json",
+                },
+            )
+            response = con.getresponse()
+            status, raw = response.status, response.read(16385)
+        finally:
+            con.close()
+        if status != 200:
+            raise LiveFixtureError("MULTISOURCE_BLOCKED: signed bundle registration rejected")
+        registered = json.loads(raw)
+        if len(registered.get("sources", [])) != 4:
+            raise LiveFixtureError("signed bundle registration returned incomplete identities")
         print("LIVE_MULTISOURCE_REGISTERED: inventory and three exhibit versions")
     finally:
         if proc is not None:
