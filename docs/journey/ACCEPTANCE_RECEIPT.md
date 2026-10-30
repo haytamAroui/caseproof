@@ -67,3 +67,13 @@ forensic authenticity certificate, measured time saving, or client-ready securit
 approval. Printed/bundle mappings and semantic decisions are explicit human
 assertions. Full worker isolation/egress, backup expiry/restore, independent
 security/privacy review and commercial discovery remain separate gates.
+
+
+## Repeat the demonstration
+
+Run **Complete signed dossier live acceptance** in GitHub Actions on the tested
+feature branch, or on `main` after integration. The existing protected
+`caseproof-dev` environment supplies development credentials. No manual user,
+matter or source provisioning is required. The workflow creates fresh synthetic
+identities, runs both scenarios, exports the demo artifact and always tears down
+its owned resources. It is not enabled for fork PRs or arbitrary branch refs.

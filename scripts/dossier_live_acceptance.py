@@ -40,7 +40,7 @@ def json_request(token, method, path, payload=None):
 
 
 def main():
-    if os.getenv('GITHUB_REF') != 'refs/heads/feat/complete-dossier-journey' or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
+    if os.getenv('GITHUB_REF') not in {'refs/heads/feat/complete-dossier-journey', 'refs/heads/main'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
         raise RuntimeError('protected dossier branch required')
     key = os.environ['CASEPROOF_DEV_PUBLISHABLE_KEY']
     signin = SupabasePasswordSignin(PROJECT_REF, key)
