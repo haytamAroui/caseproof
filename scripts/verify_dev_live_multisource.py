@@ -199,9 +199,18 @@ def verify_registration(
         if proc is not None:
             _server_stop(proc)
         from scripts.verify_m1_live_positive_original import _remove_original
+        cleanup_errors = []
         for ref in refs:
-            _remove_original(admin_key, ref)
-        admin_rpc(admin_key, "cleanup", {"p_run": run_id, "p_owner": actors[0]})
+            try:
+                _remove_original(admin_key, ref)
+            except Exception as exc:
+                cleanup_errors.append("storage:" + type(exc).__name__)
+        try:
+            admin_rpc(admin_key, "cleanup", {"p_run": run_id, "p_owner": actors[0]})
+        except Exception as exc:
+            cleanup_errors.append("fixture:" + type(exc).__name__)
+        if cleanup_errors:
+            raise LiveFixtureError("cleanup failed: " + ", ".join(cleanup_errors))
 
 def main() -> int:
     if (
