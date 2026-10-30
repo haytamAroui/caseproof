@@ -64,10 +64,12 @@ def discover(payload: bytes, manifest: list[dict[str, Any]]) -> dict[str, Any]:
             "offsets": {"start": ref.start, "end": ref.end},
             "identity": identity, "source_id": source.get("source_id") if source else None,
             "version_id": source.get("version_id") if source else None,
-            "page_mapping": "page_unmapped", "pdf_page": None,
+            "page_mapping": "pdf_page_verified" if source and source.get("ocr_crop") else "page_unmapped",
+            "pdf_page": source["ocr_crop"]["page_number"] if source and source.get("ocr_crop") else None,
             "printed_page": None, "bundle_page": None,
             "fidelity": "not_assessed", "support": "not_assessed",
-            "ocr_crop": None, "ocr_uncertainty": "not_assessed",
+            "ocr_crop": source.get("ocr_crop") if source else None,
+            "ocr_uncertainty": source.get("ocr_uncertainty", "not_assessed") if source else "not_assessed",
             "ambiguous_manifest": len(matches) > 1,
         })
     return {
