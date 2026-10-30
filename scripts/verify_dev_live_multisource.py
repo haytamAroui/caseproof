@@ -61,4 +61,4 @@ def verify_registration(
     finally:
         if proc is not None:
             _server_stop(proc)
-        admin_rpc(admin_key, "cleanup", {"p_run": run_id})
+        admin_rpc(admin_key, "cleanup", {"p_run": run_id, "p_owner": actors[0]})
