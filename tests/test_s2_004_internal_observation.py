@@ -130,7 +130,7 @@ def test_no_new_live_route_or_staged_migration() -> None:
         "20261030160341_retention_storage_fence.sql",
         "20261030161844_complete_dossier_journey.sql",
             "20261030235107_representation_snapshot_read.sql",
-            "20261030235221_regional_review_attestation.sql",
+            "20261030235456_regional_review_attestation.sql",
         "20261030095000_caseproof_dev_bundle_cleanup.sql",
         "20261030101500_caseproof_dev_bundle_manifest.sql",
         "20261030103000_caseproof_durable_bundle_roles.sql",

@@ -5,8 +5,9 @@ The current `feat/complete-representation-gate` candidate adds signed dossier
 integration, bounded region/crop provenance, conservative normalization, immutable
 snapshot readback, human inspection UI, executable corpus measurement and signed
 acceptance. See [v2 acceptance](m3/REPRESENTATION_GATE_ACCEPTANCE.md).
-No calibrated legal-corpus artifact ships; agreement stays unassessed. Local OCR
-sandbox/browser were unavailable; required cloud executable evidence is pending.
+No calibrated legal-corpus artifact ships; agreement stays unassessed. Cloud executable OCR, browser and signed development receipts are available on
+PR #146. Final-head reruns and review status determine acceptance. Dev migrations
+`20261030235107` and `20261030235456` are installed; production is unchanged.
 No M3 closure, customer-data authorization or production deployment is claimed.
 
 <!-- PR #140 verification receipt; measured code head, not production authorization. -->

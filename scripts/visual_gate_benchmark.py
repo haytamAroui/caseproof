@@ -36,6 +36,12 @@ def main() -> None:
             'critical_review_cases':len(review),'flagged_or_unreliable':len(flagged),
             'critical_cases_not_flagged':len(review)-len(flagged),
             'clean_cases':len(control),'clean_false_alerts':sum(r['state']!='not_assessed' for r in control),
+            'detector_true_positives':sum(r['state']=='representation_conflict' for r in review),
+            'detector_false_positives':sum(r['state']=='representation_conflict' for r in control),
+            'anomalous_abstentions':sum(r['state']=='ocr_unreliable' for r in review),
+            'strict_detection_recall':sum(r['state']=='representation_conflict' for r in review)/len(review),
+            'detector_precision': (sum(r['state']=='representation_conflict' for r in review)/
+                max(1,sum(r['state']=='representation_conflict' for r in review+control))),
             'accepted_matches':0,'calibration':'not_available',
             'accuracy_claim':'None; synthetic labels, one run, uncalibrated OCR and limited detector.',
             'ablation':ablation(engine)}

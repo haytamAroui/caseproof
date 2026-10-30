@@ -95,3 +95,9 @@ the old function, while preserving recorded attestations. Production is not targ
 
 A separate review finding fixed long-page uniqueness: normalization-budget overflow
 abstains before anchoring, rather than silently truncating and selecting one crop.
+
+Attestation migration installed through connected MCP in caseproof-dev as
+`20261030235456_regional_review_attestation`, after disposable direct-RPC tests
+passed in run 41147125040. The JSON column is non-null with an empty-array default;
+anon function execution and direct authenticated decision-table SELECT/INSERT
+remain denied. No production schema change.

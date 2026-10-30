@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
+from pathlib import Path
 
+import reportlab
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from reportlab.pdfgen import canvas
 
@@ -17,8 +19,8 @@ class VisualFixture:
 
 
 def font(size: int) -> ImageFont.FreeTypeFont:
-    # Pillow searches platform font directories; no Linux-only absolute path.
-    return ImageFont.truetype('DejaVuSans.ttf', size)
+    # This font ships with the locked ReportLab dependency on every platform.
+    return ImageFont.truetype(str(Path(reportlab.__file__).parent / 'fonts' / 'Vera.ttf'), size)
 
 
 def corpus() -> tuple[VisualFixture, ...]:

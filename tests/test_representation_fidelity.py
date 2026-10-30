@@ -58,11 +58,12 @@ def test_real_fixture_formats_preserve_trap():
 
 
 def test_pixel_detector_flags_midline_but_not_clean_or_underline():
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
     from infrastructure.parsers.visual_edit_candidates import has_midline_candidate
+    from tests.fixtures.visual_fidelity import font as fixture_font
 
-    font = ImageFont.truetype("DejaVuSans.ttf", 44)
+    font = fixture_font(44)
     clean = Image.new("RGB", (200, 100), "white")
     draw = ImageDraw.Draw(clean)
     draw.text((20, 20), "1000", fill="black", font=font)

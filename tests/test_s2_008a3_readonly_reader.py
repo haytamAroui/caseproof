@@ -215,7 +215,7 @@ def test_all_new_code_is_unwired_and_migration_unchanged() -> None:
         "20261030160341_retention_storage_fence.sql",
         "20261030161844_complete_dossier_journey.sql",
             "20261030235107_representation_snapshot_read.sql",
-            "20261030235221_regional_review_attestation.sql",
+            "20261030235456_regional_review_attestation.sql",
     }
     workflow = (root / ".github/workflows/kernel-boundary.yml").read_text()
     assert "scripts.verify_s2_008a3_reader" in workflow
