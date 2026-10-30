@@ -1,8 +1,10 @@
 """Protected M0.5 live wrapper: create, register, execute, always teardown."""
 from __future__ import annotations
+
 import os
 import sys
 from uuid import UUID
+
 from scripts.m05_registry import record
 from scripts.teardown_test_run import teardown
 from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin
