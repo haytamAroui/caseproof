@@ -168,6 +168,31 @@ def verify_registration(
                 else:
                     raise LiveFixtureError("unauthorized original download accepted")
         print("LIVE_MULTISOURCE_STORAGE: four signed uploads, hash readbacks, outsider denials")
+        # A new process must reconstruct the same signed source metadata and bytes.
+        _server_stop(proc)
+        proc = None
+        proc = _server_start()
+        fresh = signin.sign_in(credentials[0])
+        if fresh.user_id != actors[0]:
+            raise LiveFixtureError("fresh sign-in changed the matter owner")
+        for ref, (_, _, payload) in zip(refs, sources, strict=True):
+            if stored.get_verified(ref, fresh.access_token) != payload:
+                raise LiveFixtureError("cold restart original bytes changed")
+        print("LIVE_MULTISOURCE_REOPEN: cold process restart and fresh signed readback")
+
+        if admin_rpc(admin_key, "revoke", {
+            "p_run": run_id, "p_owner": actors[0], "p_case": case,
+        }) is not True:
+            raise LiveFixtureError("bundle matter revoke failed")
+        for ref in refs:
+            try:
+                stored.get_verified(ref, fresh.access_token)
+            except PrivateStorageDenied:
+                pass
+            else:
+                raise LiveFixtureError("revoked owner still reads a bundle member")
+        print("LIVE_MULTISOURCE_REVOKED: all four original paths denied")
+
 
     finally:
         if proc is not None:
@@ -178,21 +203,34 @@ def verify_registration(
         admin_rpc(admin_key, "cleanup", {"p_run": run_id, "p_owner": actors[0]})
 
 def main() -> int:
-    """Fail closed: registration-only probes are not five-check acceptance."""
     if (
         os.getenv("CASEPROOF_DEV_LIVE_MULTISOURCE") != "YES"
         or os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof"
         or os.getenv("GITHUB_EVENT_NAME") != "workflow_dispatch"
         or os.getenv("GITHUB_REF") != "refs/heads/feat/m1-live-multisource-acceptance"
     ):
-        print("LIVE_MULTISOURCE_FAILED: protected draft dispatch required", file=sys.stderr)
+        print("LIVE_MULTISOURCE_FAILED: protected feature-branch dispatch required", file=sys.stderr)
         return 1
-    print(
-        "LIVE_MULTISOURCE_NOT_ACCEPTED: real uploads, SHA-256 readback, "
-        "foreign denial, revocation and cold restart are not implemented",
-        file=sys.stderr,
-    )
-    return 1
+    from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin
+    from scripts.verify_m1_ephemeral_signed_private import ephemeral_private_probe
+
+    publishable = os.getenv("CASEPROOF_DEV_PUBLISHABLE_KEY", "")
+    admin_key = os.getenv("CASEPROOF_DEV_AUTH_ADMIN_KEY", "")
+    if not publishable.startswith("sb_publishable_") or not admin_key:
+        print("LIVE_MULTISOURCE_FAILED: missing protected credentials", file=sys.stderr)
+        return 1
+    try:
+        ephemeral_private_probe(
+            admin=GoTrueDevAdmin(admin_key),
+            probe=lambda credentials: verify_registration(
+                credentials, admin_key=admin_key, publishable=publishable,
+            ),
+        )
+        print("LIVE_MULTISOURCE_PROBE_PASSED: signed four-source storage/revocation/restart")
+        return 0
+    except Exception as exc:
+        print(f"LIVE_MULTISOURCE_FAILED: {type(exc).__name__}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
