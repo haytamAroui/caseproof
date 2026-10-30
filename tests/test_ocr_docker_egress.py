@@ -1,8 +1,15 @@
 """Prove denied outbound HTTP at the container network boundary."""
 import errno
+import os
 import socket
 
+import pytest
 
+
+@pytest.mark.skipif(
+    os.getenv("CASEPROOF_EGRESS_PROBE") != "1",
+    reason="Executed by the required isolated Docker probe workflow",
+)
 def test_outbound_http_is_denied_by_network_boundary():
     # Numeric public IPv4 address avoids DNS and proxy configuration.
     try:

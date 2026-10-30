@@ -11,10 +11,10 @@ import hashlib
 import io
 import os
 import resource
-import sys
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
