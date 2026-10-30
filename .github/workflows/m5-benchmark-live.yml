@@ -4,6 +4,7 @@ on:
   push:
     branches: [feat/final-hardening-and-verification]
     paths:
+      - apps/api/signed_document_parse.py
       - infrastructure/parsers/pdf_ocr.py
       - tests/test_ocr_docker_egress.py
       - docker/ocr-egress.Dockerfile
@@ -38,6 +39,7 @@ jobs:
       CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
       CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
       CASEPROOF_PHASE3_LIVE: "YES"
+      CASEPROOF_OCR_DIAGNOSTICS: "YES"
       CASEPROOF_OCR_SANDBOX: docker
       CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
     steps:
