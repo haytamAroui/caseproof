@@ -5,12 +5,11 @@ has no durable manifest must not be reaped by guessing email domains or paths.
 """
 from __future__ import annotations
 
-
 import json
 import os
 import secrets
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
