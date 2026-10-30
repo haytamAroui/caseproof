@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import re
 from typing import Any
 from uuid import UUID
 
@@ -51,13 +52,73 @@ class SupabaseHeadlessMatterStore:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
 
     def manifest(self, *, bearer: str, case_id: str) -> list[dict[str, Any]]:
-        # Phase 3 manifests identify source versions, not exhibit numbers.
-        # Do not infer legal exhibit identity from filenames or upload order.
-        return [
-            {"role": s["role"], "source_id": s["document_id"],
-             "version_id": s["version_id"], "filename": s["filename"]}
-            for s in self._bundle(bearer=bearer, case_id=case_id)
-        ]
+        sources = self._bundle(bearer=bearer, case_id=case_id)
+        inventories = [s for s in sources if s["role"] == "inventory"]
+        exhibits = [s for s in sources if s["role"] == "exhibit"]
+        if len(inventories) != 1 or len(exhibits) != 2:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        inventory = inventories[0]
+        try:
+            original = self.client.library.read(
+                bearer=bearer, case_id=case_id,
+                document_id=inventory["document_id"], version_id=inventory["version_id"],
+            )
+            text = original.decode("utf-8", errors="strict")
+        except (PrivateStorageFailure, UnicodeError):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        # Inventory is authoritative for numbering, but filename matching
+        # cannot be trusted as legal identity. Keep ambiguous sources unresolved.
+        mentions = re.findall(
+            r"(?i)\\b(stuk|pi[eè]ce)\\s+(\\d{1,4})\\s+([^;\\n]+)", text,
+        )
+        results: list[dict[str, Any]] = []
+        for label, number, description in mentions:
+            candidates = [
+                s for s in exhibits
+                if all(token in s["filename"].casefold() for token in
+                       (("stuk" if label.casefold() == "stuk" else "piece"), number))
+            ]
+            item: dict[str, Any] = {
+                "label": label.casefold(), "number": number,
+                "inventory_description": description.strip(),
+            }
+            if len(candidates) == 1:
+                source = candidates[0]
+                item.update({
+                    "source_id": source["document_id"], "version_id": source["version_id"],
+                    "source_sha256": source["sha256"],
+                })
+                # Only use persisted, integrity-verified OCR geometry; a missing
+                # sidecar never creates fabricated coordinates.
+                if label.casefold() != "stuk":
+                    try:
+                        _, geometry = self.client.read_geometry(
+                            bearer, source["version_id"], 1,
+                        )
+                        words = geometry["words"]
+                        matches = [
+                            w for w in words if isinstance(w, dict)
+                            and str(w.get("text", "")).casefold().strip(".,:") in
+                            {"piece", "pièce", number}
+                        ]
+                        if matches:
+                            w = matches[0]
+                            if all(type(w.get(k)) is int for k in
+                                   ("left", "top", "width", "height")):
+                                item["ocr_crop"] = {
+                                    "page_number": 1,
+                                    "left": w["left"], "top": w["top"],
+                                    "width": w["width"], "height": w["height"],
+                                    "coordinate_basis": geometry["coordinate_basis"],
+                                    "geometry_sha256": self.client.read_geometry(
+                                        bearer, source["version_id"], 1,
+                                    )[0].geometry_sha256,
+                                }
+                                item["ocr_uncertainty"] = "requires_human_confirmation"
+                    except AccessRejected:
+                        pass
+            results.append(item)
+        return results
 
     def _review_rpc(self, bearer: str, case_id: str, brief_id: str,
                     snapshot_hash: str, action: str, **fields: object) -> dict[str, Any]:
