@@ -28,9 +28,16 @@ jobs:
         run: uv run --locked --with pytest --with python-docx --with reportlab --with pillow python -m pytest -q tests/test_fixture_factory.py tests/test_dossier_journey.py
       - name: Hostile DOCX injection and discovery egress regression
         run: uv run --locked --with pytest --with python-docx python -m pytest -q tests/test_m5_discovery_sequence_security.py
-      - name: Execute signed 150-page 60-reference stress dossier and teardown
+      - name: Execute complete mixed-evidence dossier and scoped teardown
         run: uv run --with python-docx --with reportlab --with pillow python -m scripts.dossier_live
       - name: Unreadable original must remain unprocessed in the live API
         env:
           CASEPROOF_DOSSIER_UNREADABLE: "YES"
         run: uv run --locked --with python-docx --with reportlab --with pillow python -m scripts.dossier_live
+      - name: Downloadable synthetic originals and scoped outputs
+        if: success()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: caseproof-synthetic-dossier-demo
+          path: /tmp/caseproof-dossier-demo
+          retention-days: 7

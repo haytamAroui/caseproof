@@ -7,6 +7,7 @@ import http.client
 import io
 import json
 import os
+from pathlib import Path
 from uuid import uuid4
 from zipfile import ZipFile
 
@@ -72,6 +73,7 @@ def main():
             record(os.environ['CASEPROOF_DEV_AUTH_ADMIN_KEY'], os.environ['CASEPROOF_P3_RUN_ID'], 'storage_file', path)
             success(token, 'POST', f'/dev/live/matters/{case}/sources/{row["document_id"]}/{row["version_id"]}/upload',
                     {'content_base64': base64.b64encode(source.content).decode()})
+        for source, row in zip(bundle, registered, strict=True):
             status, original = request(token, 'GET', base + f'/sources/{row["version_id"]}/original')
             if status != 200 or hashlib.sha256(original).hexdigest() != source.sha256:
                 raise RuntimeError('DOSSIER_ORIGINAL_READBACK_HASH_FAILED')
@@ -120,6 +122,16 @@ def main():
         with ZipFile(io.BytesIO(derivative)) as archive:
             if b'scoped review annotations' not in archive.read('word/document.xml'):
                 raise RuntimeError('DOSSIER_DOCX_ANNOTATIONS_MISSING')
+        artifacts = Path('/tmp/caseproof-dossier-demo')
+        artifacts.mkdir(exist_ok=True)
+        for source in bundle:
+            (artifacts / source.filename).write_bytes(source.content)
+        (artifacts / 'report.json').write_text(json.dumps(exported, ensure_ascii=False, indent=2), encoding='utf-8')
+        (artifacts / 'report.md').write_bytes(markdown)
+        (artifacts / 'caseproof-annotated.docx').write_bytes(derivative)
+        status, original_after_export = request(token, 'GET', base + f'/sources/{versions["draft"]}/original')
+        if status != 200 or hashlib.sha256(original_after_export).hexdigest() != bundle[0].sha256:
+            raise RuntimeError('DOSSIER_EXPORT_CHANGED_ORIGINAL_DRAFT')
         print('DOSSIER_PAGE_CROP_REVIEW_JSON_MARKDOWN_DOCX_PASSED', flush=True)
         _server_stop(proc)
         proc = _server_start()
