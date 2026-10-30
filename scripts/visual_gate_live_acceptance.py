@@ -22,6 +22,44 @@ from tests.fixtures.visual_fidelity import corpus
 from tests.test_phase4_headless_api import docx
 
 
+def verify_live_panel(token: str, case: str, brief: str, region_id: str) -> None:
+    """Real signed browser → API → private crop → persisted human review."""
+    import shutil
+
+    from playwright.sync_api import expect, sync_playwright
+
+    output=Path('/tmp/caseproof-visual-gate')
+    output.mkdir(exist_ok=True)
+    with sync_playwright() as p:
+        browser=p.chromium.launch(headless=True,executable_path=shutil.which('google-chrome') or shutil.which('chromium'),
+                                  args=['--no-sandbox'])
+        page=browser.new_page(viewport={'width':1440,'height':1000})
+        # Authorized signed dev identity in memory only; never screenshot, log,
+        # persist or put the bearer in a URL. The UI's session bridge owns it.
+        page.add_init_script('window.caseproofSession={getBearer:async()=>'+json.dumps(token)+'};')
+        page.goto('http://127.0.0.1:8765/dev/clearbrief')
+        page.locator('#case-id').fill(case)
+        page.locator('#brief-id').fill(brief)
+        page.get_by_role('button',name='Inspect dossier').click()
+        expect(page.locator('#fidelity-panel .fidelity-finding')).to_have_count(3,timeout=120000)
+        finding=page.locator('#fidelity-panel .fidelity-finding').first
+        expect(finding.get_by_text('Preserved crop hashes checked.',exact=False)).to_be_visible(timeout=120000)
+        expect(finding.locator('img')).to_have_count(1)
+        expect(finding.get_by_text('⚠ Representation conflict',exact=False)).to_be_visible()
+        finding.get_by_role('textbox',name='Rationale').fill('Signed browser inspection of the preserved synthetic crop.')
+        finding.get_by_role('checkbox').check()
+        finding.get_by_role('button',name='Save human review').click()
+        expect(finding.get_by_text('Human review saved.',exact=False)).to_be_visible(timeout=30000)
+        # Full UI contains development UUID inputs; hide only those identifiers
+        # in the screenshot, not the result or its source image.
+        page.screenshot(path=str(output/'signed-browser.png'),full_page=True,
+                        mask=[page.locator('#case-id'),page.locator('#brief-id')])
+        page.set_viewport_size({'width':390,'height':844})
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        browser.close()
+    print('VISUAL_REAL_SIGNED_BROWSER_CROP_INSPECTION_AND_REVIEW_PASSED',flush=True)
+
+
 def main() -> None:
     key=os.environ['CASEPROOF_DEV_PUBLISHABLE_KEY']
     signin=SupabasePasswordSignin(PROJECT_REF,key)
@@ -77,6 +115,7 @@ def main() -> None:
             'decision':'CONFIRMED_QUALIFIED','rationale':'Synthetic fixture inspection; conflicting struck amount retained.',
             'reviewed_region_ids':[r['region_id'] for r in selected]}
         json_request(token,'POST',base+'/reviews',review)
+        verify_live_panel(token, case, brief, selected[0]['region_id'])
         exported=json_request(token,'GET',base+'/export?snapshot_hash='+snapshot)
         if exported['human_decisions'][0].get('reviewed_region_ids') != sorted(review['reviewed_region_ids']):
             raise RuntimeError('VISUAL_ATTESTATION_NOT_PERSISTED')
