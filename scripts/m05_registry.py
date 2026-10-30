@@ -18,7 +18,7 @@ def request(key: str, method: str, path: str, payload=None):
         raise RuntimeError("protected dev admin credential required")
     headers = {"apikey": key, "Content-Type": "application/json",
                "Accept": "application/json", "Accept-Profile": "caseproof",
-               "Content-Profile": "caseproof", "Prefer": "return=representation"}
+               "Content-Profile": "caseproof", "Prefer": "return=representation,resolution=merge-duplicates"}
     if key.startswith("eyJ"):
         headers["Authorization"] = "Bearer " + key
     conn = http.client.HTTPSConnection(HOST, timeout=20)
