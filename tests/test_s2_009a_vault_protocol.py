@@ -465,5 +465,5 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
         "20261030115000_m05_protected_registry_rpc.sql",
         "20261030120000_m05_verify_empty.sql",
         "20261030155817_matter_retention.sql",
-        "20261030155944_retention_storage_fence.sql",
+        "20261030160341_retention_storage_fence.sql",
     }

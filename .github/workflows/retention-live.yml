@@ -4,6 +4,7 @@ on:
   push:
     branches: [feat/production-hardening]
     paths:
+      - supabase/migrations/**
       - scripts/retention_live*.py
       - scripts/soft_delete_matter.py
       - scripts/purge_deleted_matters.py

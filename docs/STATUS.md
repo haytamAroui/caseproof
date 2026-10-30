@@ -4,6 +4,20 @@
 
 **Most recent stated narrow proof:** [PR #119](https://github.com/haytamAroui/caseproof/pull/119) and [signed synthetic TXT live receipt](m2/LIVE_SIGNED_CORRECTION_RECHECK_2026-10-28.md) establish a particular authenticated TXT source/brief/review/correction/recheck/restart scenario. **Open:** verified full PDF/DOCX/scanned corpus and OCR cropping, reference/page split, web reviewer, released actual DOCX/report, confidentiality review, pilot and paid demand. No claim that other historical M1/M2 status below is current; dates and exact receipts decide what was actually tested.
 
+
+**30 October 2026 retention engineering update (PR #136):** Two-phase matter
+retention is installed on `caseproof-dev` only, with signed creator deletion,
+owner/crop/original/review/export denial, 30-day grace, legal-hold checks,
+Storage-first purge and minimal pseudonymous erasure receipt. Initial signed
+OCR/review/restart/deletion acceptance and teardown passed in
+[run 41085730618](https://github.com/haytamAroui/caseproof/actions/runs/41085730618).
+Real concurrent Storage-upload denial passed in
+[run 41086260235](https://github.com/haytamAroui/caseproof/actions/runs/41086260235).
+Canonical deployed migrations: `20261030155817` and `20261030160341`.
+See [retention design](security/RETENTION_DESIGN.md) and [backup limitations](../SECURITY.md).
+This does not approve confidential client data, full worker egress, legal
+accuracy, a production restore procedure or a commercial launch.
+
 ---
 
 ## Historical dated status log (retained; superseded for product direction)
