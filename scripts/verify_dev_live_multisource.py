@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import os
+import sys
 from uuid import UUID, uuid4
 
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
@@ -83,3 +85,24 @@ def verify_registration(
         if proc is not None:
             _server_stop(proc)
         admin_rpc(admin_key, "cleanup", {"p_run": run_id, "p_owner": actors[0]})
+
+def main() -> int:
+    """Fail closed: registration-only probes are not five-check acceptance."""
+    if (
+        os.getenv("CASEPROOF_DEV_LIVE_MULTISOURCE") != "YES"
+        or os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof"
+        or os.getenv("GITHUB_EVENT_NAME") != "workflow_dispatch"
+        or os.getenv("GITHUB_REF") != "refs/heads/feat/m1-live-multisource-acceptance"
+    ):
+        print("LIVE_MULTISOURCE_FAILED: protected draft dispatch required", file=sys.stderr)
+        return 1
+    print(
+        "LIVE_MULTISOURCE_NOT_ACCEPTED: real uploads, SHA-256 readback, "
+        "foreign denial, revocation and cold restart are not implemented",
+        file=sys.stderr,
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
