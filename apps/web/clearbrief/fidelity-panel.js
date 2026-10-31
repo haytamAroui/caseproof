@@ -30,6 +30,7 @@ window.CaseProofFidelity = {mount({root, api, context}) {
     const crops=node("div","","fidelity-crops");article.append(crops);
     const cropStatus=node("p",assessment.regions.length?"Loading preserved crops…":"No region anchored to this reference.","small");article.append(cropStatus);
     if(f.source_text_context){article.append(node("strong",`Source text (${f.source_language||"language undeclared"}) — original representation, not a translation`),node("pre",f.source_text_context));}
+    if(f.source_text_context_partial)article.append(node("p","Source context is truncated. Inspect the full preserved page before deciding.","notice"));
     if(f.translation_review_required&&!assessment.regions.length)article.append(node("p","Translated text has no literal source anchor. Download the preserved source page and inspect its context before recording support.","notice"));
     const form=document.createElement("form");form.noValidate=true;
     const actionLabel=node("label","Human disposition");const action=document.createElement("select");

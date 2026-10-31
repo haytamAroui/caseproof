@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from typing import Any
 
 CONTRACT = "caseproof-verification-contracts-v1"
@@ -84,6 +85,13 @@ def add_report_contract(report: dict[str, Any], region_manifest: dict[str, objec
     report["coverage"]["source_pages_total"] = None if unknown else len(ledger)
     report["coverage"]["source_pages_ocr_processed"] = sum(p["method"] == "OCR_LOCAL_WORKER" for p in ledger)
     report["coverage"]["source_pages_failed_or_skipped"] = sum(p["method"] != "OCR_LOCAL_WORKER" for p in ledger)
+    report["coverage"]["dimension_counts"] = {
+        "identity": dict(Counter(f['identity'] for f in report['findings'])),
+        "page_mapping": dict(Counter(f['page_mapping'] for f in report['findings'])),
+        "literal": dict(Counter(f['literal_assessment']['state'] for f in report['findings'])),
+        "visual": dict(Counter(f['visual_assessment']['state'] for f in report['findings'])),
+        "human_support": dict(Counter(f['support'] for f in report['findings'])),
+    }
     report["abstentions"] = [{"reference_id": f["reference_id"],
         "identity_reason": f.get("identity_reason"), "page_reason": f.get("page_mapping_reason"),
         "literal_reason": f["literal_assessment"]["reason"],

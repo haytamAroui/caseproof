@@ -18,7 +18,7 @@ no signed input or state. The result could disagree with the intended report con
    languages. Source IDs must be authorized bundle members. These declarations can
    require review, never confirm a translation or change permissions. Explicit
    traduction/vertaling/translation markers cannot be cleared by same-language input.
-   Unanchored translated prose retains bounded original-language text and an authenticated source-page download; the panel requires source availability plus explicit human inspection before review. Language detection is not automated; undeclared languages are explicitly unknown.
+   Unanchored translated prose retains bounded original-language text and an authenticated source-page download; the panel requires source availability plus explicit human inspection attestation before review; download availability is not proof that a person read it. Language detection is not automated; undeclared languages are explicitly unknown.
 3. Literal text and visual assessment remain separate. Translated prose never becomes
    a literal exact match because of semantic similarity. OCR/conflict takes display
    priority while independent translation_review_required remains true. Source text,
