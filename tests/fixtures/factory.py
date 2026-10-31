@@ -125,3 +125,54 @@ class FixtureFactory:
                 raise RuntimeError("fixture_original_hash_unverified")
             result.append((source.filename, doc, version))
         return ProvisionedBundle(matter, tuple(result))
+
+
+def generate_fidelity_bundle() -> tuple[SyntheticSource, ...]:
+    """Paired clean/redlined text PDFs and an image-only annotated scan.
+
+    Ground truth is generated here, never used as runtime detector output.
+    """
+    from docx import Document
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    from reportlab.pdfgen import canvas
+
+    sources = []
+    document = Document()
+    paragraph = document.add_paragraph("Monthly rent EUR ")
+    paragraph.add_run("1000").font.strike = True
+    paragraph.add_run(" 1200").font.underline = True
+    output = io.BytesIO()
+    document.save(output)
+    sources.append(SyntheticSource(
+        "redline.docx", "exhibit",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", output.getvalue()))
+    for redline in (False, True):
+        output = io.BytesIO()
+        pdf = canvas.Canvas(output, pagesize=(600, 300), invariant=1)
+        pdf.setFont("Helvetica", 24)
+        pdf.drawString(40, 220, "Monthly rent EUR 1000 1200" if redline else "Monthly rent EUR 1200")
+        if redline:
+            x = 40 + pdf.stringWidth("Monthly rent EUR ", "Helvetica", 24)
+            pdf.line(x, 228, x + pdf.stringWidth("1000", "Helvetica", 24), 228)
+        pdf.showPage()
+        pdf.save()
+        sources.append(SyntheticSource("redline.pdf" if redline else "clean.pdf",
+                                       "exhibit", "application/pdf", output.getvalue()))
+    image = Image.new("RGB", (1200, 600), "white")
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 44)
+    draw.text((50, 100), "Monthly rent EUR", font=font, fill="black")
+    draw.text((50, 180), "1000", font=font, fill="black")
+    draw.line((45, 207, 170, 207), fill="black", width=4)
+    draw.text((210, 180), "1200", font=font, fill="black")
+    draw.line((190, 235, 200, 220, 210, 235), fill="black", width=3)
+    stamp = Image.new("RGB", (300, 100), "white")
+    ImageDraw.Draw(stamp).text((10, 10), "DRAFT STAMP", font=font, fill="black")
+    image.paste(stamp.filter(ImageFilter.GaussianBlur(6)), (50, 350))
+    output = io.BytesIO()
+    pdf = canvas.Canvas(output, pagesize=(600, 300), invariant=1)
+    pdf.drawInlineImage(image, 0, 0, width=600, height=300)
+    pdf.showPage()
+    pdf.save()
+    sources.append(SyntheticSource("redline-scan.pdf", "exhibit", "application/pdf", output.getvalue()))
+    return tuple(sources)

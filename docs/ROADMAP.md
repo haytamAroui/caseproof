@@ -227,3 +227,11 @@ The [SEC-01–SEC-16 checklist](security/PILOT_DATA_SECURITY_GATE.md) is **OPEN*
 - **Lifecycle:** disposable runs need explicit run ownership and a dedicated scoped teardown before automated deletion is enabled. The CLI deliberately rejects `delete-all` rather than risk destroying persistent Phase 3 acceptance evidence.
 - **Acceptance:** protected Phase 3 workflow regenerates the synthetic bundle and executes the signed nine-step OCR/crop round-trip; offline tests run first. The persistent acceptance run is **not** a disposable isolated run. Future milestones must introduce separate run-scoped cleanup with auditable ownership and no cross-run deletion.
 - **Status:** factory implementation and workflow wiring are engineering work; no claim of all-CI-green or complete zero-manual Auth lifecycle until a run on the committed revision passes.
+
+
+## Representation fidelity extension — 30 October 2026
+
+See [ADR 0019](adr/0019-representation-conflict-gate.md). Text/visual disagreement
+is a fidelity review trigger, not a product pivot or semantic verdict. New
+synthetic fixtures and an opt-in resolver gate are under development; live adapter,
+private crop, persistence and web rendering acceptance remain open.

@@ -2,9 +2,16 @@
 
 [ADR 0019](adr/0019-evidence-engine-and-first-market.md), [roadmap](ROADMAP.md) and [workflow](PRODUCT_WORKFLOW.md) now separate the reusable engine ambition from Belgian litigation as the first market. Expansion is conditional on customer pull, technical reuse, measured benefit and commercial commitment with explicit owner approval. This documentation update adds no product features, UI, migration, client-data permission or release.
 
-Latest merged engineering proof: PR #140, merge `5ab54710c21d797bd41295754e7a95e4331c0449`; tested head `82330f205084ffa7204540c2cd0bfe6131793d09`, all 15 workflows green. [Dossier](https://github.com/haytamAroui/caseproof/actions/runs/41105503131), [benchmark](https://github.com/haytamAroui/caseproof/actions/runs/41105503677), [CLI](https://github.com/haytamAroui/caseproof/actions/runs/41105503385), [retention](https://github.com/haytamAroui/caseproof/actions/runs/41105503401). Benchmark discovery: 2,627.645 ms, 89,060 KiB API peak RSS, synthetic reference detection 60 TP / 0 FP / 0 FN. Dossier normal/edge counts: 8/9 detected, 3/3 identity-page checked, 5/6 unresolved; fully checked remains false. These are scoped development observations, not legal accuracy, browser acceptance, confidential-client approval or commercial proof. Earlier dated baselines below remain historical.
+PR #140 signed-workflow baseline (before representation gate PR #142): PR #140, merge `5ab54710c21d797bd41295754e7a95e4331c0449`; tested head `82330f205084ffa7204540c2cd0bfe6131793d09`, all 15 workflows green. [Dossier](https://github.com/haytamAroui/caseproof/actions/runs/41105503131), [benchmark](https://github.com/haytamAroui/caseproof/actions/runs/41105503677), [CLI](https://github.com/haytamAroui/caseproof/actions/runs/41105503385), [retention](https://github.com/haytamAroui/caseproof/actions/runs/41105503401). Benchmark discovery: 2,627.645 ms, 89,060 KiB API peak RSS, synthetic reference detection 60 TP / 0 FP / 0 FN. Dossier normal/edge counts: 8/9 detected, 3/3 identity-page checked, 5/6 unresolved; fully checked remains false. These are scoped development observations, not legal accuracy, browser acceptance, confidential-client approval or commercial proof. Earlier dated baselines below remain historical.
 
 Next work: validate practitioner pain and total effort; close supported verification/coverage and output gaps for the existing task. Web implementation remains a separately scoped task; no UI work is initiated by this update.
+## Representation fidelity candidate — 30 October 2026
+
+Feature branch `feat/representation-conflict`: paired clean/redlined/scan fixture
+factory, conservative pixel midline candidate detector, source-bound regional
+comparison and unresolved literal-check gate. See [ADR 0019](adr/0019-representation-conflict-gate.md).
+Live adapter/persistence/UI wiring remains open; no M3 completion or detector
+accuracy claim. Exact CI evidence belongs to the feature PR.
 
 <!-- PR #140 verification receipt; measured code head, not production authorization. -->
 ## PR #140 OCR hardening verification (30 October 2026)

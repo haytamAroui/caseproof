@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from application.litigation.library import EvidencePreview
+from application.litigation.representation_fidelity import RepresentationComparison, RepresentationState
 from domains.disputes.exhibits import ExhibitRegister, MappingState
 
 
@@ -19,6 +20,8 @@ class DraftCheckError(ValueError):
 
 
 class CitationCheckState(StrEnum):
+    REPRESENTATION_CONFLICT = "representation_conflict"
+    OCR_UNRELIABLE = "ocr_unreliable"
     EXACT_MATCH = "exact_match"
     NO_QUOTATION = "reference_checked_no_quotation"
     QUOTE_NOT_FOUND = "quote_not_found"
@@ -90,6 +93,7 @@ class CitationObservation:
     text_start: int | None
     text_end: int | None
     scope_note: str
+    representation_comparisons: tuple[RepresentationComparison, ...] = ()
     # EXACT_MATCH is lexical fidelity within one parsed span, NOT
     # semantic support, document authenticity or legal approval.
 
@@ -121,6 +125,7 @@ def _note(reference: DraftReference, state: CitationCheckState,
         row.representation_id if row else None,
         span[0] if span else None, span[1] if span else None,
         state.value,
+        preview.representation_comparisons if preview else (),
     )
 
 
@@ -179,6 +184,21 @@ def check_brief_references(
             observations.append(_note(reference, CitationCheckState.INCOMPLETE_EXTRACTION,
                                       exhibit_id=resolved.exhibit_id, preview=matched_preview))
             continue
+        relevant = []
+        for comparison in matched_preview.representation_comparisons:
+            if (comparison.original_sha256 != row.original_sha256
+                    or comparison.representation_id != row.representation_id):
+                raise DraftCheckError("stale representation comparison")
+            if comparison.pdf_page == page.pdf_page:
+                relevant.append(comparison)
+        blocked = {item.state for item in relevant}
+        if blocked - {RepresentationState.NOT_ASSESSED}:
+            state = (CitationCheckState.REPRESENTATION_CONFLICT
+                     if RepresentationState.REPRESENTATION_CONFLICT in blocked
+                     else CitationCheckState.OCR_UNRELIABLE)
+            observations.append(_note(reference, state, exhibit_id=resolved.exhibit_id,
+                                      preview=matched_preview))
+            continue
         # Derived representation text must have source-linked bounds.
         if any(
             type(start) is not int or type(end) is not int
@@ -225,6 +245,7 @@ def check_brief_references(
         CitationCheckState.REFERENCE_UNRESOLVED, CitationCheckState.REFERENCE_AMBIGUOUS,
         CitationCheckState.PAGE_UNMAPPED, CitationCheckState.SOURCE_UNAVAILABLE,
         CitationCheckState.INCOMPLETE_EXTRACTION, CitationCheckState.MULTIPLE_MATCHES,
+        CitationCheckState.REPRESENTATION_CONFLICT, CitationCheckState.OCR_UNRELIABLE,
     }
     return DraftCheckReport(
         brief.case_id, brief.version_id, brief.sha256_hex, register.revision, all_obs,
