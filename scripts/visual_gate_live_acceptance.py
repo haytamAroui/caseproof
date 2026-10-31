@@ -45,6 +45,7 @@ def verify_live_panel(token: str, case: str, brief: str, region_id: str) -> None
         finding=page.locator('#fidelity-panel .fidelity-finding').first
         expect(finding.get_by_text('Preserved crop hashes checked.',exact=False)).to_be_visible(timeout=120000)
         expect(finding.locator('img')).to_have_count(1)
+        assert finding.locator('img').evaluate('(image)=>image.complete && image.naturalWidth>0')
         expect(finding.get_by_text('⚠ Representation conflict',exact=False)).to_be_visible()
         finding.get_by_role('textbox',name='Rationale').fill('Signed browser inspection of the preserved synthetic crop.')
         finding.get_by_role('checkbox').check()

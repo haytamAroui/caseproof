@@ -101,3 +101,13 @@ def test_long_page_cannot_claim_uniqueness_from_truncated_prefix():
     result=select_visual_assessment(page,'1000')
     assert result['state']=='not_assessed' and result['regions']==[]
     assert result['reason']=='layer_alignment_budget_exceeded'
+
+
+def test_crop_review_requires_decoded_image_and_scoped_blob_policy():
+    from pathlib import Path
+
+    panel=Path('apps/web/clearbrief/fidelity-panel.js').read_text()
+    assert panel.index('await image.decode()') < panel.index('inspected.push(r.region_id)')
+    policy=Path('apps/api/litigation_development_app.py').read_text()
+    assert "img-src 'self' blob:; base-uri 'none'; form-action 'self'" in policy
+    assert "script-src 'self'; style-src 'self'" in policy

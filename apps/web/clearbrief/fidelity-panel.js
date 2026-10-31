@@ -57,7 +57,7 @@ window.CaseProofFidelity = {mount({root, api, context}) {
         view.append(node("p",`Page ${r.page_number} · ${r.reason}`,"small"));
         const side=node("div","","fidelity-pair");const text=node("div","");text.append(node("strong","Extracted text"),node("pre",r.extracted_text||"No independent text layer"),node("strong","Visual transcription"),node("pre",r.visual_text||"Unreadable"));
         const image=document.createElement("img");image.alt=`Preserved source crop, page ${r.page_number}`;image.width=Math.max(1,r.bbox[2]-r.bbox[0]);image.height=Math.max(1,r.bbox[3]-r.bbox[1]);
-        const url=URL.createObjectURL(new Blob([bytes],{type:"image/png"}));urls.add(url);image.src=url;side.append(text,image);view.append(side);crops.append(view);inspected.push(r.region_id);
+        const url=URL.createObjectURL(new Blob([bytes],{type:"image/png"}));urls.add(url);image.src=url;await image.decode();if(seq!==sequence)return;side.append(text,image);view.append(side);crops.append(view);inspected.push(r.region_id);
       }
       cropStatus.textContent=assessment.regions.length?"Preserved crop hashes checked. Human inspection is still required.":"No region anchored; visual fidelity remains unassessed.";
     }catch{cropStatus.textContent="Crop unavailable or integrity check failed. Review is blocked; retry loading.";confirm.disabled=true;save.disabled=true;}

@@ -187,7 +187,7 @@ def create_litigation_development_app(
             response.headers["Content-Security-Policy"] = (
                 "default-src 'none'; script-src 'self'; style-src 'self'; "
                 "connect-src 'self' https://ldwmocpxwskvhoojndrd.supabase.co; "
-                "img-src 'self'; base-uri 'none'; form-action 'self'; "
+                "img-src 'self' blob:; base-uri 'none'; form-action 'self'; "
                 "frame-ancestors 'none'"
             )
         else:
