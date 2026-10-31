@@ -59,7 +59,7 @@ declare a uuid:=auth.uid(); o uuid; r caseproof.dossier_draft_revisions%rowtype;
 begin
  if a is null or coalesce(auth.jwt()->>'role','')<>'authenticated'
  or coalesce(auth.jwt()->>'is_anonymous','false')='true' or p_request is null
- or p_action not in ('status','reserve') or command is null or command !~ '^[0-9a-f]{64}$'
+ or p_action is null or p_action not in ('status','reserve') or command is null or command !~ '^[0-9a-f]{64}$'
  then raise exception 'unavailable' using errcode='42501'; end if;
  select c.org_id into o from caseproof.cases c
  join caseproof.organization_members m on m.org_id=c.org_id and m.user_id=a and m.active
