@@ -41,6 +41,26 @@ def json_request(token, method, path, payload=None):
     return json.loads(raw)
 
 
+def validate_reopened_artifacts(page: bytes, crop: bytes, derivative: bytes) -> None:
+    """Independently decode downloaded artifacts; magic bytes alone are insufficient."""
+    from docx import Document
+    from PIL import Image
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(page), strict=True)
+    if len(reader.pages) != 1:
+        raise RuntimeError('DOSSIER_EXPORTED_PAGE_COUNT_INVALID')
+    with Image.open(io.BytesIO(crop)) as image:
+        image.verify()
+    with Image.open(io.BytesIO(crop)) as image:
+        image.load()
+        if image.format != 'PNG' or min(image.size) < 1:
+            raise RuntimeError('DOSSIER_CROP_DECODE_FAILED')
+    document = Document(io.BytesIO(derivative))
+    if not any('scoped review annotations' in paragraph.text for paragraph in document.paragraphs):
+        raise RuntimeError('DOSSIER_REOPENED_DOCX_ANNOTATIONS_MISSING')
+
+
 def main():
     if os.getenv('GITHUB_REF') not in {'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main', 'refs/heads/feat/final-hardening-and-verification', 'refs/heads/feat/canonical-mcp-report-gate-20261031'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
         raise RuntimeError('protected dossier branch required')
@@ -187,6 +207,8 @@ def main():
         with ZipFile(io.BytesIO(derivative)) as archive:
             if b'scoped review annotations' not in archive.read('word/document.xml'):
                 raise RuntimeError('DOSSIER_DOCX_ANNOTATIONS_MISSING')
+        validate_reopened_artifacts(page, png, derivative)
+        print('DOSSIER_DOWNLOADED_PDF_PNG_DOCX_INDEPENDENTLY_REOPENED', flush=True)
         artifacts = Path('/tmp/caseproof-dossier-demo')
         artifacts.mkdir(exist_ok=True)
         for source in bundle:
