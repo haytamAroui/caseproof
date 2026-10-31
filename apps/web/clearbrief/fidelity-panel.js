@@ -12,6 +12,7 @@ window.CaseProofFidelity = {mount({root, api, context}) {
   const clear=()=>{for(const u of urls)URL.revokeObjectURL(u);urls.clear();list.replaceChildren();report=null;};
   const fail=()=>{status.textContent="Cannot open this snapshot. Check your session and access, then retry.";status.className="notice danger";};
   async function renderFinding(f,seq) {
+    if(seq!==sequence)return;
     const assessment=f.visual_assessment||{state:"not_assessed",reason:"visual_not_run",regions:[]};
     const article=node("article","","fidelity-finding");
     const title=node("h3",f.literal);article.append(title);
@@ -39,12 +40,13 @@ window.CaseProofFidelity = {mount({root, api, context}) {
       pending=pending||{signature,payload:{...payload,request_id:crypto.randomUUID()}};busy=true;save.disabled=true;load.disabled=true;form.setAttribute("aria-busy","true");
       try{await api(base()+"/reviews",{method:"POST",json:pending.payload});if(seq!==sequence)return;pending=null;cropStatus.textContent="Human review saved. The original conflict remains in the report.";}
       catch(error){
+        if(seq!==sequence)return;
         if([400,401,403,404,409,422].includes(error?.code)){
           pending=null;confirm.checked=false;
           cropStatus.textContent="Review rejected. Load the current snapshot and inspect again. Your rationale is kept in this session.";
         }else cropStatus.textContent="Review was not confirmed. Retry the same input; refresh after a snapshot conflict.";
       }
-      finally{busy=false;load.disabled=false;form.removeAttribute("aria-busy");save.disabled=!confirm.checked;}
+      finally{if(seq===sequence){busy=false;load.disabled=false;form.removeAttribute("aria-busy");save.disabled=!confirm.checked;}}
     });
     try{
       const batch=assessment.regions.length?await api(base()+`/snapshots/${report.snapshot_hash}/crops`,
@@ -74,9 +76,9 @@ window.CaseProofFidelity = {mount({root, api, context}) {
       if(data.schema!=="caseproof-dossier-v1"||!Array.isArray(data.findings))throw Error("invalid_report");report=data;
       status.textContent=`${data.findings.length} references. Visual agreement is uncalibrated; no legal conclusion is automated.`;
       if(!data.findings.length)list.append(node("p","No explicit references were found. Review processing coverage."));
-      for(const f of data.findings)await renderFinding(f,seq);
-    }catch{clear();fail();}finally{if(seq===sequence)load.disabled=false;}
+      for(const f of data.findings){if(seq!==sequence)return;await renderFinding(f,seq);}
+    }catch{if(seq===sequence){clear();fail();}}finally{if(seq===sequence)load.disabled=false;}
   });
   root.append(heading,node("p","Inspect uncertainty beside preserved source pixels. A matching quotation alone does not establish visual fidelity.","small"),load,status,list);
-  return {clear(){sequence++;clear();pending=null;drafts.clear();status.textContent="Session cleared. Reauthenticate before inspecting.";}};
+  return {clear(){sequence++;clear();pending=null;busy=false;load.disabled=false;drafts.clear();status.textContent="Session cleared. Reauthenticate before inspecting.";}};
 }};

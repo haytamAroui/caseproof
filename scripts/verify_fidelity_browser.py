@@ -37,11 +37,11 @@ def main() -> None:
         page.add_script_tag(content=Path('apps/web/clearbrief/fidelity-panel.js').read_text())
         page.add_style_tag(content=Path('apps/web/clearbrief/workspace.css').read_text())
         page.evaluate('''({report,png,sha})=>{
-          window.calls=[]; window.failSave=true;
-          window.CaseProofFidelity.mount({root:document.getElementById('panel'),context:()=>({caseId:'case',briefId:'brief'}),
+          window.calls=[]; window.failSave=true;window.testReport=report;
+          window.panel=window.CaseProofFidelity.mount({root:document.getElementById('panel'),context:()=>({caseId:'case',briefId:'brief'}),
             api:async(url,options)=>{window.calls.push({url,options});
-              if(url.endsWith('/crops'))return {snapshot_hash:report.snapshot_hash,crops:[{
-                region_id:'b'.repeat(64),crop_sha256:sha,original_sha256:'c'.repeat(64),crop_base64:png}]};
+              if(url.endsWith('/crops')){if(window.delayCrop)await new Promise(resolve=>window.releaseCrop=resolve);return {snapshot_hash:report.snapshot_hash,crops:[{
+                region_id:'b'.repeat(64),crop_sha256:sha,original_sha256:'c'.repeat(64),crop_base64:png}]};}
               if(url.endsWith('/reviews')){if(window.rejectSave){window.rejectSave=false;const e=Error('stale');e.code=409;throw e;}if(window.failSave){window.failSave=false;throw Error('network');}return {saved:true};}
               return report;
             }});
@@ -75,8 +75,22 @@ def main() -> None:
         expect(save).to_be_visible()
         assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth')
         page.screenshot(path=str(out/'narrow.png'),full_page=True)
+        # A delayed first crop must not reintroduce later findings after signout.
+        page.evaluate("window.delayCrop=true")
+        page.evaluate("window.releaseCrop=null")
+        # Extend the same transport report to ensure the outer rendering loop is cancelled.
+        page.evaluate("window.testReport.findings.push({...window.testReport.findings[0],literal:'Old private reference'})")
+        page.get_by_role('button',name='Inspect dossier').click()
+        page.wait_for_function("typeof window.releaseCrop==='function'")
+        page.evaluate("window.panel.clear();window.releaseCrop()")
+        expect(page.get_by_text('Session cleared.',exact=False)).to_be_visible()
+        expect(page.locator('.fidelity-finding')).to_have_count(0)
+        expect(page.get_by_role('button',name='Inspect dossier')).to_be_enabled()
+        page.evaluate("window.delayCrop=false;window.testReport.findings.pop()")
+        page.get_by_role('button',name='Inspect dossier').click()
+        expect(page.get_by_text('Preserved crop hashes checked.',exact=False)).to_be_visible()
         (out/'browser.json').write_text(json.dumps({'crop_hash_checked':True,'escaped_text':True,
-            'explicit_review':True,'idempotent_retry':True,'narrow':True,'identity':'synthetic transport only'}))
+            'explicit_review':True,'signout_cancels_render':True,'idempotent_retry':True,'narrow':True,'identity':'synthetic transport only'}))
         browser.close()
     print('FIDELITY_PANEL_BROWSER_PASSED')
 
