@@ -31,8 +31,11 @@ class SignedPageJobs:
         self.receipt_key = hmac.digest(receipt_secret.encode(), b'caseproof:page-worker:v1', 'sha256')
 
     def call(self, bearer: str, case: str, request: str, action: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
-        UUID(case)
-        UUID(request)
+        try:
+            UUID(case)
+            UUID(request)
+        except (ValueError, TypeError, AttributeError):
+            raise HTTPException(422, 'invalid matter or page job identifier') from None
         if action not in {'enqueue', 'status', 'claim', 'heartbeat', 'put', 'page', 'finish', 'yield', 'cancel'}:
             raise ValueError('closed page job operation required')
         conn = http.client.HTTPSConnection(HOST, timeout=30)
@@ -68,8 +71,9 @@ class SignedPageJobs:
         return hmac.new(key, b'page-artifact-v1\x00' + canonical(payload).encode(), hashlib.sha256).hexdigest()
 
     def read_page(self, bearer: str, case: str, request: str, page_key: str, job: dict[str, Any] | None = None) -> dict[str, Any]:
-        # Always independently reauthorize through the RPC, even with a trusted manifest cache.
-        current = self.call(bearer, case, request, 'status')
+        # The page RPC independently reauthorizes every read. A caller may reuse
+        # a previously authorized status snapshot for manifest binding.
+        current = job if job is not None else self.call(bearer, case, request, 'status')
         row = self.call(bearer, case, request, 'page', {'page_key': page_key})
         try:
             serialized = row['serialized']
