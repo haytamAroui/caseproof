@@ -18,14 +18,19 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from application.litigation.content_release import ContentRelease
+from apps.api.access_control import AccessRejected, IdentityServiceUnavailable, InvalidBearer
+from apps.api.dossier_journey import DossierStore
 from apps.api.hosted_mcp_oauth_boundary import (
     OAuthBoundaryRejected,
     VerifiedOAuthClaims,
     authorize_verified_claims,
 )
-from apps.api.mcp_adapter_contract import McpContractError, call_canonical_tool, list_tools, validate_tool_call
-from apps.api.dossier_journey import DossierStore
-from apps.api.access_control import AccessRejected, IdentityServiceUnavailable, InvalidBearer
+from apps.api.mcp_adapter_contract import (
+    McpContractError,
+    call_canonical_tool,
+    list_tools,
+    validate_tool_call,
+)
 
 PROTOCOL = "2026-07-28"
 SCOPE = "caseproof:reports:read"
