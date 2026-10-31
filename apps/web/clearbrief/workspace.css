@@ -13,3 +13,10 @@
 .journey-step textarea{width:100%;resize:vertical;min-height:5rem;}
 .journey-state{white-space:pre-wrap;overflow-wrap:anywhere;max-height:22rem;overflow:auto;font-size:.75rem;line-height:1.5;}
 @media(max-width:750px){.journey-grid{grid-template-columns:1fr;}}
+/* Regional fidelity uses the existing dossier theme and native controls. */
+:root{--danger:#9a2727;scrollbar-color:var(--muted) var(--base);scrollbar-width:thin}
+::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-track{background:var(--base)}::-webkit-scrollbar-thumb{background:var(--muted);border:3px solid var(--base);border-radius:8px}
+.fidelity-list{max-height:850px;overflow:auto;scrollbar-gutter:stable}.fidelity-finding{padding:20px 0;border-bottom:1px solid var(--line)}.fidelity-pair{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center}.fidelity-pair pre{white-space:pre-wrap;overflow-wrap:anywhere}.fidelity-pair img{max-width:100%;height:auto;border:1px solid var(--line);background:white}.fidelity-region{margin:16px 0;padding:12px;border:1px solid var(--line)}.fidelity-finding form{max-width:700px}.fidelity-finding input[type=checkbox]{width:24px;min-height:24px;margin-right:12px}.fidelity-finding textarea{resize:none;min-height:120px}.fidelity-finding .danger{color:var(--danger)}#fidelity-panel{margin-top:20px}#fidelity-panel>button{margin-top:16px}
+@media(max-width:760px){.fidelity-pair{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(forced-colors:active){:root{scrollbar-color:auto}.notice,.fidelity-region{border:1px solid CanvasText}}

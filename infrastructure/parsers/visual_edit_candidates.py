@@ -6,6 +6,8 @@ from this heuristic establishes deletion, insertion or contractual effect.
 """
 from PIL import Image
 
+_DARK = 100
+
 
 def has_midline_candidate(image: Image.Image, bounds: tuple[int, int, int, int]) -> bool:
     left, top, right, bottom = bounds
@@ -15,17 +17,20 @@ def has_midline_candidate(image: Image.Image, bounds: tuple[int, int, int, int])
             or image.width * image.height > 16_000_000):
         raise ValueError("bounded crop and word geometry required")
     width, height = right - left, bottom - top
+    if width * height > 256_000:
+        raise ValueError("word_pixel_budget")
     if width < 8 or height < 8:
         return False
-    gray = image.crop(bounds).convert("L")
+    # Read the crop once as raw grey bytes instead of one getpixel call per pixel.
+    data = image.crop(bounds).convert("L").tobytes()
     # A long continuous dark run crossing the middle of a word is only a
     # candidate. Ordinary glyph strokes tend to be separated by white gaps.
     for y in range(height // 3, 2 * height // 3 + 1):
         longest = current = 0
-        for x in range(width):
-            pixel = gray.getpixel((x, y))
-            current = current + 1 if isinstance(pixel, int) and pixel < 100 else 0
-            longest = max(longest, current)
+        for pixel in data[y * width:(y + 1) * width]:
+            current = current + 1 if pixel < _DARK else 0
+            if current > longest:
+                longest = current
         if longest * 5 >= width * 4:
             return True
     return False

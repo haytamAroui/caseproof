@@ -21,3 +21,15 @@ Snapshot/revision conflicts show an inline banner and a Reload case action; neve
 Source text is rendered using textContent/text nodes. Server Unicode codepoint offsets are highlighted with Array.from, not UTF-16 slice offsets. Show original source version and parsed location; downloadable originals are attachments, not executable embeds. Draft export includes unresolved conflicts and missing evidence even after notes are saved. Integrity checks do not establish legal validity or approval.
 
 Browser evidence: scripts/verify_review_browser.py. Static source/contract audit is supplementary, not a substitute for actual browser/DB checks.
+
+## Regional fidelity review (ADR 0019 / representation acceptance)
+
+The ClearBrief dossier panel owns regional comparison display. Existing API/session
+helpers supply bearer access; source content is escaped text. Raw OCR scores are not
+probabilities; missing comparisons visibly remain not assessed. Authenticated crop
+fetches validate bytes, original SHA and snapshot SHA before enabling review.
+A native action select plus explicit inspection checkbox/rationale records the
+selected region IDs. Conflict findings survive human disposition and export.
+Failed crop loads block review; failed saves preserve input and idempotency key;
+changing an uncertain save is blocked. Signout clears crops/object URLs and pending
+view. This development panel uses existing en-BE copy, no new legal approval claims.

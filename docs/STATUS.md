@@ -1,3 +1,14 @@
+## Representation fidelity v2 — 31 October 2026
+
+PR #142 merged v1 at `53354f0`: optional comparison contract and fixture foundation.
+The current `feat/complete-representation-gate` candidate adds signed dossier
+integration, bounded region/crop provenance, conservative normalization, immutable
+snapshot readback, human inspection UI, executable corpus measurement and signed
+acceptance. See [v2 acceptance](m3/REPRESENTATION_GATE_ACCEPTANCE.md).
+No calibrated legal-corpus artifact ships; agreement stays unassessed. Cloud executable OCR, browser and signed development receipts are available on
+PR #146. Final-head reruns and review status determine acceptance. Dev migrations
+`20261030235107` and `20261030235456` are installed; production is unchanged.
+No M3 closure, customer-data authorization or production deployment is claimed.
 ## 30 October 2026 — product vision and current evidence
 
 [ADR 0019](adr/0019-evidence-engine-and-first-market.md), [roadmap](ROADMAP.md) and [workflow](PRODUCT_WORKFLOW.md) now separate the reusable engine ambition from Belgian litigation as the first market. Expansion is conditional on customer pull, technical reuse, measured benefit and commercial commitment with explicit owner approval. This documentation update adds no product features, UI, migration, client-data permission or release.
@@ -9,7 +20,7 @@ Next work: validate practitioner pain and total effort; close supported verifica
 
 Feature branch `feat/representation-conflict`: paired clean/redlined/scan fixture
 factory, conservative pixel midline candidate detector, source-bound regional
-comparison and unresolved literal-check gate. See [ADR 0019](adr/0019-representation-conflict-gate.md).
+comparison and unresolved literal-check gate. See [ADR 0020](adr/0020-representation-conflict-gate.md).
 Live adapter/persistence/UI wiring remains open; no M3 completion or detector
 accuracy claim. Exact CI evidence belongs to the feature PR.
 
@@ -231,6 +242,15 @@ A loopback-only injected development app combines versioned factual checking, ma
 
 [Manual run 40531773053](https://github.com/haytamAroui/caseproof/actions/runs/40531773053) passed on main commit `866158a51c780dad88a63d48769282f96addfc8a`: three real Supabase dev identities were signed in and tested against a least-privilege disposable PostgreSQL RLS fixture; the job reported cleanup of all ephemeral identities. On 2026-10-27, at the owner's explicit direction, migration `20261027160745_caseproof_m1_dev_atomic_private_grants` was applied to the empty `caseproof-dev` project. Read-only inspection confirmed the M1 grant table, RLS enabled, and replacement of legacy case/document policies. Independent human security review has not been verified. The M2 brief tables are absent. This does not test real signed users against the live database, live Storage, the PR branch's M2 composition, or an Office host.
 
+### PR #147 corrective follow-up (31 October 2026; feature branch)
+
+Removed word-overlap exemptions: regional comparisons without geometry still gate
+all references on their page. Added serialized comparison-presence, coverage and
+not-assessed/conflict/unreliable fields, plus explicit engine/rules versions.
+Regression coverage includes unrelated regional conflicts and clean common-word
+regions with unknown coverage. Full web rendering, geometry-based scoping and live
+adapter/crop acceptance remain open. Cloud CI must pass on the new head before
+merge; prior-head green results do not verify this correction.
 
 ## Product planning refinement — 31 October 2026 (PR #141)
 
@@ -247,3 +267,12 @@ until the host separately approves the exact matter/destination for each call.
 Detached listing copies prevent consumers from mutating the dispatch schemas.
 No MCP server, remote-model egress, installer, live acceptance or client-data approval
 is delivered. Local and cloud verification evidence belongs to the current PR head.
+### #146/#147 combined branch review — 31 October 2026
+
+#146 now includes #147's explicit serialized coverage and rules version while
+retaining validated raw-offset regional selection. Unlocated comparisons remain
+page gates, including no-quotation references. Source/text binding is checked
+before offsets can exempt a disjoint region. Shared ligature/soft-hyphen folding
+retains original codepoint ranges. This is a branch integration, not a main merge
+or customer release. The existing signout cancellation regression is retained.
+Current-head cloud/live receipts must supersede historical run references.

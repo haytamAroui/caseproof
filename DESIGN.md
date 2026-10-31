@@ -60,3 +60,13 @@ Use native buttons/links/labels and shared field/status helpers in workbench.js.
 ## Do's and Don'ts
 
 Use source text and exact page/path/MIME references. Never imply that a review recommendation is approval. Keep synthetic/demo and persistence state visible. Never insert source or reviewer content as HTML. Do not invent proof, source authorship, balances or legal outcomes. Persist no drafts/tokens in localStorage; explicitly warn before abandoning unsaved edits.
+
+## CaseProof regional fidelity extension
+
+`apps/web/clearbrief/workspace.css` owns the existing ClearBrief dossier theme
+(separate legacy client from the finance workbench); the fidelity panel reuses
+that theme rather than transplanting finance tokens. Source-image/text pairing
+is the signature. Conflict uses `--danger` plus warning text/icon, never color alone.
+Native controls, local fonts and no remote media. Region images reserve intrinsic
+geometry and reflow to one column below 760px. The canonical review panel is
+`apps/web/clearbrief/fidelity-panel.js`, consuming the signed dossier API only.
