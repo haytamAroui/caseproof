@@ -172,7 +172,7 @@ def _orchestrate() -> int:
         _expect_rejected(jobs, operation, payload)
     # Hand off the fresh test lease so the resumed real process can claim it.
     jobs.call(BEARER, CASE, JOB, "yield", {"lease_token": claim["lease_token"]})
-    second = subprocess.Popen([sys.executable, "-m", __name__, "worker", str(directory), "resume"], env=env)
+    second = subprocess.Popen([sys.executable, "-m", "scripts.verify_page_worker_postgres_process", "worker", str(directory), "resume"], env=env)
     assert second.wait(timeout=1500) == 0, "Worker B failed to resume the PostgreSQL job"
     final = jobs.call(BEARER, CASE, JOB, "status")
     expected = {p["version_id"] + ":" + str(p["pdf_page"]): p for p in pages}
