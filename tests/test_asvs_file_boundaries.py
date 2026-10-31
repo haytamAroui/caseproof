@@ -48,8 +48,8 @@ def test_oversized_raw_archive_is_rejected() -> None:
     "sources/../evil.pdf", "evil.pdf\\x00.txt", " evil.pdf ", "．．/evil.pdf",
 ])
 def test_signed_registration_rejects_path_like_filename(filename: str) -> None:
-    from pydantic import ValidationError
     from apps.api.litigation_live_journey import OriginalRegister
+    from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
         OriginalRegister(filename=filename, sha256="a" * 64, byte_length=10,
@@ -58,8 +58,8 @@ def test_signed_registration_rejects_path_like_filename(filename: str) -> None:
 
 
 def test_signed_registration_rejects_oversized_pdf_before_storage() -> None:
-    from pydantic import ValidationError
     from apps.api.litigation_live_journey import MAX_ORIGINAL, OriginalRegister
+    from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
         OriginalRegister(filename="large.pdf", sha256="a" * 64,
@@ -69,8 +69,8 @@ def test_signed_registration_rejects_oversized_pdf_before_storage() -> None:
 
 def test_signed_binary_ingest_rejects_zip_bomb_in_isolated_parser() -> None:
     """Exercise actual signed binary parse boundary, not only draft-pack verification."""
-    from apps.api.signed_document_parse import parse_verified_original
     from application.extraction.contracts import ExtractionError
+    from apps.api.signed_document_parse import parse_verified_original
 
     compressed = _archive("word/document.xml", b"A" * (12 * 1024 * 1024), ZIP_DEFLATED)
     with pytest.raises(ExtractionError):
@@ -79,8 +79,8 @@ def test_signed_binary_ingest_rejects_zip_bomb_in_isolated_parser() -> None:
 
 
 def test_signed_binary_ingest_rejects_oversized_pdf_before_parser() -> None:
-    from apps.api.signed_document_parse import MAX_BINARY_BYTES, parse_verified_original
     from application.extraction.contracts import ExtractionError
+    from apps.api.signed_document_parse import MAX_BINARY_BYTES, parse_verified_original
 
     with pytest.raises(ExtractionError, match="unsupported_bounded_binary_original"):
         parse_verified_original(document_id="doc", version_id="version",
