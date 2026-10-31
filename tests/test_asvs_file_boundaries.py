@@ -65,3 +65,24 @@ def test_signed_registration_rejects_oversized_pdf_before_storage() -> None:
         OriginalRegister(filename="large.pdf", sha256="a" * 64,
                          byte_length=MAX_ORIGINAL + 1, media_type="application/pdf",
                          request_id="00000000-0000-4000-8000-000000000001")
+
+
+def test_signed_binary_ingest_rejects_zip_bomb_in_isolated_parser() -> None:
+    """Exercise actual signed binary parse boundary, not only draft-pack verification."""
+    from apps.api.signed_document_parse import parse_verified_original
+    from application.extraction.contracts import ExtractionError
+
+    compressed = _archive("word/document.xml", b"A" * (12 * 1024 * 1024), ZIP_DEFLATED)
+    with pytest.raises(ExtractionError):
+        parse_verified_original(document_id="doc", version_id="version", data=compressed,
+                                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
+def test_signed_binary_ingest_rejects_oversized_pdf_before_parser() -> None:
+    from apps.api.signed_document_parse import MAX_BINARY_BYTES, parse_verified_original
+    from application.extraction.contracts import ExtractionError
+
+    with pytest.raises(ExtractionError, match="unsupported_bounded_binary_original"):
+        parse_verified_original(document_id="doc", version_id="version",
+                                data=b"%PDF-1.7\\n" + b"x" * MAX_BINARY_BYTES,
+                                media_type="application/pdf")
