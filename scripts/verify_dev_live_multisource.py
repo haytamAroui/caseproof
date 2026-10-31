@@ -1,4 +1,4 @@
-"""Protected development probe: signed registration of one inventory and three exhibits.
+"""Protected development probe: signed registration of a draft, inventory, and two exhibits.
 
 This deliberately fails if the existing RPC still enforces a single original.
 It is NOT an acceptance receipt until the full upload/readback/revoke/restart
@@ -15,8 +15,9 @@ import sys
 from uuid import UUID, uuid4
 
 from apps.api.signed_supabase_originals import OriginalRef, PrivateStorageDenied, SignedOriginalsStorage
+from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from apps.api.supabase_password_signin import PasswordCredentials, SupabasePasswordSignin
-from scripts.verify_dev_ephemeral_auth import PROJECT_REF
+from scripts.verify_dev_ephemeral_auth import ISSUER, PROJECT_REF
 from scripts.verify_dev_live_review_roundtrip import _request, _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import LiveFixtureError, admin_rpc, success
 
@@ -74,12 +75,33 @@ def _scan_pdf() -> bytes:
 
 
 def _sources() -> tuple[tuple[str, str, bytes], ...]:
-    return (
-        ("inventory.txt", "text/plain", b"Inventory: Stuk 1; Stuk 2; Stuk 3\n"),
-        ("stuk-1.pdf", "application/pdf", _text_pdf("Stuk 1: invoice 125 EUR")),
-        ("stuk-2.pdf", "application/pdf", _text_pdf("Stuk 2: receipt 125 EUR")),
-        ("stuk-3-scan.pdf", "application/pdf", _scan_pdf()),
-    )
+    """Same four genuine synthetic formats as the Phase 3 dossier fixture."""
+    from tests.fixtures.factory import generate_bundle
+
+    return tuple((source.filename, source.media_type, source.content) for source in generate_bundle())
+
+
+
+def _validate_registration(registered: object, case: str, metadata: list[dict]) -> list[dict]:
+    """Do not upload against a response with altered scope, bytes or identifiers."""
+    if not isinstance(registered, dict) or registered.get("case_id") != case:
+        raise LiveFixtureError("signed bundle registration returned wrong matter")
+    rows = registered.get("sources")
+    if not isinstance(rows, list) or len(rows) != len(metadata):
+        raise LiveFixtureError("signed bundle registration returned incomplete identities")
+    documents, versions = set(), set()
+    for row, expected in zip(rows, metadata, strict=True):
+        if not isinstance(row, dict) or any(row.get(key) != value for key, value in expected.items()):
+            raise LiveFixtureError("registered source metadata differs from request")
+        try:
+            document, version = UUID(row["document_id"]), UUID(row["version_id"])
+        except (KeyError, ValueError, TypeError, AttributeError):
+            raise LiveFixtureError("registered source identity invalid") from None
+        if document in documents or version in versions:
+            raise LiveFixtureError("registered source identity duplicated")
+        documents.add(document)
+        versions.add(version)
+    return rows
 
 
 
@@ -89,8 +111,14 @@ def verify_registration(
 ) -> None:
     signin = SupabasePasswordSignin(PROJECT_REF, publishable)
     sessions = tuple(signin.sign_in(item) for item in credentials)
-    actors = tuple(session.user_id for session in sessions)
-    if len(set(actors)) != 3:
+    verifier = SupabaseAuthUserVerifier(PROJECT_REF, HttpsSupabaseUserLookup(PROJECT_REF, publishable))
+    identities = tuple(verifier.verify_bearer(session.access_token) for session in sessions)
+    actors = tuple(identity.subject_id for identity in identities)
+    if (len(set(actors)) != 3 or any(
+        identity.subject_id != session.user_id or identity.issuer != ISSUER
+        or identity.audience != "authenticated"
+        for identity, session in zip(identities, sessions, strict=True)
+    )):
         raise LiveFixtureError("three distinct signed users required")
     run_id = str(uuid4())
     proc = None
@@ -111,7 +139,7 @@ def verify_registration(
         case = str(UUID(created["case_id"]))
         metadata = [
             {
-                "role": "inventory" if index == 0 else "exhibit",
+                "role": ("draft", "inventory", "exhibit", "exhibit")[index],
                 "filename": filename,
                 "media_type": media_type,
                 "byte_length": len(payload),
@@ -137,12 +165,11 @@ def verify_registration(
         if status != 200:
             raise LiveFixtureError("MULTISOURCE_BLOCKED: signed bundle registration rejected")
         registered = json.loads(raw)
-        if len(registered.get("sources", [])) != 4:
-            raise LiveFixtureError("signed bundle registration returned incomplete identities")
-        print("LIVE_MULTISOURCE_REGISTERED: inventory and three exhibit versions")
+        registered_rows = _validate_registration(registered, case, metadata)
+        print("LIVE_MULTISOURCE_REGISTERED: draft, inventory and two exhibit versions")
         stored = SignedOriginalsStorage(publishable)
         outsiders = (sessions[1].access_token, sessions[2].access_token)
-        for source, item in zip(sources, registered["sources"], strict=True):
+        for source, item in zip(sources, registered_rows, strict=True):
             filename, media_type, payload = source
             ref = OriginalRef(
                 UUID(org), UUID(case), UUID(item["document_id"]),
@@ -192,7 +219,7 @@ def verify_registration(
         actual = manifest.get("sources")
         if not isinstance(actual, list) or len(actual) != 4:
             raise LiveFixtureError("persisted bundle incomplete")
-        expected = [dict(item, version_number=1) for item in registered["sources"]]
+        expected = [dict(item, version_number=1) for item in registered_rows]
         if actual != expected:
             raise LiveFixtureError("persisted manifest differs from registration")
         rediscovered = []
@@ -202,7 +229,7 @@ def verify_registration(
             rediscovered.append(ref)
             if stored.get_verified(ref, fresh.access_token) != payload:
                 raise LiveFixtureError("persisted manifest source readback mismatch")
-        refs.extend(rediscovered)  # Cleanup only; all post-restart reads used manifest-derived refs.
+        refs.extend(rediscovered)  # Revocation checks use only manifest-derived references.
         print("LIVE_MULTISOURCE_MANIFEST_REOPEN: durable identities, roles and four hashes")
         print("LIVE_MULTISOURCE_MANIFEST_DENIED: foreign and ungranted identities")
 
@@ -267,7 +294,7 @@ def main() -> int:
                 credentials, admin_key=admin_key, publishable=publishable,
             ),
         )
-        print("LIVE_MULTISOURCE_PROBE_PASSED: signed four-source storage/revocation/restart")
+        print("LIVE_MULTISOURCE_PROBE_PASSED: signed draft/inventory/PDF/scan storage/revocation/restart")
         return 0
     except Exception as exc:
         stage = "ephemeral_auth_cleanup" if isinstance(exc, RuntimeError) and str(exc) == "ephemeral dev identity cleanup failed" else "probe_or_fixture"

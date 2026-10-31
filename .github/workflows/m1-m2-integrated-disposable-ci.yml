@@ -43,6 +43,7 @@ jobs:
       - name: Validate real-format NL FR EN intake and fail-closed M1/M2 discovery
         run: |
           uv run --locked pytest -q \
+            tests/test_live_multisource_probe.py \
             tests/test_signed_multisource_journey.py \
             tests/test_m1_m2_fail_closed_acceptance.py \
             tests/test_m1_m2_real_format_intake.py \

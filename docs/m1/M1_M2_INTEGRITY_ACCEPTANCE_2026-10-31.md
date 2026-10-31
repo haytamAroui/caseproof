@@ -34,11 +34,12 @@
 
 ## Live multi-source probe repair (candidate)
 
-The protected multi-source probe now generates parseable PDF bytes, retains a separate
+The protected multi-source probe now uses the installed DOCX/inventory/two-PDF contract,
+checks signed Auth identity and registered source metadata, generates parseable PDF bytes, retains a separate
 cleanup list across process restart failures, requires explicit authorization-denial
 HTTP status codes, and permits manual dispatch from protected `main` rather than the
 historic feature branch. The companion regression tests exercise PDF parsing and a
 forced failure during restart. This is a candidate until the PR head passes required
-CI and a separately protected live run succeeds. The probe covers one inventory and
-three exhibits; it does **not** prove the complete DOCX → check → review → correction
+CI and a separately protected live run succeeds. The probe covers a DOCX draft, one inventory and
+two PDF exhibits (one image-only); it does **not** prove the complete DOCX → check → review → correction
 → recheck journey, representative OCR accuracy, or independent security/legal approval.
