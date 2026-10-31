@@ -4,7 +4,7 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass
 
-NORMALIZATION = "caseproof-visual-nfc-whitespace-v1"
+NORMALIZATION = "caseproof-visual-nfc-ligature-whitespace-v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +23,9 @@ def normalize_region(raw: str) -> NormalizedRegion:
     i = 0
     while i < len(raw):
         start = i
+        if raw[i] == "\u00ad":
+            i += 1
+            continue
         if raw[i].isspace():
             while i < len(raw) and raw[i].isspace():
                 i += 1
@@ -34,6 +37,10 @@ def normalize_region(raw: str) -> NormalizedRegion:
         while i < len(raw) and unicodedata.combining(raw[i]):
             i += 1
         cluster = unicodedata.normalize("NFC", raw[start:i])
+        for glyph, plain in (("\ufb00", "ff"), ("\ufb01", "fi"), ("\ufb02", "fl"),
+                             ("\ufb03", "ffi"), ("\ufb04", "ffl"),
+                             ("\ufb05", "st"), ("\ufb06", "st")):
+            cluster = cluster.replace(glyph, plain)
         for char in cluster:
             output.append(char)
             ranges.append((start, i))

@@ -100,6 +100,9 @@ def test_clean_quote_free_dossier_produces_zero_candidate_differences():
     assert all(x.state is FactState.MATCH for x in run.factual_observations)
     assert all(x.state is CitationCheckState.NO_QUOTATION for x in run.citation_observations)
     data = json.loads(verification_record(run))
+    assert data["citations"][0]["visual_coverage"] == "not_supplied"
+    assert data["citations"][0]["visual_assessment"] == "not_assessed"
+    assert data["citations"][0]["fidelity_rules_version"] == "representation-gate-v2"
     assert data["scope_complete"] is True
     assert data["professional_certificate"] is False
     assert data["filing_status"] == "not_assessed"

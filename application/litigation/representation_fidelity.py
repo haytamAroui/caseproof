@@ -9,6 +9,11 @@ from enum import StrEnum
 from application.litigation.representation_normalization import NORMALIZATION, normalize_region
 
 
+def normalize_for_comparison(text: str) -> str:
+    """Same folding as region selection, retaining raw text separately."""
+    return normalize_region(text).text
+
+
 class RepresentationState(StrEnum):
     NOT_ASSESSED = "not_assessed"
     REPRESENTATION_CONFLICT = "representation_conflict"
@@ -30,6 +35,7 @@ class RepresentationComparison:
     bbox: tuple[int, int, int, int] | None = None
     coordinate_basis: str = "raster_pixels_top_left_150dpi"
     detector_version: str = "unrecorded"
+    covers_whole_page: bool = True
     # Adapter observations only: strikethrough/insertion is a review trigger,
     # never an automatic instruction to delete or accept contractual language.
 
@@ -41,7 +47,8 @@ class RepresentationComparison:
         if (type(self.pdf_page) is not int or not 1 <= self.pdf_page <= 100_000
                 or not self.representation_id or len(self.representation_id) > 256
                 or type(self.visual_reliable) is not bool
-                or type(self.meaning_bearing_edit) is not bool):
+                or type(self.meaning_bearing_edit) is not bool
+                or type(self.covers_whole_page) is not bool):
             raise ValueError("bounded page and typed adapter observations required")
         if (self.text_start is None) != (self.text_end is None):
             raise ValueError("paired regional text bounds required")

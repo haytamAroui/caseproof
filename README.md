@@ -1,12 +1,16 @@
-# CaseProof — Belgian pre-submission exhibit verification
+# CaseProof — evidence verification, starting with Belgian litigation
+
+[Detailed 31 October product and delivery plan](docs/PRODUCT_DEFINITION_2026-10-31.md): unified report first; consolidated-bundle and export acceptance; local/hybrid/signature options gated by buyer evidence.
 
 **Frozen first commercial hypothesis (28 October 2026):** upload conclusions DOCX, a separately confirmed Stuk/Pièce inventory and preserved PDF/scanned exhibits; inspect reference identity, physical/printed/bundle pages, literal/typed fidelity and OCR uncertainty; get an authorized human-reviewed source-linked DOCX/report export. **Web workspace first; Word and deployed MCP are optional channels, not pilot blockers.** No legal research, argument generation, deadline checks or automated Book 8 sufficiency.
+
+**Long-term vision:** source-traceable document verification, explicit uncertainty and accountable human review. One reusable kernel, one focused product today, evidence-led expansion. [ADR 0019](docs/adr/0019-evidence-engine-and-first-market.md) requires customer pull, technical fit, measured benefit and commercial commitment before an owner-approved additional workflow. No new vertical is authorized.
 
 **Current cross-milestone blockers:** the four [pre-M3 verification contracts](docs/contracts/PRE_M3_VERIFICATION_SPEC.md) (translation, OCR location, DOCX coverage, missing inventory) must have tested M1/M2 implementation before product-shaped M3. M5 may not close without its [four decision gates](docs/ROADMAP.md#pre-m5-hard-prerequisites--the-commercial-experiment-must-have-an-exit), and real client-source processing requires the [SEC-01–16 pilot security appendix](docs/security/PILOT_DATA_SECURITY_GATE.md) to be approved for the exact environment.
 
 **Current sources of truth:** [M0–M6 roadmap](docs/ROADMAP.md) · [complete verify-review-export journey](docs/PRODUCT_WORKFLOW.md) · [ADR 0018 scope freeze](docs/adr/0018-pre-submission-verification-freeze.md) · [engineering status and real gate evidence](docs/STATUS.md). [Historical Clearbrief feature ledger](docs/FEATURE_DELIVERY_MATRIX.md) and [Word channel contract](docs/m3/WORD_INTEGRATION_ACCEPTANCE.md) are reference material, **not launch requirements**. [M4 export acceptance](docs/m4/DELIVERY_ACCEPTANCE.md) governs actual document/report outputs.
 
-**Truth:** signed synthetic TXT backend corrections/recheck have passed in development; the full scanned exhibit + browser reviewer + reopenable DOCX/report task has **not** been accepted, and confidential customer material is not authorized by this document. An early completed engineering slice does not prove paid demand.
+**Truth (30 October 2026):** the bounded signed synthetic DOCX + UTF-8 inventory + text/scanned PDF backend journey, source crops, saved reviews, scoped JSON/Markdown/DOCX appendix export and restart/reopening passed through [PR #140](https://github.com/haytamAroui/caseproof/pull/140). All 15 workflows passed on `82330f2`; merged as `5ab5471`. This is not full corpus coverage, inline DOCX correction, accepted browser UX, confidential-client authorization or paid demand. See [the exact dossier run](https://github.com/haytamAroui/caseproof/actions/runs/41105503131) and [status](docs/STATUS.md).
 
 ## Historical engineering README below (not current commercial scope)
 

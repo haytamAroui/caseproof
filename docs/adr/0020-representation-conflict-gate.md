@@ -56,3 +56,40 @@ and current literal behavior preserved when no comparison exists. Synthetic only
 
 
 V2 supersedes the v1 page-wide comparison design. See [v2 acceptance and data review](../m3/REPRESENTATION_GATE_ACCEPTANCE.md).
+## PR #147 correction — 31 October 2026
+
+Regional text overlap is not source geometry. Until adapters supply validated
+source-linked bounds, all comparisons on the cited physical page apply; a regional
+conflict cannot be dismissed because its words differ from the quote. This may
+increase false alerts but avoids claiming disjointness without evidence.
+
+Citation observations serialize derived `visual_comparison_supplied`,
+`visual_coverage` (`not_supplied`, `unknown`, `regional`, `whole_page`) and `visual_assessment`.
+Supplied does not mean the whole quote is covered; `regional` identifies bounded comparisons, not complete quote coverage. Equal strings
+remain `not_assessed` even for whole-page input. Existing asdict API/export/run-hash
+consumers receive these additive fields; constructors retain compatibility via
+init=False. Run hashes intentionally change; persisted old records are not rewritten.
+Engine version is `caseproof-literal-citation-v2`, and observations carry
+`representation-gate-v2` so normalization/scoping behavior is distinguishable.
+Web rendering and live comparison adapters remain open; no visual verification
+or complete crop coverage is asserted by these fields.
+
+
+## Compatibility with open PR #146
+
+PR #147 is a bounded foundation update against main, not a replacement for #146.
+It retains conservative page gating only where no source-linked regional geometry
+is available. #146 introduces anchored regional selection and must preserve those
+anchors when reconciled with this branch; do not transplant whole-page fallback
+over validated regional logic. Merge order requires rerunning the remaining PR.
+ADR 0020 matches #146 representation-gate numbering and avoids the merged product
+vision ADR 0019. This branch does not establish joint integration acceptance.
+
+
+## Combined integration acceptance (PR #146 over #147)
+
+Source-bound offsets retain regional independence; missing offsets retain the
+conservative page fallback. Ligature/soft-hyphen normalization now shares raw-offset
+lineage with region selection. New rules remain uncalibrated and cannot create
+positive visual approval. Current-head cloud and signed development receipts must
+be refreshed before acceptance; older evidence above remains historical.
