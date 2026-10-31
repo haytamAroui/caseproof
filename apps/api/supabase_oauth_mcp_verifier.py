@@ -16,8 +16,8 @@ from uuid import UUID
 from apps.api.access_control import IdentityServiceUnavailable, InvalidBearer
 from apps.api.hosted_mcp_oauth_boundary import VerifiedOAuthClaims
 from apps.api.supabase_auth_verifier import (
-    HttpsSupabaseUserLookup,
     PROJECT_REF,
+    HttpsSupabaseUserLookup,
     SupabaseUserLookup,
     _untrusted_claims,
 )
