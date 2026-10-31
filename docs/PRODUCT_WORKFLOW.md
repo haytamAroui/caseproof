@@ -6,7 +6,7 @@
 
 **User job:** a Belgian civil/commercial litigator about to file conclusions checks whether detected `Stuk/Pièce` factual references point to the right preserved exhibit and correct page and whether an actual source representation contains the quoted text or appropriately matched number. The software reports located/matched, mismatched and unresolved references; an authorized lawyer alone decides semantic support and corrections. **No court filing, legal advice, case-law checking or legal-validity certificate.**
 
-**First commercial experience:** web workspace, `upload → inventory/source confirmation → verify four dimensions → inspect preserved original page/crop → review/correction proposal → recheck → safe export → reopen`. Word is **not required** to perform this journey. Accept genuine DOCX and text/image PDF as bounded input formats, not as license to silently alter or regenerate legal conclusions. The supported subset of DOCX formatting must be declared.
+**First commercial experience:** web workspace, `upload → inventory/source confirmation → verify four dimensions → inspect preserved original page/crop → review/correction proposal → recheck → safe export → reopen`. The existing short form `upload → verify → inspect source → review → export` names the same journey; it does not omit required inventory confirmation, recheck, cold reopen or security checks. Word is **not required** to perform this journey. Accept genuine DOCX and text/image PDF as bounded input formats, not as license to silently alter or regenerate legal conclusions. The supported subset of DOCX formatting must be declared.
 
 ## Vision, first task and expansion boundary
 
