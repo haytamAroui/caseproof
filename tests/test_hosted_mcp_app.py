@@ -118,6 +118,13 @@ def test_stateless_discovery_and_closed_read_only_catalog(monkeypatch):
         assert response.status_code == 200, response.text
         result = response.json()["result"]
         assert result["resultType"] == "complete"
+        assert result["_meta"]["io.modelcontextprotocol/serverInfo"] == {
+            "name": "caseproof", "version": "1.0.0"}
+        if method == "server/discover":
+            assert result["supportedVersions"] == [PROTOCOL]
+            assert result["capabilities"] == {"tools": {}}
+            assert result["cacheScope"] == "private" and result["ttlMs"] == 0
+            assert "serverInfo" not in result and "protocolVersions" not in result
         if method == "tools/list":
             assert {t["name"] for t in result["tools"]} == {
                 "caseproof_discover_references", "caseproof_export_report"}
@@ -189,4 +196,25 @@ def test_header_meta_origin_json_and_session_violations(monkeypatch):
     bad = body()
     bad["params"]["_meta"]["io.modelcontextprotocol/protocolVersion"] = "2025-11-25"
     assert client.post("/mcp", json=bad, headers=headers()).status_code == 400
+    assert not calls and gate.calls == 0
+
+
+def test_unknown_method_is_http_404_and_resource_protected(monkeypatch):
+    client, _, gate, calls = setup(monkeypatch)
+    response = client.post("/mcp", json=body(method="admin/approve"), headers={
+        k: v for k, v in headers(**{"Mcp-Method": "admin/approve"}).items() if k != "Mcp-Name"})
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == -32601
+    assert not calls and gate.calls == 0
+
+
+def test_known_but_unsupported_protocol_returns_version_negotiation_error(monkeypatch):
+    client, _, gate, calls = setup(monkeypatch)
+    incoming = body()
+    incoming["params"]["_meta"]["io.modelcontextprotocol/protocolVersion"] = "2025-11-25"
+    response = client.post("/mcp", json=incoming, headers=headers(**{
+        "MCP-Protocol-Version": "2025-11-25"}))
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == -32022
+    assert response.json()["error"]["data"]["supported"] == [PROTOCOL]
     assert not calls and gate.calls == 0
