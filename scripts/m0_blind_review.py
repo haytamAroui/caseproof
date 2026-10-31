@@ -17,6 +17,10 @@ from scripts.audit_m0_trilingual import DEFAULT_CORPUS
 def make_packet(corpus: dict[str, Any], sha256: str) -> dict[str, Any]:
     cases = []
     for case in corpus["cases"]:
+        # Opaque IDs keep authored cohort labels like MISMATCH/CLEAN/SCAN
+        # out of first-pass human review. Mapping remains reproducible
+        # from the pinned corpus but is not shipped in reviewer packets.
+        reviewer_id = "CASE-" + hashlib.sha256((sha256 + ":" + case["id"]).encode()).hexdigest()[:12]
         sources = [
             {
                 "source_id": s["source_id"],
@@ -32,7 +36,7 @@ def make_packet(corpus: dict[str, Any], sha256: str) -> dict[str, Any]:
             for s in case["sources"]
         ]
         cases.append({
-            "id": case["id"],
+            "id": reviewer_id,
             "language": case["language"],
             "cohort": case["cohort"],
             "brief_text": case["brief_text"],
@@ -47,6 +51,8 @@ def make_packet(corpus: dict[str, Any], sha256: str) -> dict[str, Any]:
         "review_status": "AWAITING_INDEPENDENT_HUMAN_REVIEW",
         "instructions": "Review independently before looking at source corpus expected labels. Record what cannot be assessed.",
         "cases": cases,
+        "case_ids_are_opaque": True,
+        "original_author_labels_excluded": True,
     }
 
 
@@ -91,7 +97,11 @@ def generate(out: Path, corpus_path: Path = DEFAULT_CORPUS) -> dict[str, Any]:
     )
     guidance = """# Independent M0 NL/FR/EN review instructions
 
-- This is a **blind case pack**. It contains no proposed labels or author rationales.
+- This is a **first-pass blind case pack**. It contains opaque case IDs, no
+  original author cohort tags, no proposed labels or author rationales.
+- Keep the unblinded document generator archive and corpus JSON out of
+  first-pass review. Inspect and adjudicate actual real-format bytes **after**
+  independent first judgments have been recorded, with no answer key provided.
 - Review each case in your competent language before opening the original gold.
 - Every case requires **two distinct independent human assessments**.
 - For the 19 historical v2 cases the separate complete inventory was **not defined**.
