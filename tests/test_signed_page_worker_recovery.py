@@ -166,3 +166,32 @@ def test_completion_requires_exact_page_identity_not_just_count(monkeypatch):
     with pytest.raises(ExtractionError, match="worker_invalid_checkpoint"):
         worker.run("signed-owner", "matter", "request")
     assert jobs.state == "running"
+
+
+def test_finish_rechecks_all_receipts_and_rejects_late_corruption(monkeypatch):
+    worker, jobs, _ = make_worker(monkeypatch, page_count=4)
+    original_call = jobs.call
+    def corrupt_at_final_status(*args, **kwargs):
+        result = original_call(*args, **kwargs)
+        if args[3] == "status" and len(jobs.results) == 4:
+            key = next(iter(jobs.results))
+            jobs.results[key]["artifact_hash"] = "0" * 64
+        return result
+    jobs.call = corrupt_at_final_status
+    with pytest.raises(AccessRejected):
+        worker.run("signed-owner", "matter", "request")
+    assert jobs.state != "succeeded"
+    assert "finish" not in jobs.actions
+
+
+def test_checkpointed_page_is_not_reprocessed_after_resume(monkeypatch):
+    worker, jobs, manifest = make_worker(monkeypatch, page_count=6)
+    worker.run("signed-owner", "matter", "request", max_pages=2)
+    checkpoint_hashes = {key: row["artifact_hash"] for key, row in jobs.results.items()}
+    fresh = module.SignedPageWorker(jobs, ocr=SimpleNamespace())
+    fresh.engine = worker.engine
+    monkeypatch.setattr(fresh, "inputs", lambda *_: (manifest, {"version": b"synthetic-pdf-content"}))
+    fresh.run("signed-owner", "matter", "request", max_pages=4)
+    assert len(jobs.results) == 6
+    assert all(jobs.results[key]["artifact_hash"] == value for key, value in checkpoint_hashes.items())
+    assert jobs.actions.count("put") == 6
