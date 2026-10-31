@@ -95,13 +95,13 @@ def main() -> None:
         documents["vision"],
         ("independent post-assembly verification", "First commercial experience",
          "four separate dimensions", "web", "professional-secrecy",
-         "does not independently satisfy"),
+         "A deterministic core is not a legal clearance"),
         FILES["vision"],
     )
     _contains_all(
         documents["product_definition"],
         ("independent pre-submission verification", "Priority 1 — M1–M4 browser",
-         "EUIPO/BOIP", "field-level", "same frozen"),
+         "EUIPO/BOIP", "field-level", "same frozen manifest"),
         FILES["product_definition"],
     )
     _contains_all(
