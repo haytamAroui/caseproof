@@ -64,11 +64,8 @@ def test_unverified_jwt_must_never_be_accepted():
 ])
 def test_invalid_claim_shape_or_subject(claim):
     remote = Identity()
-    try:
-        result = SupabaseOAuthBearerVerifier(PROJECT, remote).verify(token(claim))
-        assert claim == {"sub": result.subject}, "Unexpected acceptance"
-    except InvalidBearer:
-        pass
+    with pytest.raises(InvalidBearer):
+        SupabaseOAuthBearerVerifier(PROJECT, remote).verify(token(claim))
 
 
 @pytest.mark.parametrize("alg", ["HS256", "none", "RS512"])
