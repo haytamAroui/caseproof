@@ -31,3 +31,14 @@
 | Release authorization | Named owners for P3-01..04, current-head live acceptance receipt, security/ethics/privacy decisions and signed M1/M2 milestone exit; absent here |
 
 **Do not close M1 or M2 from this PR alone.** A signed-user synthetic test, disposable database or candidate crop is not a production-approved Belgian litigation dossier. M3 may consume the merged candidate contracts, but the separate pilot and live development gates remain.
+
+## Live multi-source probe repair (candidate)
+
+The protected multi-source probe now generates parseable PDF bytes, retains a separate
+cleanup list across process restart failures, requires explicit authorization-denial
+HTTP status codes, and permits manual dispatch from protected `main` rather than the
+historic feature branch. The companion regression tests exercise PDF parsing and a
+forced failure during restart. This is a candidate until the PR head passes required
+CI and a separately protected live run succeeds. The probe covers one inventory and
+three exhibits; it does **not** prove the complete DOCX → check → review → correction
+→ recheck journey, representative OCR accuracy, or independent security/legal approval.

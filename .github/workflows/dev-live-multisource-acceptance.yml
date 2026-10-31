@@ -1,4 +1,4 @@
-name: M1 live multi-source acceptance (protected draft)
+name: M1 live multi-source acceptance (protected)
 on:
   workflow_dispatch:
 
@@ -11,6 +11,7 @@ concurrency:
 
 jobs:
   live-multisource:
+    if: ${{ github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: caseproof-dev
@@ -20,6 +21,8 @@ jobs:
       CASEPROOF_DEV_LIVE_MULTISOURCE: "YES"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.11"

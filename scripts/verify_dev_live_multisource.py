@@ -23,18 +23,18 @@ from scripts.verify_dev_live_txt_journey import LiveFixtureError, admin_rpc, suc
 
 def _pdf(objects: list[bytes]) -> bytes:
     """Construct a deterministic, valid single-page PDF with an xref table."""
-    data = bytearray(b"%PDF-1.4\\n%\\xe2\\xe3\\xcf\\xd3\\n")
+    data = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
     offsets = [0]
     for index, obj in enumerate(objects, 1):
         offsets.append(len(data))
-        data.extend(f"{index} 0 obj\\n".encode() + obj + b"\\nendobj\\n")
+        data.extend(f"{index} 0 obj\n".encode() + obj + b"\nendobj\n")
     xref = len(data)
-    data.extend(f"xref\\n0 {len(offsets)}\\n0000000000 65535 f \\n".encode())
+    data.extend(f"xref\n0 {len(offsets)}\n0000000000 65535 f \n".encode())
     for offset in offsets[1:]:
-        data.extend(f"{offset:010d} 00000 n \\n".encode())
+        data.extend(f"{offset:010d} 00000 n \n".encode())
     data.extend(
-        f"trailer\\n<< /Size {len(offsets)} /Root 1 0 R >>\\n"
-        f"startxref\\n{xref}\\n%%EOF\\n".encode()
+        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\n"
+        f"startxref\n{xref}\n%%EOF\n".encode()
     )
     return bytes(data)
 
@@ -46,7 +46,7 @@ def _text_pdf(text: str) -> bytes:
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 240] "
         b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-        f"<< /Length {len(stream)} >>\\nstream\\n".encode() + stream + b"\\nendstream",
+        f"<< /Length {len(stream)} >>\nstream\n".encode() + stream + b"\nendstream",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ])
 
@@ -66,16 +66,16 @@ def _scan_pdf() -> bytes:
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 120] "
         b"/Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>",
-        f"<< /Length {len(stream)} >>\\nstream\\n".encode() + stream + b"\\nendstream",
+        f"<< /Length {len(stream)} >>\nstream\n".encode() + stream + b"\nendstream",
         (f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} "
          f"/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode "
-         f"/Length {len(image)} >>\\nstream\\n").encode() + image + b"\\nendstream",
+         f"/Length {len(image)} >>\nstream\n").encode() + image + b"\nendstream",
     ])
 
 
 def _sources() -> tuple[tuple[str, str, bytes], ...]:
     return (
-        ("inventory.txt", "text/plain", b"Inventory: Stuk 1; Stuk 2; Stuk 3\\n"),
+        ("inventory.txt", "text/plain", b"Inventory: Stuk 1; Stuk 2; Stuk 3\n"),
         ("stuk-1.pdf", "application/pdf", _text_pdf("Stuk 1: invoice 125 EUR")),
         ("stuk-2.pdf", "application/pdf", _text_pdf("Stuk 2: receipt 125 EUR")),
         ("stuk-3-scan.pdf", "application/pdf", _scan_pdf()),
@@ -95,6 +95,7 @@ def verify_registration(
     run_id = str(uuid4())
     proc = None
     refs = []
+    cleanup_refs = []
     sources = _sources()
     try:
         setup = admin_rpc(admin_key, "setup", {
@@ -148,6 +149,7 @@ def verify_registration(
                 UUID(item["version_id"]), hashlib.sha256(payload).hexdigest(), media_type,
             )
             refs.append(ref)
+            cleanup_refs.append(ref)
             endpoint = (
                 f"/dev/live/matters/{case}/sources/"
                 f"{ref.document_id}/{ref.version_id}/upload"
@@ -155,8 +157,8 @@ def verify_registration(
             encoded = {"content_base64": base64.b64encode(payload).decode("ascii")}
             for outsider in outsiders:
                 status, _ = _request(outsider, "POST", endpoint, encoded)
-                if status == 200:
-                    raise LiveFixtureError("unauthorized original upload accepted")
+                if status not in (401, 403, 404):
+                    raise LiveFixtureError("unauthorized original upload was not denied")
             uploaded = success(owner, "POST", endpoint, encoded)
             if uploaded.get("verified") is not True or uploaded.get("sha256") != ref.sha256_hex:
                 raise LiveFixtureError("Storage SHA-256 upload verification missing")
@@ -182,8 +184,8 @@ def verify_registration(
         # Rediscover from durable database records, not the pre-restart refs list.
         for outsider in outsiders:
             denied, _ = _request(outsider, "GET", f"/dev/live/matters/{case}/manifest")
-            if denied == 200:
-                raise LiveFixtureError("outsider read persisted bundle manifest")
+            if denied not in (401, 403, 404):
+                raise LiveFixtureError("outsider manifest access was not denied")
         manifest_status, manifest = _request(fresh.access_token, "GET", f"/dev/live/matters/{case}/manifest")
         if manifest_status != 200 or manifest.get("case_id") != case:
             raise LiveFixtureError("signed cold manifest rediscovery failed")
@@ -217,8 +219,8 @@ def verify_registration(
             else:
                 raise LiveFixtureError("revoked owner still reads a bundle member")
         denied, _ = _request(fresh.access_token, "GET", f"/dev/live/matters/{case}/manifest")
-        if denied == 200:
-            raise LiveFixtureError("revoked owner still reads persisted manifest")
+        if denied not in (401, 403, 404):
+            raise LiveFixtureError("revoked manifest access was not denied")
         print("LIVE_MULTISOURCE_REVOKED: all four original paths and manifest denied")
 
 
@@ -227,7 +229,7 @@ def verify_registration(
             _server_stop(proc)
         from scripts.verify_m1_live_positive_original import _remove_original
         cleanup_errors = []
-        for ref in refs:
+        for ref in cleanup_refs:
             try:
                 _remove_original(admin_key, ref)
             except Exception as exc:
@@ -246,9 +248,9 @@ def main() -> int:
         os.getenv("CASEPROOF_DEV_LIVE_MULTISOURCE") != "YES"
         or os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof"
         or os.getenv("GITHUB_EVENT_NAME") != "workflow_dispatch"
-        or os.getenv("GITHUB_REF") != "refs/heads/feat/m1-live-multisource-acceptance"
+        or os.getenv("GITHUB_REF") != "refs/heads/main"
     ):
-        print("LIVE_MULTISOURCE_FAILED: protected feature-branch dispatch required", file=sys.stderr)
+        print("LIVE_MULTISOURCE_FAILED: protected main-branch dispatch required", file=sys.stderr)
         return 1
     from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin
     from scripts.verify_m1_ephemeral_signed_private import ephemeral_private_probe
