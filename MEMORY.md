@@ -1,3 +1,7 @@
+## 30 October 2026 — vision clarification
+
+[ADR 0019](docs/adr/0019-evidence-engine-and-first-market.md): reusable evidence engine, Belgian litigation first; web-first product, Word/MCP optional; expansion requires customer pull, technical fit, measured benefit and commercial commitment plus explicit owner approval. No new vertical, generic framework or client-data permission. Roadmap/workflow remain authoritative; PR #140 supplies bounded signed synthetic backend evidence, not market validation.
+
 # CaseProof — durable project handoff
 
 **Navigation, not authority.** Verify `main` and GitHub CI before relying on this summary. Source of truth: `CONSTITUTION.md`, code/tests, approved ADRs, then `docs/STATUS.md`.

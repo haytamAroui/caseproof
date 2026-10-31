@@ -12,6 +12,7 @@ authorized human act and must not be reachable from a model.
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -44,7 +45,7 @@ class McpTool:
             "description": self.description,
             "inputSchema": {
                 "type": "object",
-                "properties": self.properties,
+                "properties": deepcopy(self.properties),
                 "required": list(self.required),
                 "additionalProperties": False,
             },
@@ -97,11 +98,15 @@ def _validated(tool: McpTool, arguments: object) -> dict[str, Any]:
 
 
 def call_tool(*, store: HeadlessMatterStore | None, bearer: str,
-              name: str, arguments: object) -> dict[str, Any]:
+              name: str, arguments: object,
+              allow_document_content: bool = False) -> dict[str, Any]:
     """Run one read-only tool for the host-authenticated user.
 
     Access failures return an opaque error result. Contract violations raise
     McpContractError so a host can reject the request before any data access.
+    The host must separately authorize content release for this matter and
+    destination on each call; read access alone never approves model egress.
+    This flag is not a tool argument and cannot be supplied by the model.
     """
     tool = _BY_NAME.get(name) if type(name) is str else None
     if tool is None:
@@ -109,6 +114,10 @@ def call_tool(*, store: HeadlessMatterStore | None, bearer: str,
     args = _validated(tool, arguments)
     if type(bearer) is not str or not bearer.strip():
         raise McpContractError("host-authenticated bearer required")
+    if type(allow_document_content) is not bool:
+        raise McpContractError("typed host content-release decision required")
+    if not allow_document_content:
+        return {"isError": True, "error": "content_release_not_authorized"}
     try:
         if tool.name == "caseproof_discover_references":
             snapshot = load_snapshot(store, bearer, args["case_id"], args["brief_id"])
