@@ -16,7 +16,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from apps.api.access_control import (
     AccessFailure,
@@ -78,9 +78,29 @@ class MatterCreate(BaseModel):
     request_id: UUID
 
 
+def safe_original_filename(value: str) -> str:
+    """Reject traversal, absolute paths, control characters and ambiguous names."""
+    import unicodedata
+
+    if not isinstance(value, str) or not 1 <= len(value) <= 128:
+        raise ValueError("invalid original filename")
+    if unicodedata.normalize("NFKC", value) != value:
+        raise ValueError("noncanonical original filename")
+    if value in {".", ".."} or "/" in value or chr(92) in value or ":" in value:
+        raise ValueError("path-like original filename")
+    if any(ord(c) < 32 or ord(c) == 127 for c in value) or value != value.strip():
+        raise ValueError("unsafe original filename")
+    return value
+
+
 class OriginalRegister(BaseModel):
     model_config = ConfigDict(extra="forbid")
     filename: str = Field(min_length=1, max_length=128)
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, value: str) -> str:
+        return safe_original_filename(value)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     byte_length: int = Field(ge=1, le=MAX_ORIGINAL)
     media_type: str = Field(pattern=r"^(text/plain|application/pdf|application/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$")
