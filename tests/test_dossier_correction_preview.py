@@ -26,6 +26,7 @@ def test_correction_preserves_original_and_other_package_parts():
     assert Document(io.BytesIO(result)).paragraphs[0].text == 'See Stuk 1, p. 3.'
     with ZipFile(io.BytesIO(original)) as old, ZipFile(io.BytesIO(result)) as new:
         assert old.namelist() == new.namelist()
+        assert b'xmlns:w14=' in new.read('word/document.xml')
         for name in old.namelist():
             if name != 'word/document.xml':
                 assert old.read(name) == new.read(name)

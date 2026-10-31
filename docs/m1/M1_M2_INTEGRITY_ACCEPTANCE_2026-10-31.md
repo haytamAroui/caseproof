@@ -43,3 +43,17 @@ forced failure during restart. This is a candidate until the PR head passes requ
 CI and a separately protected live run succeeds. The probe covers a DOCX draft, one inventory and
 two PDF exhibits (one image-only); it does **not** prove the complete DOCX → check → review → correction
 → recheck journey, representative OCR accuracy, or independent security/legal approval.
+
+
+## Draft correction/recheck candidate
+
+The canonical dossier API now implements bounded DOCX preview, two-stage commit
+and recheck against the new active draft. The database implementation is proposed
+in `db/proposals/M1_M2_dossier_draft_revisions.sql`; it is **not installed live**.
+Disposable PostgreSQL acceptance exercises pending-version signature isolation,
+idempotent reserve/activate, wrong readback rejection, activation privilege fences,
+audit rollback, active manifest switching, confirmation/snapshot invalidation and
+revocation. Coordinator tests exercise real DOCX bytes and uncertain upload retry.
+See [persistence design](DRAFT_REVISION_PERSISTENCE_DESIGN.md). All-current-head CI,
+reviewed deployment, protected signed staging acceptance and independent evaluation
+remain separate requirements; these additions do not close M1/M2 by themselves.

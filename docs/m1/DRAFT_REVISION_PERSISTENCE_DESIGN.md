@@ -1,6 +1,15 @@
 # Dossier draft revision persistence — implementation proposal
 
-This is an uninstalled schema proposal, not live acceptance.
+The schema proposal is implemented and exercised in disposable PostgreSQL; it is
+not installed in shared staging. `apps/api/dossier_draft_revisions.py` supplies the
+signed reserve/status and server-only activation transport. The canonical dossier
+service exposes correction preview, commit and recheck routes. Current database
+contracts must be reviewed and installed before these routes can succeed in staging.
+
+The protected dossier workflow has an explicit `correction` option. Its acceptance
+reserves exact cleanup ownership before uploading the new derivative, exercises
+commit/replay, checks for fresh confirmation and decision state, preserves exhibit
+hashes, restarts the server and checks revocation. It remains unexecuted live.
 
 ```mermaid
 erDiagram

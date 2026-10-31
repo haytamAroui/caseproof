@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 from scripts.verify_retention_disposable import main as install
@@ -68,26 +69,46 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
     assert pending['confirmation']['request_id'] == confirmation
     assert json.loads(call('caseproof_dev_bundle_manifest',[case]))['sources'][0]['version_id']==versions[0]
     call('caseproof_dossier_draft_reserve',[case,request,'reserve',json.dumps(command | {'command_sha256':'d'*64})],succeeds=False)
+    competing_request = str(uuid4())
+    call('caseproof_dossier_draft_reserve',[case,competing_request,'reserve',json.dumps(command | {'command_sha256':'e'*64})])
     activation=[actor,case,request,'c'*64,40]
     call('caseproof_dossier_draft_activate',activation,succeeds=False)
     call('caseproof_dossier_draft_activate',[actor,case,request,'d'*64,40],service=True,succeeds=False)
     # Audit failure must roll activation and active-pointer visibility back.
     _run("create function caseproof.reject_revision_audit() returns trigger language plpgsql as $$ begin "
-         "if new.action='dossier_draft_activated' then raise exception 'forced audit failure'; end if; return new; end $$;"
+         "if new.action in ('dossier_draft_activated','dossier_draft_reserved') then raise exception 'forced audit failure'; end if; return new; end $$;"
          "create trigger reject_revision_audit before insert on caseproof.audit_events "
          "for each row execute function caseproof.reject_revision_audit();",env)
+    failed_request = str(uuid4())
+    before_count = _run(f"select count(*) from caseproof.document_versions where org_id='{org}';",env)
+    call('caseproof_dossier_draft_reserve',[case,failed_request,'reserve',json.dumps(command)],succeeds=False)
+    assert _run(f"select count(*) from caseproof.document_versions where org_id='{org}';",env) == before_count
     call('caseproof_dossier_draft_activate',activation,service=True,succeeds=False)
     assert json.loads(call('caseproof_dossier_draft_reserve',[case,request,'status',json.dumps(command)]))['state']=='reserved'
     _run('drop trigger reject_revision_audit on caseproof.audit_events;',env)
-    activated=json.loads(call('caseproof_dossier_draft_activate',activation,service=True))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        activations = list(pool.map(lambda _: json.loads(call('caseproof_dossier_draft_activate',activation,service=True)), range(2)))
+    assert sorted(result['replayed'] for result in activations) == [False, True]
+    activated = activations[0]
     assert activated['state']=='active'
     assert json.loads(call('caseproof_dossier_draft_activate',activation,service=True))['replayed'] is True
     manifest=json.loads(call('caseproof_dev_bundle_manifest',[case]))
     assert manifest['sources'][0]['version_id']==reserved['version_id']
     assert manifest['sources'][0]['version_number']==2
+    call('caseproof_dossier_draft_activate',[actor,case,competing_request,'c'*64,40],service=True,succeeds=False)
     changed=json.loads(call('caseproof_dossier',[case,'context','{}']))
     assert changed['bundle_signature']!=context['bundle_signature'] and changed['confirmation'] is None
     call('caseproof_dossier',[case,'decisions',json.dumps(dict(snapshot_hash=snapshot))],succeeds=False)
+    revised = dict(report, brief_id=reserved['version_id'], bundle_signature=changed['bundle_signature'],
+                   confirmation_id=None, findings=[dict(reference_id='ref-0000', technical_check='unresolved')])
+    revised_serial = json.dumps(revised, sort_keys=True)
+    revised_hash = hashlib.sha256(revised_serial.encode()).hexdigest()
+    call('caseproof_dossier',[case,'snapshot',json.dumps(dict(snapshot_hash=revised_hash,serialized=revised_serial))])
+    assert json.loads(call('caseproof_dossier',[case,'decisions',json.dumps(dict(snapshot_hash=revised_hash))]))['decisions'] == []
+    assert json.loads(call('caseproof_dossier_snapshot_read',[case,revised_hash]))['serialized'] == revised_serial
+    _run(f"update caseproof.organization_members set active=false where org_id='{org}' and user_id='{actor}';",env)
+    call('caseproof_dossier_draft_activate',activation,service=True,succeeds=False)
+    _run(f"update caseproof.organization_members set active=true where org_id='{org}' and user_id='{actor}';",env)
     _run(f"update caseproof._m1_matter_grants set active=false where case_id='{case}';",env)
     call('caseproof_dossier_draft_activate',activation,service=True,succeeds=False)
     call('caseproof_dossier_draft_reserve',[case,request,'status',json.dumps(command)],succeeds=False)

@@ -141,29 +141,42 @@ def corrected_docx_preview(original: bytes, *, expected_sha256: str,
         raise ValueError('stale or invalid correction')
     _validate_derivative_package(original)
     with ZipFile(io.BytesIO(original)) as archive:
-        root = SafeXML.fromstring(archive.read('word/document.xml'), forbid_dtd=True,
-                                  forbid_entities=True, forbid_external=True)
-        body = root.find(f'{{{NS}}}body')
-        paragraphs = [] if body is None else body.findall(f'{{{NS}}}p')
+        xml_bytes = archive.read('word/document.xml')
+        SafeXML.fromstring(xml_bytes, forbid_dtd=True, forbid_entities=True, forbid_external=True)
+        # Preserve namespace declarations, including prefixes referenced only by
+        # mc:Ignorable. ElementTree would drop such declarations on serialization.
+        document = minidom.parseString(xml_bytes)
+
+        def elements(node: Any) -> list[Any]:
+            return [child for child in node.childNodes if child.nodeType == child.ELEMENT_NODE]
+
+        bodies = [node for node in elements(document.documentElement)
+                  if node.namespaceURI == NS and node.localName == 'body']
+        paragraphs = [] if len(bodies) != 1 else [node for node in elements(bodies[0])
+                     if node.namespaceURI == NS and node.localName == 'p']
         if paragraph_index >= len(paragraphs):
             raise ValueError('paragraph unavailable')
         paragraph = paragraphs[paragraph_index]
-        runs = paragraph.findall(f'{{{NS}}}r')
-        if (len(runs) != 1 or any(child.tag not in {f'{{{NS}}}pPr', f'{{{NS}}}r'}
-                                  for child in paragraph)):
+        children = elements(paragraph)
+        runs = [node for node in children if node.namespaceURI == NS and node.localName == 'r']
+        if (len(runs) != 1 or any(node.namespaceURI != NS or node.localName not in {'pPr', 'r'}
+                                  for node in children)):
             raise ValueError('complex paragraph requires manual correction')
-        texts = runs[0].findall(f'{{{NS}}}t')
-        if (len(texts) != 1 or any(child.tag not in {f'{{{NS}}}rPr', f'{{{NS}}}t'}
-                                   for child in runs[0])):
+        children = elements(runs[0])
+        texts = [node for node in children if node.namespaceURI == NS and node.localName == 't']
+        if (len(texts) != 1 or any(node.namespaceURI != NS or node.localName not in {'rPr', 't'}
+                                   for node in children)):
             raise ValueError('complex run requires manual correction')
-        text = texts[0].text or ''
+        text = ''.join(node.data for node in texts[0].childNodes if node.nodeType == node.TEXT_NODE)
         if text.count(before) != 1:
             raise ValueError('ambiguous or stale correction range')
-        texts[0].text = text.replace(before, after, 1)
-        texts[0].set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        for child in list(texts[0].childNodes):
+            texts[0].removeChild(child)
+        texts[0].appendChild(document.createTextNode(text.replace(before, after, 1)))
+        texts[0].setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve')
         output = io.BytesIO()
         with ZipFile(output, 'w', compression=ZIP_DEFLATED) as target:
             for entry in archive.infolist():
-                target.writestr(entry, ET.tostring(root, encoding='utf-8', xml_declaration=True)
+                target.writestr(entry, document.toxml(encoding='utf-8')
                                 if entry.filename == 'word/document.xml' else archive.read(entry))
     return output.getvalue()

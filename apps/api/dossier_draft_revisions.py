@@ -7,8 +7,11 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from apps.api.access_control import AccessFailure, AccessRejected
-from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
+from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
+from apps.api.supabase_auth_verifier import (
+    HttpsSupabaseUserLookup,
+    SupabaseAuthUserVerifier,
+)
 
 HOST = 'ldwmocpxwskvhoojndrd.supabase.co'
 
@@ -57,7 +60,12 @@ class DraftRevisionClient:
         key = self.trusted_key
         if not key:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        actor = self.verifier.verify_bearer(bearer)
+        try:
+            actor = self.verifier.verify_bearer(bearer)
+        except InvalidBearer:
+            raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+        except IdentityServiceUnavailable:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return self._rpc('caseproof_dossier_draft_activate',
                          {'p_actor': actor.subject_id, 'p_case': case, 'p_request': request,
                           'p_sha256': digest, 'p_length': size},
