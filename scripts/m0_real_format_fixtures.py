@@ -86,6 +86,9 @@ def _scanned_pdf(source: dict[str, Any], case_id: str, language: str) -> bytes:
         draw.text((95, 325), "No searchable text layer", font=small, fill="black")
         if page_number == source["pdf_page"]:
             draw.text((95, 465), "IMAGE-ONLY PAGE / OCR NOT PERFORMED", font=small, fill="black")
+            if source.get("text"):
+                for index, line in enumerate(_wrapped(source["text"], 45)):
+                    draw.text((95, 530 + index * 42), line, font=small, fill="black")
             if source["printed_page"] is not None:
                 draw.text((95, 1510), f"Printed label {source['printed_page']}", font=small, fill="black")
         pdf.drawImage(ImageReader(im), 0, 0, width=595, height=842)
@@ -162,6 +165,23 @@ def generate(output: Path, corpus: Path = DEFAULT_CORPUS) -> dict[str, Any]:
                 "bundle_page": source["bundle_page"],
                 "image_only": scan,
             })
+        if cid == "FR_CLEAN_25":
+            # A separately identified image-only alternate to an FR text-source
+            # document; never treat it as a second preserved original for that
+            # same exhibit or as an OCR-success claim.
+            alternate = prefix + "alternate-image-only-control.pdf"
+            _register(output, alternate, _scanned_pdf(case["sources"][0], cid, "fr"), "image_pdf", records)
+            sources.append({
+                "path": alternate,
+                "source_id": case["sources"][0]["source_id"],
+                "label": case["sources"][0]["label"],
+                "version": case["sources"][0]["version"],
+                "pdf_page": case["sources"][0]["pdf_page"],
+                "printed_page": case["sources"][0]["printed_page"],
+                "bundle_page": case["sources"][0]["bundle_page"],
+                "image_only": True,
+                "alternate_format_only": True,
+            })
         cases.append({
             "id": cid,
             "language": case["language"],
@@ -235,8 +255,12 @@ def verify(output: Path) -> dict[str, int]:
         for source in case["sources"]:
             if len(PdfReader(str(output / source["path"])).pages) != source["pdf_page"]:
                 raise ValueError(f"wrong physical PDF page count: {cid}")
-    if not {"nl", "fr", "en"} <= {c["language"] for c in manifest["cases"] if c["sources"]}:
-        raise ValueError("trilingual real-format corpus incomplete")
+    for language in ("nl", "fr", "en"):
+        language_sources = [s for c in manifest["cases"] if c["language"] == language for s in c["sources"]]
+        if not language_sources or not any(s["image_only"] for s in language_sources):
+            raise ValueError(f"missing {language} image-only scanned PDF")
+        if not any(not s["image_only"] for s in language_sources):
+            raise ValueError(f"missing {language} searchable text PDF")
     return counts
 
 
