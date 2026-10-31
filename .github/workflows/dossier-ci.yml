@@ -34,6 +34,8 @@ jobs:
           python-version: "3.11"
       - run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
       - run: uv run --locked python -m scripts.verify_dossier_disposable
+      - name: Signed page job SQL fences and audit rollback
+        run: uv run --locked python -m scripts.verify_signed_page_jobs_disposable
       - name: Test deterministic dossier, original preservation and annotations
         run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_dossier_journey.py
       - name: ASVS file-boundary and canonical MCP contract regression
