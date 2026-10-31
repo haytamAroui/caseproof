@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import http.client
 import io
 import json
@@ -62,10 +63,15 @@ class VisualDecisionBody(DecisionBody):
 
 
 class DossierStore:
-    def __init__(self, key: str):
+    def __init__(self, key: str, receipt_secret: str | None = None):
         self.key = key
         self.client = JourneyClient(key)
         self.visual = PDFVisualFidelity()
+        # Domain-separated receipt key, never the public client key. No key is
+        # serialized, logged, persisted in source, or accepted from HTTP.
+        self.receipt_key = (hmac.digest(receipt_secret.encode(), b'caseproof:dossier-receipt:v1', 'sha256')
+                            if receipt_secret and len(receipt_secret) >= 32
+                            and not receipt_secret.startswith('sb_publishable_') else None)
 
     def rpc(self, bearer: str, case: str, action: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         con = http.client.HTTPSConnection(HOST, timeout=30)
@@ -93,17 +99,29 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def receipt(self, payload: dict[str, Any]) -> str:
+        key = getattr(self, 'receipt_key', None)
+        if not key:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return hmac.new(key, canonical(payload).encode(), hashlib.sha256).hexdigest()
+
     def reopen(self, bearer: str, case: str, brief: str, snapshot: str) -> tuple[dict[str, Any], bytes]:
         stored = self.rpc(bearer, case, 'read', {'snapshot_hash': snapshot})
         serialized = stored.get('serialized')
         if not isinstance(serialized, str) or hashlib.sha256(serialized.encode()).hexdigest() != snapshot:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         report = json.loads(serialized)
+        attestation = report.pop('server_receipt', None)
+        expected = self.receipt(report)
+        if not isinstance(attestation, str) or not hmac.compare_digest(expected, attestation):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        report['server_receipt'] = attestation
         if report.get('case_id') != case or report.get('brief_id') != brief:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         sources, originals = self.sources(bearer, case)
         current = {(s['version_id'], s['sha256']) for s in sources}
-        if any((s['version_id'], s['sha256']) not in current for s in report['sources']):
+        recorded = {(s['version_id'], s['sha256']) for s in report.get('sources', [])}
+        if not recorded or recorded != current:
             raise HTTPException(409, 'source snapshot changed')
         report['snapshot_hash'] = snapshot
         return report, originals[brief]
@@ -237,6 +255,7 @@ class DossierStore:
                   'inventory_confirmation': {k: confirmation.get(k) for k in ('request_id', 'reviewer_id', 'timestamp')} if confirmation else None,
                   'sources': sources, 'visual_pages': {v + ':' + str(p): data for (v,p),data in visual_pages.items()}, **found, 'professional_certificate': False, 'filing_status': 'not_assessed'}
         report['coverage']['unprocessed_sources'] = sum(bool(s.get('parse_error')) for s in sources)
+        report['server_receipt'] = self.receipt(report)
         serialized = canonical(report)
         if len(serialized.encode()) > 1_900_000:
             raise HTTPException(422, 'visual snapshot budget exceeded; reduce assessed pages')

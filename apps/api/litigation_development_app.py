@@ -60,7 +60,7 @@ def create_litigation_development_app(
     ):
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
-    app.include_router(create_dossier_router(DossierStore(publishable_key) if publishable_key else None))
+    app.include_router(create_dossier_router(DossierStore(publishable_key, trusted_ingest_key) if publishable_key else None))
     app.include_router(create_headless_review_router(headless))
     app.include_router(create_live_review_router(publishable_key))
     app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key, ocr=ocr))

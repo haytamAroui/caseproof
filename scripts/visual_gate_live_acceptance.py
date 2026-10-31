@@ -120,6 +120,22 @@ def main() -> None:
         exported=json_request(token,'GET',base+'/export?snapshot_hash='+snapshot)
         if exported['human_decisions'][0].get('reviewed_region_ids') != sorted(review['reviewed_region_ids']):
             raise RuntimeError('VISUAL_ATTESTATION_NOT_PERSISTED')
+        # Existing RPC accepts signed user snapshots, so prove receipt checking
+        # rejects a client-authored report even with a valid bundle and hash.
+        from apps.api.dossier_journey import canonical
+        forged=json.loads(json.dumps(report))
+        forged.pop('snapshot_hash',None)
+        forged['sources']=[]
+        forged['findings'][0]['fidelity']='invented_match'
+        serialized=canonical(forged)
+        fake_hash=hashlib.sha256(serialized.encode()).hexdigest()
+        status,_=direct(token,key,'/rest/v1/rpc/caseproof_dossier','POST',
+            {'p_case':case,'p_action':'snapshot','p_data':{'snapshot_hash':fake_hash,'serialized':serialized}})
+        if status!=200:
+            raise RuntimeError('VISUAL_FORGERY_FIXTURE_NOT_WRITTEN')
+        for suffix in ('?snapshot_hash='+fake_hash,'/export?snapshot_hash='+fake_hash):
+            if request(token,'GET',base+suffix)[0]!=503:
+                raise RuntimeError('VISUAL_CLIENT_FORGED_REPORT_TRUSTED')
         _server_stop(proc)
         proc=_server_start()
         token=signin.sign_in(credentials['owner']).access_token
@@ -150,7 +166,7 @@ def main() -> None:
         (target/'signed-receipt.json').write_text(json.dumps({'commit':os.getenv('GITHUB_SHA'),
             'original_hashes':[s.sha256 for s in bundle], 'regional_conflict':True,'clean_same_page':True,
             'scan_abstention':True,'crop_hash':selected[0]['crop_sha256'],'review_restart_export':True,
-            'ungranted_foreign_revoked_denied':True,'changed_confirmation_stale':True,
+            'forged_snapshot_denied':True,'ungranted_foreign_revoked_denied':True,'changed_confirmation_stale':True,
             'cleanup':'required_by_registry_wrapper'},indent=2))
         print('VISUAL_SIGNED_CROP_REVIEW_RESTART_EXPORT_AND_DENIALS_PASSED',flush=True)
     finally:

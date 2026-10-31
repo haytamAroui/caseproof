@@ -101,3 +101,19 @@ Attestation migration installed through connected MCP in caseproof-dev as
 passed in run 41147125040. The JSON column is non-null with an empty-array default;
 anon function execution and direct authenticated decision-table SELECT/INSERT
 remain denied. No production schema change.
+
+## Server-authenticated provenance for frozen reads
+
+The legacy signed snapshot-write RPC validates matter ownership/shape, not machine
+authorship. A reader could write custom findings/crops. Frozen reads therefore
+require an HMAC-SHA256 receipt over the entire canonical machine report, including
+the exact matter/brief/source set, all regions/crop bytes, processing versions and
+coverage. The key is domain-separated from the existing server-only dev processing
+credential and never returned to callers. Missing configuration, absent/altered
+receipts and substituted source sets fail closed; no public key can mint receipts.
+Human decisions remain separately authenticated records appended on export. This
+proves origin/integrity relative to that server key, not authenticity or accuracy.
+Key rotation invalidates old receipts until a separately designed key-version
+recovery policy exists. The legacy RPC may hold untrusted snapshots; these routes
+must never use them without receipt validation. Production key custody is not
+approved by this development implementation.

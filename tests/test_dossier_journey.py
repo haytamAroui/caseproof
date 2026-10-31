@@ -87,7 +87,7 @@ def test_omitted_confirmation_entry_cannot_become_absent_inventory():
 
     class FixtureStore(DossierStore):
         def __init__(self):
-            pass
+            self.receipt_key=b"synthetic-geometry-fixture-only"
 
         def rpc(self, bearer, case, action, data=None):
             if action == 'context':
@@ -183,6 +183,7 @@ def test_mixed_pdf_physical_reference_looks_up_its_actual_scanned_page():
 
     class MixedStore(DossierStore):
         def __init__(self, available):
+            self.receipt_key=b"synthetic-geometry-fixture-only"
             self.client = GeometryClient(available)
             from infrastructure.parsers.pdf_ocr import OCRUnavailable
 

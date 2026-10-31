@@ -23,6 +23,7 @@ from tests.test_phase4_headless_api import docx
 class DiskStore(DossierStore):
     def __init__(self, root):
         self.root=root
+        self.receipt_key=b"synthetic-test-receipt-only-not-a-live-secret"
         self.visual=PDFVisualFidelity()
         self.client=SimpleNamespace(read_geometry=self.missing_geometry)
         self.pdf=next(f.pdf for f in corpus() if f.name=='grey')
@@ -109,6 +110,16 @@ def test_actual_document_dossier_crop_review_restart_export_and_denials(tmp_path
         assert export.status_code==200
         if format!='docx':
             assert b'representation_conflict' in export.content and region['region_id'].encode() in export.content
+    # A signed reader may write a custom JSON snapshot through the legacy RPC,
+    # but cannot authenticate its provenance for these new read/export routes.
+    forged = json.loads((tmp_path/(sha+'.json')).read_text())
+    forged['sources'] = []
+    forged['findings'][0]['fidelity'] = 'invented_match'
+    from apps.api.dossier_journey import canonical
+    payload = canonical(forged)
+    fake_hash = hashlib.sha256(payload.encode()).hexdigest()
+    (tmp_path/(fake_hash+'.json')).write_text(payload)
+    assert reopened.get(base+'?snapshot_hash='+fake_hash,headers=headers).status_code==404
     # Bytes in the private snapshot are checked independently on download.
     frozen=json.loads((tmp_path/(sha+'.json')).read_text())
     frozen['visual_pages']['source:1']['regions'][0]['crop_base64']='AAAA'
