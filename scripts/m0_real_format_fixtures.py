@@ -187,7 +187,6 @@ def generate(output: Path, corpus: Path = DEFAULT_CORPUS) -> dict[str, Any]:
             "language": case["language"],
             "inventory_status": inv["status"],
             "sources": sources,
-            "author_expected_dimensions": case["expected_dimensions"],
             "not_human_adjudicated": True,
         })
     manifest: dict[str, Any] = {
