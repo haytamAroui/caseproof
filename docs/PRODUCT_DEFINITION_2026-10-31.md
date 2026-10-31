@@ -1,12 +1,22 @@
 # Product definition and prioritized delivery — 31 October 2026
 
-**Owner-requested direction update for PR #141.** This document refines the existing
+**31 October owner refinement (superseding PR #141's planning snapshot).** This document refines the existing
 [M0–M6 roadmap](ROADMAP.md), [workflow](PRODUCT_WORKFLOW.md) and
 [ADR 0019](adr/0019-evidence-engine-and-first-market.md). It does not reset milestones,
 certify a legal position, authorize client data or replace existing security gates.
 CaseProof remains the repository name; the future public name is undecided.
 The supplied Product Definition and Roadmap PDF is planning input, not proof of
 implementation, competitor limitations, bar approval or commercial demand.
+
+## Vision and differentiated position
+
+**Long-term purpose:** make source-referenced professional work inspectable, uncertainty explicit, and accountable human review reproducible. **First commercial hypothesis:** independent pre-submission verification of Belgian FR/NL civil/commercial litigation conclusions—not general legal research, a bundle assembly tool, an AI law firm or a legal judgment engine.
+
+**Position in existing workflow:** after a lawyer uses their own Word, DMS or exhibit-assembly tool to prepare a draft and inventory, CaseProof independently checks detected Stuk/Pièce references against the **supplied and separately preserved original exhibits**: inventory identity, physical PDF/printed/bundle page space, literal/visual/value fidelity, then human-only semantic review. Show an actual source page/crop and exact version-bound review; never claim to prove the original is authentic or that the bundle was filed.
+
+**Working differentiation, not exclusivity:** source-linked post-assembly checking of a Belgian inventory and three page spaces, explicit OCR abstention and a durable review trail at lower measured total lawyer effort. Compare real capabilities of Jimini, Doctrine Flow Litigate, Clearbrief and QiXCite before claiming they do not verify; vendor marketing and funding do not prove market gaps. See [Jimini litigation help](https://intercom.help/odysai/fr/articles/15073060-jimini-contentieux), [Doctrine Flow Litigate](https://www.doctrine.fr/flow-litigate) and [QiXCite](https://marketplace.microsoft.com/en-us/product/WA200010493).
+
+**Customer copy:** “Before filing, CaseProof checks detected exhibit references against the bundle you supply, shows which could not be substantiated within disclosed coverage, and records your review.” Do not say “only”, “as filed”, “every reference”, “100% accurate” or a global verified result. The public CaseProof name is provisional pending EUIPO/BOIP trademark clearance; a pre-existing software business using Caseproof is a search lead, not an infringement conclusion.
 
 ## Product and buyer
 
@@ -72,14 +82,14 @@ Calendar dates below are planning windows, not commitments. Move dates, not gate
 
 | Order / milestone | Bounded work | Exit evidence |
 |---|---|---|
-| Now, M0/M2 | Reconcile PR #146/#147 without losing regional anchors, normalization, explicit coverage or rule versions | One coherent branch, negative/stale/ambiguous regressions, current-head CI and independent evidence/security review |
-| Next, M1–M4 | Complete the signed upload → check → inspect → review → export → reopen journey and unified report | Actual browser, frozen downloads, restart, changed-source invalidation, ungranted/revoked denial; synthetic first |
-| Next intake increment, M1/M2 | Consolidated bookmarked PDF plus inventory, alongside separate exhibit originals | Stable exhibit-to-page-range mapping; duplicate/missing bookmarks, overlaps, insertions, renumbering and wrong page-space fixtures; human confirmation |
-| Next output increment, M4 | PDF and CSV from the same manifest | Actual byte reopening, safe CSV, working links and coverage parity; no silent format loss |
-| Parallel now, M5 | Five initial FR/NL practitioner interviews, then expand toward 8–10 litigators and 2–3 risk/ethics contacts if useful | Dated pain, real checking effort, buyer/budget, competing workflow, deployment constraints and rejection evidence |
-| Conditional, M5 | Restricted priced design-partner proposal and representative controlled dossier trials | Existing P5-01–04 and SEC-01–16 gates, independent ground truth, repeat use and priced commitment |
-| Conditional, M6 | Packaged firm-controlled deployment | Buyer need, approved data flow, tested installation/update/recovery and network capture before client use |
-| Later, M6 | Qualified signatures, hybrid, Word, MCP, German and authority checking | Separate buyer-backed scope decision, costs, security/legal review and acceptance for each capability |
+| Completed M1/M2 engineering baseline | PRs #146/#147, #149 and #150 merged fidelity/translation/coverage/canonical-report work; #152–154 merged recovery and CI coverage | Exact PR/check receipts. [Main commit d3374b8f](https://github.com/haytamAroui/caseproof/commit/d3374b8f78599b33bff7ce098a746b70af29b094) passed 17 automated checks, with four intentionally skipped manual live gates: no customer release |
+| **Priority 1 — M1–M4 browser** | Signed user-created matter → DOCX/inventory/PDF/scan upload → confirmed identity → separate evidence dimensions and original crop → review/correction/recheck → canonical report/DOCX download → cold reopen | Browser E2E with real-format synthetic originals; current grants, hash-bound source links and actual reopened artifacts; stale/revoked/interrupt/duplicate denial |
+| Following core journey — M1/M2 intake | Consolidated bookmarked PDF and locale/role-aware money/date normalization, without silently mixing source/page spaces | Confirmed exhibit-to-range mapping, overlap/alias/insert/rename cases; unambiguous Decimal/locale match or typed abstention |
+| Following stable manifest — M4 formats | Optional PDF/CSV and portable review record derived from one frozen report | Independent actual byte/Unicode/link reopening; CSV formula-injection protection; no qualified-signature claim |
+| **Parallel — M5 practitioner discovery** | Five disconfirming FR/NL interviews and two observed workflows, extend toward 8–10 litigators and 2–3 risk/ethics contacts if evidence supports | Actual post-assembly errors, time, competitors, confidence, confidentiality needs, buyer/budget and concrete price reaction |
+| Conditional — M5 controlled pilot | Priced design-partner offer and only approved representative dossier trials | P5-01–04, SEC-01–16, rights and professional-secrecy approvals, independent ground truth and measured whole-task effort |
+| **Parallel assessment — deployment/security** | Data-flow and network-capture comparison of hosted, hybrid and firm-controlled modes; packaging only if buyer requires it | Documented processing environment, egress, retention/backups, vendor confidentiality, independent security/legal signoff |
+| Deferred — M6 channels | Word add-in, deployed public MCP, local installer, qualified signatures, German and authority research only on separately approved evidence | Separate owner scope decision and acceptance. MCP **code** merged in #153; production/OAuth and host-client consent unaccepted |
 
 The PDF's November groundwork, December–February report, March–May pilot and June–
 September channels are provisional planning windows only. Do not postpone existing
@@ -97,6 +107,8 @@ aliases. Confirm supported bookmarks/ranges explicitly. Never rewrite an opponen
 
 ### Deployment decision, not an automatic pivot
 
+**Do now:** map field-level flows, network egress, processing provider and region, source originals, crops, derived texts, hashes, IDs, report exports, logs, support access, subprocessors, backups, retention and deletion for all candidate modes. A browser UI can be served within a firm; web-first is **not** hosted-first. Hashes, reference strings and timing may still be confidential or personal. Deterministic computation and an isolated worker do not independently satisfy Belgian professional secrecy. Assess vendor confidentiality after contract termination, not only GDPR DPA paperwork. No zero-retention or no-egress promise without evidence.
+
 The independent web report remains the first experience; web does not imply hosted
 processing. Current Supabase development infrastructure is not a packaged local product.
 Validate firms' actual requirements before choosing which customer deployment to build.
@@ -113,6 +125,8 @@ notes are off by default and cannot promote an uncertain/conflicting finding to 
 A local installation alone does not establish bar approval or security compliance.
 
 ### Review record and signatures
+
+**No evidence transparency paywall:** a sample/free trial must show the same four independent states, abstentions, provenance and coverage as a paid report; enterprise administration may be priced separately. Cryptographic integrity receipts are not qualified human signatures or proof of careful legal supervision.
 
 Keep version-bound durable review, actor authorization, rationale, source/crop hashes and
 stale detection in M2–M4 now. Add cryptographic verification only with an explicit threat
@@ -137,6 +151,13 @@ starts at the first practitioner conversation. A roughly 60-day no-paid-demand c
 may inform refine/reconsider, but does not automatically authorize a new market. Record
 outreach quality, buyer fit and objections before requesting an owner decision. Paid
 interest is not permission to upload client documents or release software.
+
+## Competitive, name and practitioner research queue
+
+- Conduct permissioned direct workflow comparisons of actual post-assembly reference verification, original crop/three-page mapping and review reports in Belgian, French and neighboring markets; do not assume existing assembly systems cannot also check.
+- Perform EUIPO/BOIP name clearance before public branding. A naming overlap is not an established legal conflict.
+- Interview actual litigators, risk reviewers and purchasers about total checking time, missed Stuk/Pièce references, OCR, wrong page spaces, deployment restrictions, buyer budget and priced commitment.
+- Get security, privacy, confidentiality/vendor-terms and intended-use AI Act analysis for the exact proposed processing environment before any non-synthetic customer data.
 
 ## External validation and deferred claims
 
