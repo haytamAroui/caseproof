@@ -25,3 +25,10 @@ and [password protection](https://supabase.com/docs/guides/auth/password-securit
 This is deployment/catalog evidence, **not genuine signed-user acceptance**.
 The opt-in protected dossier correction workflow still needs execution. Independent
 review, representative accuracy and formal M1/M2 acceptance remain open.
+
+
+Performance follow-up: advisor inspection identified uncovered document and parent
+version foreign keys on the new table. Migration `20261031235117` installed indexes
+on `(org_id,document_id)` and `(org_id,parent_version_id)` to support referential
+checks and scoped cleanup without scanning unrelated revision rows. Exact SQL is
+recorded in `supabase/migrations/20261031235117_dossier_draft_revision_fk_indexes.sql`.
