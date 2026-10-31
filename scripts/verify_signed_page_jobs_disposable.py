@@ -49,16 +49,29 @@ insert into caseproof.document_versions(id,org_id,document_id,version_number,ori
     rpc('claim', succeeds=False)
     _run("drop trigger page_audit_fail on caseproof.page_job_events; drop function public.page_audit_fail();", env)
     assert rpc('status')['state'] == 'queued'
-    lease = rpc('claim')['lease_token']
+    stale_lease = rpc('claim')['lease_token']
     rpc('claim', succeeds=False)
     rpc('heartbeat', {'lease_token': str(uuid4())}, succeeds=False)
-    rpc('finish', {'lease_token': lease}, succeeds=False)
+    rpc('finish', {'lease_token': stale_lease}, succeeds=False)
+    # Simulate the lease deadline after a worker process dies. The actual SQL
+    # function must fence the stale owner and allow a new claim.
+    _run(f"update caseproof.page_jobs set lease_until=clock_timestamp()-interval '1 second' "
+         f"where case_id='{case}' and request_id='{request}'", env)
+    lease = rpc('claim')['lease_token']
+    assert lease != stale_lease
+    for operation, data in (
+        ('heartbeat', {'lease_token': stale_lease}),
+        ('yield', {'lease_token': stale_lease}),
+        ('finish', {'lease_token': stale_lease}),
+    ):
+        rpc(operation, data, succeeds=False)
     artifact = {'schema': 'caseproof-page-artifact-v1', 'org_id': org, 'case_id': case,
                 'actor_id': owner, 'request_id': request, 'manifest_hash': hashed, 'engine_version': manifest['engine_version'],
                 **page, 'semantic_support': 'not_assessed', 'state': 'ocr_unavailable', 'server_receipt': 'b' * 64}
     encoded = json.dumps(artifact, sort_keys=True, separators=(',', ':'))
     put = {'lease_token': lease, 'page_key': version + ':1', 'serialized': encoded,
            'artifact_hash': hashlib.sha256(encoded.encode()).hexdigest()}
+    rpc('put', {**put, 'lease_token': stale_lease}, succeeds=False)
     rpc('put', put)
     rpc('put', put)
     rpc('yield', {'lease_token': lease})
@@ -75,7 +88,7 @@ insert into caseproof.document_versions(id,org_id,document_id,version_number,ori
     _run(f"update caseproof._m1_matter_grants set active=true where case_id='{case}' and user_id='{owner}'", env)
     _run(f"update caseproof.organization_members set active=false where org_id='{org}' and user_id='{owner}'", env)
     rpc('status', succeeds=False)
-    print('SIGNED_PAGE_SQL_ACTOR_SCOPE_LEASE_AUDIT_IMMUTABILITY_AND_REVOCATION_PASSED')
+    print('SIGNED_PAGE_SQL_ACTOR_SCOPE_EXPIRY_FENCING_AUDIT_IMMUTABILITY_AND_REVOCATION_PASSED')
 
 
 if __name__ == '__main__':
