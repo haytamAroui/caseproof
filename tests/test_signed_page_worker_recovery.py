@@ -195,3 +195,36 @@ def test_checkpointed_page_is_not_reprocessed_after_resume(monkeypatch):
     assert len(jobs.results) == 6
     assert all(jobs.results[key]["artifact_hash"] == value for key, value in checkpoint_hashes.items())
     assert jobs.actions.count("put") == 6
+
+
+def test_heartbeat_lease_loss_prevents_finish(monkeypatch):
+    worker, jobs, _ = make_worker(monkeypatch, page_count=2)
+    original_call = jobs.call
+    from apps.worker import signed_page_worker as worker_module
+
+    class SignaledEvent:
+        instances = []
+        def __init__(self):
+            self.signaled = False
+            self.__class__.instances.append(self)
+        def is_set(self):
+            return self.signaled
+        def set(self):
+            self.signaled = True
+        def wait(self, timeout=None):
+            return True
+
+    # Simulate a heartbeat failure after the final status read, without
+    # relying on timing or waiting for the actual 20-second renewal interval.
+    def lose_lease_before_transition(*args, **kwargs):
+        result = original_call(*args, **kwargs)
+        if args[3] == "status" and len(jobs.results) == 2:
+            SignaledEvent.instances[1].set()
+        return result
+
+    monkeypatch.setattr(worker_module, "Event", SignaledEvent)
+    jobs.call = lose_lease_before_transition
+    with pytest.raises(ExtractionError, match="worker_lease_lost"):
+        worker.run("signed-owner", "matter", "request")
+    assert "finish" not in jobs.actions
+    assert "yield" not in jobs.actions
