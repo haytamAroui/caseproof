@@ -39,8 +39,12 @@ def test_actual_docx_references_are_scanned_but_recall_is_unproven(
     assert raw[:2] == b"PK"
     found = discover_docx_references(raw)
     assert any(ref.label.casefold() == expected_label for ref in found.references)
-    assert found.text_coverage_complete
-    assert not found.coverage_complete  # DOCX reading != reference-recognition recall
+    # Real python-docx files include Word settings/style story parts that the
+    # conservative inventory does NOT silently count as scanned text.
+    assert found.region_manifest["regions_scanned"] >= 1
+    assert not found.text_coverage_complete
+    assert found.unscanned_parts
+    assert not found.coverage_complete  # DOCX parsing != full reference recall
     text, manifest = parse_verified_original(
         document_id="synthetic-docx-" + case_id,
         version_id="v1",
