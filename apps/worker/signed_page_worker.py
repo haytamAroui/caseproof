@@ -58,7 +58,13 @@ class SignedPageWorker:
         manifest, originals = self.inputs(bearer, case, request)
         if canonical(manifest) != status['manifest'] or hashlib.sha256(canonical(manifest).encode()).hexdigest() != status['manifest_hash']:
             raise ExtractionError('worker_manifest_changed')
-        completed = {r['page_key'] for r in status['results']}
+        expected_keys = {p['version_id'] + ':' + str(p['pdf_page']) for p in manifest['pages']}
+        if len(expected_keys) != len(manifest['pages']):
+            raise ExtractionError('worker_duplicate_page_identity')
+        completed_rows = status['results']
+        completed = {r['page_key'] for r in completed_rows}
+        if len(completed) != len(completed_rows) or not completed.issubset(expected_keys):
+            raise ExtractionError('worker_invalid_checkpoint')
         for key in completed:
             self.jobs.read_page(bearer, case, request, key)
         if status['state'] == 'succeeded':
@@ -116,7 +122,10 @@ class SignedPageWorker:
             with ThreadPoolExecutor(max_workers=2) as pool:
                 list(pool.map(process, pending))
             current = self.jobs.call(bearer, case, request, 'status')
-            action = 'finish' if len(current['results']) == len(manifest['pages']) else 'yield'
+            current_keys = {r['page_key'] for r in current['results']}
+            if len(current_keys) != len(current['results']) or not current_keys.issubset(expected_keys):
+                raise ExtractionError('worker_invalid_checkpoint')
+            action = 'finish' if current_keys == expected_keys else 'yield'
             return self.jobs.call(bearer, case, request, action, {'lease_token': token})
         finally:
             stop.set()
