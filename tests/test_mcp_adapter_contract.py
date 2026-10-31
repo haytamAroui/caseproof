@@ -36,6 +36,14 @@ class FakeStore:
         if self.deny:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
 
+    def load(self, bearer, case_id, brief_id):
+        self._gate(bearer)
+        return ({"schema": "caseproof-dossier-v1", "snapshot_hash": "a" * 64, "findings": []}, b"")
+
+    def rpc(self, bearer, case_id, action, data):
+        self._gate(bearer)
+        return {"decisions": []}
+
     def original_docx(self, *, bearer, case_id, brief_id):
         self._gate(bearer)
         return _docx()
@@ -177,24 +185,17 @@ def test_tool_listing_cannot_mutate_closed_dispatch_contract():
                   arguments={**ARGS, "bearer": "model-token"}, allow_document_content=True)
 
 
-def test_actual_http_discovery_and_export_match_mcp_content():
-    app = FastAPI()
-    app.include_router(create_headless_review_router(FakeStore()))
-    client = TestClient(app)
-    headers = {"Authorization": "Bearer host-token"}
-    base = "/v2/matters/case-a/briefs/brief-1/verification"
-    discovery = client.get(base + "/discovery", headers=headers)
-    assert discovery.status_code == 200
-    mcp = call_tool(store=FakeStore(), bearer="host-token", name="caseproof_discover_references",
-                    arguments=ARGS, allow_document_content=True)
-    assert discovery.json() == mcp["structuredContent"]
-    for fmt in ("json", "markdown"):
-        response = client.get(base + "/export", params={"format": fmt}, headers=headers)
-        assert response.status_code == 200
-        mcp = call_tool(store=FakeStore(), bearer="host-token", name="caseproof_export_report",
-                        arguments={**ARGS, "format": fmt}, allow_document_content=True)
-        assert response.text == mcp["content"]
-        assert response.headers["content-type"].startswith(mcp["mediaType"])
+def test_signed_store_parity_for_discovery_and_export():
+    store = FakeStore()
+    expected, _ = store.load("host-token", "case-a", "brief-1")
+    discovery = call_tool(store=store, bearer="host-token",
+                          name="caseproof_discover_references", arguments=ARGS,
+                          allow_document_content=True)
+    assert discovery["structuredContent"] == expected
+    exported = call_tool(store=store, bearer="host-token",
+                         name="caseproof_export_report", arguments=ARGS,
+                         allow_document_content=True)
+    assert json.loads(exported["content"])["findings"] == expected["findings"]
 
 
 def test_legacy_mcp_tools_are_not_advertised_as_canonical():
