@@ -164,10 +164,15 @@ def create_hosted_mcp_app(
         if type(params) is not dict:
             return fault(-32602, "Invalid params", ident)
         meta = params.get("_meta")
-        if type(meta) is not dict or meta.get(META_VERSION) != PROTOCOL or type(meta.get(META_CAPABILITIES)) is not dict:
-            return fault(-32020, "HeaderMismatch: request metadata", ident)
-        if request.headers.get("mcp-protocol-version") != PROTOCOL:
-            return fault(-32022, "UnsupportedProtocolVersion: 2026-07-28", ident)
+        if type(meta) is not dict or type(meta.get(META_CAPABILITIES)) is not dict:
+            return fault(-32602, "Required request metadata missing", ident)
+        requested_version = request.headers.get("mcp-protocol-version")
+        if not requested_version or requested_version != meta.get(META_VERSION):
+            return fault(-32020, "HeaderMismatch: protocol version", ident)
+        if requested_version != PROTOCOL:
+            return reply({"jsonrpc": "2.0", "id": ident,
+                          "error": {"code": -32022, "message": "UnsupportedProtocolVersion",
+                                    "data": {"supported": [PROTOCOL]}}}, 400)
         method = body["method"]
         if request.headers.get("mcp-method") != method:
             return fault(-32020, "HeaderMismatch: method", ident)
@@ -177,9 +182,8 @@ def create_hosted_mcp_app(
         if method != "tools/call" and request.headers.get("mcp-name") is not None:
             return fault(-32020, "HeaderMismatch: unexpected name", ident)
         if method == "server/discover":
-            result: dict[str, Any] = {"resultType": "complete", "protocolVersions": [PROTOCOL],
-                                     "serverInfo": {"name": "caseproof", "version": "1.0.0"},
-                                     "capabilities": {"tools": {}}}
+            result: dict[str, Any] = {"resultType": "complete", "supportedVersions": [PROTOCOL],
+                                     "capabilities": {"tools": {}}, "ttlMs": 0, "cacheScope": "private"}
         elif method == "tools/list":
             result = {"resultType": "complete", "tools": list_tools(), "ttlMs": 0,
                       "cacheScope": "private"}
@@ -216,7 +220,8 @@ def create_hosted_mcp_app(
                 if "structuredContent" in output:
                     result["structuredContent"] = output["structuredContent"]
         else:
-            return fault(-32601, "Method not found", ident)
+            return fault(-32601, "Method not found", ident, status=404)
+        result["_meta"] = {"io.modelcontextprotocol/serverInfo": {"name": "caseproof", "version": "1.0.0"}}
         return reply({"jsonrpc": "2.0", "id": ident, "result": result})
 
     return app
