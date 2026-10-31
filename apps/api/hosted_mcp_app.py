@@ -45,7 +45,7 @@ class OAuthBearerVerifier(Protocol):
 
 
 class HostContentGate(Protocol):
-    def resolve(self, *, subject: str, bearer: str, destination: str,
+    def resolve(self, *, subject: str, client_id: str, bearer: str, destination: str,
                 case_id: str, brief_id: str, snapshot_hash: str) -> ContentRelease | None:
         """Live, revocable, per-call decision from trusted host; no model consent."""
 
@@ -133,8 +133,8 @@ def create_hosted_mcp_app(
             bearer = authorize_verified_claims(
                 claims, expected_issuer=settings.issuer, resource_audience=settings.resource,
                 now=clock(), required_scope=SCOPE)
-            if bearer != token:
-                raise OAuthBoundaryRejected("bearer identity mismatch")
+            if bearer != token or not claims.client_id:
+                raise OAuthBoundaryRejected("bearer/client identity mismatch")
         except (OAuthBoundaryRejected, InvalidBearer, IdentityServiceUnavailable,
                 ValueError, TypeError, OSError):
             return reply({"error": "unauthorized"}, 401, challenge_required=True)
@@ -198,7 +198,8 @@ def create_hosted_mcp_app(
                 snapshot = args["snapshot_hash"]
                 # The gate must perform an up-to-date revocation/approval check;
                 # no blanket server-wide True option or stale long-lived grant.
-                release = releases.resolve(subject=claims.subject, bearer=bearer,
+                release = releases.resolve(subject=claims.subject, client_id=claims.client_id,
+                                           bearer=bearer,
                                            destination=settings.destination, case_id=case,
                                            brief_id=brief, snapshot_hash=snapshot)
                 output = call_canonical_tool(store=store, bearer=bearer, name=params["name"],
