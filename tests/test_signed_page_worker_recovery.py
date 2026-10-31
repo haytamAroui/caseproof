@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from application.extraction.contracts import ExtractionError
+from apps.api.access_control import AccessRejected
 from apps.api.dossier_journey import canonical
 from apps.api.signed_page_jobs import SignedPageJobs
 from apps.worker import signed_page_worker as module
@@ -145,7 +146,7 @@ def test_resume_fails_closed_on_corrupt_checkpoint(monkeypatch, corruption):
         jobs.call = duplicate_status
     else:
         jobs.results[key]["artifact_hash"] = "0" * 64
-    with pytest.raises((ExtractionError, Exception)):
+    with pytest.raises((ExtractionError, AccessRejected)):
         worker.run("signed-owner", "matter", "request")
     assert jobs.lease_counter == 1
 
