@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any
 
 from apps.api.access_control import AccessRejected
 from apps.api.dossier_journey import DossierStore
