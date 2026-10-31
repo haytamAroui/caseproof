@@ -4,7 +4,7 @@
 
 ## Decision
 
-**Vision:** CaseProof helps legal professionals check that important statements and references are traceable to the right source documents, inspect uncertainty and preserve accountable human review. It starts with pre-filing exhibit verification for Belgian litigation.
+**Vision:** make evidence-backed professional work inspectable: trace an important statement to an exact preserved source, expose incomplete or unreliable coverage, and preserve an accountable human review. **First market:** independent pre-filing Stuk/Pièce exhibit-reference verification for Belgian FR/NL civil/commercial litigation, not a general citation checker or an exhibit-assembly product.
 
 One reusable kernel, one focused product today, evidence-led expansion. Litigation is already a vertical. Kernel flexibility provides options; it is not evidence of demand or domain correctness in contracts, compliance or accounting.
 
@@ -15,6 +15,18 @@ One reusable kernel, one focused product today, evidence-led expansion. Litigati
 | First domain/product | Belgian draft + confirmed inventory + exhibits; identity, independent page mapping, fidelity and human support | No generic legal assistant or AI-native law firm |
 | First experience | Web workspace using the authenticated API | Word and MCP remain optional future clients |
 | Expansion | A separately approved adjacent task with its own rules, corpus and economics | No new domain or generic plugin framework merely because the kernel is reusable |
+
+## 31 October positioning and delivery clarification
+
+**The job is independent post-assembly verification.** Lawyers may already number, stamp and organize their pieces using Word, a DMS or an exhibit-assembly product. CaseProof checks the resulting *supplied* conclusion draft and confirmed inventory against the *preserved original* documents with four separate dimensions: identity, independent PDF/printed/bundle page positions, literal/visual/value fidelity, and authorized human semantic support. Never collapse dimensions into one verified badge. Human decisions and checks are frozen to source, draft, inventory, processing and rule versions. Hashes prove byte continuity, not authenticity or that anything was filed.
+
+**First commercial experience:** authenticated **web** upload → confirm → check → source/crop inspection → human review and safe correction proposal → scoped DOCX/report export → reopen. The kernel/headless API is not a second sellable platform or an excuse for framework work. Word and a publicly hosted MCP client remain optional channels; the MCP host implementation in merged PR #153 has **not** passed production deployment/live OAuth/host consent acceptance.
+
+**Potential differentiation, not a uniqueness claim:** useful independent verification of Belgian exhibits, three non-interchangeable page spaces, OCR/text-layer disagreements, explicit abstention and durable source-linked review at lower measured total lawyer effort. Competing products may offer assembly **and** verification; direct workflow comparisons are required. No factual exclusivity or commercial moat is established.
+
+**Deployment is not the interface:** web-first does not imply remote processing. Original-byte custody, OCR/processing location and audit/provenance remain separate ports. Hosted, hybrid and firm-controlled deployment require documented outbound fields, backup/log retention, security/professional-secrecy review and buyer evidence before choosing or marketing them. A deterministic core is not a legal clearance; even reference strings, hashes and timing may be sensitive.
+
+**Commercial and naming limits:** first five disconfirming interviews, two observed manual workflows and a conditional priced commitment request precede any product-family pivot. Synthetic/sample trial first; confidential client evidence only after the approved SEC-01–16 controls. CaseProof is a provisional public name pending EUIPO/BOIP clearance. Do not sell authority research, court-filing automation, legal certification, signed-lawyer attestation or qualified timestamps as current features.
 
 ## Expansion decision gate
 
