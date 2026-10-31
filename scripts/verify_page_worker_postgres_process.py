@@ -15,12 +15,10 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 import psycopg
 from fastapi import HTTPException
 
-from apps.api.dossier_journey import canonical
 from apps.api.signed_page_jobs import SignedPageJobs
 from apps.worker.signed_page_worker import SignedPageWorker
 from scripts.generate_page_worker_bundle import write_bundle
