@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import io
 import stat
-from zipfile import BadZipFile, ZipFile
+from zipfile import BadZipFile, ZipFile, is_zipfile
 
 from application.extraction.contracts import ExtractionError
 
@@ -16,7 +16,13 @@ DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 
 def validate_original_container(data: bytes, media_type: str) -> None:
-    if media_type != DOCX or not data.startswith(b'PK'):
+    if media_type != DOCX:
+        return
+    if not data.startswith(b'PK'):
+        # ZIP readers accept arbitrary prefixes; do not let those containers
+        # bypass the same archive limits as normal DOCX packages.
+        if is_zipfile(io.BytesIO(data)):
+            raise ExtractionError('unsafe_original_archive')
         return
     try:
         with ZipFile(io.BytesIO(data)) as archive:
