@@ -3,8 +3,26 @@
 Inputs must be loaded by a matter-authorized adapter, never accepted as browser
 assertions. Equal text does not prove that formatting survived extraction.
 """
+import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
+
+# Typographic artefacts that PDF text extraction commonly introduces. Only
+# these are folded, so deliberate look-alike or invisible-character
+# substitutions (zero-width characters, full-width digits, Cyrillic letters)
+# still surface as a disagreement between the two representations.
+_LIGATURES = {
+    "\ufb00": "ff", "\ufb01": "fi", "\ufb02": "fl", "\ufb03": "ffi",
+    "\ufb04": "ffl", "\ufb05": "st", "\ufb06": "st",
+}
+
+
+def normalize_for_comparison(text: str) -> str:
+    """Fold extraction-only noise before comparing two representations."""
+    folded = unicodedata.normalize("NFC", text).replace("\u00ad", "")
+    for ligature, plain in _LIGATURES.items():
+        folded = folded.replace(ligature, plain)
+    return " ".join(folded.split())
 
 
 class RepresentationState(StrEnum):
@@ -23,6 +41,9 @@ class RepresentationComparison:
     visual_text: str
     visual_reliable: bool
     meaning_bearing_edit: bool
+    # False means the adapter compared only the region in extracted_text and
+    # visual_text, so it need not block quotes that lie elsewhere on the page.
+    covers_whole_page: bool = True
     # Adapter observations only: strikethrough/insertion is a review trigger,
     # never an automatic instruction to delete or accept contractual language.
 
@@ -34,7 +55,8 @@ class RepresentationComparison:
         if (type(self.pdf_page) is not int or not 1 <= self.pdf_page <= 100_000
                 or not self.representation_id or len(self.representation_id) > 256
                 or type(self.visual_reliable) is not bool
-                or type(self.meaning_bearing_edit) is not bool):
+                or type(self.meaning_bearing_edit) is not bool
+                or type(self.covers_whole_page) is not bool):
             raise ValueError("bounded page and typed adapter observations required")
         for text in (self.extracted_text, self.visual_text):
             if type(text) is not str or len(text) > 4000:
@@ -44,7 +66,9 @@ class RepresentationComparison:
     def state(self) -> RepresentationState:
         if not self.visual_reliable or not self.visual_text.strip():
             return RepresentationState.OCR_UNRELIABLE
-        if self.meaning_bearing_edit or self.extracted_text != self.visual_text:
+        if (self.meaning_bearing_edit
+                or normalize_for_comparison(self.extracted_text)
+                != normalize_for_comparison(self.visual_text)):
             return RepresentationState.REPRESENTATION_CONFLICT
         return RepresentationState.NOT_ASSESSED
 

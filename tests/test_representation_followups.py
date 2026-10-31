@@ -1,0 +1,154 @@
+"""Follow-ups to the representation gate: scoping, normalization, visibility."""
+import random
+from dataclasses import replace
+
+import pytest
+
+from application.litigation.brief_checks import CitationCheckState
+from application.litigation.representation_fidelity import (
+    RepresentationComparison,
+    RepresentationState,
+    normalize_for_comparison,
+)
+
+
+def comparison(**changes):
+    base = RepresentationComparison("a" * 64, "rep-1", 1, "b" * 64,
+                                    "EUR 1000 1200", "EUR 1000 1200", True, False)
+    return replace(base, **changes)
+
+
+@pytest.mark.parametrize("extracted,visual", [
+    ("of\ufb01ce", "office"),
+    ("pay\u00a0ment due", "pay ment due"),
+    ("pay\u00adment", "payment"),
+    ("EUR   1200\n", "EUR 1200"),
+])
+def test_extraction_noise_is_not_a_conflict(extracted, visual):
+    result = comparison(extracted_text=extracted, visual_text=visual)
+    assert result.state is RepresentationState.NOT_ASSESSED
+
+
+@pytest.mark.parametrize("extracted,visual", [
+    ("EUR 1200", "EUR 1\u200b200"),
+    ("EUR 1200", "EUR \uff11\uff12\uff10\uff10"),
+    ("EUR 1000", "EUR 1200"),
+])
+def test_lookalike_and_hidden_characters_stay_conflicts(extracted, visual):
+    result = comparison(extracted_text=extracted, visual_text=visual)
+    assert result.state is RepresentationState.REPRESENTATION_CONFLICT
+
+
+def test_normalization_is_idempotent_and_minimal():
+    text = "of\ufb01ce  pay\u00adment"
+    once = normalize_for_comparison(text)
+    assert once == "office payment"
+    assert normalize_for_comparison(once) == once
+
+
+def test_covers_whole_page_defaults_true_and_must_be_bool():
+    assert comparison().covers_whole_page is True
+    with pytest.raises(ValueError):
+        comparison(covers_whole_page="no")
+
+
+def test_regional_comparison_elsewhere_does_not_block_unrelated_quote():
+    from tests.test_litigation_m2_brief_checks import check, rig
+
+    brief, register, previews = rig()
+    preview = previews[0]
+    item = comparison(original_sha256=preview.row.original_sha256,
+                      meaning_bearing_edit=True, covers_whole_page=False)
+    report = check(brief, register, (replace(preview, representation_comparisons=(item,)),))
+    obs = report.observations[0]
+    assert obs.state is CitationCheckState.EXACT_MATCH
+    assert obs.visual_comparison_supplied is False
+    assert report.exact_without_visual_comparison_count == 1
+
+
+def test_regional_comparison_overlapping_the_quote_still_blocks():
+    from tests.test_litigation_m2_brief_checks import check, rig
+
+    brief, register, previews = rig()
+    preview = previews[0]
+    item = comparison(original_sha256=preview.row.original_sha256,
+                      extracted_text="Le paiement est d\u00fb.", visual_text="Le paiement",
+                      covers_whole_page=False)
+    report = check(brief, register, (replace(preview, representation_comparisons=(item,)),))
+    obs = report.observations[0]
+    assert obs.state is CitationCheckState.REPRESENTATION_CONFLICT
+    assert obs.visual_comparison_supplied is True
+    assert report.exact_count == 0
+
+
+def test_whole_page_comparison_keeps_blocking_every_quote():
+    from tests.test_litigation_m2_brief_checks import check, rig
+
+    brief, register, previews = rig()
+    preview = previews[0]
+    item = comparison(original_sha256=preview.row.original_sha256,
+                      meaning_bearing_edit=True)
+    report = check(brief, register, (replace(preview, representation_comparisons=(item,)),))
+    assert report.observations[0].state is CitationCheckState.REPRESENTATION_CONFLICT
+
+
+def test_clean_supplied_comparison_is_visible_and_not_counted_as_missing():
+    from tests.test_litigation_m2_brief_checks import check, rig
+
+    brief, register, previews = rig()
+    preview = previews[0]
+    item = comparison(original_sha256=preview.row.original_sha256)
+    report = check(brief, register, (replace(preview, representation_comparisons=(item,)),))
+    assert report.observations[0].state is CitationCheckState.EXACT_MATCH
+    assert report.observations[0].visual_comparison_supplied is True
+    assert report.exact_without_visual_comparison_count == 0
+
+
+def test_no_comparison_leaves_exact_match_visibly_unassessed():
+    from tests.test_litigation_m2_brief_checks import check
+
+    report = check()
+    assert report.observations[0].state is CitationCheckState.EXACT_MATCH
+    assert report.observations[0].visual_comparison_supplied is False
+    assert report.exact_without_visual_comparison_count == 1
+
+
+def _reference_detector(image, bounds):
+    left, top, right, bottom = bounds
+    width, height = right - left, bottom - top
+    if width < 8 or height < 8:
+        return False
+    gray = image.crop(bounds).convert("L")
+    for y in range(height // 3, 2 * height // 3 + 1):
+        longest = current = 0
+        for x in range(width):
+            pixel = gray.getpixel((x, y))
+            current = current + 1 if isinstance(pixel, int) and pixel < 100 else 0
+            longest = max(longest, current)
+        if longest * 5 >= width * 4:
+            return True
+    return False
+
+
+def test_fast_detector_matches_the_original_pixel_loop():
+    from PIL import Image, ImageDraw
+
+    from infrastructure.parsers.visual_edit_candidates import has_midline_candidate
+
+    rng = random.Random(7)
+    seen = set()
+    for _ in range(60):
+        image = Image.new("RGB", (120, 60), "white")
+        draw = ImageDraw.Draw(image)
+        for _ in range(rng.randint(0, 6)):
+            y = rng.randint(0, 59)
+            x0 = rng.randint(0, 100)
+            draw.line((x0, y, min(119, x0 + rng.randint(5, 119)), y),
+                      fill=rng.choice(["black", "red", "blue", "gray", "yellow"]))
+        for _ in range(rng.randint(0, 20)):
+            draw.point((rng.randint(0, 119), rng.randint(0, 59)), fill="black")
+        bounds = (rng.randint(0, 20), rng.randint(0, 10), rng.randint(60, 120), rng.randint(30, 60))
+        expected = _reference_detector(image, bounds)
+        assert has_midline_candidate(image, bounds) is expected
+        seen.add(expected)
+    assert seen == {True, False}

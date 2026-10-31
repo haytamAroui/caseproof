@@ -7,11 +7,16 @@ truth, procedural validity or the correctness of a legal conclusion.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 
 from application.litigation.library import EvidencePreview
-from application.litigation.representation_fidelity import RepresentationComparison, RepresentationState
+from application.litigation.representation_fidelity import (
+    RepresentationComparison,
+    RepresentationState,
+    normalize_for_comparison,
+)
 from domains.disputes.exhibits import ExhibitRegister, MappingState
 
 
@@ -97,6 +102,15 @@ class CitationObservation:
     # EXACT_MATCH is lexical fidelity within one parsed span, NOT
     # semantic support, document authenticity or legal approval.
 
+    @property
+    def visual_comparison_supplied(self) -> bool:
+        """False means no source-bound text/visual comparison covered this reference.
+
+        An EXACT_MATCH with this flag False says nothing about formatting that
+        text extraction may have lost, such as struck-out or hidden text.
+        """
+        return bool(self.representation_comparisons)
+
 
 @dataclass(frozen=True, slots=True)
 class DraftCheckReport:
@@ -111,11 +125,40 @@ class DraftCheckReport:
     evidence_scope_complete: bool
     engine_version: str = "caseproof-literal-citation-v1"
 
+    @property
+    def exact_without_visual_comparison_count(self) -> int:
+        """Exact matches that no source-bound visual comparison covered."""
+        return sum(
+            o.state is CitationCheckState.EXACT_MATCH and not o.visual_comparison_supplied
+            for o in self.observations
+        )
+
+
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"\w+", normalize_for_comparison(text).casefold()))
+
+
+def _comparison_applies(reference: DraftReference, comparison: RepresentationComparison) -> bool:
+    """Whole-page comparisons always apply; regional ones only when they touch the quote.
+
+    Fails closed: a regional comparison is skipped only when both sides have
+    words and share none with the quoted text. A reference without a quotation
+    is still gated by every comparison on its page.
+    """
+    if comparison.covers_whole_page or reference.exact_quote is None:
+        return True
+    quote_words = _words(reference.exact_quote)
+    region_words = _words(comparison.extracted_text) | _words(comparison.visual_text)
+    if not quote_words or not region_words:
+        return True
+    return bool(quote_words & region_words)
+
 
 def _note(reference: DraftReference, state: CitationCheckState,
           *, exhibit_id: str | None = None,
           preview: EvidencePreview | None = None,
-          span: tuple[int, int] | None = None) -> CitationObservation:
+          span: tuple[int, int] | None = None,
+          comparisons: tuple[RepresentationComparison, ...] | None = None) -> CitationObservation:
     row = preview.row if preview is not None else None
     return CitationObservation(
         reference.reference_id, state, exhibit_id,
@@ -125,7 +168,8 @@ def _note(reference: DraftReference, state: CitationCheckState,
         row.representation_id if row else None,
         span[0] if span else None, span[1] if span else None,
         state.value,
-        preview.representation_comparisons if preview else (),
+        comparisons if comparisons is not None
+        else (preview.representation_comparisons if preview else ()),
     )
 
 
@@ -189,15 +233,17 @@ def check_brief_references(
             if (comparison.original_sha256 != row.original_sha256
                     or comparison.representation_id != row.representation_id):
                 raise DraftCheckError("stale representation comparison")
-            if comparison.pdf_page == page.pdf_page:
+            if (comparison.pdf_page == page.pdf_page
+                    and _comparison_applies(reference, comparison)):
                 relevant.append(comparison)
+        applied = tuple(relevant)
         blocked = {item.state for item in relevant}
         if blocked - {RepresentationState.NOT_ASSESSED}:
             state = (CitationCheckState.REPRESENTATION_CONFLICT
                      if RepresentationState.REPRESENTATION_CONFLICT in blocked
                      else CitationCheckState.OCR_UNRELIABLE)
             observations.append(_note(reference, state, exhibit_id=resolved.exhibit_id,
-                                      preview=matched_preview))
+                                      preview=matched_preview, comparisons=applied))
             continue
         # Derived representation text must have source-linked bounds.
         if any(
@@ -210,6 +256,7 @@ def check_brief_references(
             observations.append(_note(
                 reference, CitationCheckState.NO_QUOTATION,
                 exhibit_id=resolved.exhibit_id, preview=matched_preview,
+                comparisons=applied,
             ))
             continue
         # A confirmed mapping to physical page N does not permit matching
@@ -238,7 +285,7 @@ def check_brief_references(
             state = CitationCheckState.QUOTE_NOT_FOUND
         observations.append(_note(
             reference, state, exhibit_id=resolved.exhibit_id, preview=matched_preview,
-            span=matches[0] if len(matches) == 1 else None,
+            span=matches[0] if len(matches) == 1 else None, comparisons=applied,
         ))
     all_obs = tuple(observations)
     unknown = {
