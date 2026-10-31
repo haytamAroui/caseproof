@@ -152,10 +152,10 @@ def test_cross_matter_release_and_client_argument_injection_denied(monkeypatch):
     forged = body(arguments={"case_id": CASE, "brief_id": BRIEF, "snapshot_hash": HASH,
                             "bearer": TOKEN, "allow_document_content": True})
     response = client.post("/mcp", json=forged, headers=headers())
-    # No release is enough to override the canonical argument allowlist.
-    # Injected stub stands in for the canonical dispatcher here.
-    assert response.status_code == 200
-    assert len(calls) == 2
+    # The host must refuse forged arguments BEFORE requesting any consent.
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == -32602
+    assert len(calls) == 1 and gate.calls == 1
 
 
 def test_bearer_scope_issuer_audience_and_expiry_fail_before_tools(monkeypatch):
