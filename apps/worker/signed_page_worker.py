@@ -135,6 +135,8 @@ class SignedPageWorker:
             if current_keys == expected_keys:
                 for key in sorted(current_keys):
                     self.jobs.read_page(bearer, case, request, key, job=current)
+            if lost.is_set():
+                raise ExtractionError('worker_lease_lost')
             action = 'finish' if current_keys == expected_keys else 'yield'
             return self.jobs.call(bearer, case, request, action, {'lease_token': token})
         finally:
