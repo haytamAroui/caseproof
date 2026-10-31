@@ -37,6 +37,7 @@ class Revisions:
         if action == 'status':
             return dict(self.row)
         self.row = dict(state='reserved', parent_version_id=values['parent_version_id'],
+                        parent_snapshot_hash=values['snapshot_hash'], reference_id=values['reference_id'],
                         document_id='document', version_id='new', original_sha256=values['sha256'],
                         byte_length=values['byte_length'], command_sha256=values['command_sha256'])
         return dict(self.row)
@@ -104,3 +105,13 @@ def test_changed_command_and_stale_snapshot_rejected():
     with pytest.raises(HTTPException) as conflict:
         service.commit_correction('signed', 'case', 'old', command.model_copy(update={'after': 'p. 4'}))
     assert conflict.value.status_code == 409
+
+
+def test_signed_reservation_cannot_substitute_another_snapshot_or_reference():
+    service, command = store('corrupt')
+    with pytest.raises(AccessRejected):
+        service.commit_correction('signed', 'case', 'old', command)
+    service.revisions.row['parent_snapshot_hash'] = 'f'*64
+    with pytest.raises(HTTPException) as conflict:
+        service.commit_correction('signed', 'case', 'old', command)
+    assert conflict.value.status_code == 409 and service.revisions.activations == 0

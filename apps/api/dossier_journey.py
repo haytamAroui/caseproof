@@ -143,6 +143,11 @@ class DossierStore:
         command_sha = hashlib.sha256(canonical({'case': case, 'brief': brief, **values}).encode()).hexdigest()
         existing = self.revisions.reserve(bearer, case, command.request_id, 'status',
                                           {'command_sha256': command_sha})
+        if existing.get('state') in ('reserved', 'active') and (
+                existing.get('parent_snapshot_hash') != command.snapshot_hash
+                or existing.get('reference_id') != command.reference_id
+                or existing.get('parent_version_id') != brief):
+            raise HTTPException(409, 'correction reservation differs from command')
         if existing.get('state') == 'active':
             return {**existing, 'committed': True, 'requires_recheck': True}
         if existing.get('state') == 'absent':
@@ -166,7 +171,10 @@ class DossierStore:
             'command_sha256': command_sha, 'snapshot_hash': command.snapshot_hash,
             'parent_version_id': brief, 'parent_sha256': command.original_sha256,
             'reference_id': command.reference_id, 'sha256': digest, 'byte_length': len(derivative)})
-        if (reserved.get('parent_version_id') != brief or reserved.get('original_sha256') != digest
+        if (reserved.get('parent_version_id') != brief
+                or reserved.get('parent_snapshot_hash') != command.snapshot_hash
+                or reserved.get('reference_id') != command.reference_id
+                or reserved.get('original_sha256') != digest
                 or reserved.get('byte_length') != len(derivative)):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         params = {'bearer': bearer, 'case_id': case, 'document_id': reserved['document_id'],

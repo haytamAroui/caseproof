@@ -9,6 +9,7 @@ create table caseproof.dossier_draft_revisions (
  parent_version_id uuid not null,
  version_id uuid not null,
  parent_snapshot_hash text not null check(parent_snapshot_hash ~ '^[0-9a-f]{64}$'),
+ reference_id text not null check(length(reference_id) between 1 and 256),
  command_sha256 text not null check(command_sha256 ~ '^[0-9a-f]{64}$'),
  original_sha256 text not null check(original_sha256 ~ '^[0-9a-f]{64}$'),
  byte_length bigint not null check(byte_length between 1 and 5242880),
@@ -94,8 +95,8 @@ begin
  insert into caseproof.document_versions(id,org_id,document_id,version_number,original_sha256_hex,byte_length,media_type,bundle_role)
  values(v,o,parent.document_id,n,p_data->>'sha256',(p_data->>'byte_length')::bigint,parent.media_type,'draft');
  insert into caseproof.dossier_draft_revisions(org_id,case_id,request_id,actor_id,document_id,parent_version_id,
- version_id,parent_snapshot_hash,command_sha256,original_sha256,byte_length)
- values(o,p_case,p_request,a,parent.document_id,parent.id,v,s.snapshot_hash,command,p_data->>'sha256',(p_data->>'byte_length')::bigint)
+ version_id,parent_snapshot_hash,reference_id,command_sha256,original_sha256,byte_length)
+ values(o,p_case,p_request,a,parent.document_id,parent.id,v,s.snapshot_hash,p_data->>'reference_id',command,p_data->>'sha256',(p_data->>'byte_length')::bigint)
  returning * into r;
  insert into caseproof.audit_events(org_id,case_id,actor_type,actor_user_id,action,event_schema_version,correlation_id,input_sha256_hex)
  values(o,p_case,'human',a,'dossier_draft_reserved','dossier-correction-v1',p_request,command);
