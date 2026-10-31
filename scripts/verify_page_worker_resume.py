@@ -200,8 +200,14 @@ def orchestrate() -> int:
     final = jobs.call(BEARER, CASE, JOB, 'status')
     assert final['state'] == 'succeeded' and len(final['results']) == 200
     states: dict[str, int] = {}
+    expected_pages = {p['version_id'] + ':' + str(p['pdf_page']): p for p in pages}
+    assert len(expected_pages) == 200, 'duplicate manifest page identity'
+    assert {r['page_key'] for r in final['results']} == set(expected_pages), 'missing or unexpected page'
     for item in final['results']:
         artifact = jobs.read_page(BEARER, CASE, JOB, item['page_key'], job=final)
+        expected = expected_pages[item['page_key']]
+        assert all(artifact[k] == expected[k] for k in ('document_id', 'version_id', 'original_sha256', 'pdf_page', 'needs_ocr'))
+        assert (artifact['state'] in ('ocr_candidate', 'ocr_unavailable')) == expected['needs_ocr'], 'OCR path mismatch'
         states[artifact['state']] = states.get(artifact['state'], 0) + 1
         assert artifact['semantic_support'] == 'not_assessed'
     con = jobs.connect()
