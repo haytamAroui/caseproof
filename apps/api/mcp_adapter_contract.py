@@ -54,7 +54,7 @@ _ID_PROPERTY = {"type": "string", "pattern": _ID_PATTERN}
 TOOLS: tuple[McpTool, ...] = (
     McpTool(
         "caseproof_discover_references",
-        "LEGACY DISCOVERY ONLY (headless-v1), not the canonical dossier verification report. "
+        "Canonical signed dossier verification report. "
         "Do not treat inventory absence, fidelity, translation, or page mapping as verified.",
         {"case_id": _ID_PROPERTY, "brief_id": _ID_PROPERTY},
         ("case_id", "brief_id"),
