@@ -2,6 +2,8 @@
 
 **Status:** ACCEPTED as the owner's new **commercial product hypothesis and scope** on 28 October 2026; **pilot and customer deployment are NOT approved** by this ADR. [Authoritative milestones](../ROADMAP.md) and [workflow](../PRODUCT_WORKFLOW.md) specify the implementation/acceptance truth. All v1 scope decisions are frozen pending practitioner evidence, except legal/security corrections and defects that protect existing invariants.
 
+**30 October clarification:** [ADR 0019](0019-evidence-engine-and-first-market.md) separates the reusable evidence-engine vision from this first market and adds an evidence-led expansion decision gate. The litigation scope freeze, web-first journey and approval boundaries remain in force.
+
 ## Context and decision
 
 CaseProof previously committed to a broad Clearbrief-class Word-first writing-to-delivery product under ADR 0016. Repeated competitor comparisons, Microsoft Copilot integration risk and missing customer evidence caused launch-scope drift. The owner now chooses **one testable commercial hypothesis** instead of more positioning debates:
