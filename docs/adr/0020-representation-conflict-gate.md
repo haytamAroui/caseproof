@@ -1,4 +1,4 @@
-# ADR 0019 — Bounded representation disagreement gate
+# ADR 0020 — Bounded representation disagreement gate
 
 Status: feature-branch implementation proposal, subject to review; 30 October 2026.
 
@@ -69,3 +69,14 @@ Engine version is `caseproof-literal-citation-v2`, and observations carry
 `representation-gate-v2` so normalization/scoping behavior is distinguishable.
 Web rendering and live comparison adapters remain open; no visual verification
 or complete crop coverage is asserted by these fields.
+
+
+## Compatibility with open PR #146
+
+PR #147 is a bounded foundation update against main, not a replacement for #146.
+It retains conservative page gating only where no source-linked regional geometry
+is available. #146 introduces anchored regional selection and must preserve those
+anchors when reconciled with this branch; do not transplant whole-page fallback
+over validated regional logic. Merge order requires rerunning the remaining PR.
+ADR 0020 matches #146 representation-gate numbering and avoids the merged product
+vision ADR 0019. This branch does not establish joint integration acceptance.
