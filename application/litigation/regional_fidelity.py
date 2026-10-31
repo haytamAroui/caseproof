@@ -25,6 +25,12 @@ def select_visual_assessment(page: dict[str, Any] | None, quote: str | None) -> 
     if not layer:
         result['reason'] = 'scan_without_independent_text_layer'
         result['state'] = 'ocr_unreliable'
+        context = page.get('page_context')
+        if context:
+            result['regions'] = [context]
+            result['anchor_scope'] = 'page_context_only'
+        else:
+            result['reason'] = 'scan_context_unavailable_or_over_budget'
         return result
     if len(layer) > 4000:
         result['reason'] = 'layer_alignment_budget_exceeded'

@@ -237,12 +237,26 @@ class PDFVisualFidelity:
             record['region_id'] = digest(str((representation_id,page_number,word.box,word.text,ENGINE)).encode())
             regions.append(record)
             position += len(word.text) + 1
+        context: dict[str, Any] | None = None
+        if not layer and len(png) <= MAX_PAGE_CROP_BYTES:
+            context = {'region_id': digest((representation_id + ':page-context:' + digest(png)).encode()),
+                       'original_sha256': digest(raw), 'representation_id': representation_id,
+                       'page_number': page_number, 'page_image_sha256': digest(png),
+                       'bbox': [0, 0, image.width, image.height],
+                       'coordinate_basis': 'raster_pixels_top_left_150dpi',
+                       'image_size': [image.width, image.height], 'dpi': RASTER_DPI,
+                       'extracted_text': '', 'visual_text': ' '.join(w.text for w in ocr)[:4000],
+                       'text_context_partial': len(' '.join(w.text for w in ocr)) > 4000,
+                       'state': 'ocr_unreliable', 'reason': 'page_context_only_no_text_layer',
+                       'anchor_scope': 'page_context_only', 'detector': ENGINE,
+                       'runtime_image': os.getenv('CASEPROOF_OCR_BUILD', 'unrecorded'),
+                       'crop_sha256': digest(png), 'crop_base64': base64.b64encode(png).decode()}
         return {'schema': 'caseproof.visual-page.v2', 'engine': ENGINE,
                 'original_sha256': digest(raw), 'page_number': page_number,
                 'representation_id': representation_id,
                 'layer_text': ' '.join(w.text for w in layer),
                 'visual_text': ' '.join(w.text for w in ocr),
-                'regions': regions, 'processed_words': len(regions), 'total_words': len(targets),
+                'regions': regions, 'page_context': context, 'processed_words': len(regions), 'total_words': len(targets),
                 'complete': len(regions) == len(targets) and bool(targets),
                 'vector_geometry_supported': vector_supported,
                 'limitations': ['Candidate review only; no calibrated acceptance or legal interpretation.',

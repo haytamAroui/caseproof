@@ -111,3 +111,10 @@ def test_crop_review_requires_decoded_image_and_scoped_blob_policy():
     policy=Path('apps/api/litigation_development_app.py').read_text()
     assert "img-src 'self' blob:; base-uri 'none'; form-action 'self'" in policy
     assert "script-src 'self'; style-src 'self'" in policy
+
+
+def test_scan_abstention_supplies_explicit_page_context_not_a_guessed_word_anchor():
+    context={'region_id':'page-context','anchor_scope':'page_context_only'}
+    result=select_visual_assessment({'layer_text':'','regions':[], 'page_context':context},'1000')
+    assert result['state']=='ocr_unreliable'
+    assert result['anchor_scope']=='page_context_only' and result['regions']==[context]

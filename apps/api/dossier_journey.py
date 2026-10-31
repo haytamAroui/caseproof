@@ -338,7 +338,8 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         s, bearer = active(authorization)
         report, _ = s.reopen(bearer, case_id, brief_id, snapshot_hash)
         matches = [r for page in report.get('visual_pages', {}).values()
-                   for r in page.get('regions', []) if r['region_id'] == region_id]
+                   for r in [*page.get('regions', []), *([page['page_context']] if page.get('page_context') else [])]
+                   if r['region_id'] == region_id]
         if len(matches) != 1:
             raise HTTPException(404, 'visual region unavailable')
         region = matches[0]
