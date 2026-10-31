@@ -231,7 +231,7 @@ The [SEC-01–SEC-16 checklist](security/PILOT_DATA_SECURITY_GATE.md) is **OPEN*
 
 ## Representation fidelity extension — 30 October 2026
 
-See [ADR 0019](adr/0019-representation-conflict-gate.md). Text/visual disagreement
+See [ADR 0020](adr/0020-representation-conflict-gate.md). Text/visual disagreement
 is a fidelity review trigger, not a product pivot or semantic verdict. New
 synthetic fixtures and an opt-in resolver gate are under development; live adapter,
 private crop, persistence and web rendering acceptance remain open.

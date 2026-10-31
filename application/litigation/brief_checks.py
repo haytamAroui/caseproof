@@ -7,11 +7,14 @@ truth, procedural validity or the correctness of a legal conclusion.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 from application.litigation.library import EvidencePreview
-from application.litigation.representation_fidelity import RepresentationComparison, RepresentationState
+from application.litigation.representation_fidelity import (
+    RepresentationComparison,
+    RepresentationState,
+)
 from domains.disputes.exhibits import ExhibitRegister, MappingState
 
 
@@ -97,6 +100,29 @@ class CitationObservation:
     # EXACT_MATCH is lexical fidelity within one parsed span, NOT
     # semantic support, document authenticity or legal approval.
 
+    # Stored derived fields survive asdict() in API, manifests and run hashes.
+    visual_comparison_supplied: bool = field(init=False)
+    visual_coverage: str = field(init=False)
+    visual_assessment: str = field(init=False)
+    fidelity_rules_version: str = field(init=False, default="representation-gate-v2")
+
+    def __post_init__(self) -> None:
+        comparisons = self.representation_comparisons
+        object.__setattr__(self, "visual_comparison_supplied", bool(comparisons))
+        object.__setattr__(self, "visual_coverage", (
+            "whole_page" if any(c.covers_whole_page for c in comparisons)
+            else "unknown" if comparisons else "not_supplied"
+        ))
+        states = {c.state for c in comparisons}
+        assessment = (
+            RepresentationState.REPRESENTATION_CONFLICT
+            if RepresentationState.REPRESENTATION_CONFLICT in states
+            else RepresentationState.OCR_UNRELIABLE
+            if RepresentationState.OCR_UNRELIABLE in states
+            else RepresentationState.NOT_ASSESSED
+        )
+        object.__setattr__(self, "visual_assessment", assessment.value)
+
 
 @dataclass(frozen=True, slots=True)
 class DraftCheckReport:
@@ -109,13 +135,22 @@ class DraftCheckReport:
     mismatch_count: int
     exact_count: int
     evidence_scope_complete: bool
-    engine_version: str = "caseproof-literal-citation-v1"
+    engine_version: str = "caseproof-literal-citation-v2"
+
+    @property
+    def exact_without_visual_comparison_count(self) -> int:
+        """Exact matches that no source-bound visual comparison covered."""
+        return sum(
+            o.state is CitationCheckState.EXACT_MATCH and not o.visual_comparison_supplied
+            for o in self.observations
+        )
 
 
 def _note(reference: DraftReference, state: CitationCheckState,
           *, exhibit_id: str | None = None,
           preview: EvidencePreview | None = None,
-          span: tuple[int, int] | None = None) -> CitationObservation:
+          span: tuple[int, int] | None = None,
+          comparisons: tuple[RepresentationComparison, ...] | None = None) -> CitationObservation:
     row = preview.row if preview is not None else None
     return CitationObservation(
         reference.reference_id, state, exhibit_id,
@@ -125,7 +160,7 @@ def _note(reference: DraftReference, state: CitationCheckState,
         row.representation_id if row else None,
         span[0] if span else None, span[1] if span else None,
         state.value,
-        preview.representation_comparisons if preview else (),
+        comparisons if comparisons is not None else (),
     )
 
 
@@ -189,15 +224,18 @@ def check_brief_references(
             if (comparison.original_sha256 != row.original_sha256
                     or comparison.representation_id != row.representation_id):
                 raise DraftCheckError("stale representation comparison")
+            # Without source-linked geometry, word overlap cannot establish
+            # disjointness. Every conflict on this page remains a review gate.
             if comparison.pdf_page == page.pdf_page:
                 relevant.append(comparison)
+        applied = tuple(relevant)
         blocked = {item.state for item in relevant}
         if blocked - {RepresentationState.NOT_ASSESSED}:
             state = (CitationCheckState.REPRESENTATION_CONFLICT
                      if RepresentationState.REPRESENTATION_CONFLICT in blocked
                      else CitationCheckState.OCR_UNRELIABLE)
             observations.append(_note(reference, state, exhibit_id=resolved.exhibit_id,
-                                      preview=matched_preview))
+                                      preview=matched_preview, comparisons=applied))
             continue
         # Derived representation text must have source-linked bounds.
         if any(
@@ -210,6 +248,7 @@ def check_brief_references(
             observations.append(_note(
                 reference, CitationCheckState.NO_QUOTATION,
                 exhibit_id=resolved.exhibit_id, preview=matched_preview,
+                comparisons=applied,
             ))
             continue
         # A confirmed mapping to physical page N does not permit matching
@@ -238,7 +277,7 @@ def check_brief_references(
             state = CitationCheckState.QUOTE_NOT_FOUND
         observations.append(_note(
             reference, state, exhibit_id=resolved.exhibit_id, preview=matched_preview,
-            span=matches[0] if len(matches) == 1 else None,
+            span=matches[0] if len(matches) == 1 else None, comparisons=applied,
         ))
     all_obs = tuple(observations)
     unknown = {

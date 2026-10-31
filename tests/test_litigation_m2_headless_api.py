@@ -108,6 +108,11 @@ def test_headless_post_authorized_private_case_returns_source_linked_check():
     assert response.status_code == 200
     data = response.json()
     assert data["schema"] == "caseproof-m2-check-headless-v1"
+    observation = data["citation_observations"][0]
+    assert observation["visual_comparison_supplied"] is False
+    assert observation["visual_coverage"] == "not_supplied"
+    assert observation["visual_assessment"] == "not_assessed"
+    assert observation["fidelity_rules_version"] == "representation-gate-v2"
     assert data["citation_observations"][0]["state"] == "reference_checked_no_quotation"
     assert data["case_id"] == CASE and len(data["snapshot_hash"]) == 64
     assert store.current_calls == 2 and verifier.calls == 2

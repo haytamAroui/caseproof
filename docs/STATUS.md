@@ -9,7 +9,7 @@ Next work: validate practitioner pain and total effort; close supported verifica
 
 Feature branch `feat/representation-conflict`: paired clean/redlined/scan fixture
 factory, conservative pixel midline candidate detector, source-bound regional
-comparison and unresolved literal-check gate. See [ADR 0019](adr/0019-representation-conflict-gate.md).
+comparison and unresolved literal-check gate. See [ADR 0020](adr/0020-representation-conflict-gate.md).
 Live adapter/persistence/UI wiring remains open; no M3 completion or detector
 accuracy claim. Exact CI evidence belongs to the feature PR.
 
@@ -231,6 +231,15 @@ A loopback-only injected development app combines versioned factual checking, ma
 
 [Manual run 40531773053](https://github.com/haytamAroui/caseproof/actions/runs/40531773053) passed on main commit `866158a51c780dad88a63d48769282f96addfc8a`: three real Supabase dev identities were signed in and tested against a least-privilege disposable PostgreSQL RLS fixture; the job reported cleanup of all ephemeral identities. On 2026-10-27, at the owner's explicit direction, migration `20261027160745_caseproof_m1_dev_atomic_private_grants` was applied to the empty `caseproof-dev` project. Read-only inspection confirmed the M1 grant table, RLS enabled, and replacement of legacy case/document policies. Independent human security review has not been verified. The M2 brief tables are absent. This does not test real signed users against the live database, live Storage, the PR branch's M2 composition, or an Office host.
 
+### PR #147 corrective follow-up (31 October 2026; feature branch)
+
+Removed word-overlap exemptions: regional comparisons without geometry still gate
+all references on their page. Added serialized comparison-presence, coverage and
+not-assessed/conflict/unreliable fields, plus explicit engine/rules versions.
+Regression coverage includes unrelated regional conflicts and clean common-word
+regions with unknown coverage. Full web rendering, geometry-based scoping and live
+adapter/crop acceptance remain open. Cloud CI must pass on the new head before
+merge; prior-head green results do not verify this correction.
 
 ## Product planning refinement — 31 October 2026 (PR #141)
 
