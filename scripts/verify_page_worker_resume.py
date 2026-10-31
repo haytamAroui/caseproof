@@ -170,6 +170,68 @@ def worker_main(db: str, directory: str) -> int:
     return 0
 
 
+
+def verify_adversarial_lease_contract(bundle: Path, directory: Path) -> dict[str, bool]:
+    """Exercise stale-owner fencing and replay semantics in a separate durable store."""
+    from apps.api.dossier_journey import canonical
+    import hashlib
+
+    db = directory / 'adversarial.sqlite'
+    jobs = SqliteJobs(db, FileDossier(bundle))
+    jobs.init_schema()
+    manifest, _ = SignedPageWorker(jobs).inputs(BEARER, CASE, JOB)
+    serialized = canonical(manifest)
+    jobs.call(BEARER, CASE, JOB, 'enqueue', {
+        'manifest': serialized, 'manifest_hash': hashlib.sha256(serialized.encode()).hexdigest()
+    })
+    first = jobs.call(BEARER, CASE, JOB, 'claim')
+    first_token = first['lease_token']
+    try:
+        jobs.call(BEARER, CASE, JOB, 'claim')
+    except HTTPException as error:
+        assert error.status_code == 409, 'active lease takeover must fail'
+    else:
+        raise AssertionError('active lease takeover was permitted')
+
+    with jobs.connect() as con:
+        con.execute('update job set lease_until=?', (time.time() - 1,))
+    second = jobs.call(BEARER, CASE, JOB, 'claim')
+    assert second['lease_token'] != first_token and second['claims'] == 2
+
+    for action, data in (
+        ('heartbeat', {'lease_token': first_token}),
+        ('put', {'lease_token': first_token, 'page_key': 'stale:1',
+                 'serialized': '{}', 'artifact_hash': '0' * 64}),
+        ('yield', {'lease_token': first_token}),
+        ('finish', {'lease_token': first_token}),
+    ):
+        try:
+            jobs.call(BEARER, CASE, JOB, action, data)
+        except HTTPException as error:
+            assert error.status_code == 409, (action, error.status_code)
+        else:
+            raise AssertionError(f'stale lease permitted {action}')
+
+    try:
+        jobs.call(BEARER, CASE, JOB, 'finish', {'lease_token': second['lease_token']})
+    except HTTPException as error:
+        assert error.status_code == 409, 'incomplete finish must fail'
+    else:
+        raise AssertionError('incomplete job was finished')
+
+    assert jobs.call(BEARER, CASE, JOB, 'status')['state'] == 'running'
+    assert not jobs.call(BEARER, CASE, JOB, 'status')['results']
+    return {
+        'active_lease_takeover_denied': True,
+        'expired_lease_takeover_succeeded': True,
+        'stale_heartbeat_denied': True,
+        'stale_put_denied': True,
+        'stale_yield_denied': True,
+        'stale_finish_denied': True,
+        'incomplete_finish_denied': True,
+    }
+
+
 def orchestrate() -> int:
     work = Path(tempfile.mkdtemp(prefix='caseproof-page-worker-'))
     bundle, db = work / 'bundle', work / 'jobs.sqlite'
@@ -224,12 +286,13 @@ def orchestrate() -> int:
     assert states.get('text_extracted') == 100, states
     assert states.get('ocr_candidate', 0) + states.get('ocr_unavailable', 0) == 100, states
     assert claims == 2, claims
+    adversarial = verify_adversarial_lease_contract(bundle, work)
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     (EVIDENCE / 'evidence.json').write_text(json.dumps({
         'pages': 200, 'text_pages': 100, 'image_only_pages': 100, 'artifact_states': states,
         'stored_by_crashed_worker': by_pid[crashed.pid], 'stored_by_resumed_worker': by_pid[resumed.pid],
         'claims': claims, 'lease_seconds': LEASE_SECONDS, 'crash_after_pages': CRASH_AFTER,
-        'every_page_written_by_one_process_only': True, 'receipts_verified': 200}, indent=2, sort_keys=True))
+        'every_page_written_by_one_process_only': True, 'receipts_verified': 200, 'adversarial_lease_checks': adversarial}, indent=2, sort_keys=True))
     print('PAGE_WORKER_HARD_CRASH_RESUME_200_PAGES_RECEIPTS_AND_LEASE_FENCE_PASSED')
     return 0
 
