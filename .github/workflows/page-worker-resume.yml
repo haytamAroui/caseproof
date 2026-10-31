@@ -1,0 +1,45 @@
+name: Signed page worker crash and resume acceptance
+on:
+  pull_request:
+    paths:
+      - 'apps/worker/**'
+      - 'apps/api/signed_page_jobs.py'
+      - 'scripts/generate_page_worker_bundle.py'
+      - 'scripts/verify_page_worker_resume.py'
+      - 'tests/test_signed_page_worker_recovery.py'
+      - 'tests/test_signed_page_jobs.py'
+      - 'apps/api/hosted_mcp_oauth_boundary.py'
+      - 'tests/test_hosted_mcp_oauth_boundary.py'
+      - '.github/workflows/page-worker-resume.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  crash-resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CASEPROOF_OCR_SANDBOX: docker
+      CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
+      CASEPROOF_PAGE_JOB_LEASE_SECONDS: '30'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - run: sudo apt-get update -qq && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-nld tesseract-ocr-fra fonts-dejavu-core
+      - run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
+      - name: Record OCR container content fingerprint
+        run: echo "CASEPROOF_OCR_BUILD=$(docker image inspect caseproof-ocr-worker:ci --format='{{.Id}}')" >> "$GITHUB_ENV"
+      - name: Unit tests for page jobs and worker recovery
+        run: uv run --locked pytest -q tests/test_signed_page_jobs.py tests/test_signed_page_worker_recovery.py tests/test_hosted_mcp_oauth_boundary.py
+      - name: Hard crash and cross-process resume of a generated 200-page bundle
+        run: uv run --locked python -m scripts.verify_page_worker_resume
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: page-worker-evidence
+          path: /tmp/caseproof-page-worker
+          retention-days: 7
