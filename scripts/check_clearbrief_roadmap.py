@@ -101,7 +101,7 @@ def main() -> None:
     _contains_all(
         documents["product_definition"],
         ("independent pre-submission verification", "Priority 1 — M1–M4 browser",
-         "EUIPO/BOIP", "field-level", "same frozen manifest"),
+         "EUIPO/BOIP", "field-level", "one frozen manifest"),
         FILES["product_definition"],
     )
     _contains_all(
