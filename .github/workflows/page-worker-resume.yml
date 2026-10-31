@@ -11,6 +11,24 @@ on:
       - 'apps/api/hosted_mcp_oauth_boundary.py'
       - 'tests/test_hosted_mcp_oauth_boundary.py'
       - '.github/workflows/page-worker-resume.yml'
+      - 'docker/ocr-worker.Dockerfile'
+      - 'pyproject.toml'
+      - 'uv.lock'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/worker/**'
+      - 'apps/api/signed_page_jobs.py'
+      - 'scripts/generate_page_worker_bundle.py'
+      - 'scripts/verify_page_worker_resume.py'
+      - 'tests/test_signed_page_worker_recovery.py'
+      - 'tests/test_signed_page_jobs.py'
+      - 'apps/api/hosted_mcp_oauth_boundary.py'
+      - 'tests/test_hosted_mcp_oauth_boundary.py'
+      - '.github/workflows/page-worker-resume.yml'
+      - 'docker/ocr-worker.Dockerfile'
+      - 'pyproject.toml'
+      - 'uv.lock'
   workflow_dispatch:
 permissions:
   contents: read
