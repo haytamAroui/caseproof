@@ -66,7 +66,7 @@ class SignedPageWorker:
         if len(completed) != len(completed_rows) or not completed.issubset(expected_keys):
             raise ExtractionError('worker_invalid_checkpoint')
         for key in completed:
-            self.jobs.read_page(bearer, case, request, key)
+            self.jobs.read_page(bearer, case, request, key, job=status)
         if status['state'] == 'succeeded':
             return status
         lease = self.jobs.call(bearer, case, request, 'claim')
@@ -83,6 +83,14 @@ class SignedPageWorker:
         renew = Thread(target=heartbeat, daemon=True)
         renew.start()
         pending = [p for p in manifest['pages'] if p['version_id'] + ':' + str(p['pdf_page']) not in completed][:max_pages]
+        # Parse each text-bearing source once, not once per physical page.
+        parsed_sources: dict[str, tuple[str, dict[str, Any]]] = {}
+        for page in pending:
+            if not page['needs_ocr'] and page['version_id'] not in parsed_sources:
+                raw = originals[page['version_id']]
+                parsed_sources[page['version_id']] = parse_verified_original(
+                    document_id=page['document_id'], version_id=page['version_id'],
+                    data=raw, media_type='application/pdf')
 
         def process(page: dict[str, Any]) -> None:
             if lost.is_set():
@@ -106,8 +114,7 @@ class SignedPageWorker:
                     artifact.update({'state': 'ocr_unavailable', 'reason': 'local_ocr_unavailable'})
             else:
                 # Parse in a resource-limited child; preserve exact physical page offsets.
-                text, parsed = parse_verified_original(document_id=page['document_id'], version_id=page['version_id'],
-                                                       data=raw, media_type='application/pdf')
+                text, parsed = parsed_sources[page['version_id']]
                 blocks = [b for b in parsed['blocks'] if b['page_index'] == page['pdf_page'] - 1]
                 artifact.update({'state': 'text_extracted', 'blocks': [
                     {**b, 'text': text[b['start']:b['end']]} for b in blocks]})
@@ -125,6 +132,9 @@ class SignedPageWorker:
             current_keys = {r['page_key'] for r in current['results']}
             if len(current_keys) != len(current['results']) or not current_keys.issubset(expected_keys):
                 raise ExtractionError('worker_invalid_checkpoint')
+            if current_keys == expected_keys:
+                for key in sorted(current_keys):
+                    self.jobs.read_page(bearer, case, request, key, job=current)
             action = 'finish' if current_keys == expected_keys else 'yield'
             return self.jobs.call(bearer, case, request, action, {'lease_token': token})
         finally:
