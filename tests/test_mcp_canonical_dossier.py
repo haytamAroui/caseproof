@@ -66,3 +66,28 @@ def test_unavailable_canonical_report_never_falls_back_to_legacy():
                                  name="caseproof_discover_references", arguments=ARGS,
                                  allow_document_content=True)
     assert result == {"isError": True, "error": "canonical_report_unavailable"}
+
+
+def test_mcp_json_export_is_byte_identical_to_rest_renderer():
+    from apps.api.dossier_journey import render_dossier_export
+    store = Mock()
+    store.load.return_value = (report(), b"")
+    store.rpc.return_value = {"decisions": []}
+    result = call_canonical_tool(store=store, bearer="signed-user",
+                                 name="caseproof_export_report", arguments={**ARGS, "format": "json"},
+                                 allow_document_content=True)
+    assert result["content"] == render_dossier_export({**report(), "human_decisions": []}, "json")
+
+
+def test_mcp_markdown_export_is_byte_identical_to_rest_renderer():
+    from apps.api.dossier_journey import render_dossier_export
+    dossier = report()
+    dossier["findings"][0].update({"literal": "Stuk 1", "page_mapping": "page_unmapped",
+                                   "fidelity": "not_assessed", "support": "not_assessed"})
+    store = Mock()
+    store.load.return_value = (dossier, b"")
+    store.rpc.return_value = {"decisions": []}
+    result = call_canonical_tool(store=store, bearer="signed-user",
+                                 name="caseproof_export_report", arguments={**ARGS, "format": "markdown"},
+                                 allow_document_content=True)
+    assert result["content"] == render_dossier_export({**dossier, "human_decisions": []}, "markdown")
