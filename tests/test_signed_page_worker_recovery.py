@@ -121,6 +121,7 @@ def test_200_page_checkpoint_resume_with_fresh_worker(monkeypatch):
     assert len(second["results"]) == 200
     assert jobs.lease_counter == 2
     assert jobs.actions.count("put") == 200
+    assert len(worker.parse_calls) == 2
     assert jobs.actions.count("page") >= 100
 
     # A completed job must not acquire another lease or rewrite pages.
