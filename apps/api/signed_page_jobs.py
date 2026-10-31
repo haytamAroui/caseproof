@@ -76,10 +76,14 @@ class SignedPageJobs:
             if not isinstance(serialized, str) or hashlib.sha256(serialized.encode()).hexdigest() != row['artifact_hash']:
                 raise ValueError('artifact hash')
             payload = json.loads(serialized)
+            if type(payload) is not dict:
+                raise ValueError('artifact must be an object')
             receipt = payload.pop('server_receipt')
             if not isinstance(receipt, str) or not hmac.compare_digest(self.seal(payload), receipt):
                 raise ValueError('artifact receipt')
             manifest = json.loads(current['manifest'])
+            if type(manifest) is not dict or type(manifest.get('pages')) is not list:
+                raise ValueError('invalid manifest')
             expected = next(p for p in manifest['pages'] if p['version_id'] + ':' + str(p['pdf_page']) == page_key)
             if (payload['schema'] != 'caseproof-page-artifact-v1' or payload['case_id'] != case
                     or payload['request_id'] != request or payload['org_id'] != current['org_id']
@@ -87,6 +91,8 @@ class SignedPageJobs:
                     or payload['manifest_hash'] != current['manifest_hash']
                     or payload['engine_version'] != manifest['engine_version']
                     or payload['semantic_support'] != 'not_assessed'
+                    or payload['state'] not in {'ocr_candidate', 'ocr_unavailable', 'text_extracted'}
+                    or payload['needs_ocr'] != expected['needs_ocr']
                     or any(payload[k] != expected[k] for k in ('document_id', 'version_id', 'original_sha256', 'pdf_page'))):
                 raise ValueError('artifact binding')
             return {**payload, 'server_receipt': receipt, 'artifact_hash': row['artifact_hash']}
