@@ -5,15 +5,8 @@ from functools import lru_cache
 
 import pytest
 from docx import Document
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from apps.api.access_control import AccessFailure, AccessRejected
-from apps.api.litigation_headless_verification import (
-    create_headless_review_router,
-    export_report,
-    load_snapshot,
-)
 from apps.api.mcp_adapter_contract import McpContractError, call_tool, list_tools
 
 
