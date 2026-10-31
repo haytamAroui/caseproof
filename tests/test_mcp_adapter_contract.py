@@ -105,8 +105,10 @@ def test_discovery_matches_the_shared_snapshot_and_uses_the_host_bearer():
     result = call_tool(allow_document_content=True, store=store, bearer="host-token",
                        name="caseproof_discover_references", arguments=ARGS)
     assert result["isError"] is False
-    assert result["structuredContent"] == load_snapshot(
+    assert {k: v for k, v in result["structuredContent"].items() if k not in ("verification_contract", "canonical_verification")} == load_snapshot(
         FakeStore(), "host-token", "case-a", "brief-1")
+    assert result["structuredContent"]["canonical_verification"] is False
+    assert result["structuredContent"]["verification_contract"] == "legacy_headless_discovery_only"
     assert set(store.bearers) == {"host-token"}
     assert result["structuredContent"]["schema"] == "caseproof-headless-discovery-v1"
 
@@ -117,7 +119,9 @@ def test_export_json_and_markdown_match_the_shared_report():
                            name="caseproof_export_report",
                            arguments={**ARGS, "format": fmt})
         media_type, body = export_report(FakeStore(), "host-token", "case-a", "brief-1", fmt)
-        assert result == {"isError": False, "mediaType": media_type, "content": body}
+        assert result == {"isError": False, "mediaType": media_type, "content": body,
+                          "verification_contract": "legacy_headless_discovery_only",
+                          "canonical_verification": False}
     report = json.loads(call_tool(allow_document_content=True, store=FakeStore(), bearer="host-token",
                                   name="caseproof_export_report", arguments=ARGS)["content"])
     assert report["filing_status"] == "not_assessed"
@@ -196,3 +200,10 @@ def test_actual_http_discovery_and_export_match_mcp_content():
                         arguments={**ARGS, "format": fmt}, allow_document_content=True)
         assert response.text == mcp["content"]
         assert response.headers["content-type"].startswith(mcp["mediaType"])
+
+
+def test_legacy_mcp_tools_are_not_advertised_as_canonical():
+    tools = list_tools()
+    discovery = next(tool for tool in tools if tool["name"] == "caseproof_discover_references")
+    assert "LEGACY DISCOVERY ONLY" in discovery["description"]
+    assert "not the canonical dossier" in discovery["description"]
