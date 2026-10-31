@@ -5,8 +5,10 @@ caller/matter/brief/snapshot/destination/expiry-bound host release checked befor
 return; exact export digests; byte-parity HTTP regressions; isolated fresh PDF
 inspection and no reparse on frozen reads; actual signed-upload archive preflight;
 privacy-safe OpenTelemetry tool spans/durations with real in-memory SDK capture.
+Markdown evidence is inert JSON code-block data; DOCX derivatives refuse external
+relationships, macros/active objects and active fields without editing originals.
 
-Local locked suite after these changes: **1,716 passed, 4 skipped**; Ruff, affected
+Local locked suite after these changes: **1,729 passed, 4 skipped**; Ruff, affected
 strict mypy and architecture checks passed. Required executable OCR/browser and
 PostgreSQL/live workflows remain authoritative for this candidate's exact head.
 Cloud readiness is not asserted here. See

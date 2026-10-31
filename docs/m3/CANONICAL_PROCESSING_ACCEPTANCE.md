@@ -9,6 +9,7 @@ Candidate dated 31 October 2026. CI is authoritative for its exact commit.
 | Content release | Caller, case, brief, snapshot, destination, expiry; pre/post-read checks; model arguments closed | Real host consent resolver and approved destination |
 | Matter authorization | Existing current-grant/RLS and signed original guards retained; protected owner/foreign/ungranted/revoked acceptance | External pilot security approval |
 | File boundaries | DOCX bomb/traversal/duplicate/malformed archive denied before signed upload storage; parser/pack and size tests | Malware policy, quotas and independent ASVS audit |
+| Export content safety | Inert Markdown evidence blocks; DOCX rejects external/active relationships, macros/objects and active field commands, including split/tab/adjacent fields | Independent Office/malware security review |
 | Provenance | Frozen report hash/HMAC, source-byte verification, no read-time reassessment, exact exported-byte digest | Production key custody/rotation |
 | Large bundles | 200-page local text parser/coordinator benchmark, finite concurrency/retry, per-page checkpoints and persisted deadline | Live fenced litigation page-worker composition; realistic scan/OCR and end-to-end signed 200-page benchmark |
 | PostgreSQL durability | Existing journal; CI script checks 200 pages and separate-process replay, foreign/revoked denial | Least-privilege live worker binding |
