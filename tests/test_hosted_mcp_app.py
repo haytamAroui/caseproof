@@ -22,6 +22,7 @@ DEFAULT = VerifiedOAuthClaims(
     subject="a3c8a7df-f46a-4984-8cb7-a491957a44a2", issuer=ISSUER,
     audiences=(RESOURCE,), scopes=frozenset({"caseproof:reports:read"}),
     expires_at=2000, issued_at=1000, bearer=TOKEN,
+    client_id="approved-mcp-client-1",
 )
 CASE = "matter"
 BRIEF = "draft"
@@ -44,9 +45,10 @@ class Gate:
         self.granted = False
         self.calls = 0
 
-    def resolve(self, *, subject, bearer, destination, case_id, brief_id, snapshot_hash):
+    def resolve(self, *, subject, client_id, bearer, destination, case_id, brief_id, snapshot_hash):
         self.calls += 1
         assert subject == DEFAULT.subject and bearer == TOKEN
+        assert client_id == DEFAULT.client_id
         assert destination == "lawyer-host"
         if not self.granted or case_id != CASE or brief_id != BRIEF or snapshot_hash != HASH:
             return None
@@ -174,6 +176,7 @@ def test_bearer_scope_issuer_audience_and_expiry_fail_before_tools(monkeypatch):
         {"expires_at": 1500},
         {"issued_at": 1501},
         {"bearer": "other"},
+        {"client_id": ""},
     ):
         verifier.claims = replace(DEFAULT, **mutated)
         response = client.post("/mcp", json=body(), headers=headers())
