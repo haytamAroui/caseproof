@@ -23,7 +23,7 @@ def make_packet(corpus: dict[str, Any], sha256: str) -> dict[str, Any]:
         reviewer_id = "CASE-" + hashlib.sha256((sha256 + ":" + case["id"]).encode()).hexdigest()[:12]
         sources = [
             {
-                "source_id": s["source_id"],
+                "source_id": "SRC-" + hashlib.sha256((sha256 + ":" + s["source_id"]).encode()).hexdigest()[:10],
                 "version": s["version"],
                 "label": s["label"],
                 "aliases": s["aliases"],
@@ -38,7 +38,6 @@ def make_packet(corpus: dict[str, Any], sha256: str) -> dict[str, Any]:
         cases.append({
             "id": reviewer_id,
             "language": case["language"],
-            "cohort": case["cohort"],
             "brief_text": case["brief_text"],
             "citation": case["citation"],
             "inventory": case.get("inventory", {"status": "not_defined_in_legacy_v2", "listed_labels": []}),
@@ -103,6 +102,8 @@ def generate(out: Path, corpus_path: Path = DEFAULT_CORPUS) -> dict[str, Any]:
   first-pass review. Inspect and adjudicate actual real-format bytes **after**
   independent first judgments have been recorded, with no answer key provided.
 - Review each case in your competent language before opening the original gold.
+  Do not inspect code or files with original case names (CLEAN/MISMATCH/SCAN).
+  Case/source IDs in the blind packet are deliberately pseudonymized.
 - Every case requires **two distinct independent human assessments**.
 - For the 19 historical v2 cases the separate complete inventory was **not defined**.
   Mark identity based on inventory as unassessed unless independent original material
