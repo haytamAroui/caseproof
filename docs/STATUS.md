@@ -223,3 +223,8 @@ A loopback-only injected development app combines versioned factual checking, ma
 ## Genuine signed Auth to disposable RLS receipt
 
 [Manual run 40531773053](https://github.com/haytamAroui/caseproof/actions/runs/40531773053) passed on main commit `866158a51c780dad88a63d48769282f96addfc8a`: three real Supabase dev identities were signed in and tested against a least-privilege disposable PostgreSQL RLS fixture; the job reported cleanup of all ephemeral identities. On 2026-10-27, at the owner's explicit direction, migration `20261027160745_caseproof_m1_dev_atomic_private_grants` was applied to the empty `caseproof-dev` project. Read-only inspection confirmed the M1 grant table, RLS enabled, and replacement of legacy case/document policies. Independent human security review has not been verified. The M2 brief tables are absent. This does not test real signed users against the live database, live Storage, the PR branch's M2 composition, or an Office host.
+
+
+## Product planning refinement — 31 October 2026 (PR #141)
+
+The [detailed direction update](PRODUCT_DEFINITION_2026-10-31.md) is a proposed acceptance plan, not delivered software. PR #146 (`bcd52ff`) and #147 (`ff154a1`) were open at review with passing independent CI; integration is not proven. Preserve #146 regional anchors while assessing #147 normalization/coverage/versioning fixes; no merge or supersession is claimed. Local packaging, new exports, qualified signatures and German remain conditional work. No confidential-client authorization or paid validation follows from documentation.

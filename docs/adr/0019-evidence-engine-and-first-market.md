@@ -38,3 +38,8 @@ Practitioner failures may become synthetic regression cases or permissioned, rig
 Clarifies and extends ADR 0018's long-term vision and expansion gate; preserves its Belgian litigation first-market freeze, M0–M6 milestones, web-first experience, four independent states, client-data gates and owner change control. Preserves ADR 0011's modular monolith and kernel sovereignty. No generic platform, DomainPack, extracted kernel service or mandatory MCP server is introduced.
 
 See [roadmap](../ROADMAP.md), [workflow](../PRODUCT_WORKFLOW.md) and [engineering evidence](../STATUS.md). Synthetic signed development acceptance is separate from a usable web product, confidential-client approval and paid demand.
+
+
+## 31 October owner-requested refinement
+
+Adopt the detailed [product definition and prioritized delivery](../PRODUCT_DEFINITION_2026-10-31.md): supplied snapshot wording, independent four-dimensional report, consolidated bundle intake, version-bound review, measured reference recall and conditional deployment/signature/channel expansion. Preserve current gates and web-first delivery. The owner authorizes this planning update, not implementation or release of every proposed option.

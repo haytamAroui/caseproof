@@ -1,5 +1,7 @@
 # CaseProof — pre-submission exhibit verification: complete v1 user workflow
 
+**31 October direction refinement:** [detailed product, report, intake, deployment and pilot plan](PRODUCT_DEFINITION_2026-10-31.md). Preserves M0–M6 gates; no milestone reset, automatic local-first pivot or release claim.
+
 **Decision date:** 28 October 2026. **Authority:** [ROADMAP.md](ROADMAP.md), [ADR 0018](adr/0018-pre-submission-verification-freeze.md), [CONSTITUTION.md](../CONSTITUTION.md). This is the **product acceptance specification**, not a claim that any browser journey is already implemented, secure for clients, legally approved or commercially validated. [Historical Clearbrief-class workflow](https://github.com/haytamAroui/caseproof/blob/486b239926b681d76e1e3f79d30e3dc7098ab6d8/docs/PRODUCT_WORKFLOW.md) is superseded for launch scope.
 
 **User job:** a Belgian civil/commercial litigator about to file conclusions checks whether detected `Stuk/Pièce` factual references point to the right preserved exhibit and correct page and whether an actual source representation contains the quoted text or appropriately matched number. The software reports located/matched, mismatched and unresolved references; an authorized lawyer alone decides semantic support and corrections. **No court filing, legal advice, case-law checking or legal-validity certificate.**

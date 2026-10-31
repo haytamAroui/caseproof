@@ -1,5 +1,7 @@
 # CaseProof — evidence verification, starting with Belgian litigation
 
+[Detailed 31 October product and delivery plan](docs/PRODUCT_DEFINITION_2026-10-31.md): unified report first; consolidated-bundle and export acceptance; local/hybrid/signature options gated by buyer evidence.
+
 **Frozen first commercial hypothesis (28 October 2026):** upload conclusions DOCX, a separately confirmed Stuk/Pièce inventory and preserved PDF/scanned exhibits; inspect reference identity, physical/printed/bundle pages, literal/typed fidelity and OCR uncertainty; get an authorized human-reviewed source-linked DOCX/report export. **Web workspace first; Word and deployed MCP are optional channels, not pilot blockers.** No legal research, argument generation, deadline checks or automated Book 8 sufficiency.
 
 **Long-term vision:** source-traceable document verification, explicit uncertainty and accountable human review. One reusable kernel, one focused product today, evidence-led expansion. [ADR 0019](docs/adr/0019-evidence-engine-and-first-market.md) requires customer pull, technical fit, measured benefit and commercial commitment before an owner-approved additional workflow. No new vertical is authorized.

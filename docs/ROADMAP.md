@@ -1,5 +1,7 @@
 # CaseProof — pre-submission Belgian exhibit verification roadmap (M0–M6)
 
+**31 October direction refinement:** [detailed product, report, intake, deployment and pilot plan](PRODUCT_DEFINITION_2026-10-31.md). Preserves M0–M6 gates; no milestone reset, automatic local-first pivot or release claim.
+
 **Decision date:** 28 October 2026. **Status:** authoritative **proposed product/acceptance contract**, not an implementation or customer-readiness claim. **Commercial hypothesis frozen until practitioner evidence** under [ADR 0018](adr/0018-pre-submission-verification-freeze.md). See [the actual lawyer journey](PRODUCT_WORKFLOW.md), [implementation evidence](STATUS.md), [historic F01–F42 comparison ledger](FEATURE_DELIVERY_MATRIX.md), [Word channel acceptance](m3/WORD_INTEGRATION_ACCEPTANCE.md), and [M4 output acceptance](m4/DELIVERY_ACCEPTANCE.md).
 
 **One product, one job:** before a Belgian civil/commercial litigator files conclusions, compare **each detected factual Stuk/Pièce reference** with the supplied inventory, the separately preserved originals and the correct page. Produce an inspectable findings list, source crop when needed, reviewer decisions, a revised/annotated DOCX where supported, and a scope-bound verification run record. **The system locates and matches evidence; it never certifies factual truth, admissibility, court compliance or legal correctness.** Unreadable, unavailable and ambiguous materials stay explicitly unresolved.
