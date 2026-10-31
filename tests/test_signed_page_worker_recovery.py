@@ -94,15 +94,17 @@ def make_worker(monkeypatch, page_count=200):
     worker = module.SignedPageWorker(jobs, ocr=SimpleNamespace())
     worker.engine = "synthetic-engine"
     monkeypatch.setattr(worker, "inputs", lambda *_: (manifest, {"version": original}))
-    monkeypatch.setattr(
-        module, "parse_verified_original",
-        lambda **_: ("X", {
+    parse_calls = []
+    def parse_once(**kwargs):
+        parse_calls.append(kwargs["version_id"])
+        return ("X", {
             "blocks": [
                 {"page_index": n - 1, "start": 0, "end": 1}
                 for n in range(1, page_count + 1)
             ]
-        }),
-    )
+        })
+    monkeypatch.setattr(module, "parse_verified_original", parse_once)
+    worker.parse_calls = parse_calls
     return worker, jobs, manifest
 
 
