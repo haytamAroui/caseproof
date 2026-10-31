@@ -252,6 +252,8 @@ class PDFVisualFidelity:
                        'runtime_image': os.getenv('CASEPROOF_OCR_BUILD', 'unrecorded'),
                        'crop_sha256': digest(png), 'crop_base64': base64.b64encode(png).decode()}
         return {'schema': 'caseproof.visual-page.v2', 'engine': ENGINE,
+                'runtime_image': os.getenv('CASEPROOF_OCR_BUILD', 'unrecorded'),
+                'pypdf_version': version('pypdf'), 'normalization_version': NORMALIZATION,
                 'original_sha256': digest(raw), 'page_number': page_number,
                 'representation_id': representation_id,
                 'layer_text': ' '.join(w.text for w in layer),

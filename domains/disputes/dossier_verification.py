@@ -4,13 +4,18 @@ from __future__ import annotations
 import re
 from typing import Any
 
-ALGORITHM = 'caseproof-dossier-v2'
+from domains.disputes.exhibit_identity import InventoryStatus, resolve_exhibit_identity
+
+ALGORITHM = 'caseproof-dossier-v3'
 _PAGE = re.compile(r'^\s*[,;:]?\s*(?:(PDF|printed|gedrukte|imprimée|bundle|bundel|liasse)\s+)?(?:pp?|pages?)\.?\s*(\d+)\b', re.I)
 
 
-def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[str, Any]], confirmation: dict[str, Any] | None) -> dict[str, Any]:
+def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[str, Any]], confirmation: dict[str, Any] | None, *, inventory_status: InventoryStatus | None = None) -> dict[str, Any]:
     entries = confirmation['payload']['entries'] if confirmation else []
     complete = bool(confirmation and confirmation['payload']['inventory_complete'])
+    status = inventory_status or (InventoryStatus.CONFIRMED_COMPLETE if complete else
+                                  InventoryStatus.INCOMPLETE if confirmation else InventoryStatus.UNCONFIRMED)
+    complete = status is InventoryStatus.CONFIRMED_COMPLETE
     findings = []
     for index, ref in enumerate(discovery.references):
         label = 'stuk' if ref.label.startswith('stuk') else 'piece'
@@ -19,9 +24,10 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
         version = entry.get('source_version_id') if entry else None
         candidates = [s for s in sources if s['version_id'] == version and s['role'] == 'exhibit']
         source = candidates[0] if len(candidates) == 1 else None
-        identity = ('not_assessed' if not confirmation else 'ambiguous' if len(matches) > 1
-                    else 'resolved' if source else 'source_missing' if entry
-                    else 'not_in_inventory' if complete else 'not_assessed')
+        identities = tuple(f"entry-{i}" for i, _ in enumerate(matches))
+        decision = resolve_exhibit_identity(inventory_status=status, matching_exhibit_ids=identities,
+                                            authorized_source_ids=frozenset({"entry-0"}) if source else frozenset())
+        identity = decision.state.value.lower()
         page = _PAGE.match(regions.get(ref.region, '')[ref.end:])
         requested = None
         unsupported_sequence = False
@@ -47,15 +53,21 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
         geometry = source.get('geometry', {}).get(str(pdf_page)) if source and pdf_page else None
         image_page = bool(source and pdf_page and pdf_page in source.get('image_only_pages', []))
         image_page = image_page or bool(source and source.get('image_only'))
+        page_spaces = {"pdf": {"state": "mapped" if pdf_page else "unmapped", "value": pdf_page}}
+        for page_space in ("printed", "bundle"):
+            labels = {p['label'] for p in entry['pages'] if p['space'] == page_space and p['pdf_page'] == pdf_page} if entry and pdf_page else set()
+            page_spaces[page_space] = {"state": "mapped" if len(labels) == 1 else "conflicting" if labels else "unmapped",
+                                       "value": next(iter(labels)) if len(labels) == 1 else None}
         findings.append({
             'reference_id': f'ref-{index:04d}', 'literal': ref.raw, 'region': ref.region,
             'offsets': {'start': ref.start, 'end': ref.end}, 'number': ref.number,
-            'identity': identity, 'requested_page': requested,
+            'identity': identity, 'identity_reason': decision.reason.value if decision.reason else None,
+            'requested_page': requested,
             'source_id': source['document_id'] if source else None,
             'version_id': source['version_id'] if source else None,
             'source_sha256': source['sha256'] if source else None,
             'page_mapping': 'mapped' if pdf_page else 'conflicting' if len(targets) > 1 else 'unmapped',
-            'pdf_page': pdf_page,
+            'pdf_page': pdf_page, 'page_spaces': page_spaces,
             'page_mapping_reason': 'page_sequence_requires_review' if unsupported_sequence else None,
             'printed_page': requested['label'] if pdf_page and requested and requested['space'] == 'printed' else None,
             'bundle_page': requested['label'] if pdf_page and requested and requested['space'] == 'bundle' else None,

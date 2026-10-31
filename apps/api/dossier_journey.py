@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pypdf import PdfReader, PdfWriter
 from pypdf.errors import PdfReadError
 
+from application.litigation.dossier_contracts import add_report_contract, assess_fidelity, quotation_context
 from application.litigation.regional_fidelity import select_visual_assessment
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.litigation_evidence_app import _token
@@ -22,6 +23,7 @@ from apps.api.litigation_headless_verification import DecisionBody
 from apps.api.litigation_live_journey import HOST, JourneyClient
 from apps.api.signed_supabase_originals import PrivateStorageFailure
 from domains.disputes.dossier_verification import build_findings
+from domains.disputes.exhibit_identity import InventoryStatus
 from domains.disputes.reference_detection import detect_exhibit_references
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
@@ -56,6 +58,12 @@ class InventoryConfirmation(BaseModel):
     request_id: str
     inventory_complete: bool
     entries: list[IdentityConfirmation] = Field(max_length=512)
+
+
+class VerificationOptions(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    draft_language: Literal['nl', 'fr', 'en', 'de'] | None = None
+    source_languages: dict[str, Literal['nl', 'fr', 'en', 'de']] = Field(default_factory=dict, max_length=32)
 
 
 class CropBatchBody(BaseModel):
@@ -169,12 +177,15 @@ class DossierStore:
             sources.append(row)
         return sources, originals
 
-    def load(self, bearer: str, case: str, brief: str) -> tuple[dict[str, Any], bytes]:
+    def load(self, bearer: str, case: str, brief: str, *, language_context: dict[str, Any] | None = None) -> tuple[dict[str, Any], bytes]:
         context = self.rpc(bearer, case, 'context')
         sources, originals = self.sources(bearer, case)
         drafts = [s for s in sources if s['role'] == 'draft' and s['version_id'] == brief]
         if len(drafts) != 1:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        languages = language_context or {"draft_language": None, "source_languages": {}}
+        if set(languages.get('source_languages', {})) - {s['version_id'] for s in sources if s['role'] == 'exhibit'}:
+            raise HTTPException(422, 'language source outside authorized bundle')
         raw = originals[brief]
         discovery = discover_docx_references(raw)
         regions = {r.part: r.text for r in extract_docx_text_regions(raw).regions}
@@ -201,8 +212,13 @@ class DossierStore:
             confirmation = {**confirmation, 'payload': {**confirmation['payload'], 'entries': normalized,
                 'inventory_complete': bool(inventory_readable and confirmation['payload']['inventory_complete']
                                            and supplied_identities == inventory_identities)}}
+        inventory_status = (InventoryStatus.MISSING if inventory is None else
+                            InventoryStatus.UNPARSEABLE if not inventory_readable else
+                            InventoryStatus.UNCONFIRMED if not confirmation else
+                            InventoryStatus.CONFIRMED_COMPLETE if confirmation['payload']['inventory_complete'] else
+                            InventoryStatus.INCOMPLETE)
         if confirmation:
-            initial = build_findings(discovery, regions, sources, confirmation)
+            initial = build_findings(discovery, regions, sources, confirmation, inventory_status=inventory_status)
             # Only retrieve stored geometry for explicitly mapped physical pages.
             for source in sources:
                 pages = {p['pdf_page'] for e in confirmation['payload']['entries']
@@ -226,15 +242,19 @@ class DossierStore:
                             **{k: w[k] for k in ('left', 'top', 'width', 'height')},
                             'geometry_sha256': ref.geometry_sha256}}
                 source['geometry'] = geometry
-        found = build_findings(discovery, regions, sources, confirmation)
+        found = build_findings(discovery, regions, sources, confirmation, inventory_status=inventory_status)
         # Both text-layer PDFs and scans take the visual path. Inputs come only
         # from verified private originals; unavailable engines never count as pass.
         visual_pages: dict[tuple[str, int], dict[str, Any]] = {}
         visual_budget = 4
         for finding in found['findings']:
             version, page_number = finding['version_id'], finding['pdf_page']
+            tail = regions.get(finding['region'], '')[finding['offsets']['end']:]
+            finding.update(quotation_context(tail, draft_language=languages.get('draft_language'),
+                                            source_language=languages.get('source_languages', {}).get(version)))
             if version is None or page_number is None:
-                finding['visual_assessment'] = select_visual_assessment(None, None)
+                finding['visual_assessment'] = select_visual_assessment(None, finding['quoted_text'])
+                assess_fidelity(finding, None)
                 continue
             key = (version, page_number)
             if key not in visual_pages:
@@ -246,17 +266,9 @@ class DossierStore:
                         original_sha256=source['sha256'], page_number=page_number)
                 except OCRUnavailable as error:
                     visual_pages[key] = {'error': str(error)}
-            region = regions.get(finding['region'], '')
-            tail = region[finding['offsets']['end']:]
-            import re
-
-            # Only an explicitly delimited quotation immediately following the
-            # page reference is linked. No inferred quote from nearby prose.
-            quoted = re.match(r'^\s*[,;:]?\s*(?:(?:PDF|printed|gedrukte|imprimée|bundle|bundel|liasse)\s+)?(?:pp?|pages?)\.?\s*\d+\s*[,;:.]?\s*["“«]([^"”»]{1,1000})["”»]', tail, re.I)
-            assessment = select_visual_assessment(visual_pages[key], quoted[1] if quoted else None)
+            assessment = select_visual_assessment(visual_pages[key], finding['quoted_text'])
             finding['visual_assessment'] = assessment
-            if assessment['state'] != 'not_assessed':
-                finding['fidelity'] = assessment['state']
+            assess_fidelity(finding, visual_pages[key])
             # Identity/pinpoint remain independently checked; visual conflict
             # never changes exhibit identity or claims human semantic support.
         found['coverage']['visual_pages_attempted'] = len(visual_pages)
@@ -269,6 +281,7 @@ class DossierStore:
                   'inventory_confirmation': {k: confirmation.get(k) for k in ('request_id', 'reviewer_id', 'timestamp')} if confirmation else None,
                   'sources': sources, 'visual_pages': {v + ':' + str(p): data for (v,p),data in visual_pages.items()}, **found, 'professional_certificate': False, 'filing_status': 'not_assessed'}
         report['coverage']['unprocessed_sources'] = sum(bool(s.get('parse_error')) for s in sources)
+        add_report_contract(report, discovery.region_manifest, languages)
         report['server_receipt'] = self.receipt(report)
         serialized = canonical(report)
         if len(serialized.encode()) > 1_900_000:
@@ -292,6 +305,12 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         s, bearer = active(authorization)
         return (s.reopen(bearer, case_id, brief_id, snapshot_hash) if snapshot_hash
                 else s.load(bearer, case_id, brief_id))[0]
+
+    @router.post(base + '/checks')
+    def check_with_languages(case_id: str, brief_id: str, body: VerificationOptions,
+                             authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        return s.load(bearer, case_id, brief_id, language_context=body.model_dump())[0]
 
     @router.post(base + '/confirmation')
     def confirm(case_id: str, brief_id: str, body: InventoryConfirmation,
@@ -354,6 +373,9 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
                             headers={**headers, 'Content-Disposition': 'attachment; filename=caseproof-annotated.docx'})
         if format == 'markdown':
             text = '# CaseProof scoped dossier report\n\n' + canonical(report['coverage']) + '\n\n'
+            text += 'Verification contract\n' + canonical(report.get('verification_contract', {})) + '\n\n'
+            text += 'Abstentions\n' + canonical(report.get('abstentions', [])) + '\n\n'
+            text += 'Literal and translation assessments\n' + canonical([{k: f.get(k) for k in ('reference_id', 'identity_reason', 'quoted_text', 'draft_language', 'source_language', 'translation_review_required', 'literal_assessment', 'source_text_context', 'source_text_context_partial')} for f in report['findings']]) + '\n\n'
             text += '\n'.join(f"- {f['reference_id']}: {f['literal']} — {f['identity']}; {f['page_mapping']}; {f['fidelity']}; {f['support']}"
                               for f in report['findings'])
             text += '\n\nVisual assessments\n' + canonical([{

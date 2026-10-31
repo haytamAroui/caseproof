@@ -26,12 +26,19 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
                  'Snapshot: ' + report['snapshot_hash'],
                  'Coverage: ' + str(report['coverage']),
                  'No filing, authenticity, fidelity or legal-support certificate.']
+        lines.append('Verification contract: ' + str(report.get('verification_contract', {})))
+        lines.append('Abstentions: ' + str(report.get('abstentions', [])))
         decisions = report['human_decisions']
         for f in report['findings']:
             human = [d for d in decisions if d['reference_id'] == f['reference_id']]
             lines.append(f"{f['reference_id']} {f['literal']}: identity={f['identity']}; page={f['page_mapping']}; "
                          f"fidelity={f['fidelity']}; automated support=not_assessed; "
                          f"source={f['version_id']}; OCR={f['ocr_uncertainty']}")
+            lines.append('Identity reason: ' + str(f.get('identity_reason')) + '; literal=' + str(f.get('literal_assessment', {})) +
+                         '; translation_review_required=' + str(f.get('translation_review_required', False)) +
+                         '; draft_language=' + str(f.get('draft_language')) + '; source_language=' + str(f.get('source_language')) +
+                         '; quoted_text=' + str(f.get('quoted_text')))
+            lines.append('Source original context: ' + str(f.get('source_text_context', '')) + '; context_partial=' + str(f.get('source_text_context_partial', False)))
             visual = f.get('visual_assessment', {})
             lines.append('Visual fidelity: ' + str(visual.get('state', 'not_assessed')) +
                          '; reason=' + str(visual.get('reason', 'visual_not_run')) +

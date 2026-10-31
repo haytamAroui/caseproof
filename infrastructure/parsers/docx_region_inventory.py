@@ -17,6 +17,15 @@ MAX_TOTAL_UNCOMPRESSED = 80_000_000
 MAX_PARTS = 1000
 
 
+def word_on_off_enabled(node: ET.Element | None) -> bool:
+    """OOXML on/off: presence defaults on; explicit 0/false/off disables it.
+
+    Unknown values conservatively retain the exclusion; never hide a visible
+    citation solely because a valid explicit false property is present.
+    """
+    return node is not None and node.get(WORD_NS + "val", "true").strip().casefold() not in {"0", "false", "off"}
+
+
 class RegionStatus(StrEnum):
     UNSCANNED = "UNPROCESSED_REGION"
     UNSUPPORTED = "UNSUPPORTED_REGION"
@@ -112,6 +121,9 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
                     regions.append(DocxRegion(name, kind, RegionStatus.REVISION_UNRESOLVED, "FROZEN_VIEW_REQUIRED"))
                 else:
                     regions.append(DocxRegion(name, kind, RegionStatus.UNSCANNED, "TEXT_NOT_YET_SCANNED"))
+                if any(node.tag == WORD_NS + "vanish" and word_on_off_enabled(node) for node in root.iter()):
+                    regions.append(DocxRegion(name + "#hidden", "HIDDEN_TEXT_EXCLUDED",
+                                              RegionStatus.UNSUPPORTED, "EXCLUDED_HIDDEN_TEXT"))
                 if any(node.tag in {
                     WORD_NS + "txbxContent", WORD_NS + "altChunk", WORD_NS + "drawing",
                     WORD_NS + "pict", WORD_NS + "object", WORD_NS + "fldChar",

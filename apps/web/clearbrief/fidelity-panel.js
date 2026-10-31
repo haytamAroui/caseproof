@@ -7,9 +7,10 @@ window.CaseProofFidelity = {mount({root, api, context}) {
   const heading=node("h2","Compare text with the source image");
   const status=node("p","Visual fidelity has not been assessed.","notice");status.setAttribute("role","status");
   const load=node("button","Inspect dossier");load.type="button";
+  const coverage=node("section", "", "fidelity-coverage");coverage.setAttribute("aria-label","Verification coverage");
   const list=node("div", "", "fidelity-list");
   const base=()=>{const c=context();return `/v2/matters/${encodeURIComponent(c.caseId)}/briefs/${encodeURIComponent(c.briefId)}/dossier`;};
-  const clear=()=>{for(const u of urls)URL.revokeObjectURL(u);urls.clear();list.replaceChildren();report=null;};
+  const clear=()=>{for(const u of urls)URL.revokeObjectURL(u);urls.clear();list.replaceChildren();coverage.replaceChildren();report=null;};
   const fail=()=>{status.textContent="Cannot open this snapshot. Check your session and access, then retry.";status.className="notice danger";};
   async function renderFinding(f,seq) {
     if(seq!==sequence)return;
@@ -17,12 +18,20 @@ window.CaseProofFidelity = {mount({root, api, context}) {
     const article=node("article","","fidelity-finding");
     const title=node("h3",f.literal);article.append(title);
     article.append(node("p",`Identity: ${f.identity} · Page: ${f.page_mapping} · Fidelity: ${f.fidelity} · Support: ${f.support}`,"small"));
+    if(f.identity_reason)article.append(node("p",`Inventory: ${f.identity_reason}`,"notice"));
+    if(f.translation_review_required)article.append(node("p",`Translation review required · Draft: ${f.draft_language||"undeclared"} · Source: ${f.source_language||"undeclared"}. A literal comparison cannot confirm translated prose.`,"notice"));
+    if(f.quoted_text)article.append(node("p",`Draft quotation: ${f.quoted_text}`));
+    if(f.literal_assessment)article.append(node("p",`Literal: ${f.literal_assessment.state} — ${f.literal_assessment.reason}`,"small"));
     const warning=node("p",(assessment.state==="representation_conflict"?"⚠ Representation conflict":assessment.state==="ocr_unreliable"?"⚠ OCR unreliable":"○ Visual fidelity not assessed")+" — "+assessment.reason,
       assessment.state==="representation_conflict"?"notice danger":"notice");
     article.append(warning);list.append(article);
+    let originalOpened=false;
     const inspected=[];
     const crops=node("div","","fidelity-crops");article.append(crops);
     const cropStatus=node("p",assessment.regions.length?"Loading preserved crops…":"No region anchored to this reference.","small");article.append(cropStatus);
+    if(f.source_text_context){article.append(node("strong",`Source text (${f.source_language||"language undeclared"}) — original representation, not a translation`),node("pre",f.source_text_context));}
+    if(f.source_text_context_partial)article.append(node("p","Source context is truncated. Inspect the full preserved page before deciding.","notice"));
+    if(f.translation_review_required&&!assessment.regions.length)article.append(node("p","Translated text has no literal source anchor. Download the preserved source page and inspect its context before recording support.","notice"));
     const form=document.createElement("form");form.noValidate=true;
     const actionLabel=node("label","Human disposition");const action=document.createElement("select");
     for(const [value,text] of [["CONFIRMED_QUALIFIED","Qualified / needs further evidence"],["CONFIRMED_CONTRADICTED","Contradicted"],["CONFIRMED_SUPPORTED","Supported after human inspection"]]) {const o=node("option",text);o.value=value;action.append(o);}
@@ -31,7 +40,22 @@ window.CaseProofFidelity = {mount({root, api, context}) {
     const rationaleLabel=node("label","Rationale");const rationale=document.createElement("textarea");rationale.maxLength=1000;rationale.rows=4;rationale.value=drafts.get(draftKey)||"";rationale.addEventListener("input",()=>drafts.set(draftKey,rationale.value));rationaleLabel.append(rationale);form.append(rationaleLabel);
     const confirmLabel=node("label","I inspected the displayed source regions for this snapshot.");const confirm=document.createElement("input");confirm.type="checkbox";confirmLabel.prepend(confirm);form.append(confirmLabel);
     const save=node("button","Save human review");save.type="submit";save.disabled=true;form.append(save);article.append(form);
-    confirm.addEventListener("change",()=>{save.disabled=busy||!confirm.checked||inspected.length!==assessment.regions.length;});
+    const ready=()=>assessment.regions.length?inspected.length===assessment.regions.length:originalOpened;
+    confirm.addEventListener("change",()=>{save.disabled=busy||!confirm.checked||!ready();});
+    if(f.source_page?.version_id&&f.source_page?.pdf_page){
+      const sourceButton=node("button","Download preserved source page");sourceButton.type="button";
+      sourceButton.addEventListener("click",async()=>{sourceButton.disabled=true;
+        try{const response=await api(base()+`/sources/${encodeURIComponent(f.source_page.version_id)}/pages/${f.source_page.pdf_page}`,{raw:true});
+          if(seq!==sequence)return;
+          if(response.headers.get("X-CaseProof-Original-SHA256")!==f.source_sha256||response.headers.get("X-CaseProof-PDF-Page")!==String(f.source_page.pdf_page))throw Error("source_identity");
+          const blob=await response.blob();if(seq!==sequence)return;
+          const url=URL.createObjectURL(blob);urls.add(url);const link=document.createElement("a");link.href=url;link.download="caseproof-source-page.pdf";link.rel="noopener";link.click();
+          originalOpened=true;cropStatus.textContent="Preserved source page downloaded. Open it and inspect its original-language context before confirming.";
+          save.disabled=busy||!confirm.checked||!ready();
+        }catch{if(seq===sequence)cropStatus.textContent="Source page unavailable. Review remains blocked until the source can be inspected.";}
+        finally{if(seq===sequence)sourceButton.disabled=false;}
+      });article.append(sourceButton);
+    }
     form.addEventListener("submit",async e=>{e.preventDefault();if(busy||save.disabled)return;
       if(!rationale.value.trim()){cropStatus.textContent="Enter a rationale before saving.";rationale.setAttribute("aria-invalid","true");rationale.focus();return;}
       const payload={snapshot_hash:report.snapshot_hash,reference_id:f.reference_id,decision:action.value,rationale:rationale.value.trim(),reviewed_region_ids:inspected};
@@ -46,7 +70,7 @@ window.CaseProofFidelity = {mount({root, api, context}) {
           cropStatus.textContent="Review rejected. Load the current snapshot and inspect again. Your rationale is kept in this session.";
         }else cropStatus.textContent="Review was not confirmed. Retry the same input; refresh after a snapshot conflict.";
       }
-      finally{if(seq===sequence){busy=false;load.disabled=false;form.removeAttribute("aria-busy");save.disabled=!confirm.checked;}}
+      finally{if(seq===sequence){busy=false;load.disabled=false;form.removeAttribute("aria-busy");save.disabled=!confirm.checked||!ready();}}
     });
     try{
       const batch=assessment.regions.length?await api(base()+`/snapshots/${report.snapshot_hash}/crops`,
@@ -74,11 +98,20 @@ window.CaseProofFidelity = {mount({root, api, context}) {
     const seq=++sequence;clear();load.disabled=true;status.textContent="Comparing source representations…";
     try{const data=await api(base());if(seq!==sequence)return;
       if(data.schema!=="caseproof-dossier-v1"||!Array.isArray(data.findings))throw Error("invalid_report");report=data;
+      const c=data.coverage||{};const manifest=c.docx_regions;
+      coverage.append(node("h3","Declared processing coverage"));
+      coverage.append(node("p",`Detected: ${c.references_detected??c.detected??"unknown"} · Identity/page checked: ${c.references_checked??c.checked??"unknown"} · Recognition recall: not measured.`));
+      coverage.append(node("p",manifest?`DOCX regions discovered: ${manifest.regions_discovered} · Scanned: ${manifest.regions_scanned} · Unsupported: ${manifest.regions_unsupported??"unknown"} · Coverage unknown: ${manifest.coverage_unknown}.`:"Detailed DOCX region coverage was not recorded for this snapshot.","notice"));
+      const details=node("details","");details.append(node("summary","Regions and reasons"));
+      for(const r of (manifest?.regions||[]).slice(0,100))details.append(node("p",`${r.part} · ${r.kind} · ${r.status} · ${r.reason}`,"small"));
+      if((manifest?.regions||[]).length>100)details.append(node("p","Showing 100 regions; export contains the full ledger."));
+      coverage.append(details);
+      coverage.append(node("p",`Source pages: ${c.source_pages_total??"unknown"} · Isolated OCR processed: ${c.source_pages_ocr_processed??"unknown"} · Failed/skipped: ${c.source_pages_failed_or_skipped??"unknown"}. Unprocessed pages remain unassessed.`,"small"));
       status.textContent=`${data.findings.length} references. Visual agreement is uncalibrated; no legal conclusion is automated.`;
       if(!data.findings.length)list.append(node("p","No explicit references were found. Review processing coverage."));
       for(const f of data.findings){if(seq!==sequence)return;await renderFinding(f,seq);}
     }catch{if(seq===sequence){clear();fail();}}finally{if(seq===sequence)load.disabled=false;}
   });
-  root.append(heading,node("p","Inspect uncertainty beside preserved source pixels. A matching quotation alone does not establish visual fidelity.","small"),load,status,list);
+  root.append(heading,node("p","Inspect uncertainty beside preserved source pixels. A matching quotation alone does not establish visual fidelity.","small"),load,status,coverage,list);
   return {clear(){sequence++;clear();pending=null;busy=false;load.disabled=false;drafts.clear();status.textContent="Session cleared. Reauthenticate before inspecting.";}};
 }};

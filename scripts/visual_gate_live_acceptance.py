@@ -42,6 +42,7 @@ def verify_live_panel(token: str, case: str, brief: str, region_id: str) -> None
         page.locator('#brief-id').fill(brief)
         page.get_by_role('button',name='Inspect dossier').click()
         expect(page.locator('#fidelity-panel .fidelity-finding')).to_have_count(3,timeout=120000)
+        expect(page.get_by_role('heading',name='Declared processing coverage')).to_be_visible()
         finding=page.locator('#fidelity-panel .fidelity-finding').first
         expect(finding.get_by_text('Preserved crop hashes checked.',exact=False)).to_be_visible(timeout=120000)
         expect(finding.locator('img')).to_have_count(1)
@@ -106,6 +107,16 @@ def main() -> None:
             raise RuntimeError('VISUAL_REGIONAL_CONFLICT_OR_CLEAN_CONTROL_FAILED')
         if scan['visual_assessment']['state']!='ocr_unreliable':
             raise RuntimeError('VISUAL_SCAN_WITHOUT_INDEPENDENT_LAYER_DID_NOT_ABSTAIN')
+        report=json_request(token,'POST',base+'/checks', {
+            'draft_language':'fr', 'source_languages':{row['version_id']:'nl' for row in registered[2:]}})
+        if (report['verification_contract']['version']!='caseproof-verification-contracts-v1'
+                or not report['coverage']['docx_regions']['regions_scanned']
+                or not all(f['translation_review_required'] for f in report['findings'])
+                or not report['coverage']['source_pages']):
+            raise RuntimeError('SIGNED_VERIFICATION_CONTRACT_LEDGER_FAILED')
+        conflict,clean,scan=report['findings']
+        if scan['fidelity']!='ocr_unreliable' or not scan['translation_review_required']:
+            raise RuntimeError('SIGNED_TRANSLATION_OCR_PRIORITY_LOST')
         snapshot=report['snapshot_hash']
         selected=conflict['visual_assessment']['regions']
         crop_route=base+f'/snapshots/{snapshot}/regions/{selected[0]["region_id"]}/crop'
@@ -148,7 +159,7 @@ def main() -> None:
                 raise RuntimeError('VISUAL_EXPORT_FAILED')
             if format=='docx':
                 with ZipFile(io.BytesIO(data)) as z:
-                    if b'representation_conflict' not in z.read('word/document.xml'):
+                    if any(value not in z.read('word/document.xml') for value in (b'representation_conflict', b'translation_review_required', b'docx_regions')):
                         raise RuntimeError('VISUAL_DOCX_LOST_CONFLICT')
         for role in ('ungranted','foreign'):
             for suffix in (f'?snapshot_hash={snapshot}',f'/export?snapshot_hash={snapshot}',crop_route.removeprefix(base)):
@@ -166,7 +177,7 @@ def main() -> None:
         target.mkdir(exist_ok=True)
         (target/'signed-receipt.json').write_text(json.dumps({'commit':os.getenv('GITHUB_SHA'),
             'original_hashes':[s.sha256 for s in bundle], 'regional_conflict':True,'clean_same_page':True,
-            'scan_abstention':True,'crop_hash':selected[0]['crop_sha256'],'review_restart_export':True,
+            'scan_abstention':True,'crop_hash':selected[0]['crop_sha256'],'review_restart_export':True,'verification_contracts':True,'translation_ocr_priority':True,
             'forged_snapshot_denied':True,'ungranted_foreign_revoked_denied':True,'changed_confirmation_stale':True,
             'cleanup':'required_by_registry_wrapper'},indent=2))
         print('VISUAL_SIGNED_CROP_REVIEW_RESTART_EXPORT_AND_DENIALS_PASSED',flush=True)
