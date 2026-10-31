@@ -21,6 +21,8 @@ FILES = {
     "agents": ROOT / "AGENTS.md",
     "readme": ROOT / "README.md",
     "pre_m3": ROOT / "docs" / "contracts" / "PRE_M3_VERIFICATION_SPEC.md",
+    "vision": ROOT / "docs" / "adr" / "0019-evidence-engine-and-first-market.md",
+    "product_definition": ROOT / "docs" / "PRODUCT_DEFINITION_2026-10-31.md",
     "pilot_security": ROOT / "docs" / "security" / "PILOT_DATA_SECURITY_GATE.md",
 }
 FEATURE_ROW = re.compile(r"^\| (F\d{2}) \| ([^|]+) \|", re.MULTILINE)
@@ -86,6 +88,39 @@ def main() -> None:
             "P5-01..04",
         ),
         FILES["workflow"],
+    )
+    # Owner's 31 October vision and delivery refinement must not regress into
+    # Word-first, generic legal research, a one-colour verdict or local-only.
+    _contains_all(
+        documents["vision"],
+        ("independent post-assembly verification", "First commercial experience",
+         "four separate dimensions", "web", "professional-secrecy",
+         "does not independently satisfy"),
+        FILES["vision"],
+    )
+    _contains_all(
+        documents["product_definition"],
+        ("independent pre-submission verification", "Priority 1 — M1–M4 browser",
+         "EUIPO/BOIP", "field-level", "same frozen"),
+        FILES["product_definition"],
+    )
+    _contains_all(
+        roadmap,
+        ("independent post-assembly checking", "Current implementation checkpoint",
+         "Immediate delivery sequence", "17 successful automatic post-merge checks",
+         "SEC-01–16", "Word add-in is a"),
+        FILES["roadmap"],
+    )
+    _contains_all(
+        workflow,
+        ("inventory/source confirmation", "independent post-assembly check",
+         "cold reopen"),
+        FILES["workflow"],
+    )
+    _contains_all(
+        documents["pre_m3"],
+        ("merged synthetic-path engineering implementation", "not complete M3 acceptance"),
+        FILES["pre_m3"],
     )
     _contains_all(
         documents["adr"],
