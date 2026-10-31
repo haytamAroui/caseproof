@@ -40,6 +40,13 @@ jobs:
           python-version: "3.11"
       - name: Install PostgreSQL client
         run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Validate real-format NL FR EN intake and fail-closed M1/M2 discovery
+        run: |
+          uv run --locked pytest -q \
+            tests/test_signed_multisource_journey.py \
+            tests/test_m1_m2_fail_closed_acceptance.py \
+            tests/test_m1_m2_real_format_intake.py \
+            tests/test_phase4_headless_api.py
       - name: Initialize full protected local backend
         run: |
           set -euo pipefail
