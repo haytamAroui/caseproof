@@ -1,8 +1,9 @@
 name: Complete dossier disposable and adversarial acceptance
 on:
+  workflow_dispatch:
   pull_request:
   push:
-    branches: [feat/complete-dossier-journey]
+    branches: [feat/complete-dossier-journey, feat/live-page-worker-and-hosted-mcp]
 permissions:
   contents: read
 jobs:
