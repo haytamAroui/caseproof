@@ -10,7 +10,9 @@ from hashlib import sha256
 from apps.api.signed_supabase_originals import (
     MAX_BYTES,
     OriginalRef,
+    PrivateStorageExists,
     PrivateStorageIntegrityError,
+    PrivateStorageOutcomeUnknown,
     SignedOriginalsStorage,
 )
 from domains.disputes.multisource_manifest import MultiSourceManifest
@@ -57,8 +59,16 @@ class SignedMultiSourceJourney:
                 raise PrivateStorageIntegrityError("source bytes disagree with manifest")
         for item in manifest.all_sources:
             ref = refs[item.document_version_id]
-            self.storage.put_once(ref, bearer, payloads[item.document_version_id])
-            self.storage.get_verified(ref, bearer)
+            try:
+                self.storage.put_once(ref, bearer, payloads[item.document_version_id])
+            except (PrivateStorageExists, PrivateStorageOutcomeUnknown):
+                # Interrupted prior requests or a 409 on retry must never
+                # overwrite the original or be trusted as success. A fresh
+                # signed read plus the immutable SHA proves this exact
+                # source is already present. Denials and hash mismatches fail.
+                self.storage.get_verified(ref, bearer)
+            else:
+                self.storage.get_verified(ref, bearer)
 
     def reopen_verified(
         self, *, manifest: MultiSourceManifest,
