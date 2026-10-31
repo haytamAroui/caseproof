@@ -2,7 +2,7 @@ name: Matter retention disposable PostgreSQL
 on:
   pull_request:
   push:
-    branches: [feat/production-hardening, fix/retention-controls]
+    branches: [main, feat/production-hardening, fix/retention-controls]
 permissions:
   contents: read
 jobs:

@@ -1,7 +1,7 @@
 name: Phase 3 OCR geometry CI
 on:
   push:
-    branches: [feat/phase3-ocr-geometry-crops]
+    branches: [main, feat/phase3-ocr-geometry-crops]
   pull_request:
 permissions:
   contents: read

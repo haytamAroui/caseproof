@@ -2,7 +2,7 @@ name: Representation fidelity full gate
 on:
   pull_request:
   push:
-    branches: [feat/complete-representation-gate]
+    branches: [main, feat/complete-representation-gate]
 permissions:
   contents: read
 jobs:
