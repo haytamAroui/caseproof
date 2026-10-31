@@ -1,6 +1,8 @@
 # PIV-01/20 fixed litigation task benchmark (v1)
 
-**State:** protocol and original synthetic inputs only, **no human or competitor benchmark executed**, no accuracy/speed numbers. Corpus under `evals/litigation/m0_corpus_v2.json` is independently authored fictional material, not real court files and not representative of deployed accuracy. Permission to use a competitor's product is required before testing it. M0 validator checks fixture consistency only.
+**State (31 October):** protocol and original synthetic inputs only, **no independent human or competitor benchmark executed**, no product accuracy/speed numbers. v3 adds 18 four-dimensional boundary cases to the immutable v2 19-case NL/FR/EN/mixed suite. Mechanical labels remain author supplied, not an externally adjudicated benchmark. [Rights and coverage](TRILINGUAL_RIGHTS_AND_COVERAGE.md) · [Reviewer packet](TRILINGUAL_ADJUDICATION_PACKET.md).
+
+**Historical note:** the older protocol initially referred to v2. Its 19 cases remain unchanged as a regression baseline. Corpus under `evals/litigation/m0_corpus_v2.json` is independently authored fictional material, not real court files and not representative of deployed accuracy. Permission to use a competitor's product is required before testing it. M0 validator checks fixture consistency only.
 
 ## Evaluation record
 

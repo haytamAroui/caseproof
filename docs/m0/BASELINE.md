@@ -1,5 +1,7 @@
 # M0 (PIV-00) — Belgian litigation product and engineering baseline
 
+**31 October 2026 additive evaluation update:** the 26 October baseline below is historical (including its older ADR 0016, language-target and Word/finance implementation assumptions). The authoritative first-market scope is [ADR 0018](../adr/0018-pre-submission-verification-freeze.md), [ADR 0019](../adr/0019-evidence-engine-and-first-market.md) and [the current roadmap](../ROADMAP.md): independent, web-first Belgian FR/NL exhibit verification; English participates in synthetic evaluation but is **not** a new full-parity launch requirement. New v3 NL/FR/EN/mixed fixtures and mechanical rights/label audit are described in [evaluation README](../../evals/litigation/README.md) and the [M0 adjudication packet](TRILINGUAL_ADJUDICATION_PACKET.md). No independent human/legal adjudication or customer-processing approval has yet been recorded.
+
 **Date:** 2026-10-26. **Baseline code:** `main@f643ae9cd5170add32c79e2bd2d2324468e7d95e` (merged PR #60). **Purpose:** pin observed capabilities and acceptance work before modifying any product contracts. **Status:** M0 implementation planning and synthetic evaluation only; no product readiness claim. Recheck before each PIV work packet.
 
 ## Authority and ownership

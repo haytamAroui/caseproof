@@ -15,6 +15,11 @@ jobs:
         run: uv run --locked python scripts/check_architecture.py
       - name: Verify frozen pre-submission M0–M6 scope and historical feature crosswalk
         run: uv run --locked python -m scripts.check_clearbrief_roadmap
+      - name: Audit immutable M0 NL FR EN synthetic evaluation and language boundaries
+        run: |
+          uv run --locked python -m scripts.validate_litigation_corpus
+          uv run --locked python -m scripts.audit_m0_trilingual
+          uv run --locked pytest -q tests/test_litigation_m0_corpus.py tests/test_m0_trilingual_acceptance.py
       - name: Run unit tests
         run: uv run --locked pytest -q
       - name: Ruff check

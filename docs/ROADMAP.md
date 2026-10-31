@@ -99,7 +99,7 @@ Older milestone receipts below are retained as **dated measurements**, not claim
 - **Exit:** one reviewed source-of-truth for scope, technical and commercial acceptance; no stale Word-mandatory or finance-first instruction in active documents. The evaluation fixtures are independently checked, include zero-error cases and explicitly mark which tests are synthetic.
 - **Not exit:** a draft dataset alone does not demonstrate quality, paid demand or permission to upload legal customer documents.
 - **Proof:** scope ADR, changed-file map, linked docs, static consistency checks; all source rights recorded.
-- **Status:** documentation alignment proposed here; **validation not yet proven**.
+- **Status (31 October M0 evaluation increment):** product scope, active docs and architecture consistency have been merged in [PR #155](https://github.com/haytamAroui/caseproof/pull/155) (14 successful main checks; four deliberately skipped live jobs). The **v3 NL/FR/EN/mixed synthetic corpus** adds rights-declared source/label fixtures and executable four-dimensional structural audit without rewriting historical v2; see [evaluation README](../evals/litigation/README.md), [rights/coverage](m0/TRILINGUAL_RIGHTS_AND_COVERAGE.md) and [adjudication packet](m0/TRILINGUAL_ADJUDICATION_PACKET.md). **M0 engineering baseline acceptance is conditional on exact-head cloud CI; formal independent reviewer gold adjudication, full real-format DOCX/PDF/scan gold and owner closure remain OPEN.** Do not claim legal or commercial accuracy from synthetic mechanical checks.
 
 ## M1 — Secure matter intake, sources, inventories and scanned pages
 
