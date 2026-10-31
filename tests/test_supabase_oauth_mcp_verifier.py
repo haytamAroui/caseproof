@@ -13,11 +13,17 @@ SUB = str(uuid4())
 SESSION = str(uuid4())
 ISSUER = f"https://{PROJECT}.supabase.co/auth/v1"
 RESOURCE = "https://caseproof.example/mcp"
+CLIENT = "approved-mcp-oauth-client-1"
+
+
+def verifier(remote):
+    return SupabaseOAuthBearerVerifier(PROJECT, remote, RESOURCE, frozenset({CLIENT}))
 
 
 def token(payload=None, alg="RS256"):
-    p = {"iss": ISSUER, "aud": RESOURCE, "role": "authenticated",
-         "sub": SUB, "session_id": SESSION, "scope": "caseproof:reports:read",
+    p = {"iss": ISSUER, "aud": "authenticated", "role": "authenticated",
+         "client_id": CLIENT,
+         "sub": SUB, "session_id": SESSION,
          "iat": 1000, "exp": 2000}
     p.update(payload or {})
     def enc(obj):
@@ -41,7 +47,7 @@ class Identity:
 
 def test_auth_remote_verification_then_claims():
     remote = Identity()
-    verifier = SupabaseOAuthBearerVerifier(PROJECT, remote)
+    verifier = verifier(remote)
     result = verifier.verify(token())
     assert remote.calls == 1
     assert result.subject == SUB and result.issuer == ISSUER
@@ -52,12 +58,13 @@ def test_auth_remote_verification_then_claims():
 def test_unverified_jwt_must_never_be_accepted():
     remote = Identity(False)
     with pytest.raises(InvalidBearer):
-        SupabaseOAuthBearerVerifier(PROJECT, remote).verify(token())
+        verifier(remote).verify(token())
     assert remote.calls == 1
 
 
 @pytest.mark.parametrize("claim", [
-    {"iss": "https://other.supabase.co/auth/v1"}, {"aud": ""},
+    {"iss": "https://other.supabase.co/auth/v1"}, {"aud": "other"},
+    {"client_id": "unapproved-mcp-client"}, {"client_id": None},
     {"role": "service_role"}, {"scope": ""}, {"sub": str(uuid4())},
     {"session_id": "not-uuid"}, {"iat": "1000"}, {"exp": True},
     {"is_anonymous": True},
@@ -65,14 +72,14 @@ def test_unverified_jwt_must_never_be_accepted():
 def test_invalid_claim_shape_or_subject(claim):
     remote = Identity()
     with pytest.raises(InvalidBearer):
-        SupabaseOAuthBearerVerifier(PROJECT, remote).verify(token(claim))
+        verifier(remote).verify(token(claim))
 
 
 @pytest.mark.parametrize("alg", ["HS256", "none", "RS512"])
 def test_insecure_algorithms_denied_before_user_lookup(alg):
     remote = Identity()
     with pytest.raises(InvalidBearer):
-        SupabaseOAuthBearerVerifier(PROJECT, remote).verify(token(alg=alg))
+        verifier(remote).verify(token(alg=alg))
     assert remote.calls == 0
 
 
@@ -81,4 +88,15 @@ def test_remote_unavailability_fails_closed():
         def get_verified_user(self, bearer):
             raise IdentityServiceUnavailable("down")
     with pytest.raises(IdentityServiceUnavailable):
-        SupabaseOAuthBearerVerifier(PROJECT, Offline()).verify(token())
+        verifier(Offline()).verify(token())
+
+
+def test_explicit_client_policy_required_and_standard_scopes_not_authority():
+    remote = Identity()
+    with pytest.raises(ValueError):
+        SupabaseOAuthBearerVerifier(PROJECT, remote, RESOURCE, frozenset())
+    # Standard Supabase OAuth scopes (OIDC identity claims) are not CaseProof
+    # document read grants; no custom scope claim is needed or trusted.
+    effective = verifier(remote).verify(token({"scope": "openid email"}))
+    assert effective.scopes == frozenset({"caseproof:reports:read"})
+    assert remote.calls == 1
