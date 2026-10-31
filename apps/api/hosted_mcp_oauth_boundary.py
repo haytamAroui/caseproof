@@ -22,6 +22,7 @@ class VerifiedOAuthClaims:
     expires_at: int
     issued_at: int
     bearer: str
+    client_id: str = ""
 
 
 def authorize_verified_claims(

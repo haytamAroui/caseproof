@@ -1,3 +1,22 @@
+## PostgreSQL two-process recovery + hosted OAuth MCP candidate — 31 October 2026
+
+Feature branch `feat/postgres-process-recovery-hosted-mcp-oauth` builds the missing real-PostgreSQL
+200-page worker crash/resume scenario under the actual signed page-job SQL
+function (disposable PostgreSQL, synthetic actor role), with lease fencing,
+200 verified HMAC artifact readbacks, checkpoint/audit counts, revocation
+denial and fresh OS process takeover. Unlike the earlier SQLite recovery
+proof, this does not mirror PostgreSQL behavior in a mock.
+
+An independent, optional, stateless MCP JSON-RPC HTTP host and OAuth protected
+resource discovery boundary are added, with pinned project Auth /user
+verification, resource audience and scope checks, exact read-only canonical
+tool projection, host-only per-call content release and no review/approval
+writes. This is **an engineering/CI candidate** pending final-head checks.
+It does **not** provide a deployed OAuth issuer/client or approved, persistent
+firm consent registry, and is NOT a production-validated hosted service.
+Read [acceptance and outstanding release gates](m3/POSTGRES_HOSTED_MCP_OAUTH_ACCEPTANCE.md).
+Existing web-first lawyer workflow remains the product priority.
+
 ## PR #150 — canonical report and processing hardening candidate, 31 October 2026
 
 Implementation: frozen-snapshot MCP dispatch; shared application report projection;

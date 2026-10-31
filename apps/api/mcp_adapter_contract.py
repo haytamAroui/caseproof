@@ -102,6 +102,14 @@ def _validated(tool: McpTool, arguments: object) -> dict[str, Any]:
     return dict(arguments)
 
 
+def validate_tool_call(name: str, arguments: object) -> dict[str, Any]:
+    """Validate the complete closed read-only tool schema before any host release lookup."""
+    tool = _BY_NAME.get(name) if type(name) is str else None
+    if tool is None:
+        raise McpContractError("unknown tool")
+    return _validated(tool, arguments)
+
+
 def _dispatch_tool(*, store: DossierStore | None, bearer: str,
                         name: str, arguments: object,
                         allow_document_content: bool = False,
@@ -111,10 +119,8 @@ def _dispatch_tool(*, store: DossierStore | None, bearer: str,
     No headless-v1 fallback is permitted. The host owns identity and release
     consent; tool arguments cannot select either. Review writes are absent.
     """
-    tool = _BY_NAME.get(name) if type(name) is str else None
-    if tool is None:
-        raise McpContractError("unknown tool")
-    args = _validated(tool, arguments)
+    args = validate_tool_call(name, arguments)
+    tool = _BY_NAME[name]
     if type(bearer) is not str or not bearer.strip():
         raise McpContractError("host-authenticated bearer required")
     if type(allow_document_content) is not bool:
