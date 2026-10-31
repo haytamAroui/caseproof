@@ -14,9 +14,10 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from apps.api.access_control import AccessRejected
+from apps.api.dossier_journey import DossierStore
 from apps.api.litigation_headless_verification import (
     HeadlessMatterStore,
     export_report,
@@ -127,3 +128,53 @@ def call_tool(*, store: HeadlessMatterStore | None, bearer: str,
     except AccessRejected:
         return {"isError": True, "error": "access_rejected"}
     return {"isError": False, "mediaType": media_type, "content": body, "verification_contract": "legacy_headless_discovery_only", "canonical_verification": False}
+
+
+def call_canonical_tool(*, store: DossierStore | None, bearer: str,
+                        name: str, arguments: object,
+                        allow_document_content: bool = False) -> dict[str, Any]:
+    """Read the same signed, hash-bound dossier report used by the REST dossier.
+
+    No headless-v1 fallback is permitted. The host owns identity and release
+    consent; tool arguments cannot select either. Review writes are absent.
+    """
+    tool = _BY_NAME.get(name) if type(name) is str else None
+    if tool is None:
+        raise McpContractError("unknown tool")
+    args = _validated(tool, arguments)
+    if type(bearer) is not str or not bearer.strip():
+        raise McpContractError("host-authenticated bearer required")
+    if type(allow_document_content) is not bool:
+        raise McpContractError("typed host content-release decision required")
+    if not allow_document_content:
+        return {"isError": True, "error": "content_release_not_authorized"}
+    if store is None:
+        return {"isError": True, "error": "access_rejected"}
+    try:
+        report, _ = store.load(bearer, args["case_id"], args["brief_id"])
+        if report.get("schema") != "caseproof-dossier-v1" or not report.get("snapshot_hash"):
+            return {"isError": True, "error": "canonical_report_unavailable"}
+        if tool.name == "caseproof_discover_references":
+            return {"isError": False, "structuredContent": report,
+                    "canonical_verification": True}
+        decisions = store.rpc(bearer, args["case_id"], "decisions",
+                              {"snapshot_hash": report["snapshot_hash"]})
+        if not isinstance(decisions.get("decisions"), list):
+            return {"isError": True, "error": "canonical_report_unavailable"}
+        exported = {**report, "human_decisions": decisions["decisions"]}
+        if args.get("format", "json") == "json":
+            import json
+            return {"isError": False, "mediaType": "application/json",
+                    "content": json.dumps(exported, sort_keys=True, ensure_ascii=False),
+                    "canonical_verification": True}
+        from apps.api.dossier_journey import canonical
+        lines = ["# CaseProof scoped dossier report", "",
+                 "Verification contract", canonical(exported.get("verification_contract", {})), "",
+                 "Coverage", canonical(exported.get("coverage", {})), "",
+                 "Findings", canonical(exported.get("findings", [])), "",
+                 "Human decisions", canonical(exported["human_decisions"])]
+        return {"isError": False, "mediaType": "text/markdown",
+                "content": "\\n".join(lines) + "\\n",
+                "canonical_verification": True}
+    except AccessRejected:
+        return {"isError": True, "error": "access_rejected"}
