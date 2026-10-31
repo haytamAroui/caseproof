@@ -48,8 +48,9 @@ def test_oversized_raw_archive_is_rejected() -> None:
     "sources/../evil.pdf", "evil.pdf\\x00.txt", " evil.pdf ", "．．/evil.pdf",
 ])
 def test_signed_registration_rejects_path_like_filename(filename: str) -> None:
-    from apps.api.litigation_live_journey import OriginalRegister
     from pydantic import ValidationError
+
+    from apps.api.litigation_live_journey import OriginalRegister
 
     with pytest.raises(ValidationError):
         OriginalRegister(filename=filename, sha256="a" * 64, byte_length=10,
@@ -58,8 +59,9 @@ def test_signed_registration_rejects_path_like_filename(filename: str) -> None:
 
 
 def test_signed_registration_rejects_oversized_pdf_before_storage() -> None:
-    from apps.api.litigation_live_journey import MAX_ORIGINAL, OriginalRegister
     from pydantic import ValidationError
+
+    from apps.api.litigation_live_journey import MAX_ORIGINAL, OriginalRegister
 
     with pytest.raises(ValidationError):
         OriginalRegister(filename="large.pdf", sha256="a" * 64,
