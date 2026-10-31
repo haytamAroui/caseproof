@@ -149,7 +149,7 @@ def _orchestrate() -> int:
     before = _rpc(actor=ACTOR, case=CASE, request=JOB, action="status")
     assert before["state"] == "queued"
     env = {**os.environ, "CASEPROOF_TEST_BACKEND": "postgres"}
-    first = subprocess.Popen([sys.executable, "-m", __name__, "worker", str(directory), "crash"], env=env)
+    first = subprocess.Popen([sys.executable, "-m", "scripts.verify_page_worker_postgres_process", "worker", str(directory), "crash"], env=env)
     assert first.wait(timeout=1500) == 137, "Worker A must hard-crash after durable checkpoints"
     mid = jobs.call(BEARER, CASE, JOB, "status")
     stored = len(mid["results"])
