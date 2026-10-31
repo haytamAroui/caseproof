@@ -40,8 +40,8 @@ def main() -> None:
           window.calls=[]; window.failSave=true;
           window.CaseProofFidelity.mount({root:document.getElementById('panel'),context:()=>({caseId:'case',briefId:'brief'}),
             api:async(url,options)=>{window.calls.push({url,options});
-              if(url.endsWith('/crop'))return new Response(Uint8Array.from(atob(png),c=>c.charCodeAt(0)),{headers:{
-                'X-CaseProof-Snapshot':report.snapshot_hash,'X-CaseProof-Original-SHA256':'c'.repeat(64)}});
+              if(url.endsWith('/crops'))return {snapshot_hash:report.snapshot_hash,crops:[{
+                region_id:'b'.repeat(64),crop_sha256:sha,original_sha256:'c'.repeat(64),crop_base64:png}]};
               if(url.endsWith('/reviews')){if(window.rejectSave){window.rejectSave=false;const e=Error('stale');e.code=409;throw e;}if(window.failSave){window.failSave=false;throw Error('network');}return {saved:true};}
               return report;
             }});

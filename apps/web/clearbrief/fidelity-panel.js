@@ -47,12 +47,18 @@ window.CaseProofFidelity = {mount({root, api, context}) {
       finally{busy=false;load.disabled=false;form.removeAttribute("aria-busy");save.disabled=!confirm.checked;}
     });
     try{
+      const batch=assessment.regions.length?await api(base()+`/snapshots/${report.snapshot_hash}/crops`,
+        {method:"POST",json:{region_ids:assessment.regions.map(r=>r.region_id)}}):null;
+      if(seq!==sequence)return;
+      if(batch&&(batch.snapshot_hash!==report.snapshot_hash||!Array.isArray(batch.crops)||batch.crops.length!==assessment.regions.length))throw Error("crop_batch_scope");
       for(const r of assessment.regions){
-        const response=await api(base()+`/snapshots/${report.snapshot_hash}/regions/${r.region_id}/crop`,{raw:true});
-        const bytes=await response.arrayBuffer();if(seq!==sequence)return;
+        const selected=batch.crops.filter(c=>c.region_id===r.region_id);
+        if(selected.length!==1)throw Error("crop_batch_identity");
+        const crop=selected[0];
+        const bytes=Uint8Array.from(atob(crop.crop_base64),c=>c.charCodeAt(0));
         const hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(x=>x.toString(16).padStart(2,"0")).join("");
         if(seq!==sequence)return;
-        if(hash!==r.crop_sha256||response.headers.get("X-CaseProof-Snapshot")!==report.snapshot_hash||response.headers.get("X-CaseProof-Original-SHA256")!==r.original_sha256)throw Error("crop_integrity");
+        if(hash!==r.crop_sha256||crop.crop_sha256!==r.crop_sha256||crop.original_sha256!==r.original_sha256)throw Error("crop_integrity");
         const view=node("section","","fidelity-region");
         view.append(node("p",`Page ${r.page_number} · ${r.reason}`,"small"));
         const side=node("div","","fidelity-pair");const text=node("div","");text.append(node("strong","Extracted text"),node("pre",r.extracted_text||"No independent text layer"),node("strong","Visual transcription"),node("pre",r.visual_text||"Unreadable"));

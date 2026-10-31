@@ -58,6 +58,11 @@ class InventoryConfirmation(BaseModel):
     entries: list[IdentityConfirmation] = Field(max_length=512)
 
 
+class CropBatchBody(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    region_ids: list[str] = Field(min_length=1, max_length=96)
+
+
 class VisualDecisionBody(DecisionBody):
     reviewed_region_ids: list[str] = Field(default_factory=list, max_length=96)
 
@@ -105,19 +110,28 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return hmac.new(key, canonical(payload).encode(), hashlib.sha256).hexdigest()
 
-    def reopen(self, bearer: str, case: str, brief: str, snapshot: str) -> tuple[dict[str, Any], bytes]:
+    def frozen_report(self, bearer: str, case: str, brief: str, snapshot: str) -> dict[str, Any]:
         stored = self.rpc(bearer, case, 'read', {'snapshot_hash': snapshot})
         serialized = stored.get('serialized')
         if not isinstance(serialized, str) or hashlib.sha256(serialized.encode()).hexdigest() != snapshot:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         report = json.loads(serialized)
+        if not isinstance(report, dict):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         attestation = report.pop('server_receipt', None)
         expected = self.receipt(report)
-        if not isinstance(attestation, str) or not hmac.compare_digest(expected, attestation):
+        if (not isinstance(attestation, str) or len(attestation) != 64
+                or any(c not in '0123456789abcdef' for c in attestation)
+                or not hmac.compare_digest(expected, attestation)):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         report['server_receipt'] = attestation
         if report.get('case_id') != case or report.get('brief_id') != brief:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        report['snapshot_hash'] = snapshot
+        return report
+
+    def reopen(self, bearer: str, case: str, brief: str, snapshot: str) -> tuple[dict[str, Any], bytes]:
+        report = self.frozen_report(bearer, case, brief, snapshot)
         sources, originals = self.sources(bearer, case)
         current = {(s['version_id'], s['sha256']) for s in sources}
         recorded = {(s['version_id'], s['sha256']) for s in report.get('sources', [])}
@@ -351,13 +365,40 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             return Response(text, media_type='text/markdown', headers=headers)
         return Response(canonical(report), media_type='application/json', headers=headers)
 
+    def frozen_regions(s: DossierStore, bearer: str, case: str, brief: str, snapshot: str) -> list[dict[str, Any]]:
+        # The guarded read RPC checks current membership/grants, retention,
+        # bundle and inventory freshness in one transaction. A frozen PNG does
+        # not require re-downloading/re-parsing every original on every request.
+        report = s.frozen_report(bearer, case, brief, snapshot)
+        return [r for page in report.get('visual_pages', {}).values()
+                for r in [*page.get('regions', []), *([page['page_context']] if page.get('page_context') else [])]]
+
+    @router.post(base + '/snapshots/{snapshot_hash}/crops')
+    def visual_crop_batch(case_id: str, brief_id: str, snapshot_hash: str, body: CropBatchBody,
+                          authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        if len(set(body.region_ids)) != len(body.region_ids) or any(
+                len(r) != 64 or any(c not in '0123456789abcdef' for c in r) for r in body.region_ids):
+            raise HTTPException(422, 'bounded unique crop identities required')
+        regions = frozen_regions(s, bearer, case_id, brief_id, snapshot_hash)
+        crops = []
+        for identity in body.region_ids:
+            selected = [r for r in regions if r['region_id'] == identity]
+            if len(selected) != 1:
+                raise HTTPException(404, 'visual region unavailable')
+            region = selected[0]
+            png = base64.b64decode(region['crop_base64'], validate=True)
+            if hashlib.sha256(png).hexdigest() != region['crop_sha256']:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+            crops.append({k: region[k] for k in ('region_id','crop_sha256','original_sha256','crop_base64')})
+        return {'snapshot_hash': snapshot_hash, 'crops': crops,
+                'source_availability': 'verified_at_snapshot_creation'}
+
     @router.get(base + '/snapshots/{snapshot_hash}/regions/{region_id}/crop')
     def visual_crop(case_id: str, brief_id: str, snapshot_hash: str, region_id: str,
                     authorization: str | None = Header(default=None)) -> Response:
         s, bearer = active(authorization)
-        report, _ = s.reopen(bearer, case_id, brief_id, snapshot_hash)
-        matches = [r for page in report.get('visual_pages', {}).values()
-                   for r in [*page.get('regions', []), *([page['page_context']] if page.get('page_context') else [])]
+        matches = [r for r in frozen_regions(s, bearer, case_id, brief_id, snapshot_hash)
                    if r['region_id'] == region_id]
         if len(matches) != 1:
             raise HTTPException(404, 'visual region unavailable')
@@ -371,7 +412,9 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         return Response(png, media_type='image/png', headers={'Cache-Control': 'no-store',
             'X-CaseProof-Crop-SHA256': region['crop_sha256'],
             'X-CaseProof-Original-SHA256': region['original_sha256'],
-            'X-CaseProof-Snapshot': snapshot_hash, 'X-Content-Type-Options': 'nosniff'})
+            'X-CaseProof-Snapshot': snapshot_hash,
+            'X-CaseProof-Original-Availability': 'verified_at_snapshot_creation',
+            'X-Content-Type-Options': 'nosniff'})
 
     @router.get(base + '/sources/{version_id}/original')
     def original(case_id: str, brief_id: str, version_id: str,

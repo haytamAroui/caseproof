@@ -117,3 +117,15 @@ Key rotation invalidates old receipts until a separately designed key-version
 recovery policy exists. The legacy RPC may hold untrusted snapshots; these routes
 must never use them without receipt validation. Production key custody is not
 approved by this development implementation.
+
+## Bounded crop transport
+
+Frozen crop reads use the guarded snapshot RPC and server receipt; original bytes
+are verified when the snapshot is created. They do not redownload/reparse originals
+per word. The panel requests <=96 selected regions in one authenticated batch per
+finding, validates every returned identity/digest and waits for image decoding.
+Single-crop lookup remains available. Both retain current database permission,
+retention and bundle/confirmation freshness checks. Crop responses explicitly mark
+original availability as `verified_at_snapshot_creation`; live original byte
+availability is rechecked by review/export reopening, not asserted by a cached PNG.
+No shared private cache or additional retention store is introduced.

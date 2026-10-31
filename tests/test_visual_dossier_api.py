@@ -22,6 +22,7 @@ from tests.test_phase4_headless_api import docx
 
 class DiskStore(DossierStore):
     def __init__(self, root):
+        self.sources_calls=0
         self.root=root
         self.receipt_key=b"synthetic-test-receipt-only-not-a-live-secret"
         self.visual=PDFVisualFidelity()
@@ -46,6 +47,7 @@ class DiskStore(DossierStore):
 
     def sources(self, token, case):
         self.authorize(token,case)
+        self.sources_calls+=1
         return copy.deepcopy(self.manifest),{'draft':self.draft,'inv':b'Stuk 1','source':self.pdf}
 
     def rpc(self, token, case, action, data=None):
@@ -94,8 +96,13 @@ def test_actual_document_dossier_crop_review_restart_export_and_denials(tmp_path
     sha=report['snapshot_hash']
     region=conflict['visual_assessment']['regions'][0]
     route=base+f'/snapshots/{sha}/regions/{region["region_id"]}/crop'
+    previous_source_reads=store.sources_calls
     crop=c.get(route,headers=headers)
+    assert store.sources_calls==previous_source_reads
     assert crop.status_code==200 and hashlib.sha256(crop.content).hexdigest()==region['crop_sha256']
+    batch=c.post(base+f'/snapshots/{sha}/crops',headers=headers,json={'region_ids':[region['region_id']]})
+    assert batch.status_code==200 and batch.json()['crops'][0]['crop_sha256']==region['crop_sha256']
+    assert store.sources_calls==previous_source_reads
     assert c.get(route,headers={'Authorization':'Bearer ungranted'}).status_code==404
     assert c.get(route.replace('/case/','/other/'),headers=headers).status_code==404
     review={'snapshot_hash':sha,'reference_id':conflict['reference_id'],'request_id':str(uuid4()),
