@@ -90,7 +90,9 @@ def create_hosted_mcp_app(
     # The discovery URL must be rooted at the same externally pinned origin.
     url = urlsplit(settings.resource)
     resource_metadata = f"{url.scheme}://{url.netloc}/.well-known/oauth-protected-resource"
-    challenge = f'Bearer resource_metadata="{resource_metadata}", scope="{SCOPE}"'
+    # Supabase does not yet issue custom CaseProof OAuth scopes. Its signed
+    # client_id plus the current host consent policy control document access.
+    challenge = f'Bearer resource_metadata="{resource_metadata}"'
 
     def reply(data: dict[str, Any], status: int = 200,
               *, challenge_required: bool = False) -> JSONResponse:
@@ -108,7 +110,7 @@ def create_hosted_mcp_app(
     @app.get("/.well-known/oauth-protected-resource")
     def metadata() -> JSONResponse:
         return reply({"resource": settings.resource, "authorization_servers": [settings.issuer],
-                      "bearer_methods_supported": ["header"], "scopes_supported": [SCOPE],
+                      "bearer_methods_supported": ["header"],
                       "resource_name": "CaseProof frozen, reviewed dossier reports"})
 
     @app.get("/mcp")
