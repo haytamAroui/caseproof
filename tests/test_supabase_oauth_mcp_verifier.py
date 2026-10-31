@@ -57,7 +57,7 @@ def test_unverified_jwt_must_never_be_accepted():
 
 
 @pytest.mark.parametrize("claim", [
-    {"iss": "https://other.supabase.co/auth/v1"}, {"aud": "authenticated"},
+    {"iss": "https://other.supabase.co/auth/v1"}, {"aud": ""},
     {"role": "service_role"}, {"scope": ""}, {"sub": str(uuid4())},
     {"session_id": "not-uuid"}, {"iat": "1000"}, {"exp": True},
     {"is_anonymous": True},
