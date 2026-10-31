@@ -18,11 +18,6 @@ from typing import Any
 
 from apps.api.access_control import AccessRejected
 from apps.api.dossier_journey import DossierStore
-from apps.api.litigation_headless_verification import (
-    HeadlessMatterStore,
-    export_report,
-    load_snapshot,
-)
 
 _ID_PATTERN = r"^[A-Za-z0-9_.-]{1,100}$"
 _ID_RE = re.compile(_ID_PATTERN)
@@ -98,39 +93,7 @@ def _validated(tool: McpTool, arguments: object) -> dict[str, Any]:
     return dict(arguments)
 
 
-def call_tool(*, store: HeadlessMatterStore | None, bearer: str,
-              name: str, arguments: object,
-              allow_document_content: bool = False) -> dict[str, Any]:
-    """Run one read-only tool for the host-authenticated user.
-
-    Access failures return an opaque error result. Contract violations raise
-    McpContractError so a host can reject the request before any data access.
-    The host must separately authorize content release for this matter and
-    destination on each call; read access alone never approves model egress.
-    This flag is not a tool argument and cannot be supplied by the model.
-    """
-    tool = _BY_NAME.get(name) if type(name) is str else None
-    if tool is None:
-        raise McpContractError("unknown tool")
-    args = _validated(tool, arguments)
-    if type(bearer) is not str or not bearer.strip():
-        raise McpContractError("host-authenticated bearer required")
-    if type(allow_document_content) is not bool:
-        raise McpContractError("typed host content-release decision required")
-    if not allow_document_content:
-        return {"isError": True, "error": "content_release_not_authorized"}
-    try:
-        if tool.name == "caseproof_discover_references":
-            snapshot = load_snapshot(store, bearer, args["case_id"], args["brief_id"])
-            return {"isError": False, "structuredContent": {**snapshot, "verification_contract": "legacy_headless_discovery_only", "canonical_verification": False}}
-        media_type, body = export_report(
-            store, bearer, args["case_id"], args["brief_id"], args.get("format", "json"))
-    except AccessRejected:
-        return {"isError": True, "error": "access_rejected"}
-    return {"isError": False, "mediaType": media_type, "content": body, "verification_contract": "legacy_headless_discovery_only", "canonical_verification": False}
-
-
-def call_canonical_tool(*, store: DossierStore | None, bearer: str,
+def call_tool(*, store: DossierStore | None, bearer: str,
                         name: str, arguments: object,
                         allow_document_content: bool = False) -> dict[str, Any]:
     """Read the same signed, hash-bound dossier report used by the REST dossier.
@@ -178,3 +141,6 @@ def call_canonical_tool(*, store: DossierStore | None, bearer: str,
                 "canonical_verification": True}
     except AccessRejected:
         return {"isError": True, "error": "access_rejected"}
+
+# Backwards-compatible name; the only supported dispatch is canonical.
+call_canonical_tool = call_tool
