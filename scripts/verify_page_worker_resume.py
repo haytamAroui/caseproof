@@ -173,8 +173,9 @@ def worker_main(db: str, directory: str) -> int:
 
 def verify_adversarial_lease_contract(bundle: Path, directory: Path) -> dict[str, bool]:
     """Exercise stale-owner fencing and replay semantics in a separate durable store."""
-    from apps.api.dossier_journey import canonical
     import hashlib
+
+    from apps.api.dossier_journey import canonical
 
     db = directory / 'adversarial.sqlite'
     jobs = SqliteJobs(db, FileDossier(bundle))
