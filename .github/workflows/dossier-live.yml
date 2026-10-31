@@ -2,7 +2,7 @@ name: Complete signed dossier live acceptance
 # Final receipt revision: rerun protected acceptance on this exact documentation head.
 on:
   push:
-    branches: [feat/complete-dossier-journey, fix/dossier-ranges-mixed, feat/final-hardening-and-verification]
+    branches: [feat/complete-dossier-journey, fix/dossier-ranges-mixed, feat/final-hardening-and-verification, feat/canonical-mcp-report-gate-20261031]
   workflow_dispatch:
 permissions:
   contents: read
