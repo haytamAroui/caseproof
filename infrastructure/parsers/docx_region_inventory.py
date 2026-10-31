@@ -112,6 +112,9 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
                     regions.append(DocxRegion(name, kind, RegionStatus.REVISION_UNRESOLVED, "FROZEN_VIEW_REQUIRED"))
                 else:
                     regions.append(DocxRegion(name, kind, RegionStatus.UNSCANNED, "TEXT_NOT_YET_SCANNED"))
+                if any(node.tag == WORD_NS + "vanish" for node in root.iter()):
+                    regions.append(DocxRegion(name + "#hidden", "HIDDEN_TEXT_EXCLUDED",
+                                              RegionStatus.UNSUPPORTED, "EXCLUDED_HIDDEN_TEXT"))
                 if any(node.tag in {
                     WORD_NS + "txbxContent", WORD_NS + "altChunk", WORD_NS + "drawing",
                     WORD_NS + "pict", WORD_NS + "object", WORD_NS + "fldChar",

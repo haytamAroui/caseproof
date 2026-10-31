@@ -22,7 +22,7 @@ Source text is rendered using textContent/text nodes. Server Unicode codepoint o
 
 Browser evidence: scripts/verify_review_browser.py. Static source/contract audit is supplementary, not a substitute for actual browser/DB checks.
 
-## Regional fidelity review (ADR 0019 / representation acceptance)
+## Regional fidelity review (ADR 0020 / representation acceptance)
 
 The ClearBrief dossier panel owns regional comparison display. Existing API/session
 helpers supply bearer access; source content is escaped text. Raw OCR scores are not
@@ -33,3 +33,13 @@ selected region IDs. Conflict findings survive human disposition and export.
 Failed crop loads block review; failed saves preserve input and idempotency key;
 changing an uncertain save is blocked. Signout clears crops/object URLs and pending
 view. This development panel uses existing en-BE copy, no new legal approval claims.
+
+
+## Verification coverage/report extension (ADR 0022)
+
+The existing fidelity panel owns coverage/translation display; no parallel component
+or token system. Its escaped-text details list is bounded to 100 displayed regions
+with an explicit full-export fallback. Show missing legacy coverage as not recorded.
+Read status and coverage before review; translated prose stays human-only and OCR
+uncertainty remains independently visible. JSON/Markdown/DOCX consume one frozen
+report. API language declarations require current signed access and are not approval.

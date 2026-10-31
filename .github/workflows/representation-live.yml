@@ -2,7 +2,7 @@ name: Signed representation fidelity live acceptance
 # Final receipt revision: rerun protected acceptance on this exact documentation head.
 on:
   push:
-    branches: [feat/complete-representation-gate]
+    branches: [feat/complete-representation-gate, feat/verification-contract-report]
   workflow_dispatch:
 permissions:
   contents: read

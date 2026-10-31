@@ -4,6 +4,15 @@
 
 **Gate:** M1 source ingestion and M2 verification engineering may continue. **M3 implementation against production-shaped review contracts and any M3 acceptance claim are blocked until the following four rules are signed off as explicit implementation contracts and their M1/M2 fixtures are available.** This file defines those rules; writing it does not prove their implementation. Do not use a UI default to conceal an unresolved state.
 
+## 31 October executable implementation candidate
+
+[ADR 0022](../adr/0022-verification-contract-report.md) and
+[acceptance matrix](../m3/VERIFICATION_CONTRACT_ACCEPTANCE.md) implement the
+engineering contracts in the signed dossier path. This supersedes an interpretation
+that no code exists. Complete M3 acceptance still requires current-head execution,
+independent review and the named external/customer-environment approvals. No
+practitioner, bar or customer-processing approval is inferred from merged code.
+
 ## P3-01 — Translated quotations and cross-language claims
 
 **Problem:** a French draft may quote or paraphrase a Dutch exhibit (or vice versa). A literal comparison cannot judge a translation, and a translation is never source-original text.

@@ -276,3 +276,13 @@ before offsets can exempt a disjoint region. Shared ligature/soft-hyphen folding
 retains original codepoint ranges. This is a branch integration, not a main merge
 or customer release. The existing signout cancellation regression is retained.
 Current-head cloud/live receipts must supersede historical run references.
+
+
+## Executable verification contract/report candidate — 31 October 2026
+
+Feature `feat/verification-contract-report` implements the signed dossier gaps in
+P3-01..04, structured/hidden DOCX omission accounting, translation/OCR coexistence,
+identity abstention and consistent frozen web/JSON/Markdown/DOCX output. See
+[matrix](m3/VERIFICATION_CONTRACT_ACCEPTANCE.md). No migration, confidential input,
+new provider, local installer, Word host or legal/practitioner approval. Exact tests
+and cloud/live receipts belong to the PR; no complete M3/M4 release claim.

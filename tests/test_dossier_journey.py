@@ -25,7 +25,8 @@ def test_identity_needs_confirmation_and_absence_needs_complete_inventory():
     context = {'payload': {'inventory_complete': False, 'entries': [
         {'label': 'stuk', 'number': '1', 'source_version_id': 'v', 'pages': []}]}}
     report = assess(draft, [source], context)
-    assert report['findings'][0]['technical_check'] == 'checked'
+    assert report['findings'][0]['technical_check'] == 'unresolved'
+    assert report['findings'][0]['identity_reason'] == 'INVENTORY_INCOMPLETE'
     assert report['findings'][1]['identity'] == 'not_assessed'
     context['payload']['inventory_complete'] = True
     assert assess(draft, [source], context)['findings'][1]['identity'] == 'not_in_inventory'
@@ -102,7 +103,8 @@ def test_omitted_confirmation_entry_cannot_become_absent_inventory():
                     {'draft': raw, 'inventory': b'Stuk 1 invoice'})
 
     report, _ = FixtureStore().load('signed-test-double', 'case', 'draft')
-    assert report['findings'][0]['identity'] == 'source_missing'
+    assert report['findings'][0]['identity'] == 'not_assessed'
+    assert report['findings'][0]['identity_reason'] == 'INVENTORY_INCOMPLETE'
     assert not report['coverage']['inventory_confirmed_complete']
 
 

@@ -240,3 +240,12 @@ See [ADR 0020](adr/0020-representation-conflict-gate.md). Text/visual disagreeme
 is a fidelity review trigger, not a product pivot or semantic verdict. New
 synthetic fixtures and an opt-in resolver gate are under development; live adapter,
 private crop, persistence and web rendering acceptance remain open.
+
+
+## Verification contracts/report implementation candidate — 31 October 2026
+
+[ADR 0022](adr/0022-verification-contract-report.md) wires inventory status policy,
+translation review, DOCX-region coverage and per-page OCR provenance into one frozen
+report across web/JSON/Markdown/DOCX. [Acceptance evidence](m3/VERIFICATION_CONTRACT_ACCEPTANCE.md)
+tracks engineering versus external approvals. Supported scoped journeys do not close
+representative corpus, full recall, customer security, practitioner or release gates.
