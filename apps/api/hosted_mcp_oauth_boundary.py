@@ -7,7 +7,6 @@ revocation before constructing VerifiedOAuthClaims. No network host is mounted.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
 
 
 class OAuthBoundaryRejected(ValueError):
