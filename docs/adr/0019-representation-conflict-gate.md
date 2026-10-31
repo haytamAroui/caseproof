@@ -51,3 +51,21 @@ Acceptance: real generated clean/redlined PDF and strike-marked DOCX plus image-
 scan; positive and negative pixel candidates; equal-text edit conflict; unreliable
 abstention; stale-source rejection; literal-match blocking; existing four dimensions
 and current literal behavior preserved when no comparison exists. Synthetic only.
+
+## PR #147 correction — 31 October 2026
+
+Regional text overlap is not source geometry. Until adapters supply validated
+source-linked bounds, all comparisons on the cited physical page apply; a regional
+conflict cannot be dismissed because its words differ from the quote. This may
+increase false alerts but avoids claiming disjointness without evidence.
+
+Citation observations serialize derived `visual_comparison_supplied`,
+`visual_coverage` (`not_supplied`, `unknown`, `whole_page`) and `visual_assessment`.
+Supplied does not mean quote covered; regional coverage is unknown. Equal strings
+remain `not_assessed` even for whole-page input. Existing asdict API/export/run-hash
+consumers receive these additive fields; constructors retain compatibility via
+init=False. Run hashes intentionally change; persisted old records are not rewritten.
+Engine version is `caseproof-literal-citation-v2`, and observations carry
+`representation-gate-v2` so normalization/scoping behavior is distinguishable.
+Web rendering and live comparison adapters remain open; no visual verification
+or complete crop coverage is asserted by these fields.

@@ -52,7 +52,7 @@ def test_french_quote_alias_matches_one_exact_source_page_without_legal_support(
     assert (obs.source_id, obs.source_version_id, obs.representation_id) == ("src-1", "version-1", "rep-1")
     assert (obs.text_start, obs.text_end) == (0, len("Le paiement est dû."))
     assert report.exact_count == 1 and report.mismatch_count == 0
-    assert report.engine_version == "caseproof-literal-citation-v1"
+    assert report.engine_version == "caseproof-literal-citation-v2"
 
 
 def test_unmapped_label_never_defaults_to_first_exhibit():

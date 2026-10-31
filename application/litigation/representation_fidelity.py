@@ -42,7 +42,7 @@ class RepresentationComparison:
     visual_reliable: bool
     meaning_bearing_edit: bool
     # False means the adapter compared only the region in extracted_text and
-    # visual_text, so it need not block quotes that lie elsewhere on the page.
+    # visual_text. Without geometry it still gates all quotes on that page.
     covers_whole_page: bool = True
     # Adapter observations only: strikethrough/insertion is a review trigger,
     # never an automatic instruction to delete or accept contractual language.

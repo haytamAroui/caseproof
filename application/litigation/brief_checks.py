@@ -7,15 +7,13 @@ truth, procedural validity or the correctness of a legal conclusion.
 """
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 from application.litigation.library import EvidencePreview
 from application.litigation.representation_fidelity import (
     RepresentationComparison,
     RepresentationState,
-    normalize_for_comparison,
 )
 from domains.disputes.exhibits import ExhibitRegister, MappingState
 
@@ -102,14 +100,28 @@ class CitationObservation:
     # EXACT_MATCH is lexical fidelity within one parsed span, NOT
     # semantic support, document authenticity or legal approval.
 
-    @property
-    def visual_comparison_supplied(self) -> bool:
-        """False means no source-bound text/visual comparison covered this reference.
+    # Stored derived fields survive asdict() in API, manifests and run hashes.
+    visual_comparison_supplied: bool = field(init=False)
+    visual_coverage: str = field(init=False)
+    visual_assessment: str = field(init=False)
+    fidelity_rules_version: str = field(init=False, default="representation-gate-v2")
 
-        An EXACT_MATCH with this flag False says nothing about formatting that
-        text extraction may have lost, such as struck-out or hidden text.
-        """
-        return bool(self.representation_comparisons)
+    def __post_init__(self) -> None:
+        comparisons = self.representation_comparisons
+        object.__setattr__(self, "visual_comparison_supplied", bool(comparisons))
+        object.__setattr__(self, "visual_coverage", (
+            "whole_page" if any(c.covers_whole_page for c in comparisons)
+            else "unknown" if comparisons else "not_supplied"
+        ))
+        states = {c.state for c in comparisons}
+        assessment = (
+            RepresentationState.REPRESENTATION_CONFLICT
+            if RepresentationState.REPRESENTATION_CONFLICT in states
+            else RepresentationState.OCR_UNRELIABLE
+            if RepresentationState.OCR_UNRELIABLE in states
+            else RepresentationState.NOT_ASSESSED
+        )
+        object.__setattr__(self, "visual_assessment", assessment.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,7 +135,7 @@ class DraftCheckReport:
     mismatch_count: int
     exact_count: int
     evidence_scope_complete: bool
-    engine_version: str = "caseproof-literal-citation-v1"
+    engine_version: str = "caseproof-literal-citation-v2"
 
     @property
     def exact_without_visual_comparison_count(self) -> int:
@@ -132,26 +144,6 @@ class DraftCheckReport:
             o.state is CitationCheckState.EXACT_MATCH and not o.visual_comparison_supplied
             for o in self.observations
         )
-
-
-def _words(text: str) -> set[str]:
-    return set(re.findall(r"\w+", normalize_for_comparison(text).casefold()))
-
-
-def _comparison_applies(reference: DraftReference, comparison: RepresentationComparison) -> bool:
-    """Whole-page comparisons always apply; regional ones only when they touch the quote.
-
-    Fails closed: a regional comparison is skipped only when both sides have
-    words and share none with the quoted text. A reference without a quotation
-    is still gated by every comparison on its page.
-    """
-    if comparison.covers_whole_page or reference.exact_quote is None:
-        return True
-    quote_words = _words(reference.exact_quote)
-    region_words = _words(comparison.extracted_text) | _words(comparison.visual_text)
-    if not quote_words or not region_words:
-        return True
-    return bool(quote_words & region_words)
 
 
 def _note(reference: DraftReference, state: CitationCheckState,
@@ -168,8 +160,7 @@ def _note(reference: DraftReference, state: CitationCheckState,
         row.representation_id if row else None,
         span[0] if span else None, span[1] if span else None,
         state.value,
-        comparisons if comparisons is not None
-        else (preview.representation_comparisons if preview else ()),
+        comparisons if comparisons is not None else (),
     )
 
 
@@ -233,8 +224,9 @@ def check_brief_references(
             if (comparison.original_sha256 != row.original_sha256
                     or comparison.representation_id != row.representation_id):
                 raise DraftCheckError("stale representation comparison")
-            if (comparison.pdf_page == page.pdf_page
-                    and _comparison_applies(reference, comparison)):
+            # Without source-linked geometry, word overlap cannot establish
+            # disjointness. Every conflict on this page remains a review gate.
+            if comparison.pdf_page == page.pdf_page:
                 relevant.append(comparison)
         applied = tuple(relevant)
         blocked = {item.state for item in relevant}

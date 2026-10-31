@@ -52,7 +52,7 @@ def test_covers_whole_page_defaults_true_and_must_be_bool():
         comparison(covers_whole_page="no")
 
 
-def test_regional_comparison_elsewhere_does_not_block_unrelated_quote():
+def test_unlocated_regional_conflict_still_blocks_unrelated_quote():
     from tests.test_litigation_m2_brief_checks import check, rig
 
     brief, register, previews = rig()
@@ -61,9 +61,10 @@ def test_regional_comparison_elsewhere_does_not_block_unrelated_quote():
                       meaning_bearing_edit=True, covers_whole_page=False)
     report = check(brief, register, (replace(preview, representation_comparisons=(item,)),))
     obs = report.observations[0]
-    assert obs.state is CitationCheckState.EXACT_MATCH
-    assert obs.visual_comparison_supplied is False
-    assert report.exact_without_visual_comparison_count == 1
+    assert obs.state is CitationCheckState.REPRESENTATION_CONFLICT
+    assert obs.visual_comparison_supplied is True
+    assert obs.visual_coverage == "unknown"
+    assert report.exact_without_visual_comparison_count == 0
 
 
 def test_regional_comparison_overlapping_the_quote_still_blocks():
@@ -152,3 +153,48 @@ def test_fast_detector_matches_the_original_pixel_loop():
         assert has_midline_candidate(image, bounds) is expected
         seen.add(expected)
     assert seen == {True, False}
+
+
+def test_clean_regional_common_word_never_claims_quote_coverage():
+    from dataclasses import asdict
+
+    from tests.test_litigation_m2_brief_checks import check, rig
+
+    brief, register, previews = rig()
+    preview = previews[0]
+    item = comparison(original_sha256=preview.row.original_sha256,
+                      extracted_text="Le", visual_text="Le", covers_whole_page=False)
+    report = check(brief, register, (replace(preview, representation_comparisons=(item,)),))
+    payload = asdict(report)
+    obs = payload["observations"][0]
+    assert obs["visual_comparison_supplied"] is True
+    assert obs["visual_coverage"] == "unknown"
+    assert obs["visual_assessment"] == "not_assessed"
+    assert obs["fidelity_rules_version"] == "representation-gate-v2"
+    assert payload["engine_version"] == "caseproof-literal-citation-v2"
+
+
+def test_missing_visual_assessment_survives_serialization():
+    from dataclasses import asdict
+
+    from tests.test_litigation_m2_brief_checks import check
+
+    obs = asdict(check())["observations"][0]
+    assert obs["visual_comparison_supplied"] is False
+    assert obs["visual_coverage"] == "not_supplied"
+    assert obs["visual_assessment"] == "not_assessed"
+
+
+def test_incomplete_extraction_does_not_claim_other_page_visual_coverage():
+    from tests.test_litigation_m2_brief_checks import check, rig
+
+    brief, register, previews = rig()
+    preview = previews[0]
+    item = comparison(original_sha256=preview.row.original_sha256, pdf_page=2,
+                      meaning_bearing_edit=True)
+    preview = replace(preview, row=replace(preview.row, warnings=("partial",)),
+                      representation_comparisons=(item,))
+    obs = check(brief, register, (preview,)).observations[0]
+    assert obs.state is CitationCheckState.INCOMPLETE_EXTRACTION
+    assert obs.visual_coverage == "not_supplied"
+    assert obs.visual_assessment == "not_assessed"
