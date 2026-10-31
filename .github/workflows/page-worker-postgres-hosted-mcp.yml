@@ -5,11 +5,13 @@ on:
       - 'apps/api/hosted_mcp_app.py'
       - 'apps/api/supabase_oauth_mcp_verifier.py'
       - 'apps/api/hosted_mcp_oauth_boundary.py'
+      - 'apps/api/hosted_mcp_release_gate.py'
       - 'apps/api/mcp_adapter_contract.py'
       - 'apps/api/signed_page_jobs.py'
       - 'apps/worker/signed_page_worker.py'
       - 'scripts/verify_page_worker_postgres_process.py'
       - 'tests/test_hosted_mcp_app.py'
+      - 'tests/test_hosted_mcp_release_gate.py'
       - 'tests/test_supabase_oauth_mcp_verifier.py'
       - 'supabase/migrations/**'
       - '.github/workflows/page-worker-postgres-hosted-mcp.yml'
@@ -28,9 +30,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: MCP stateless OAuth HTTP and negative security acceptance
-        run: uv run --locked pytest -q tests/test_hosted_mcp_app.py tests/test_hosted_mcp_oauth_boundary.py tests/test_supabase_oauth_mcp_verifier.py tests/test_mcp_canonical_dossier.py tests/test_mcp_http_parity.py
+        run: uv run --locked pytest -q tests/test_hosted_mcp_app.py tests/test_hosted_mcp_release_gate.py tests/test_hosted_mcp_oauth_boundary.py tests/test_supabase_oauth_mcp_verifier.py tests/test_mcp_canonical_dossier.py tests/test_mcp_http_parity.py
       - name: Verify HTTP/security lint
-        run: uv run --locked ruff check apps/api/hosted_mcp_app.py apps/api/supabase_oauth_mcp_verifier.py tests/test_hosted_mcp_app.py tests/test_supabase_oauth_mcp_verifier.py
+        run: uv run --locked ruff check apps/api/hosted_mcp_app.py apps/api/supabase_oauth_mcp_verifier.py apps/api/hosted_mcp_release_gate.py tests/test_hosted_mcp_app.py tests/test_hosted_mcp_release_gate.py tests/test_supabase_oauth_mcp_verifier.py
   postgres-real-process:
     runs-on: ubuntu-latest
     timeout-minutes: 45
