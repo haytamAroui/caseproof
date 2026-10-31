@@ -16,10 +16,11 @@ def test_blind_packet_has_all_cases_without_expected_labels_or_author_rationale(
         assert "expected_dimensions" not in case
         assert "review_basis" not in case
         assert "human_review_labels" not in case
+        assert "cohort" not in case
+        assert case["id"].startswith("CASE-")
+        assert all(s["source_id"].startswith("SRC-") for s in case["sources"])
         assert all("text_or_unavailable" in source for source in case["sources"])
-    assert next(c for c in pack["cases"] if c["id"] == "NL_CLEAN_01")["inventory"]["status"] == (
-        "not_defined_in_legacy_v2"
-    )
+    assert sum(c["inventory"]["status"] == "not_defined_in_legacy_v2" for c in pack["cases"]) == 19
 
 
 def test_review_submission_has_no_human_or_owner_approval(tmp_path):
