@@ -256,6 +256,17 @@ merge; prior-head green results do not verify this correction.
 
 The [detailed direction update](PRODUCT_DEFINITION_2026-10-31.md) is a proposed acceptance plan, not delivered software. PR #146 (`bcd52ff`) and #147 (`ff154a1`) were open at review with passing independent CI; integration is not proven. Preserve #146 regional anchors while assessing #147 normalization/coverage/versioning fixes; no merge or supersession is claimed. Local packaging, new exports, qualified signatures and German remain conditional work. No confidential-client authorization or paid validation follows from documentation.
 
+
+## PR #148 read-only MCP contract correction — 31 October 2026
+
+The optional [MCP contract ADR 0021](adr/0021-readonly-mcp-adapter-contract.md)
+reserves representation ADR 0020 and remains a proposal. Two read-only tools share
+headless HTTP discovery/export functions. Host identity stays outside model inputs;
+unknown/write arguments are rejected before access. Content release defaults denied
+until the host separately approves the exact matter/destination for each call.
+Detached listing copies prevent consumers from mutating the dispatch schemas.
+No MCP server, remote-model egress, installer, live acceptance or client-data approval
+is delivered. Local and cloud verification evidence belongs to the current PR head.
 ### #146/#147 combined branch review — 31 October 2026
 
 #146 now includes #147's explicit serialized coverage and rules version while
