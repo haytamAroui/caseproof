@@ -20,6 +20,29 @@ jobs:
           uv run --locked python -m scripts.validate_litigation_corpus
           uv run --locked python -m scripts.audit_m0_trilingual
           uv run --locked pytest -q tests/test_litigation_m0_corpus.py tests/test_m0_trilingual_acceptance.py
+      - name: Build and independently parse rights-cleared M0 real-format fixtures
+        run: |
+          uv run --locked python -m scripts.m0_real_format_fixtures --out /tmp/caseproof-m0-real-formats
+          uv run --locked python -m scripts.m0_real_format_fixtures --out /tmp/caseproof-m0-real-formats --verify-only
+          uv run --locked pytest -q tests/test_m0_real_formats.py
+          uv run --locked python -m scripts.m0_blind_review --out /tmp/caseproof-m0-blind-review
+          uv run --locked pytest -q tests/test_m0_blind_review.py
+      - name: Preserve real-format synthetic evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: caseproof-m0-trilingual-real-formats
+          path: /tmp/caseproof-m0-real-formats/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Preserve blinded M0 reviewer submission packet
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: caseproof-m0-blind-human-review-packet
+          path: /tmp/caseproof-m0-blind-review/
+          if-no-files-found: warn
+          retention-days: 30
       - name: Run unit tests
         run: uv run --locked pytest -q
       - name: Ruff check
