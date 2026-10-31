@@ -122,3 +122,48 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
                 target.writestr(item, document.toxml(encoding='utf-8')
                                 if item.filename == 'word/document.xml' else source.read(item))
     return output.getvalue()
+
+
+def corrected_docx_preview(original: bytes, *, expected_sha256: str,
+                           paragraph_index: int, before: str, after: str) -> bytes:
+    """Bounded single-run correction; preserve all other ZIP member bytes.
+
+    Complex paragraphs abstain instead of flattening fields, tracked changes,
+    hyperlinks, bookmarks or multiple formatted runs. This creates a derivative,
+    never a new accepted source version or a persisted reviewer decision.
+    """
+    from hashlib import sha256
+
+    if (sha256(original).hexdigest() != expected_sha256
+            or type(paragraph_index) is not int or paragraph_index < 0
+            or not before or before == after or len(after) > 4000
+            or any(ord(c) < 32 and c not in '\t\n\r' for c in after)):
+        raise ValueError('stale or invalid correction')
+    _validate_derivative_package(original)
+    with ZipFile(io.BytesIO(original)) as archive:
+        root = SafeXML.fromstring(archive.read('word/document.xml'), forbid_dtd=True,
+                                  forbid_entities=True, forbid_external=True)
+        body = root.find(f'{{{NS}}}body')
+        paragraphs = [] if body is None else body.findall(f'{{{NS}}}p')
+        if paragraph_index >= len(paragraphs):
+            raise ValueError('paragraph unavailable')
+        paragraph = paragraphs[paragraph_index]
+        runs = paragraph.findall(f'{{{NS}}}r')
+        if (len(runs) != 1 or any(child.tag not in {f'{{{NS}}}pPr', f'{{{NS}}}r'}
+                                  for child in paragraph)):
+            raise ValueError('complex paragraph requires manual correction')
+        texts = runs[0].findall(f'{{{NS}}}t')
+        if (len(texts) != 1 or any(child.tag not in {f'{{{NS}}}rPr', f'{{{NS}}}t'}
+                                   for child in runs[0])):
+            raise ValueError('complex run requires manual correction')
+        text = texts[0].text or ''
+        if text.count(before) != 1:
+            raise ValueError('ambiguous or stale correction range')
+        texts[0].text = text.replace(before, after, 1)
+        texts[0].set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        output = io.BytesIO()
+        with ZipFile(output, 'w', compression=ZIP_DEFLATED) as target:
+            for entry in archive.infolist():
+                target.writestr(entry, ET.tostring(root, encoding='utf-8', xml_declaration=True)
+                                if entry.filename == 'word/document.xml' else archive.read(entry))
+    return output.getvalue()

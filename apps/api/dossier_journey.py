@@ -29,7 +29,7 @@ from domains.disputes.exhibit_identity import InventoryStatus
 from domains.disputes.reference_detection import detect_exhibit_references
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
-from infrastructure.parsers.dossier_docx_export import annotated_docx
+from infrastructure.parsers.dossier_docx_export import annotated_docx, corrected_docx_preview
 from infrastructure.parsers.pdf_ocr import OCRUnavailable
 from infrastructure.parsers.pdf_visual_fidelity import PDFVisualFidelity
 
@@ -68,6 +68,16 @@ class VerificationOptions(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     draft_language: Literal['nl', 'fr', 'en', 'de'] | None = None
     source_languages: dict[str, Literal['nl', 'fr', 'en', 'de']] = Field(default_factory=dict, max_length=32)
+
+
+class CorrectionPreviewBody(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    snapshot_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+    original_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    reference_id: str = Field(min_length=1, max_length=256)
+    paragraph_index: int = Field(ge=0, le=100000)
+    before: str = Field(min_length=1, max_length=4000)
+    after: str = Field(max_length=4000)
 
 
 class CropBatchBody(BaseModel):
@@ -329,6 +339,27 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
                              authorization: str | None = Header(default=None)) -> dict[str, Any]:
         s, bearer = active(authorization)
         return s.load(bearer, case_id, brief_id, language_context=body.model_dump())[0]
+
+    @router.post(base + '/corrections/preview')
+    def correction_preview(case_id: str, brief_id: str, body: CorrectionPreviewBody,
+                           authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        report, original = s.load(bearer, case_id, brief_id)
+        if report['snapshot_hash'] != body.snapshot_hash:
+            raise HTTPException(409, 'stale dossier correction')
+        if not any(f['reference_id'] == body.reference_id for f in report['findings']):
+            raise HTTPException(422, 'unknown correction reference')
+        try:
+            derivative = corrected_docx_preview(original, expected_sha256=body.original_sha256,
+                paragraph_index=body.paragraph_index, before=body.before, after=body.after)
+        except ValueError:
+            raise HTTPException(422, 'unsupported or stale correction range') from None
+        return {'schema': 'caseproof-docx-correction-preview-v1', 'committed': False,
+                'requires_new_draft_version': True, 'requires_recheck': True,
+                'invalidates_snapshot_hash': body.snapshot_hash,
+                'original_sha256': body.original_sha256,
+                'derivative_sha256': hashlib.sha256(derivative).hexdigest(),
+                'content_base64': base64.b64encode(derivative).decode('ascii')}
 
     @router.post(base + '/confirmation')
     def confirm(case_id: str, brief_id: str, body: InventoryConfirmation,
