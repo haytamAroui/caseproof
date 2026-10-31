@@ -92,4 +92,4 @@ class SupabaseOAuthBearerVerifier:
         return VerifiedOAuthClaims(
             subject=subject, issuer=issuer, audiences=(self.resource,),
             scopes=frozenset({READ_PERMISSION}), expires_at=expires,
-            issued_at=issued, bearer=token)
+            issued_at=issued, bearer=token, client_id=claims["client_id"])
