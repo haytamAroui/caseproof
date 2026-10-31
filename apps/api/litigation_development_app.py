@@ -42,6 +42,7 @@ def create_litigation_development_app(
     trusted_ingest_key: str | None = None,
     ocr: LocalPDFOCR | None = None,
     headless: HeadlessMatterStore | None = None,
+    page_worker_secret: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="CaseProof loopback development", docs_url=None, redoc_url=None, openapi_url=None)
     # One shared checker ensures search and check use the same trust boundary.
@@ -60,7 +61,11 @@ def create_litigation_development_app(
     ):
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
-    app.include_router(create_dossier_router(DossierStore(publishable_key, trusted_ingest_key) if publishable_key else None))
+    dossier_store = DossierStore(publishable_key, trusted_ingest_key) if publishable_key else None
+    app.include_router(create_dossier_router(dossier_store))
+    if dossier_store is not None and page_worker_secret is not None:
+        from apps.api.signed_page_jobs import SignedPageJobs, create_page_job_router
+        app.include_router(create_page_job_router(SignedPageJobs(dossier_store, page_worker_secret)))
     app.include_router(create_headless_review_router(headless))
     app.include_router(create_live_review_router(publishable_key))
     app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key, ocr=ocr))
