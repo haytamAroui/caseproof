@@ -14,6 +14,7 @@ from infrastructure.parsers.docx_region_inventory import (
     MAX_TOTAL_UNCOMPRESSED,
     WORD_NS,
     inventory_docx_regions,
+    word_on_off_enabled,
 )
 
 _BLOCKED = {WORD_NS + tag for tag in ("txbxContent", "drawing", "pict", "object", "altChunk", "fldSimple", "instrText")}
@@ -78,7 +79,7 @@ def extract_docx_text_regions(payload: bytes) -> DocxTextExtraction:
                     while children:
                         child = children.pop()
                         if child.tag in _BLOCKED or (child.tag == WORD_NS + "r" and
-                                child.find("./" + WORD_NS + "rPr/" + WORD_NS + "vanish") is not None):
+                                word_on_off_enabled(child.find("./" + WORD_NS + "rPr/" + WORD_NS + "vanish"))):
                             continue
                         if child.tag == WORD_NS + "t":
                             fragments.append(child.text or "")

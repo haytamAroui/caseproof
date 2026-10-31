@@ -141,3 +141,16 @@ def test_actual_prose_translation_preserves_original_context_in_http_and_export(
     assert f['support'] == 'not_assessed' and not f['visual_assessment']['regions']
     assert f['source_page'] == {'version_id':'source','pdf_page':1}
     assert c.get(base+'/sources/source/pages/1', headers=headers).status_code == 200
+
+
+@pytest.mark.parametrize('value,hidden', [('0',False),('false',False),('off',False),
+                                        ('1',True),('true',True),('on',True),(None,True)])
+def test_explicit_false_hidden_property_keeps_visible_citation_and_ledger(value,hidden):
+    attribute = '' if value is None else f' w:val="{value}"'
+    raw = _docx(body=f'<w:document xmlns:w="{NS}"><w:body><w:p><w:r><w:rPr><w:vanish{attribute}/></w:rPr>'
+                    '<w:t>Stuk 1, PDF p. 1.</w:t></w:r></w:p></w:body></w:document>')
+    discovery = discover_docx_references(raw)
+    assert [r.number for r in discovery.references] == ([] if hidden else ['1'])
+    exclusions = [r for r in discovery.region_manifest['regions'] if r['kind']=='HIDDEN_TEXT_EXCLUDED']
+    assert bool(exclusions) == hidden
+    assert discovery.text_coverage_complete is not hidden
