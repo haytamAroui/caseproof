@@ -363,3 +363,11 @@ shared staging because the proposed schema has not been independently reviewed
 and installed. No migration was applied and no client data was processed. Formal
 M1/M2 acceptance, representative accuracy and independent security/legal approval
 remain open. See `docs/m1/DRAFT_REVISION_PERSISTENCE_DESIGN.md` and PR #159.
+
+### Development installation update
+
+At the owner's explicit request, connected Supabase MCP applied the exact draft
+revision SQL as `20261031234906` to `caseproof-dev`. Post-install grants, RLS and
+search_path were inspected; no revision data was created. This supersedes the
+uninstalled-schema status above. See `docs/m1/LIVE_DRAFT_REVISION_INSTALLATION.md`.
+Genuine signed correction/recheck acceptance remains pending.

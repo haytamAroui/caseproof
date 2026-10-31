@@ -13,7 +13,10 @@ from scripts.verify_s2_002_database import ROOT, _env, _run
 def main():
     install()
     env = _env()
-    _run((ROOT / 'db/proposals/M1_M2_dossier_draft_revisions.sql').read_text(), env)
+    proposal = ROOT / 'db/proposals/M1_M2_dossier_draft_revisions.sql'
+    migration = ROOT / 'supabase/migrations/20261031234906_dossier_draft_revisions.sql'
+    if proposal.read_bytes() != migration.read_bytes():
+        raise RuntimeError('Deployed draft revision SQL differs from proposal')
     actor, other, org, case = [str(uuid4()) for _ in range(4)]
     docs, versions = [[str(uuid4()) for _ in range(4)] for _ in range(2)]
     _run(f"""
