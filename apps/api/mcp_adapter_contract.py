@@ -58,8 +58,8 @@ _ID_PROPERTY = {"type": "string", "pattern": _ID_PATTERN}
 TOOLS: tuple[McpTool, ...] = (
     McpTool(
         "caseproof_discover_references",
-        "List the exhibit references found in one brief, with identity, page-mapping, "
-        "fidelity and support states. Unassessed dimensions stay not_assessed.",
+        "LEGACY DISCOVERY ONLY (headless-v1), not the canonical dossier verification report. "
+        "Do not treat inventory absence, fidelity, translation, or page mapping as verified.",
         {"case_id": _ID_PROPERTY, "brief_id": _ID_PROPERTY},
         ("case_id", "brief_id"),
     ),
@@ -121,9 +121,9 @@ def call_tool(*, store: HeadlessMatterStore | None, bearer: str,
     try:
         if tool.name == "caseproof_discover_references":
             snapshot = load_snapshot(store, bearer, args["case_id"], args["brief_id"])
-            return {"isError": False, "structuredContent": snapshot}
+            return {"isError": False, "structuredContent": {**snapshot, "verification_contract": "legacy_headless_discovery_only", "canonical_verification": False}}
         media_type, body = export_report(
             store, bearer, args["case_id"], args["brief_id"], args.get("format", "json"))
     except AccessRejected:
         return {"isError": True, "error": "access_rejected"}
-    return {"isError": False, "mediaType": media_type, "content": body}
+    return {"isError": False, "mediaType": media_type, "content": body, "verification_contract": "legacy_headless_discovery_only", "canonical_verification": False}
