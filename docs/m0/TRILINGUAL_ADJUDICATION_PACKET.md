@@ -1,6 +1,6 @@
 # M0 NL/FR/EN/mixed — independent adjudication packet
 
-**Candidate corpus:** [v3](../../evals/litigation/m0_corpus_v3.json) (37 fictional cases; 19 legacy v2 unchanged, 18 four-dimension extensions). **Review status: NOT STARTED / NOT SIGNED OFF.** No reviewer, lawyer, organization or adjudicator is claimed by this document. This packet prepares a human review; synthetic author labels are **not independently verified**.
+**Candidate corpus:** [v3](../../evals/litigation/m0_corpus_v3.json) (37 fictional cases; 19 legacy v2 unchanged, 18 four-dimension extensions). **Review status: NOT STARTED / NOT SIGNED OFF.** A [blind 37-case packet](../../scripts/m0_blind_review.py) now generates reviewer materials and blank submissions without author labels; [actual generated files](REAL_FORMAT_EVIDENCE.md) support physical format inspection. No reviewer, lawyer, organization or adjudicator is claimed by this document. This packet prepares a human review; synthetic author labels are **not independently verified**.
 
 ## Qualified review required for formal M0 exit
 
@@ -8,7 +8,7 @@
 2. Obtain two **independent** label judgments (not supplied to them as the authoritative answer) for NL, FR, EN and mixed-language examples. Reviewers must have the language competence required by [benchmark protocol](BENCHMARK_PROTOCOL.md); at least one qualified Belgian practitioner adjudicates legal/procedural interpretation when implicated.
 3. Each person evaluates identity in a **human-confirmed complete/incomplete/unconfirmed** inventory; separately evaluates PDF page, printed label and compiled bundle page; quotation/translation/OCR reliability; and whether semantic support was **assessed by a human** (never automatically affirmed).
 4. Record independent decisions, source/quote observations, uncertainties, dissent, evidence and qualifications. Resolve differences with an independent third adjudicator. Preserve the initial labels even when later changed.
-5. Inspect at least one actual **rights-cleared DOCX**, **text PDF** and **image-only PDF** in each product language before making real-format/OCR claims. The current 37 cases have inline text and simulated scan metadata; they cannot close this requirement.
+5. Inspect at least one actual **rights-cleared DOCX**, **text PDF** and **image-only PDF** in each product language before making real-format/OCR claims. The original 37 author-supplied gold cases still describe inline text and simulated scan metadata; a separate generated **real-format synthetic file pack** now supplies NL/FR/EN DOCX, text PDF and scanned-image PDF samples. **Independent visual/legal judgment and any externally sourced real-document benchmark remain open**; runnable fixture generation alone is not approval.
 6. Owner accepts or rejects M0 with a dated decision only after review receipts and CI. Do not merge a declaration of M0 completion based on mechanical-only passing checks.
 
 ## Proposed first-pass author labels (not independently adjudicated)
@@ -35,6 +35,10 @@
 | `EN_SCAN_37` | EN | resolved / mapped / ocr_unreliable | Unavailable synthetic scan representation must abstain. | Pending |
 
 The first 19 cases remain in [v2](../../evals/litigation/m0_corpus_v2.json) with author-supplied legacy literal outcomes only. They **also require independent review**: do not treat their absence from the extended-dimension table as implicit approval.
+
+## Reviewer workflow (generated but unfilled)
+
+Run `python -m scripts.m0_blind_review --out /tmp/caseproof-m0-blind-review`, then deliver each reviewer `blind_cases.json`, a fresh separate `empty_review_submission.json` and the generated real-format archive. Never provide candidate `expected_dimensions` before initial judgment. Resolve differences through a third adjudicator, and preserve original decisions and reviewer qualification evidence. This tool is not an identity or signature verifier.
 
 ## Reviewer record — deliberately blank
 
