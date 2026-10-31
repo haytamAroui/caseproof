@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from apps.api.access_control import AccessRejected
-from apps.api.dossier_journey import DossierStore
+from apps.api.dossier_journey import DossierStore, render_dossier_export
 
 _ID_PATTERN = r"^[A-Za-z0-9_.-]{1,100}$"
 _ID_RE = re.compile(_ID_PATTERN)
@@ -125,19 +125,10 @@ def call_tool(*, store: DossierStore | None, bearer: str,
         if not isinstance(decisions.get("decisions"), list):
             return {"isError": True, "error": "canonical_report_unavailable"}
         exported = {**report, "human_decisions": decisions["decisions"]}
-        if args.get("format", "json") == "json":
-            import json
-            return {"isError": False, "mediaType": "application/json",
-                    "content": json.dumps(exported, sort_keys=True, ensure_ascii=False),
-                    "canonical_verification": True}
-        from apps.api.dossier_journey import canonical
-        lines = ["# CaseProof scoped dossier report", "",
-                 "Verification contract", canonical(exported.get("verification_contract", {})), "",
-                 "Coverage", canonical(exported.get("coverage", {})), "",
-                 "Findings", canonical(exported.get("findings", [])), "",
-                 "Human decisions", canonical(exported["human_decisions"])]
-        return {"isError": False, "mediaType": "text/markdown",
-                "content": "\\n".join(lines) + "\\n",
+        fmt = args.get("format", "json")
+        return {"isError": False,
+                "mediaType": "application/json" if fmt == "json" else "text/markdown",
+                "content": render_dossier_export(exported, fmt),
                 "canonical_verification": True}
     except AccessRejected:
         return {"isError": True, "error": "access_rejected"}
