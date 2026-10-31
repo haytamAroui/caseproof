@@ -36,6 +36,8 @@ jobs:
       - run: uv run --locked python -m scripts.verify_dossier_disposable
       - name: Test deterministic dossier, original preservation and annotations
         run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_dossier_journey.py
+      - name: ASVS file-boundary and canonical MCP contract regression
+        run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_asvs_file_boundaries.py tests/test_mcp_adapter_contract.py tests/test_mcp_canonical_dossier.py
       - name: Type and lint changed dossier code
         run: |
           uv run --locked ruff check .
