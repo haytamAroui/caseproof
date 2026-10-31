@@ -1,0 +1,33 @@
+# M1/M2 acceptance increment — 31 October 2026
+
+**State:** engineering PR acceptance in progress; **M1 and M2 are NOT formally complete**. The sole source of release truth is [ROADMAP.md](../ROADMAP.md) and its signed acceptance gates.
+
+## Defects resolved by the increment
+
+| Boundary | Before | New invariant / proof |
+|---|---|---|
+| M1 immutable multi-file upload | On a third-file hash mismatch, first and second originals could already have been written | Preflight the **complete** manifest's registered case, version, original SHA, organization, payload type/size and actual SHA **before first network write**. Negative tests assert zero writes for tampered last original, wrong type and cross-org metadata |
+| M1 lost upload acknowledgement | A network-unknown write/409 could leave a partially stored dossier that could not retry safely | On `PrivateStorageOutcomeUnknown` or `PrivateStorageExists`, require **fresh signed `get_verified`** of the exact registered SHA. A 409 or timeout alone is never success, no upsert/overwrite, revoked and corrupted readback fail closed. Retries are recoverable, but Storage batch writes remain non-atomic across network failure |
+| M2 legacy DOCX discovery | An empty/unconfirmed candidate inventory could be shown as `not_in_inventory`; a crop pointer could be labeled a verified PDF page | No signed confirmation exists in this adapter: identity is `not_assessed` with reason (or `ambiguous` for duplicate candidates), page is `page_unmapped`, crop page is a separately named **candidate**. This legacy route is marked noncanonical; canonical signed dossier remains authoritative |
+| M1/M2 actual source bytes | Contract-only tests did not exercise the new M0 trilingual file corpus in the integrated CI | Exercise bounded Linux DOCX/PDF parsers on real synthetic NL/FR/EN DOCX and searchable/scanned PDFs. Assert source SHA, PDF physical page and no invented DOCX page, and scan partial/needs-OCR. Explicitly retain partial DOCX-story and recognition recall coverage |
+
+## Executed test paths
+
+- `tests/test_signed_multisource_journey.py` (preflight, retry, revocation, corruption).
+- `tests/test_m1_m2_fail_closed_acceptance.py` (missing/unconfirmed inventory, duplicates, candidate crop).
+- `tests/test_m1_m2_real_format_intake.py` (real-format source parsing, M0 synthetic corpus).
+- `tests/test_phase4_headless_api.py` (authorized route/review/export contract).
+- The existing **M1+M2 integrated disposable PostgreSQL** CI then runs real RLS, signed-boundary **synthetic** identities, review/correction/recheck and source custody; see [.github/workflows/m1-m2-integrated-disposable-ci.yml](../../.github/workflows/m1-m2-integrated-disposable-ci.yml).
+- The repository's architecture CI includes full Python test, Ruff, mypy and original boundary suite. Passing the PR head means **engineering evidence only**.
+
+## What remains OPEN for milestone acceptance
+
+| Gate | Still needed |
+|---|---|
+| M1 full signed staging | Genuine least-privilege hosted Auth session, approved installed RLS, private Storage and durable worker, 4-file DOCX+inventory+PDF+image-only scan with physically reopened crops and fresh revoke denial at each step |
+| M1 custody and OCR policy | Customer-approved worker/region and egress, retention, backup/restore, malware/DOCX ZIP/PDF limits, external independent security and bar/professional-secrecy review |
+| M2 whole-draft coverage | Representative NL/FR/EN mixed real-format population, pinned detection denominators, unsupported DOCX story portions, explicit inventory confirmation and page-space correctness; no statement that “every reference” is caught |
+| M2 canonical signed lifecycle | Complete source/inventory/brief snapshot → check → review → correction → recheck → cold restart and revocation against approved staging, typed date/amount/translation abstention metrics, exact browser-bound source/crops and independent review |
+| Release authorization | Named owners for P3-01..04, current-head live acceptance receipt, security/ethics/privacy decisions and signed M1/M2 milestone exit; absent here |
+
+**Do not close M1 or M2 from this PR alone.** A signed-user synthetic test, disposable database or candidate crop is not a production-approved Belgian litigation dossier. M3 may consume the merged candidate contracts, but the separate pilot and live development gates remain.
