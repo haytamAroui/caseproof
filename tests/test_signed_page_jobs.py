@@ -63,3 +63,28 @@ def test_signed_client_cannot_forge_worker_receipt():
 def test_service_key_is_not_accepted_as_worker_receipt_secret():
     with pytest.raises(ValueError):
         SignedPageJobs(SimpleNamespace(), 'sb_secret_' + 'a' * 64)
+
+
+@pytest.mark.parametrize('mutation', [
+    lambda artifact: artifact.update(state='verified'),
+    lambda artifact: artifact.update(needs_ocr=False),
+])
+def test_receipt_rejects_invalid_processing_state_even_when_sealed(mutation):
+    store = Store()
+    store.artifact.pop('server_receipt')
+    mutation(store.artifact)
+    store.artifact['server_receipt'] = store.seal(store.artifact)
+    with pytest.raises(AccessRejected):
+        store.read_page('signed-fixture', 'case', 'job', 'version:1')
+
+
+def test_receipt_rejects_non_object_json_payload():
+    store = Store()
+    def malformed_call(bearer, case, request, action, data=None):
+        if action == 'status':
+            return copy.deepcopy(STATUS)
+        serialized = '[]'
+        return {'serialized': serialized, 'artifact_hash': hashlib.sha256(serialized.encode()).hexdigest()}
+    store.call = malformed_call
+    with pytest.raises(AccessRejected):
+        store.read_page('signed-fixture', 'case', 'job', 'version:1')
