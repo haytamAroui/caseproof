@@ -23,7 +23,7 @@ from apps.api.hosted_mcp_oauth_boundary import (
     VerifiedOAuthClaims,
     authorize_verified_claims,
 )
-from apps.api.mcp_adapter_contract import McpContractError, call_canonical_tool, list_tools
+from apps.api.mcp_adapter_contract import McpContractError, call_canonical_tool, list_tools, validate_tool_call
 from apps.api.dossier_journey import DossierStore
 from apps.api.access_control import AccessRejected, IdentityServiceUnavailable, InvalidBearer
 
@@ -82,7 +82,6 @@ def create_hosted_mcp_app(
     """
     app = FastAPI(title="CaseProof read-only MCP", docs_url=None, redoc_url=None,
                   openapi_url=None)
-    resource_metadata = settings.resource.rstrip("/") + "/.well-known/oauth-protected-resource"
     # The discovery URL must be rooted at the same externally pinned origin.
     url = urlsplit(settings.resource)
     resource_metadata = f"{url.scheme}://{url.netloc}/.well-known/oauth-protected-resource"
@@ -183,15 +182,11 @@ def create_hosted_mcp_app(
             # No client-supplied identity, release, consent, OAuth scope or destination.
             if set(params) - {"name", "arguments", "_meta"}:
                 return fault(-32602, "Unknown tool parameters", ident)
-            args = params.get("arguments")
-            if type(args) is not dict:
-                return fault(-32602, "Invalid tool arguments", ident)
             try:
+                args = validate_tool_call(params["name"], params.get("arguments"))
                 case = args["case_id"]
                 brief = args["brief_id"]
                 snapshot = args["snapshot_hash"]
-                if not all(type(x) is str for x in (case, brief, snapshot)):
-                    raise McpContractError("Bad identifiers")
                 # The gate must perform an up-to-date revocation/approval check;
                 # no blanket server-wide True option or stale long-lived grant.
                 release = releases.resolve(subject=claims.subject, bearer=bearer,
