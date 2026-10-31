@@ -31,7 +31,9 @@ def test_document_prompt_injection_cannot_override_deterministic_states():
     report = discover(_hostile_docx(), [])
     assert len(report["findings"]) == 1
     finding = report["findings"][0]
-    assert finding["identity"] == "not_in_inventory"
+    # An empty candidate list is NOT a reviewer-confirmed complete inventory.
+    assert finding["identity"] == "not_assessed"
+    assert finding["identity_reason"] == "INVENTORY_SCOPE_UNCONFIRMED"
     assert finding["page_mapping"] == "page_unmapped"
     assert finding["fidelity"] == "not_assessed"
     assert finding["support"] == "not_assessed"

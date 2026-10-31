@@ -55,18 +55,30 @@ def discover(payload: bytes, manifest: list[dict[str, Any]]) -> dict[str, Any]:
         matches = [x for x in manifest if str(x.get("number", "")) == ref.number
                    and x.get("label", "").casefold().startswith("stuk" if ref.label.startswith("stuk") else "pi")]
         source = matches[0] if len(matches) == 1 else None
-        identity = ("resolved" if source and source.get("source_id") and source.get("version_id")
-                    else "source_missing" if source else "not_in_inventory")
-        # DOCX reference offsets are not a verified PDF or printed-page mapping.
+        # This legacy adapter receives candidate items, not signed confirmation
+        # that the inventory is complete. Empty entries CANNOT establish
+        # NOT_IN_INVENTORY; a matching row CANNOT establish RESOLVED.
+        identity = "ambiguous" if len(matches) > 1 else "not_assessed"
+        reason = ("DUPLICATE_CANDIDATE_LABEL" if len(matches) > 1
+                  else "INVENTORY_UNCONFIRMED" if source
+                  else "INVENTORY_SCOPE_UNCONFIRMED")
+        # OCR crop is a candidate visual locator, not proof of page mapping.
         findings.append({
             "reference_id": f"ref-{index:04d}", "literal": ref.raw,
             "number": ref.number, "region": ref.region,
             "offsets": {"start": ref.start, "end": ref.end},
-            "identity": identity, "source_id": source.get("source_id") if source else None,
+            "identity": identity, "identity_reason": reason,
+            "inventory_status": "unconfirmed",
+            "candidate_source_match": bool(source),
+            "source_id": source.get("source_id") if source else None,
             "version_id": source.get("version_id") if source else None,
             "source_sha256": source.get("source_sha256") if source else None,
-            "page_mapping": "pdf_page_verified" if source and source.get("ocr_crop") else "page_unmapped",
-            "pdf_page": source["ocr_crop"]["page_number"] if source and source.get("ocr_crop") else None,
+            "page_mapping": "page_unmapped",
+            "pdf_page": None,
+            "candidate_crop_pdf_page": (
+                source["ocr_crop"].get("page_number")
+                if source and isinstance(source.get("ocr_crop"), dict) else None
+            ),
             "printed_page": None, "bundle_page": None,
             "fidelity": "not_assessed", "support": "not_assessed",
             "ocr_crop": source.get("ocr_crop") if source else None,
@@ -77,6 +89,8 @@ def discover(payload: bytes, manifest: list[dict[str, Any]]) -> dict[str, Any]:
         "schema": "caseproof-headless-discovery-v1",
         "canonical_verification": False,
         "legacy_discovery": True,
+        "inventory_completeness_confirmed": False,
+        "strong_identity_assessment_available": False,
         "text_coverage_complete": result.text_coverage_complete,
         "recognition_coverage_complete": result.coverage_complete,
         "unscanned_parts": list(result.unscanned_parts),
