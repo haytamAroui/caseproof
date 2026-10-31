@@ -125,7 +125,8 @@ def main() -> None:
         from apps.api.dossier_journey import canonical
         forged=json.loads(json.dumps(report))
         forged.pop('snapshot_hash',None)
-        forged['sources']=[]
+        # Keep the authentic source set: this specifically tests receipt
+        # authentication, not only rejection of omitted source metadata.
         forged['findings'][0]['fidelity']='invented_match'
         serialized=canonical(forged)
         fake_hash=hashlib.sha256(serialized.encode()).hexdigest()

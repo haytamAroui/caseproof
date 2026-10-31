@@ -113,7 +113,7 @@ def test_actual_document_dossier_crop_review_restart_export_and_denials(tmp_path
     # A signed reader may write a custom JSON snapshot through the legacy RPC,
     # but cannot authenticate its provenance for these new read/export routes.
     forged = json.loads((tmp_path/(sha+'.json')).read_text())
-    forged['sources'] = []
+    # Source identities remain valid; only the authenticated finding changes.
     forged['findings'][0]['fidelity'] = 'invented_match'
     from apps.api.dossier_journey import canonical
     payload = canonical(forged)
