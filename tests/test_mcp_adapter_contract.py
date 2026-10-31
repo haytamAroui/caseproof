@@ -5,15 +5,8 @@ from functools import lru_cache
 
 import pytest
 from docx import Document
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from apps.api.access_control import AccessFailure, AccessRejected
-from apps.api.litigation_headless_verification import (
-    create_headless_review_router,
-    export_report,
-    load_snapshot,
-)
 from apps.api.mcp_adapter_contract import McpContractError, call_tool, list_tools
 
 
@@ -36,6 +29,14 @@ class FakeStore:
         if self.deny:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
 
+    def reopen(self, bearer, case_id, brief_id, snapshot):
+        self._gate(bearer)
+        return ({"schema": "caseproof-dossier-v1", "snapshot_hash": "a" * 64, "findings": []}, b"")
+
+    def rpc(self, bearer, case_id, action, data):
+        self._gate(bearer)
+        return {"decisions": []}
+
     def original_docx(self, *, bearer, case_id, brief_id):
         self._gate(bearer)
         return _docx()
@@ -53,7 +54,7 @@ class FakeStore:
                  "rationale": "checked"}]
 
 
-ARGS = {"case_id": "case-a", "brief_id": "brief-1"}
+ARGS = {"snapshot_hash": "a" * 64, "case_id": "case-a", "brief_id": "brief-1"}
 
 
 def test_only_two_read_only_tools_without_identity_or_write_surface():
@@ -72,7 +73,7 @@ def test_only_two_read_only_tools_without_identity_or_write_surface():
 def test_identity_or_write_arguments_are_rejected_before_any_access(extra):
     store = FakeStore()
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=store, bearer="host-token",
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=store, bearer="host-token",
                   name="caseproof_discover_references", arguments={**ARGS, extra: "x"})
     assert store.bearers == []
 
@@ -81,7 +82,7 @@ def test_identity_or_write_arguments_are_rejected_before_any_access(extra):
     "caseproof_record_review_decision", "record", "", "caseproof_delete_matter"])
 def test_unknown_or_write_tool_names_are_rejected(name):
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=FakeStore(), bearer="host-token", name=name, arguments=ARGS)
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(), bearer="host-token", name=name, arguments=ARGS)
 
 
 @pytest.mark.parametrize("arguments", [
@@ -90,56 +91,55 @@ def test_unknown_or_write_tool_names_are_rejected(name):
 ])
 def test_malformed_arguments_are_rejected(arguments):
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=FakeStore(), bearer="host-token",
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(), bearer="host-token",
                   name="caseproof_discover_references", arguments=arguments)
 
 
 def test_blank_host_bearer_is_rejected():
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=FakeStore(), bearer="  ",
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(), bearer="  ",
                   name="caseproof_discover_references", arguments=ARGS)
 
 
-def test_discovery_matches_the_shared_snapshot_and_uses_the_host_bearer():
-    store = FakeStore()
-    result = call_tool(allow_document_content=True, store=store, bearer="host-token",
+def test_discovery_uses_canonical_signed_dossier():
+    from unittest.mock import Mock
+    store = Mock()
+    report = {"schema": "caseproof-dossier-v1", "snapshot_hash": "a" * 64,
+              "findings": [{"identity": "not_assessed", "page_mapping": "page_unmapped"}]}
+    store.reopen.return_value = (report, b"")
+    result = call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=store, bearer="host-token",
                        name="caseproof_discover_references", arguments=ARGS)
-    assert result["isError"] is False
-    assert result["structuredContent"] == load_snapshot(
-        FakeStore(), "host-token", "case-a", "brief-1")
-    assert set(store.bearers) == {"host-token"}
-    assert result["structuredContent"]["schema"] == "caseproof-headless-discovery-v1"
+    assert result["structuredContent"] == report
+    assert result["canonical_verification"] is True
+    store.reopen.assert_called_once_with("host-token", "case-a", "brief-1", "a" * 64)
 
 
-def test_export_json_and_markdown_match_the_shared_report():
-    for fmt in ("json", "markdown"):
-        result = call_tool(allow_document_content=True, store=FakeStore(), bearer="host-token",
-                           name="caseproof_export_report",
-                           arguments={**ARGS, "format": fmt})
-        media_type, body = export_report(FakeStore(), "host-token", "case-a", "brief-1", fmt)
-        assert result == {"isError": False, "mediaType": media_type, "content": body}
-    report = json.loads(call_tool(allow_document_content=True, store=FakeStore(), bearer="host-token",
-                                  name="caseproof_export_report", arguments=ARGS)["content"])
-    assert report["filing_status"] == "not_assessed"
-    assert report["professional_certificate"] is False
-    assert report["human_decisions"][0]["decision"] == "CONFIRMED_QUALIFIED"
+def test_export_json_uses_canonical_report_and_decisions():
+    from unittest.mock import Mock
+    store = Mock()
+    report = {"schema": "caseproof-dossier-v1", "snapshot_hash": "a" * 64, "findings": []}
+    store.reopen.return_value = (report, b"")
+    store.rpc.return_value = {"decisions": []}
+    result = call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=store, bearer="host-token",
+                       name="caseproof_export_report", arguments=ARGS)
+    assert json.loads(result["content"]) == {**report, "human_decisions": []}
 
 
 def test_invalid_format_is_rejected():
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=FakeStore(), bearer="host-token",
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(), bearer="host-token",
                   name="caseproof_export_report", arguments={**ARGS, "format": "docx"})
 
 
 def test_access_failure_returns_an_opaque_error_without_details():
     for name in ("caseproof_discover_references", "caseproof_export_report"):
-        result = call_tool(allow_document_content=True, store=FakeStore(deny=True), bearer="host-token",
+        result = call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(deny=True), bearer="host-token",
                            name=name, arguments=ARGS)
         assert result == {"isError": True, "error": "access_rejected"}
 
 
 def test_missing_store_fails_closed():
-    result = call_tool(allow_document_content=True, store=None, bearer="host-token",
+    result = call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=None, bearer="host-token",
                        name="caseproof_discover_references", arguments=ARGS)
     assert result == {"isError": True, "error": "access_rejected"}
 
@@ -175,24 +175,35 @@ def test_tool_listing_cannot_mutate_closed_dispatch_contract():
     assert fresh["case_id"]["pattern"] != ".*"
     with pytest.raises(McpContractError):
         call_tool(store=FakeStore(), bearer="host-token", name="caseproof_discover_references",
-                  arguments={**ARGS, "bearer": "model-token"}, allow_document_content=True)
+                  arguments={**ARGS, "bearer": "model-token"}, allow_document_content=True, release=release(), destination="synthetic-test-host")
 
 
-def test_actual_http_discovery_and_export_match_mcp_content():
-    app = FastAPI()
-    app.include_router(create_headless_review_router(FakeStore()))
-    client = TestClient(app)
-    headers = {"Authorization": "Bearer host-token"}
-    base = "/v2/matters/case-a/briefs/brief-1/verification"
-    discovery = client.get(base + "/discovery", headers=headers)
-    assert discovery.status_code == 200
-    mcp = call_tool(store=FakeStore(), bearer="host-token", name="caseproof_discover_references",
-                    arguments=ARGS, allow_document_content=True)
-    assert discovery.json() == mcp["structuredContent"]
-    for fmt in ("json", "markdown"):
-        response = client.get(base + "/export", params={"format": fmt}, headers=headers)
-        assert response.status_code == 200
-        mcp = call_tool(store=FakeStore(), bearer="host-token", name="caseproof_export_report",
-                        arguments={**ARGS, "format": fmt}, allow_document_content=True)
-        assert response.text == mcp["content"]
-        assert response.headers["content-type"].startswith(mcp["mediaType"])
+def test_signed_store_parity_for_discovery_and_export():
+    store = FakeStore()
+    expected, _ = store.reopen("host-token", "case-a", "brief-1", "a" * 64)
+    discovery = call_tool(store=store, bearer="host-token",
+                          name="caseproof_discover_references", arguments=ARGS,
+                          allow_document_content=True, release=release(), destination="synthetic-test-host")
+    assert discovery["structuredContent"] == expected
+    exported = call_tool(store=store, bearer="host-token",
+                         name="caseproof_export_report", arguments=ARGS,
+                         allow_document_content=True, release=release(), destination="synthetic-test-host")
+    assert json.loads(exported["content"])["findings"] == expected["findings"]
+
+
+def test_legacy_mcp_tools_are_not_advertised_as_canonical():
+    tools = list_tools()
+    discovery = next(tool for tool in tools if tool["name"] == "caseproof_discover_references")
+    assert "canonical" in discovery["description"].lower()
+
+
+def release():
+    from datetime import UTC, datetime, timedelta
+    from hashlib import sha256
+
+    from application.litigation.content_release import ContentRelease
+    return ContentRelease(ARGS["case_id"], ARGS["brief_id"], ARGS["snapshot_hash"],
+                          "synthetic-test-host", sha256(BEARER.encode()).hexdigest(),
+                          datetime.now(UTC) + timedelta(seconds=60))
+
+BEARER = 'host-token'

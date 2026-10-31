@@ -13,14 +13,16 @@ from uuid import UUID
 from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 from pypdf import PdfReader, PdfWriter
-from pypdf.errors import PdfReadError
 
+from application.extraction.contracts import ExtractionError
 from application.litigation.dossier_contracts import add_report_contract, assess_fidelity, quotation_context
 from application.litigation.regional_fidelity import select_visual_assessment
+from application.litigation.report_projection import render_dossier_export
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
 from apps.api.litigation_live_journey import HOST, JourneyClient
+from apps.api.signed_document_parse import parse_verified_original
 from apps.api.signed_supabase_originals import PrivateStorageFailure
 from domains.disputes.dossier_verification import build_findings
 from domains.disputes.exhibit_identity import InventoryStatus
@@ -34,6 +36,8 @@ from infrastructure.parsers.pdf_visual_fidelity import PDFVisualFidelity
 
 def canonical(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+
+
 
 
 class PageConfirmation(BaseModel):
@@ -140,7 +144,7 @@ class DossierStore:
 
     def reopen(self, bearer: str, case: str, brief: str, snapshot: str) -> tuple[dict[str, Any], bytes]:
         report = self.frozen_report(bearer, case, brief, snapshot)
-        sources, originals = self.sources(bearer, case)
+        sources, originals = self.sources(bearer, case, inspect_pdf=False)
         current = {(s['version_id'], s['sha256']) for s in sources}
         recorded = {(s['version_id'], s['sha256']) for s in report.get('sources', [])}
         if not recorded or recorded != current:
@@ -148,7 +152,7 @@ class DossierStore:
         report['snapshot_hash'] = snapshot
         return report, originals[brief]
 
-    def sources(self, bearer: str, case: str) -> tuple[list[dict[str, Any]], dict[str, bytes]]:
+    def sources(self, bearer: str, case: str, *, inspect_pdf: bool = True) -> tuple[list[dict[str, Any]], dict[str, bytes]]:
         manifest = self.client.bundle_manifest(bearer, case)['sources']
         originals = {}
         sources = []
@@ -162,16 +166,16 @@ class DossierStore:
             if len(raw) != row['byte_length'] or hashlib.sha256(raw).hexdigest() != row['sha256']:
                 raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
             originals[row['version_id']] = raw
-            if row['media_type'] == 'application/pdf':
+            if inspect_pdf and row['media_type'] == 'application/pdf':
                 try:
-                    reader = PdfReader(io.BytesIO(raw), strict=True)
-                    if reader.is_encrypted or not 0 < len(reader.pages) <= 64:
-                        raise ValueError('unsupported PDF')
-                    row['page_count'] = len(reader.pages)
-                    row['image_only_pages'] = [i for i, page in enumerate(reader.pages, 1)
-                                              if not (page.extract_text() or '').strip()]
+                    _, manifest = parse_verified_original(
+                        document_id=row['document_id'], version_id=row['version_id'],
+                        data=raw, media_type=row['media_type'])
+                    row['page_count'] = len(manifest['pages'])
+                    row['image_only_pages'] = [p['pdf_page'] for p in manifest['pages']
+                                              if p['status'] == 'needs_ocr']
                     row['image_only'] = len(row['image_only_pages']) == row['page_count']
-                except (ValueError, PdfReadError, OSError, KeyError):
+                except ExtractionError:
                     row['page_count'] = 0
                     row['parse_error'] = 'unreadable_or_unsupported_pdf'
             sources.append(row)
@@ -291,6 +295,21 @@ class DossierStore:
         return report, raw
 
 
+def read_dossier_report(store: DossierStore, bearer: str, case: str, brief: str,
+                        snapshot: str | None = None, *, decisions: bool = False) -> tuple[dict[str, Any], bytes]:
+    report, original = (store.reopen(bearer, case, brief, snapshot) if snapshot
+                        else store.load(bearer, case, brief))
+    if (report.get('schema') != 'caseproof-dossier-v1' or not report.get('snapshot_hash')
+            or (snapshot is not None and report['snapshot_hash'] != snapshot)):
+        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+    if decisions:
+        rows = store.rpc(bearer, case, 'decisions', {'snapshot_hash': report['snapshot_hash']})
+        if not isinstance(rows.get('decisions'), list):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        report = {**report, 'human_decisions': rows['decisions']}
+    return report, original
+
+
 def create_dossier_router(store: DossierStore | None) -> APIRouter:
     router = APIRouter()
     base = '/v2/matters/{case_id}/briefs/{brief_id}/dossier'
@@ -303,8 +322,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
     @router.get(base)
     def dossier(case_id: str, brief_id: str, snapshot_hash: str | None = None, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         s, bearer = active(authorization)
-        return (s.reopen(bearer, case_id, brief_id, snapshot_hash) if snapshot_hash
-                else s.load(bearer, case_id, brief_id))[0]
+        return read_dossier_report(s, bearer, case_id, brief_id, snapshot_hash)[0]
 
     @router.post(base + '/checks')
     def check_with_languages(case_id: str, brief_id: str, body: VerificationOptions,
@@ -360,9 +378,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
     def export(case_id: str, brief_id: str, format: Literal['json', 'markdown', 'docx'] = 'json', snapshot_hash: str | None = None,
                authorization: str | None = Header(default=None)) -> Response:
         s, bearer = active(authorization)
-        report, original = (s.reopen(bearer, case_id, brief_id, snapshot_hash) if snapshot_hash
-                            else s.load(bearer, case_id, brief_id))
-        report['human_decisions'] = s.rpc(bearer, case_id, 'decisions', {'snapshot_hash': report['snapshot_hash']})['decisions']
+        report, original = read_dossier_report(s, bearer, case_id, brief_id, snapshot_hash, decisions=True)
         headers = {'X-CaseProof-Snapshot': report['snapshot_hash'], 'Cache-Control': 'no-store'}
         if format == 'docx':
             try:
@@ -370,22 +386,13 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             except ValueError:
                 raise HTTPException(422, 'draft cannot be annotated') from None
             return Response(data, media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            headers={**headers, 'Content-Disposition': 'attachment; filename=caseproof-annotated.docx'})
-        if format == 'markdown':
-            text = '# CaseProof scoped dossier report\n\n' + canonical(report['coverage']) + '\n\n'
-            text += 'Verification contract\n' + canonical(report.get('verification_contract', {})) + '\n\n'
-            text += 'Abstentions\n' + canonical(report.get('abstentions', [])) + '\n\n'
-            text += 'Literal and translation assessments\n' + canonical([{k: f.get(k) for k in ('reference_id', 'identity_reason', 'quoted_text', 'draft_language', 'source_language', 'translation_review_required', 'literal_assessment', 'source_text_context', 'source_text_context_partial')} for f in report['findings']]) + '\n\n'
-            text += '\n'.join(f"- {f['reference_id']}: {f['literal']} — {f['identity']}; {f['page_mapping']}; {f['fidelity']}; {f['support']}"
-                              for f in report['findings'])
-            text += '\n\nVisual assessments\n' + canonical([{
-                'reference_id': f['reference_id'], 'assessment': {
-                    **f.get('visual_assessment', {}), 'regions': [{k: v for k, v in r.items()
-                        if k != 'crop_base64'} for r in f.get('visual_assessment', {}).get('regions', [])]}}
-                for f in report['findings']])
-            text += '\n\nHuman decisions\n' + canonical(report['human_decisions'])
-            return Response(text, media_type='text/markdown', headers=headers)
-        return Response(canonical(report), media_type='application/json', headers=headers)
+                            headers={**headers, 'X-CaseProof-Export-SHA256': hashlib.sha256(data).hexdigest(),
+                                     'X-Content-Type-Options': 'nosniff',
+                                     'Content-Disposition': 'attachment; filename=caseproof-annotated.docx'})
+        content = render_dossier_export(report, format)
+        headers.update({'X-CaseProof-Export-SHA256': hashlib.sha256(content.encode()).hexdigest(),
+                        'X-Content-Type-Options': 'nosniff'})
+        return Response(content, media_type=('text/markdown' if format == 'markdown' else 'application/json'), headers=headers)
 
     def frozen_regions(s: DossierStore, bearer: str, case: str, brief: str, snapshot: str) -> list[dict[str, Any]]:
         # The guarded read RPC checks current membership/grants, retention,
@@ -449,7 +456,8 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         if source is None:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return Response(files[version_id], media_type='application/octet-stream',
-                        headers={'Content-Disposition': 'attachment; filename=caseproof-original',
+                        headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+                                 'Content-Disposition': 'attachment; filename=caseproof-original',
                                  'X-CaseProof-Original-SHA256': source['sha256']})
 
     @router.get(base + '/sources/{version_id}/pages/{page_number}')
@@ -467,6 +475,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         out = io.BytesIO()
         writer.write(out)
         return Response(out.getvalue(), media_type='application/pdf', headers={
+            'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
             'X-CaseProof-Original-SHA256': source['sha256'], 'X-CaseProof-PDF-Page': str(page_number)})
 
     return router

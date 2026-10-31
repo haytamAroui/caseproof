@@ -75,6 +75,8 @@ def discover(payload: bytes, manifest: list[dict[str, Any]]) -> dict[str, Any]:
         })
     return {
         "schema": "caseproof-headless-discovery-v1",
+        "canonical_verification": False,
+        "legacy_discovery": True,
         "text_coverage_complete": result.text_coverage_complete,
         "recognition_coverage_complete": result.coverage_complete,
         "unscanned_parts": list(result.unscanned_parts),

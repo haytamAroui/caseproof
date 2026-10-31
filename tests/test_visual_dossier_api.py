@@ -45,7 +45,7 @@ class DiskStore(DossierStore):
         if token!='owner-test-token' or case!='case':
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
 
-    def sources(self, token, case):
+    def sources(self, token, case, *, inspect_pdf=True):
         self.authorize(token,case)
         self.sources_calls+=1
         return copy.deepcopy(self.manifest),{'draft':self.draft,'inv':b'Stuk 1','source':self.pdf}
