@@ -6,7 +6,11 @@ from uuid import uuid4
 import pytest
 
 from apps.api.signed_multisource_journey import SignedMultiSourceJourney
-from apps.api.signed_supabase_originals import OriginalRef, PrivateStorageDenied
+from apps.api.signed_supabase_originals import (
+    OriginalRef,
+    PrivateStorageDenied,
+    PrivateStorageIntegrityError,
+)
 from domains.disputes.multisource_manifest import MultiSourceManifest, SourceItem, SourceRole
 
 
@@ -72,3 +76,52 @@ def test_missing_exhibit_rejected_before_upload() -> None:
     with pytest.raises(ValueError, match="exact"):
         SignedMultiSourceJourney(storage).upload_and_verify(manifest=manifest, refs=refs, payloads=payloads, bearer="owner")
     assert not storage.objects
+
+
+def test_tampered_last_exhibit_never_writes_earlier_objects() -> None:
+    manifest, refs, payloads = fixture()
+    last = next(reversed(payloads))
+    payloads[last] += b"tampered"
+    storage = FakeSignedStorage()
+    with pytest.raises(PrivateStorageIntegrityError, match="source bytes disagree"):
+        SignedMultiSourceJourney(storage).upload_and_verify(
+            manifest=manifest, refs=refs, payloads=payloads, bearer="owner",
+        )
+    assert storage.objects == {}
+
+
+def test_wrong_payload_type_fails_before_first_write() -> None:
+    manifest, refs, payloads = fixture()
+    last = next(reversed(payloads))
+    payloads[last] = "not bytes"  # type: ignore[assignment]
+    storage = FakeSignedStorage()
+    with pytest.raises(PrivateStorageIntegrityError, match="byte bounds"):
+        SignedMultiSourceJourney(storage).upload_and_verify(
+            manifest=manifest, refs=refs, payloads=payloads, bearer="owner",
+        )
+    assert storage.objects == {}
+
+
+def test_cross_organization_reference_fails_before_writing() -> None:
+    manifest, refs, payloads = fixture()
+    last = next(reversed(refs))
+    ref = refs[last]
+    refs[last] = OriginalRef(uuid4(), ref.case_id, ref.document_id, ref.version_id,
+                             ref.sha256_hex, ref.content_type)
+    storage = FakeSignedStorage()
+    with pytest.raises(ValueError, match="multiple organizations"):
+        SignedMultiSourceJourney(storage).upload_and_verify(
+            manifest=manifest, refs=refs, payloads=payloads, bearer="owner",
+        )
+    assert storage.objects == {}
+
+
+def test_signed_m1_upload_revocation_prevents_write() -> None:
+    manifest, refs, payloads = fixture()
+    storage = FakeSignedStorage()
+    storage.revoked = True
+    with pytest.raises(PrivateStorageDenied):
+        SignedMultiSourceJourney(storage).upload_and_verify(
+            manifest=manifest, refs=refs, payloads=payloads, bearer="owner",
+        )
+    assert storage.objects == {}
