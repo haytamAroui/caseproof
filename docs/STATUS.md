@@ -1,3 +1,15 @@
+# CaseProof — latest verified direction and engineering state (31 October 2026)
+
+**Source of truth:** [ROADMAP M0–M6](ROADMAP.md) and [ADR 0019 vision](adr/0019-evidence-engine-and-first-market.md); one focused product: independent **post-assembly Belgian Stuk/Pièce exhibit verification** through a web-first, four-dimension reviewer. Research comparisons are hypotheses, not an exclusive market claim. Word, authority research, German, local installer and publicly hosted MCP are not v1 prerequisites.
+
+**Latest verified `main`:** [PR #154](https://github.com/haytamAroui/caseproof/pull/154) squash merged to [`d3374b8f78599b33bff7ce098a746b70af29b094`](https://github.com/haytamAroui/caseproof/commit/d3374b8f78599b33bff7ce098a746b70af29b094). Its 21 post-merge job conclusions were **17 success, 4 intentionally skipped live jobs and 0 failures**. The real-process 200-page PostgreSQL recovery, crash/resume, OCR/visual checks and read-only hosted MCP contract passed as **synthetic/disposable CI**, not as actual production hosting or live OAuth acceptance. PRs #146/#147 (representation gate), #149 (P3 translation/inventory/DOCX coverage), #150 (frozen canonical report) and #151–153 (worker/MCP architecture) are also **merged**; older 'feature-branch candidate' sections below are dated historical log entries.
+
+**Implementation versus gates:** M1/M2 have major signed synthetic/backend evidence; the full real-world corpus and approved client OCR boundary remain open. M3 still lacks user-created matter intake, complete original page/crop browser viewer and applied correction. M4 has bounded JSON/Markdown/DOCX appendix primitives, but not independently accepted corrected DOCX, complete source-link reopens and end-to-end browser release. M5 lawyer interviews, controlled representative validation and priced demand are not proven. SEC-01–16, professional-secrecy approval, deployed OAuth/real consent, restore/retention and independent security review remain separate gates.
+
+**Next development:** complete one authenticated **web M1→M4 journey** with a real-format synthetic NL/FR dossier and negative security/restart/retry cases; run practitioner interviews and deployment confidentiality/egress assessment in parallel. No new isolated verifier authority or Word-first pivot. Previous dated sections document historical heads only.
+
+---
+
 ## PostgreSQL two-process recovery + hosted OAuth MCP candidate — 31 October 2026
 
 Feature branch `feat/postgres-process-recovery-hosted-mcp-oauth` builds the missing real-PostgreSQL

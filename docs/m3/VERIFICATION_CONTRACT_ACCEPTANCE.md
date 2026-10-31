@@ -1,6 +1,6 @@
 # Verification contract/report acceptance — 31 October 2026
 
-Engineering candidate, not a pilot release. [ADR 0022](../adr/0022-verification-contract-report.md)
+Engineering implementation merged in [PR #149](https://github.com/haytamAroui/caseproof/pull/149); not a pilot release. This file preserves the scope of what the tests actually establish. [ADR 0022](../adr/0022-verification-contract-report.md)
 resolves implementation behavior. User requested a large test-to-readiness PR; this
 receipt separates executable evidence from external approval and final milestone closure.
 
@@ -33,5 +33,4 @@ paid-commitment gates. Successful engineering allows review/merge, not release.
 
 ## Results
 
-Current-head run links and exact counts are recorded in the PR after execution.
-Before those receipts exist, this document is an acceptance protocol only.
+PR #149 merged on final reviewed head `76f455c58c3a0884b3bd462f833ec19dc09d88c4`; its author-reported final-head checks were **14/14 green**, including signed development review/restart/export, browser and PostgreSQL fixtures. [PR and linked job receipts](https://github.com/haytamAroui/caseproof/pull/149) are engineering evidence for the exact tested head, not the whole M3/M4 browser journey or independent customer security approval. [PR #154](https://github.com/haytamAroui/caseproof/pull/154) later ensured critical disposable regression gates run on `main` as well (17 success, 4 intentionally skipped live jobs on `d3374b8f`). Retain the external/open limitations above.
