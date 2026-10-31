@@ -104,10 +104,13 @@ def test_oauth_metadata_and_unauthenticated_challenge(monkeypatch):
     assert meta.status_code == 200
     assert meta.json()["resource"] == RESOURCE
     assert meta.json()["authorization_servers"] == [ISSUER]
+    assert "caseproof:reports:read" not in str(meta.json())
+    assert "scopes_supported" not in meta.json()
     assert meta.headers["cache-control"] == "no-store"
     missing = client.post("/mcp", json=body(), headers={"Accept": "application/json, text/event-stream"})
     assert missing.status_code == 401
     assert 'resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource"' in missing.headers["www-authenticate"]
+    assert 'scope=' not in missing.headers["www-authenticate"]
     assert client.get("/mcp").status_code == 405
     assert not calls and gate.calls == 0 and verifier.calls == 0
 
