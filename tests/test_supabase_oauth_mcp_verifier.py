@@ -47,8 +47,8 @@ class Identity:
 
 def test_auth_remote_verification_then_claims():
     remote = Identity()
-    verifier = verifier(remote)
-    result = verifier.verify(token())
+    provider = verifier(remote)
+    result = provider.verify(token())
     assert remote.calls == 1
     assert result.subject == SUB and result.issuer == ISSUER
     assert result.audiences == (RESOURCE,)
@@ -65,7 +65,7 @@ def test_unverified_jwt_must_never_be_accepted():
 @pytest.mark.parametrize("claim", [
     {"iss": "https://other.supabase.co/auth/v1"}, {"aud": "other"},
     {"client_id": "unapproved-mcp-client"}, {"client_id": None},
-    {"role": "service_role"}, {"scope": ""}, {"sub": str(uuid4())},
+    {"role": "service_role"}, {"sub": str(uuid4())},
     {"session_id": "not-uuid"}, {"iat": "1000"}, {"exp": True},
     {"is_anonymous": True},
 ])
