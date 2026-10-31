@@ -1,8 +1,8 @@
 # Pre-M3 verification contract — four hard prerequisites
 
-**Status:** binding **target design** for CaseProof v1, **not yet implemented or accepted**. **Decision:** 28 October 2026, specification closure in follow-up to [ADR 0018](../adr/0018-pre-submission-verification-freeze.md). This document resolves four ambiguities identified after [ROADMAP.md](../ROADMAP.md) and [PRODUCT_WORKFLOW.md](../PRODUCT_WORKFLOW.md) were frozen. It changes **no commercial scope**.
+**Status (31 October):** binding target design with **merged synthetic-path engineering implementation in PR #149**, but **not complete M3 acceptance or authorized client deployment**. **Decision:** 28 October 2026, specification closure in follow-up to [ADR 0018](../adr/0018-pre-submission-verification-freeze.md). This document resolves four ambiguities identified after [ROADMAP.md](../ROADMAP.md) and [PRODUCT_WORKFLOW.md](../PRODUCT_WORKFLOW.md) were frozen. It changes **no commercial scope**.
 
-**Gate:** M1 source ingestion and M2 verification engineering may continue. **M3 implementation against production-shaped review contracts and any M3 acceptance claim are blocked until the following four rules are signed off as explicit implementation contracts and their M1/M2 fixtures are available.** This file defines those rules; writing it does not prove their implementation. Do not use a UI default to conceal an unresolved state.
+**Gate:** M1 and M2 engineering now contains typed candidate implementations of the four rules; M3 must consume those contracts and cannot claim acceptance until the full fixture/schema evidence, OCR operator/data-flow approval and independent review are recorded. **No UI inference or silent fallback is permitted.** This file defines those rules; writing it does not prove their implementation. Do not use a UI default to conceal an unresolved state.
 
 ## 31 October executable implementation candidate
 
@@ -71,4 +71,4 @@ practitioner, bar or customer-processing approval is inferred from merged code.
 
 M3 may start product-shaped implementation only when reviewed M1/M2 contracts and fixtures implement **all four P3-01..04**. Required signed-off evidence: typed enum schema/migration plan, supported DOCX-region coverage matrix and denominators, an approved OCR processing topology and worker safety test, and deterministic negative tests for absent inventory, translated quotes and partial coverage. Record the reviewers, exact commit and test receipts in the M3 PR.
 
-This specification is **DESIGNED only** as of creation. It does not close the **implemented** or **live accepted** gate. Work on M1/M2 and independent prototype spikes may continue in parallel, but do not label M3 passed or treat a UI mock as closure.
+At creation this file was **DESIGNED only**. Merged [PR #149](https://github.com/haytamAroui/caseproof/pull/149) subsequently implemented synthetic signed-path contracts and passed associated engineering checks, but this is **not complete live product, practitioner, security or customer-environment acceptance**. Work on M1/M2 and independent prototype spikes may continue in parallel, but do not label M3 passed or treat a UI mock as closure.
