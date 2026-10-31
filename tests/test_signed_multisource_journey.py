@@ -9,7 +9,9 @@ from apps.api.signed_multisource_journey import SignedMultiSourceJourney
 from apps.api.signed_supabase_originals import (
     OriginalRef,
     PrivateStorageDenied,
+    PrivateStorageExists,
     PrivateStorageIntegrityError,
+    PrivateStorageOutcomeUnknown,
 )
 from domains.disputes.multisource_manifest import MultiSourceManifest, SourceItem, SourceRole
 
@@ -125,3 +127,83 @@ def test_signed_m1_upload_revocation_prevents_write() -> None:
             manifest=manifest, refs=refs, payloads=payloads, bearer="owner",
         )
     assert storage.objects == {}
+
+
+
+class InterruptedSignedStorage(FakeSignedStorage):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail_once = True
+        self.replays = 0
+        self.corrupt_on_read = False
+
+    def put_once(self, ref: OriginalRef, bearer: str, payload: bytes) -> None:
+        if ref.path in self.objects:
+            self.replays += 1
+            raise PrivateStorageExists("already stored")
+        super().put_once(ref, bearer, payload)
+        if self.fail_once:
+            self.fail_once = False
+            raise PrivateStorageOutcomeUnknown("write may have committed")
+
+    def get_verified(self, ref: OriginalRef, bearer: str) -> bytes:
+        value = super().get_verified(ref, bearer)
+        if self.corrupt_on_read or sha256(value).hexdigest() != ref.sha256_hex:
+            raise PrivateStorageIntegrityError("invalid signed original")
+        return value
+
+
+def test_unknown_write_outcome_recovers_only_with_verified_readback() -> None:
+    manifest, refs, payloads = fixture()
+    storage = InterruptedSignedStorage()
+    journey = SignedMultiSourceJourney(storage)
+    journey.upload_and_verify(manifest=manifest, refs=refs, payloads=payloads, bearer="owner")
+    assert len(storage.objects) == 3
+    journey.upload_and_verify(manifest=manifest, refs=refs, payloads=payloads, bearer="owner")
+    assert len(storage.objects) == 3
+    assert storage.replays == 3  # no overwrites when re-running
+    assert journey.reopen_verified(manifest=manifest, refs=refs, bearer="owner") == (
+        tuple(payloads.values())
+    )
+
+
+def test_existing_object_mismatched_sha_never_marks_upload_complete() -> None:
+    manifest, refs, payloads = fixture()
+    storage = InterruptedSignedStorage()
+    storage.fail_once = False
+    first = next(iter(refs))
+    storage.objects[refs[first].path] = b"wrong bytes from stale write"
+    with pytest.raises(PrivateStorageIntegrityError):
+        SignedMultiSourceJourney(storage).upload_and_verify(
+            manifest=manifest, refs=refs, payloads=payloads, bearer="owner",
+        )
+    assert len(storage.objects) == 1  # corruption does not cause later writes
+
+
+def test_unknown_write_without_authorized_readback_is_not_a_success() -> None:
+    manifest, refs, payloads = fixture()
+
+    class GoneStorage(InterruptedSignedStorage):
+        def get_verified(self, ref: OriginalRef, bearer: str) -> bytes:
+            raise PrivateStorageDenied("revoked or absent")
+
+    storage = GoneStorage()
+    with pytest.raises(PrivateStorageDenied):
+        SignedMultiSourceJourney(storage).upload_and_verify(
+            manifest=manifest, refs=refs, payloads=payloads, bearer="owner",
+        )
+
+
+def test_revocation_during_reconcile_fails_closed() -> None:
+    manifest, refs, payloads = fixture()
+
+    class RevokedOnRead(InterruptedSignedStorage):
+        def get_verified(self, ref: OriginalRef, bearer: str) -> bytes:
+            self.revoked = True
+            return super().get_verified(ref, bearer)
+
+    storage = RevokedOnRead()
+    with pytest.raises(PrivateStorageDenied):
+        SignedMultiSourceJourney(storage).upload_and_verify(
+            manifest=manifest, refs=refs, payloads=payloads, bearer="owner",
+        )
