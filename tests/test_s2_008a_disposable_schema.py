@@ -62,6 +62,7 @@ def test_disposable_guard_and_cloud_verification_wiring() -> None:
 
 def test_no_installed_migration_or_prod_route() -> None:
     assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} == {
+        "20261031112127_signed_page_worker.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",
