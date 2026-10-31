@@ -37,7 +37,9 @@ jobs:
       - name: Test deterministic dossier, original preservation and annotations
         run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_dossier_journey.py
       - name: ASVS file-boundary and canonical MCP contract regression
-        run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_asvs_file_boundaries.py tests/test_mcp_adapter_contract.py tests/test_mcp_canonical_dossier.py
+        run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_asvs_file_boundaries.py tests/test_mcp_adapter_contract.py tests/test_mcp_canonical_dossier.py tests/test_mcp_http_parity.py tests/test_page_coordinator.py tests/test_private_telemetry.py
+      - name: Bounded 200-page text bundle measurement
+        run: uv run --locked python -m scripts.benchmark_page_processing
       - name: Type and lint changed dossier code
         run: |
           uv run --locked ruff check .

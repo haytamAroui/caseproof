@@ -18,6 +18,8 @@ from fastapi import APIRouter, Header
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from application.documents.file_boundary import validate_original_container
+from application.extraction.contracts import ExtractionError
 from apps.api.access_control import (
     AccessFailure,
     AccessRejected,
@@ -297,6 +299,10 @@ class JourneyClient:
                 (source.content_type == "text/plain" and len(data) > MAX_TXT) or
                 (source.content_type not in BINARY_MEDIA and source.content_type != "text/plain")):
                 raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+            try:
+                validate_original_container(data, source.content_type)
+            except ExtractionError:
+                raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
             try:
                 self.library.put_once(
                     bearer=bearer, case_id=case_id, document_id=doc_id,

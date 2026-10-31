@@ -142,19 +142,29 @@ def main():
                   'request_id': str(uuid4()), 'decision': 'CONFIRMED_SUPPORTED',
                   'rationale': 'Signed synthetic reviewer inspected original scan, printed label and OCR uncertainty'}
         json_request(token, 'POST', base + '/reviews', review)
-        exported = json_request(token, 'GET', base + '/export')
+        exported = json_request(token, 'GET', base + '/export?snapshot_hash=' + report['snapshot_hash'])
         if len(exported['human_decisions']) != 1 or exported['human_decisions'][0]['request_id'] != review['request_id']:
             raise RuntimeError('DOSSIER_DECISION_NOT_IN_EXPORT')
-        mcp_store = DossierStore(key)
-        mcp_args = {'case_id': case, 'brief_id': versions['draft']}
+        mcp_store = DossierStore(key, os.environ['CASEPROOF_DEV_AUTH_ADMIN_KEY'])
+        mcp_args = {'case_id': case, 'brief_id': versions['draft'], 'snapshot_hash': report['snapshot_hash']}
+        # Synthetic-only host policy; never authorize customer egress from these fixtures.
+        from datetime import UTC, datetime, timedelta
+        from hashlib import sha256
+
+        from application.litigation.content_release import ContentRelease
+
+        def synthetic_release(caller):
+            return ContentRelease(case, versions['draft'], report['snapshot_hash'],
+                                  'protected-synthetic-acceptance', sha256(caller.encode()).hexdigest(),
+                                  datetime.now(UTC) + timedelta(seconds=60))
         mcp_discovery = call_tool(store=mcp_store, bearer=token,
                                   name='caseproof_discover_references', arguments=mcp_args,
-                                  allow_document_content=True)
+                                  release=synthetic_release(token), destination='protected-synthetic-acceptance')
         if mcp_discovery.get('isError') or mcp_discovery['structuredContent']['snapshot_hash'] != report['snapshot_hash']:
             raise RuntimeError('MCP_LIVE_SIGNED_DISCOVERY_PARITY_FAILED')
         mcp_json = call_tool(store=mcp_store, bearer=token,
                              name='caseproof_export_report', arguments={**mcp_args, 'format': 'json'},
-                             allow_document_content=True)
+                             release=synthetic_release(token), destination='protected-synthetic-acceptance')
         if mcp_json.get('isError') or json.loads(mcp_json['content']) != exported:
             raise RuntimeError('MCP_LIVE_SIGNED_JSON_PARITY_FAILED')
         denied_release = call_tool(store=mcp_store, bearer=token,
@@ -162,12 +172,12 @@ def main():
         if denied_release != {'isError': True, 'error': 'content_release_not_authorized'}:
             raise RuntimeError('MCP_LIVE_RELEASE_DENIAL_FAILED')
         print('MCP_LIVE_SIGNED_DISCOVERY_JSON_AND_RELEASE_PARITY_PASSED', flush=True)
-        status, markdown = request(token, 'GET', base + '/export?format=markdown')
+        status, markdown = request(token, 'GET', base + '/export?format=markdown&snapshot_hash=' + report['snapshot_hash'])
         if status != 200 or b'unresolved' not in markdown or b'CONFIRMED_SUPPORTED' not in markdown:
             raise RuntimeError('DOSSIER_MARKDOWN_EXPORT_FAILED')
         mcp_markdown = call_tool(store=mcp_store, bearer=token,
                                  name='caseproof_export_report', arguments={**mcp_args, 'format': 'markdown'},
-                                 allow_document_content=True)
+                                 release=synthetic_release(token), destination='protected-synthetic-acceptance')
         if mcp_markdown.get('isError') or mcp_markdown['content'].encode() != markdown:
             raise RuntimeError('MCP_LIVE_SIGNED_MARKDOWN_PARITY_FAILED')
         print('MCP_LIVE_SIGNED_MARKDOWN_PARITY_PASSED', flush=True)
@@ -192,7 +202,7 @@ def main():
         _server_stop(proc)
         proc = _server_start()
         token = signin.sign_in(credentials['owner']).access_token
-        reopened = json_request(token, 'GET', base + '/export')
+        reopened = json_request(token, 'GET', base + '/export?snapshot_hash=' + report['snapshot_hash'])
         if reopened != exported:
             raise RuntimeError('DOSSIER_COLD_RESTART_CHANGED_SOURCES_FINDINGS_OR_DECISIONS')
         print('DOSSIER_COLD_RESTART_FRESH_SIGNIN_IDENTICAL_REPORT_PASSED', flush=True)
@@ -200,6 +210,9 @@ def main():
         body['request_id'] = str(uuid4())
         json_request(token, 'POST', base + '/confirmation', body)
         stale, _ = request(token, 'POST', base + '/reviews', review)
+        old_export, _ = request(token, 'GET', base + '/export?snapshot_hash=' + report['snapshot_hash'])
+        if old_export not in (403, 404, 409):
+            raise RuntimeError('DOSSIER_STALE_EXPORT_NOT_INVALIDATED')
         current = json_request(token, 'GET', base + '/export')
         if stale != 409 or current['human_decisions'] or current['snapshot_hash'] == review['snapshot_hash']:
             raise RuntimeError('DOSSIER_STALE_REVIEW_NOT_INVALIDATED')
@@ -215,7 +228,7 @@ def main():
                 raise RuntimeError('DOSSIER_UNGRANTED_CONFIRMATION_NOT_DENIED')
             mcp_denied = call_tool(store=mcp_store, bearer=denied_token,
                                    name='caseproof_discover_references', arguments=mcp_args,
-                                   allow_document_content=True)
+                                   release=synthetic_release(denied_token), destination='protected-synthetic-acceptance')
             if mcp_denied != {'isError': True, 'error': 'access_rejected'}:
                 raise RuntimeError('MCP_LIVE_UNGRANTED_ACCESS_NOT_DENIED')
         admin_rpc(os.environ['CASEPROOF_DEV_AUTH_ADMIN_KEY'], 'revoke',
@@ -229,7 +242,7 @@ def main():
             raise RuntimeError('DOSSIER_REVOKED_CROP_NOT_DENIED')
         mcp_revoked = call_tool(store=mcp_store, bearer=token,
                                 name='caseproof_discover_references', arguments=mcp_args,
-                                allow_document_content=True)
+                                release=synthetic_release(token), destination='protected-synthetic-acceptance')
         if mcp_revoked != {'isError': True, 'error': 'access_rejected'}:
             raise RuntimeError('MCP_LIVE_REVOKED_ACCESS_NOT_DENIED')
         print('MCP_LIVE_UNGRANTED_FOREIGN_REVOKED_DENIAL_PASSED', flush=True)

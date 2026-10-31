@@ -29,7 +29,7 @@ class FakeStore:
         if self.deny:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
 
-    def load(self, bearer, case_id, brief_id):
+    def reopen(self, bearer, case_id, brief_id, snapshot):
         self._gate(bearer)
         return ({"schema": "caseproof-dossier-v1", "snapshot_hash": "a" * 64, "findings": []}, b"")
 
@@ -54,7 +54,7 @@ class FakeStore:
                  "rationale": "checked"}]
 
 
-ARGS = {"case_id": "case-a", "brief_id": "brief-1"}
+ARGS = {"snapshot_hash": "a" * 64, "case_id": "case-a", "brief_id": "brief-1"}
 
 
 def test_only_two_read_only_tools_without_identity_or_write_surface():
@@ -73,7 +73,7 @@ def test_only_two_read_only_tools_without_identity_or_write_surface():
 def test_identity_or_write_arguments_are_rejected_before_any_access(extra):
     store = FakeStore()
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=store, bearer="host-token",
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=store, bearer="host-token",
                   name="caseproof_discover_references", arguments={**ARGS, extra: "x"})
     assert store.bearers == []
 
@@ -82,7 +82,7 @@ def test_identity_or_write_arguments_are_rejected_before_any_access(extra):
     "caseproof_record_review_decision", "record", "", "caseproof_delete_matter"])
 def test_unknown_or_write_tool_names_are_rejected(name):
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=FakeStore(), bearer="host-token", name=name, arguments=ARGS)
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(), bearer="host-token", name=name, arguments=ARGS)
 
 
 @pytest.mark.parametrize("arguments", [
@@ -91,13 +91,13 @@ def test_unknown_or_write_tool_names_are_rejected(name):
 ])
 def test_malformed_arguments_are_rejected(arguments):
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=FakeStore(), bearer="host-token",
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(), bearer="host-token",
                   name="caseproof_discover_references", arguments=arguments)
 
 
 def test_blank_host_bearer_is_rejected():
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=FakeStore(), bearer="  ",
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(), bearer="  ",
                   name="caseproof_discover_references", arguments=ARGS)
 
 
@@ -106,40 +106,40 @@ def test_discovery_uses_canonical_signed_dossier():
     store = Mock()
     report = {"schema": "caseproof-dossier-v1", "snapshot_hash": "a" * 64,
               "findings": [{"identity": "not_assessed", "page_mapping": "page_unmapped"}]}
-    store.load.return_value = (report, b"")
-    result = call_tool(allow_document_content=True, store=store, bearer="host-token",
+    store.reopen.return_value = (report, b"")
+    result = call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=store, bearer="host-token",
                        name="caseproof_discover_references", arguments=ARGS)
     assert result["structuredContent"] == report
     assert result["canonical_verification"] is True
-    store.load.assert_called_once_with("host-token", "case-a", "brief-1")
+    store.reopen.assert_called_once_with("host-token", "case-a", "brief-1", "a" * 64)
 
 
 def test_export_json_uses_canonical_report_and_decisions():
     from unittest.mock import Mock
     store = Mock()
     report = {"schema": "caseproof-dossier-v1", "snapshot_hash": "a" * 64, "findings": []}
-    store.load.return_value = (report, b"")
+    store.reopen.return_value = (report, b"")
     store.rpc.return_value = {"decisions": []}
-    result = call_tool(allow_document_content=True, store=store, bearer="host-token",
+    result = call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=store, bearer="host-token",
                        name="caseproof_export_report", arguments=ARGS)
     assert json.loads(result["content"]) == {**report, "human_decisions": []}
 
 
 def test_invalid_format_is_rejected():
     with pytest.raises(McpContractError):
-        call_tool(allow_document_content=True, store=FakeStore(), bearer="host-token",
+        call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(), bearer="host-token",
                   name="caseproof_export_report", arguments={**ARGS, "format": "docx"})
 
 
 def test_access_failure_returns_an_opaque_error_without_details():
     for name in ("caseproof_discover_references", "caseproof_export_report"):
-        result = call_tool(allow_document_content=True, store=FakeStore(deny=True), bearer="host-token",
+        result = call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=FakeStore(deny=True), bearer="host-token",
                            name=name, arguments=ARGS)
         assert result == {"isError": True, "error": "access_rejected"}
 
 
 def test_missing_store_fails_closed():
-    result = call_tool(allow_document_content=True, store=None, bearer="host-token",
+    result = call_tool(allow_document_content=True, release=release(), destination="synthetic-test-host", store=None, bearer="host-token",
                        name="caseproof_discover_references", arguments=ARGS)
     assert result == {"isError": True, "error": "access_rejected"}
 
@@ -175,19 +175,19 @@ def test_tool_listing_cannot_mutate_closed_dispatch_contract():
     assert fresh["case_id"]["pattern"] != ".*"
     with pytest.raises(McpContractError):
         call_tool(store=FakeStore(), bearer="host-token", name="caseproof_discover_references",
-                  arguments={**ARGS, "bearer": "model-token"}, allow_document_content=True)
+                  arguments={**ARGS, "bearer": "model-token"}, allow_document_content=True, release=release(), destination="synthetic-test-host")
 
 
 def test_signed_store_parity_for_discovery_and_export():
     store = FakeStore()
-    expected, _ = store.load("host-token", "case-a", "brief-1")
+    expected, _ = store.reopen("host-token", "case-a", "brief-1", "a" * 64)
     discovery = call_tool(store=store, bearer="host-token",
                           name="caseproof_discover_references", arguments=ARGS,
-                          allow_document_content=True)
+                          allow_document_content=True, release=release(), destination="synthetic-test-host")
     assert discovery["structuredContent"] == expected
     exported = call_tool(store=store, bearer="host-token",
                          name="caseproof_export_report", arguments=ARGS,
-                         allow_document_content=True)
+                         allow_document_content=True, release=release(), destination="synthetic-test-host")
     assert json.loads(exported["content"])["findings"] == expected["findings"]
 
 
@@ -195,3 +195,15 @@ def test_legacy_mcp_tools_are_not_advertised_as_canonical():
     tools = list_tools()
     discovery = next(tool for tool in tools if tool["name"] == "caseproof_discover_references")
     assert "canonical" in discovery["description"].lower()
+
+
+def release():
+    from datetime import UTC, datetime, timedelta
+    from hashlib import sha256
+
+    from application.litigation.content_release import ContentRelease
+    return ContentRelease(ARGS["case_id"], ARGS["brief_id"], ARGS["snapshot_hash"],
+                          "synthetic-test-host", sha256(BEARER.encode()).hexdigest(),
+                          datetime.now(UTC) + timedelta(seconds=60))
+
+BEARER = 'host-token'

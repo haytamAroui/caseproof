@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 from apps.api.mcp_adapter_contract import call_canonical_tool
 
-ARGS = {"case_id": "case-a", "brief_id": "brief-a"}
+ARGS = {"snapshot_hash": "a" * 64, "case_id": "case-a", "brief_id": "brief-a"}
 
 
 def report():
@@ -29,22 +29,22 @@ def report():
 def test_canonical_discovery_matches_signed_dossier_report_without_reinterpretation():
     store = Mock()
     expected = report()
-    store.load.return_value = (expected, b"")
+    store.reopen.return_value = (expected, b"")
     result = call_canonical_tool(store=store, bearer="signed-user",
                                  name="caseproof_discover_references",
-                                 arguments=ARGS, allow_document_content=True)
+                                 arguments=ARGS, allow_document_content=True, release=release(), destination="synthetic-test-host")
     assert result["structuredContent"] == expected
     assert result["canonical_verification"] is True
-    store.load.assert_called_once_with("signed-user", "case-a", "brief-a")
+    store.reopen.assert_called_once_with("signed-user", "case-a", "brief-a", "a" * 64)
 
 
 def test_canonical_export_preserves_report_and_human_decisions():
     store = Mock()
-    store.load.return_value = (report(), b"")
+    store.reopen.return_value = (report(), b"")
     store.rpc.return_value = {"decisions": [{"reference_id": "ref-0000", "decision": "CONFIRMED_QUALIFIED"}]}
     result = call_canonical_tool(store=store, bearer="signed-user",
                                  name="caseproof_export_report",
-                                 arguments={**ARGS, "format": "json"}, allow_document_content=True)
+                                 arguments={**ARGS, "format": "json"}, allow_document_content=True, release=release(), destination="synthetic-test-host")
     exported = json.loads(result["content"])
     assert exported["findings"] == report()["findings"]
     assert exported["human_decisions"] == store.rpc.return_value["decisions"]
@@ -61,21 +61,21 @@ def test_release_denial_never_accesses_store():
 
 def test_unavailable_canonical_report_never_falls_back_to_legacy():
     store = Mock()
-    store.load.return_value = ({"schema": "caseproof-headless-discovery-v1"}, b"")
+    store.reopen.return_value = ({"schema": "caseproof-headless-discovery-v1"}, b"")
     result = call_canonical_tool(store=store, bearer="signed-user",
                                  name="caseproof_discover_references", arguments=ARGS,
-                                 allow_document_content=True)
-    assert result == {"isError": True, "error": "canonical_report_unavailable"}
+                                 allow_document_content=True, release=release(), destination="synthetic-test-host")
+    assert result == {"isError": True, "error": "access_rejected"}
 
 
 def test_mcp_json_export_is_byte_identical_to_rest_renderer():
     from apps.api.dossier_journey import render_dossier_export
     store = Mock()
-    store.load.return_value = (report(), b"")
+    store.reopen.return_value = (report(), b"")
     store.rpc.return_value = {"decisions": []}
     result = call_canonical_tool(store=store, bearer="signed-user",
                                  name="caseproof_export_report", arguments={**ARGS, "format": "json"},
-                                 allow_document_content=True)
+                                 allow_document_content=True, release=release(), destination="synthetic-test-host")
     assert result["content"] == render_dossier_export({**report(), "human_decisions": []}, "json")
 
 
@@ -85,9 +85,21 @@ def test_mcp_markdown_export_is_byte_identical_to_rest_renderer():
     dossier["findings"][0].update({"literal": "Stuk 1", "page_mapping": "page_unmapped",
                                    "fidelity": "not_assessed", "support": "not_assessed"})
     store = Mock()
-    store.load.return_value = (dossier, b"")
+    store.reopen.return_value = (dossier, b"")
     store.rpc.return_value = {"decisions": []}
     result = call_canonical_tool(store=store, bearer="signed-user",
                                  name="caseproof_export_report", arguments={**ARGS, "format": "markdown"},
-                                 allow_document_content=True)
+                                 allow_document_content=True, release=release(), destination="synthetic-test-host")
     assert result["content"] == render_dossier_export({**dossier, "human_decisions": []}, "markdown")
+
+
+def release():
+    from datetime import UTC, datetime, timedelta
+    from hashlib import sha256
+
+    from application.litigation.content_release import ContentRelease
+    return ContentRelease(ARGS["case_id"], ARGS["brief_id"], ARGS["snapshot_hash"],
+                          "synthetic-test-host", sha256(BEARER.encode()).hexdigest(),
+                          datetime.now(UTC) + timedelta(seconds=60))
+
+BEARER = 'signed-user'

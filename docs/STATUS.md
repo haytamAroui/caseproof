@@ -1,3 +1,25 @@
+## PR #150 — canonical report and processing hardening candidate, 31 October 2026
+
+Implementation: frozen-snapshot MCP dispatch; shared application report projection;
+caller/matter/brief/snapshot/destination/expiry-bound host release checked before
+return; exact export digests; byte-parity HTTP regressions; isolated fresh PDF
+inspection and no reparse on frozen reads; actual signed-upload archive preflight;
+privacy-safe OpenTelemetry tool spans/durations with real in-memory SDK capture.
+
+Local locked suite after these changes: **1,716 passed, 4 skipped**; Ruff, affected
+strict mypy and architecture checks passed. Required executable OCR/browser and
+PostgreSQL/live workflows remain authoritative for this candidate's exact head.
+Cloud readiness is not asserted here. See
+[acceptance matrix](m3/CANONICAL_PROCESSING_ACCEPTANCE.md).
+
+Page processing: bounded coordinator and isolated parser composition, immutable
+input manifests, per-page checkpoints, persistent deadline, cancellation/revocation
+guards, finite local retry and artifact-persistence ports. A 200-page text-bundle
+benchmark and separate-process disposable PostgreSQL restart proof are wired to
+CI. This does **not** expand the signed dossier's four-page visual budget, install
+a live page worker, prove 200-page OCR, or close P1 production acceptance. Hosted
+MCP/OAuth remains deferred; no production or live schema change is introduced.
+
 ## Representation fidelity v2 — 31 October 2026
 
 PR #142 merged v1 at `53354f0`: optional comparison contract and fixture foundation.

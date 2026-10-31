@@ -4,7 +4,7 @@ Status: Proposed (implementation gate)
 
 ## Context
 
-The signed dossier flow in `apps/api/dossier_journey.py` implements inventory completeness, language declarations, region coverage, OCR ledger, visual assessment, and a frozen report. The separate `apps/api/litigation_headless_verification.py::discover` still computes a headless-v1 result using manifest number matching. The read-only MCP adapter consumes that older snapshot. These paths do not have equivalent semantics.
+The signed dossier flow in `apps/api/dossier_journey.py` implements inventory completeness, language declarations, region coverage, OCR ledger, visual assessment, and a frozen report. The separate `apps/api/litigation_headless_verification.py::discover` still computes a headless-v1 result using manifest number matching. Before PR #150, the read-only MCP adapter consumed that older snapshot. These paths do not have equivalent semantics.
 
 ## Decision
 
@@ -34,3 +34,26 @@ First implement the shared projection and tests; then wire the MCP adapter; then
 ## Non-goals
 
 This ADR does not authorize hosted MCP, OAuth rollout, changing the evidence assessment taxonomy, or claiming that a passing synthetic test is live practitioner acceptance.
+
+## Implementation candidate — 31 October 2026
+
+- One application serializer and shared dossier read/export projection; MCP requires
+  an explicit frozen snapshot and never recomputes or falls back to headless-v1.
+- Host-only `ContentRelease` binds the caller digest, case, brief, snapshot,
+  destination and at most five minutes. Authorization is checked again before
+  content returns. Legacy `allow_document_content=True` alone grants nothing.
+  This is an in-process trusted-host contract, not an OAuth server or portable token.
+- REST and MCP expose SHA-256 of exact exported bytes; frozen reads verify receipt,
+  current source hashes, current grants and snapshot freshness. Legacy discovery
+  is explicitly noncanonical. No Word-host acceptance is claimed.
+- Fresh PDF inspection uses the isolated bounded parser. Frozen readback verifies
+  originals without reparsing; private source responses disable caching/sniffing.
+- Archive metadata preflight is enforced before the signed API stores DOCX bytes,
+  in addition to isolated parser and pack limits. Unreadable nonarchive originals
+  may remain private evidence but cannot become checked representations.
+- Optional OpenTelemetry API instrumentation uses a closed attribute set and a
+  pinned MCP semantic convention subset (v1.41.0); no exporter is configured.
+
+The host must implement its destination consent policy before issuing a release.
+Hosted MCP 2026-07-28/OAuth/Tasks, real Word hosting, confidential-data approval and
+independent external security review remain separate acceptance gates.

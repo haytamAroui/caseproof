@@ -45,7 +45,7 @@ def test_oversized_raw_archive_is_rejected() -> None:
 
 @pytest.mark.parametrize("filename", [
     "../evil.pdf", "..\\\\evil.pdf", "/tmp/evil.pdf", "C:\\\\evil.pdf",
-    "sources/../evil.pdf", "evil.pdf\\x00.txt", " evil.pdf ", "．．/evil.pdf",
+    "sources/../evil.pdf", "evil.pdf\x00.txt", " evil.pdf ", "．．/evil.pdf",
 ])
 def test_signed_registration_rejects_path_like_filename(filename: str) -> None:
     from pydantic import ValidationError
@@ -88,3 +88,38 @@ def test_signed_binary_ingest_rejects_oversized_pdf_before_parser() -> None:
         parse_verified_original(document_id="doc", version_id="version",
                                 data=b"%PDF-1.7\\n" + b"x" * MAX_BINARY_BYTES,
                                 media_type="application/pdf")
+
+
+@pytest.mark.parametrize("kind", ["bomb", "traversal", "duplicate", "malformed"])
+def test_actual_signed_upload_rejects_hostile_docx_before_storage(kind):
+    import base64
+    from hashlib import sha256
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from application.documents.file_boundary import DOCX
+    from apps.api.access_control import AccessRejected
+    from apps.api.litigation_live_journey import JourneyClient
+
+    out = io.BytesIO()
+    if kind == "malformed":
+        data = b"PK corrupt archive"
+    else:
+        with ZipFile(out, "w", compression=ZIP_DEFLATED) as archive:
+            archive.writestr("[Content_Types].xml", b"<Types/>")
+            archive.writestr("word/document.xml", b"x" * (3 * 1024 * 1024) if kind == "bomb" else b"<doc/>")
+            if kind == "traversal":
+                archive.writestr("../../outside", b"forbidden")
+            if kind == "duplicate":
+                archive.writestr("word/document.xml", b"duplicate")
+        data = out.getvalue()
+    class Library:
+        def source(self, **kwargs):
+            return SimpleNamespace(sha256_hex=sha256(data).hexdigest(), content_type=DOCX), len(data)
+        def put_once(self, **kwargs):
+            pytest.fail("hostile archive reached private storage")
+    client = JourneyClient("sb_publishable_synthetic")
+    client.library = Library()
+    with pytest.raises(AccessRejected):
+        client.upload("signed-test-double", *(str(uuid4()) for _ in range(3)),
+                      base64.b64encode(data).decode())

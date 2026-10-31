@@ -114,7 +114,9 @@ jobs:
       - name: Resolve persisted text evidence after process restart
         run: uv run --locked python -m scripts.verify_text_anchor_integration
       - name: Verify durable extraction recovery, scope, CAS and audit rollback
-        run: uv run --locked python -m scripts.verify_extraction_integration
+        run: |
+          uv run --locked python -m scripts.verify_extraction_integration
+          uv run --locked python -m scripts.verify_page_checkpoints
       - name: Verify document intake to extraction with real private bytes and PostgreSQL
         run: uv run --locked python -m scripts.verify_document_intake_integration
       - name: Verify atomic review recommendations and draft export

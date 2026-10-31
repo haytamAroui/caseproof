@@ -96,7 +96,7 @@ def test_omitted_confirmation_entry_cannot_become_absent_inventory():
                     'request_id': 'confirmed', 'payload': {'inventory_complete': True, 'entries': []}}}
             return {}
 
-        def sources(self, bearer, case):
+        def sources(self, bearer, case, *, inspect_pdf=True):
             raw = docx('Stuk 1, PDF p. 1.')
             return ([{'role': 'draft', 'version_id': 'draft'},
                      {'role': 'inventory', 'version_id': 'inventory'}],
@@ -198,7 +198,7 @@ def test_mixed_pdf_physical_reference_looks_up_its_actual_scanned_page():
                 'request_id': 'revision', 'payload': {'inventory_complete': True, 'entries': [
                     {'label': 'piece', 'number': '2', 'source_version_id': 'mixed', 'pages': []}]}}}
 
-        def sources(self, token, case):
+        def sources(self, token, case, *, inspect_pdf=True):
             return ([{'role': 'draft', 'version_id': 'draft'}, {'role': 'inventory', 'version_id': 'inv'},
                      {'role': 'exhibit', 'version_id': 'mixed', 'document_id': 'doc', 'sha256': 'a' * 64,
                       'page_count': 2, 'image_only': False, 'image_only_pages': [2]}],
