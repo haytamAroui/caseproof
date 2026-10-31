@@ -32,6 +32,14 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
             lines.append(f"{f['reference_id']} {f['literal']}: identity={f['identity']}; page={f['page_mapping']}; "
                          f"fidelity={f['fidelity']}; automated support=not_assessed; "
                          f"source={f['version_id']}; OCR={f['ocr_uncertainty']}")
+            visual = f.get('visual_assessment', {})
+            lines.append('Visual fidelity: ' + str(visual.get('state', 'not_assessed')) +
+                         '; reason=' + str(visual.get('reason', 'visual_not_run')) +
+                         '; calibration=' + str(visual.get('calibration_status', 'not_available')))
+            for region in visual.get('regions', []):
+                lines.append('Region ' + region['region_id'] + '; crop SHA256=' + region['crop_sha256'] +
+                             '; page=' + str(region['page_number']) + '; bbox=' + str(region['bbox']) +
+                             '; extracted=' + region['extracted_text'] + '; OCR=' + region['visual_text'])
             for decision in human:
                 lines.append('Human decision: ' + decision['decision'] + '; reviewer=' +
                              str(decision.get('reviewer_id', 'unknown')) + '; timestamp=' +

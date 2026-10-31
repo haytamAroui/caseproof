@@ -17,6 +17,8 @@ def has_midline_candidate(image: Image.Image, bounds: tuple[int, int, int, int])
             or image.width * image.height > 16_000_000):
         raise ValueError("bounded crop and word geometry required")
     width, height = right - left, bottom - top
+    if width * height > 256_000:
+        raise ValueError("word_pixel_budget")
     if width < 8 or height < 8:
         return False
     # Read the crop once as raw grey bytes instead of one getpixel call per pixel.

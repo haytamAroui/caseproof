@@ -37,10 +37,11 @@ class SyntheticSource:
 def generate_bundle() -> tuple[SyntheticSource, ...]:
     """Four deterministic NL/FR originals; scan PDF contains no text layer."""
     from docx import Document
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
     from reportlab.pdfgen import canvas
 
     from scripts.verify_dev_live_multisource import _text_pdf
+    from tests.fixtures.visual_fidelity import font as fixture_font
 
     draft = Document()
     draft.add_paragraph("Synthetic CaseProof draft. See Stuk 1 and Pièce 2.")
@@ -49,7 +50,7 @@ def generate_bundle() -> tuple[SyntheticSource, ...]:
 
     image = Image.new("RGB", (1500, 650), "white")
     draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 54)
+    font = fixture_font(54)
     draw.text((80, 90), "PIECE 2 SCANNED RECEIPT", fill="black", font=font)
     draw.text((80, 190), "PAYMENT RECEIVED EUR 1250", fill="black", font=font)
     draw.text((80, 290), "14 OCTOBER 2026", fill="black", font=font)
@@ -133,8 +134,10 @@ def generate_fidelity_bundle() -> tuple[SyntheticSource, ...]:
     Ground truth is generated here, never used as runtime detector output.
     """
     from docx import Document
-    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    from PIL import Image, ImageDraw, ImageFilter
     from reportlab.pdfgen import canvas
+
+    from tests.fixtures.visual_fidelity import font as fixture_font
 
     sources = []
     document = Document()
@@ -160,7 +163,7 @@ def generate_fidelity_bundle() -> tuple[SyntheticSource, ...]:
                                        "exhibit", "application/pdf", output.getvalue()))
     image = Image.new("RGB", (1200, 600), "white")
     draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 44)
+    font = fixture_font(44)
     draw.text((50, 100), "Monthly rent EUR", font=font, fill="black")
     draw.text((50, 180), "1000", font=font, fill="black")
     draw.line((45, 207, 170, 207), fill="black", width=4)

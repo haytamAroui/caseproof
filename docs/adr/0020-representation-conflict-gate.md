@@ -1,6 +1,8 @@
 # ADR 0020 — Bounded representation disagreement gate
 
-Status: feature-branch implementation proposal, subject to review; 30 October 2026.
+Status: bounded v1 merged in PR #142; v2 integration under review, 31 October 2026.
+
+Renumbered from 0019 to reserve that number for the earlier product ADR in PR #141.
 
 Owner requested a semantic/visual fidelity gate. This extends M2/M3 fidelity
 review within ADR 0018, without changing market scope or the pure kernel.
@@ -52,6 +54,8 @@ scan; positive and negative pixel candidates; equal-text edit conflict; unreliab
 abstention; stale-source rejection; literal-match blocking; existing four dimensions
 and current literal behavior preserved when no comparison exists. Synthetic only.
 
+
+V2 supersedes the v1 page-wide comparison design. See [v2 acceptance and data review](../m3/REPRESENTATION_GATE_ACCEPTANCE.md).
 ## PR #147 correction — 31 October 2026
 
 Regional text overlap is not source geometry. Until adapters supply validated
@@ -60,8 +64,8 @@ conflict cannot be dismissed because its words differ from the quote. This may
 increase false alerts but avoids claiming disjointness without evidence.
 
 Citation observations serialize derived `visual_comparison_supplied`,
-`visual_coverage` (`not_supplied`, `unknown`, `whole_page`) and `visual_assessment`.
-Supplied does not mean quote covered; regional coverage is unknown. Equal strings
+`visual_coverage` (`not_supplied`, `unknown`, `regional`, `whole_page`) and `visual_assessment`.
+Supplied does not mean the whole quote is covered; `regional` identifies bounded comparisons, not complete quote coverage. Equal strings
 remain `not_assessed` even for whole-page input. Existing asdict API/export/run-hash
 consumers receive these additive fields; constructors retain compatibility via
 init=False. Run hashes intentionally change; persisted old records are not rewritten.
@@ -80,3 +84,12 @@ anchors when reconciled with this branch; do not transplant whole-page fallback
 over validated regional logic. Merge order requires rerunning the remaining PR.
 ADR 0020 matches #146 representation-gate numbering and avoids the merged product
 vision ADR 0019. This branch does not establish joint integration acceptance.
+
+
+## Combined integration acceptance (PR #146 over #147)
+
+Source-bound offsets retain regional independence; missing offsets retain the
+conservative page fallback. Ligature/soft-hyphen normalization now shares raw-offset
+lineage with region selection. New rules remain uncalibrated and cannot create
+positive visual approval. Current-head cloud and signed development receipts must
+be refreshed before acceptance; older evidence above remains historical.

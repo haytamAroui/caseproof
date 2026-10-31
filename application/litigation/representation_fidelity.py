@@ -3,26 +3,15 @@
 Inputs must be loaded by a matter-authorized adapter, never accepted as browser
 assertions. Equal text does not prove that formatting survived extraction.
 """
-import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
 
-# Typographic artefacts that PDF text extraction commonly introduces. Only
-# these are folded, so deliberate look-alike or invisible-character
-# substitutions (zero-width characters, full-width digits, Cyrillic letters)
-# still surface as a disagreement between the two representations.
-_LIGATURES = {
-    "\ufb00": "ff", "\ufb01": "fi", "\ufb02": "fl", "\ufb03": "ffi",
-    "\ufb04": "ffl", "\ufb05": "st", "\ufb06": "st",
-}
+from application.litigation.representation_normalization import NORMALIZATION, normalize_region
 
 
 def normalize_for_comparison(text: str) -> str:
-    """Fold extraction-only noise before comparing two representations."""
-    folded = unicodedata.normalize("NFC", text).replace("\u00ad", "")
-    for ligature, plain in _LIGATURES.items():
-        folded = folded.replace(ligature, plain)
-    return " ".join(folded.split())
+    """Same folding as region selection, retaining raw text separately."""
+    return normalize_region(text).text
 
 
 class RepresentationState(StrEnum):
@@ -41,8 +30,11 @@ class RepresentationComparison:
     visual_text: str
     visual_reliable: bool
     meaning_bearing_edit: bool
-    # False means the adapter compared only the region in extracted_text and
-    # visual_text. Without geometry it still gates all quotes on that page.
+    text_start: int | None = None
+    text_end: int | None = None
+    bbox: tuple[int, int, int, int] | None = None
+    coordinate_basis: str = "raster_pixels_top_left_150dpi"
+    detector_version: str = "unrecorded"
     covers_whole_page: bool = True
     # Adapter observations only: strikethrough/insertion is a review trigger,
     # never an automatic instruction to delete or accept contractual language.
@@ -58,6 +50,16 @@ class RepresentationComparison:
                 or type(self.meaning_bearing_edit) is not bool
                 or type(self.covers_whole_page) is not bool):
             raise ValueError("bounded page and typed adapter observations required")
+        if (self.text_start is None) != (self.text_end is None):
+            raise ValueError("paired regional text bounds required")
+        if self.text_start is not None and (type(self.text_start) is not int
+                or type(self.text_end) is not int or not 0 <= self.text_start < self.text_end):
+            raise ValueError("invalid regional text bounds")
+        if self.bbox is not None and (len(self.bbox) != 4
+                or any(type(x) is not int for x in self.bbox)
+                or not 0 <= self.bbox[0] < self.bbox[2] <= 5000
+                or not 0 <= self.bbox[1] < self.bbox[3] <= 6500):
+            raise ValueError("invalid raster region")
         for text in (self.extracted_text, self.visual_text):
             if type(text) is not str or len(text) > 4000:
                 raise ValueError("bounded regional text required")
@@ -66,9 +68,7 @@ class RepresentationComparison:
     def state(self) -> RepresentationState:
         if not self.visual_reliable or not self.visual_text.strip():
             return RepresentationState.OCR_UNRELIABLE
-        if (self.meaning_bearing_edit
-                or normalize_for_comparison(self.extracted_text)
-                != normalize_for_comparison(self.visual_text)):
+        if self.meaning_bearing_edit or normalize_region(self.extracted_text).text != normalize_region(self.visual_text).text:
             return RepresentationState.REPRESENTATION_CONFLICT
         return RepresentationState.NOT_ASSESSED
 
@@ -85,4 +85,8 @@ class RepresentationComparison:
             "extracted_text": self.extracted_text,
             "visual_text": self.visual_text,
             "semantic_support": "not_assessed",
+            "normalization_version": NORMALIZATION,
+            "text_start": self.text_start, "text_end": self.text_end,
+            "bbox": self.bbox, "coordinate_basis": self.coordinate_basis,
+            "detector_version": self.detector_version,
         }

@@ -60,7 +60,7 @@ def create_litigation_development_app(
     ):
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
-    app.include_router(create_dossier_router(DossierStore(publishable_key) if publishable_key else None))
+    app.include_router(create_dossier_router(DossierStore(publishable_key, trusted_ingest_key) if publishable_key else None))
     app.include_router(create_headless_review_router(headless))
     app.include_router(create_live_review_router(publishable_key))
     app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key, ocr=ocr))
@@ -87,7 +87,7 @@ def create_litigation_development_app(
 
     @app.get("/dev/clearbrief/{asset}", include_in_schema=False)
     def lawyer_asset(asset: str) -> FileResponse:
-        if asset not in {"workspace.css", "workspace.js"}:
+        if asset not in {"workspace.css", "workspace.js", "fidelity-panel.js"}:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return FileResponse(_workspace / asset)
 
@@ -187,7 +187,7 @@ def create_litigation_development_app(
             response.headers["Content-Security-Policy"] = (
                 "default-src 'none'; script-src 'self'; style-src 'self'; "
                 "connect-src 'self' https://ldwmocpxwskvhoojndrd.supabase.co; "
-                "img-src 'self'; base-uri 'none'; form-action 'self'; "
+                "img-src 'self' blob:; base-uri 'none'; form-action 'self'; "
                 "frame-ancestors 'none'"
             )
         else:

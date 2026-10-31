@@ -97,6 +97,7 @@ class CitationObservation:
     text_end: int | None
     scope_note: str
     representation_comparisons: tuple[RepresentationComparison, ...] = ()
+    visual_fidelity: str = "not_assessed"
     # EXACT_MATCH is lexical fidelity within one parsed span, NOT
     # semantic support, document authenticity or legal approval.
 
@@ -110,7 +111,8 @@ class CitationObservation:
         comparisons = self.representation_comparisons
         object.__setattr__(self, "visual_comparison_supplied", bool(comparisons))
         object.__setattr__(self, "visual_coverage", (
-            "whole_page" if any(c.covers_whole_page for c in comparisons)
+            "whole_page" if any(c.covers_whole_page and c.text_start is None for c in comparisons)
+            else "regional" if comparisons and all(c.text_start is not None for c in comparisons)
             else "unknown" if comparisons else "not_supplied"
         ))
         states = {c.state for c in comparisons}
@@ -161,6 +163,8 @@ def _note(reference: DraftReference, state: CitationCheckState,
         span[0] if span else None, span[1] if span else None,
         state.value,
         comparisons if comparisons is not None else (),
+        state.value if state in {CitationCheckState.REPRESENTATION_CONFLICT,
+                                 CitationCheckState.OCR_UNRELIABLE} else "not_assessed",
     )
 
 
@@ -219,24 +223,6 @@ def check_brief_references(
             observations.append(_note(reference, CitationCheckState.INCOMPLETE_EXTRACTION,
                                       exhibit_id=resolved.exhibit_id, preview=matched_preview))
             continue
-        relevant = []
-        for comparison in matched_preview.representation_comparisons:
-            if (comparison.original_sha256 != row.original_sha256
-                    or comparison.representation_id != row.representation_id):
-                raise DraftCheckError("stale representation comparison")
-            # Without source-linked geometry, word overlap cannot establish
-            # disjointness. Every conflict on this page remains a review gate.
-            if comparison.pdf_page == page.pdf_page:
-                relevant.append(comparison)
-        applied = tuple(relevant)
-        blocked = {item.state for item in relevant}
-        if blocked - {RepresentationState.NOT_ASSESSED}:
-            state = (CitationCheckState.REPRESENTATION_CONFLICT
-                     if RepresentationState.REPRESENTATION_CONFLICT in blocked
-                     else CitationCheckState.OCR_UNRELIABLE)
-            observations.append(_note(reference, state, exhibit_id=resolved.exhibit_id,
-                                      preview=matched_preview, comparisons=applied))
-            continue
         # Derived representation text must have source-linked bounds.
         if any(
             type(start) is not int or type(end) is not int
@@ -244,19 +230,12 @@ def check_brief_references(
             for start, end, _, _ in matched_preview.spans
         ):
             raise DraftCheckError("invalid representation span boundaries")
-        if reference.exact_quote is None:
-            observations.append(_note(
-                reference, CitationCheckState.NO_QUOTATION,
-                exhibit_id=resolved.exhibit_id, preview=matched_preview,
-                comparisons=applied,
-            ))
-            continue
         # A confirmed mapping to physical page N does not permit matching
         # a quote on a different page when the draft omits a page number.
         expected_pdf_page = reference.pdf_page if reference.pdf_page is not None else page.pdf_page
         matches: list[tuple[int, int]] = []
         from_position = 0
-        while True:
+        while reference.exact_quote is not None:
             begin = matched_preview.text.find(reference.exact_quote, from_position)
             if begin < 0:
                 break
@@ -274,7 +253,39 @@ def check_brief_references(
         elif len(matches) == 1:
             state = CitationCheckState.EXACT_MATCH
         else:
-            state = CitationCheckState.QUOTE_NOT_FOUND
+            state = (CitationCheckState.NO_QUOTATION if reference.exact_quote is None
+                     else CitationCheckState.QUOTE_NOT_FOUND)
+        applied_list: list[RepresentationComparison] = []
+        for comparison in matched_preview.representation_comparisons:
+            if comparison.pdf_page != expected_pdf_page:
+                continue
+            bounded = comparison.text_start is not None and comparison.text_end is not None
+            if (comparison.original_sha256 != row.original_sha256
+                    or comparison.representation_id != row.representation_id):
+                if not bounded:
+                    raise DraftCheckError("stale representation comparison")
+                state = CitationCheckState.INCOMPLETE_EXTRACTION
+                applied_list = []
+                break
+            if comparison.text_start is not None and comparison.text_end is not None and (comparison.text_end > len(matched_preview.text)
+                    or matched_preview.text[comparison.text_start:comparison.text_end] != comparison.extracted_text):
+                raise DraftCheckError("comparison not bound to represented text")
+            # Unlocated comparisons remain conservative page gates. Validated
+            # source offsets alone may prove a region disjoint from this quote.
+            if comparison.text_start is not None and comparison.text_end is not None and len(matches) == 1:
+                begin, end = matches[0]
+                if not (comparison.text_start < end and begin < comparison.text_end):
+                    continue
+            if bounded and reference.exact_quote is None:
+                continue  # No quote to anchor; only unlocated page gates apply.
+            applied_list.append(comparison)
+        applied = tuple(applied_list)
+        if state is not CitationCheckState.INCOMPLETE_EXTRACTION:
+            blocked = {item.state for item in applied}
+            if RepresentationState.REPRESENTATION_CONFLICT in blocked:
+                state = CitationCheckState.REPRESENTATION_CONFLICT
+            elif RepresentationState.OCR_UNRELIABLE in blocked:
+                state = CitationCheckState.OCR_UNRELIABLE
         observations.append(_note(
             reference, state, exhibit_id=resolved.exhibit_id, preview=matched_preview,
             span=matches[0] if len(matches) == 1 else None, comparisons=applied,

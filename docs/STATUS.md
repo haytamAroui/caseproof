@@ -1,3 +1,14 @@
+## Representation fidelity v2 — 31 October 2026
+
+PR #142 merged v1 at `53354f0`: optional comparison contract and fixture foundation.
+The current `feat/complete-representation-gate` candidate adds signed dossier
+integration, bounded region/crop provenance, conservative normalization, immutable
+snapshot readback, human inspection UI, executable corpus measurement and signed
+acceptance. See [v2 acceptance](m3/REPRESENTATION_GATE_ACCEPTANCE.md).
+No calibrated legal-corpus artifact ships; agreement stays unassessed. Cloud executable OCR, browser and signed development receipts are available on
+PR #146. Final-head reruns and review status determine acceptance. Dev migrations
+`20261030235107` and `20261030235456` are installed; production is unchanged.
+No M3 closure, customer-data authorization or production deployment is claimed.
 ## 30 October 2026 — product vision and current evidence
 
 [ADR 0019](adr/0019-evidence-engine-and-first-market.md), [roadmap](ROADMAP.md) and [workflow](PRODUCT_WORKFLOW.md) now separate the reusable engine ambition from Belgian litigation as the first market. Expansion is conditional on customer pull, technical reuse, measured benefit and commercial commitment with explicit owner approval. This documentation update adds no product features, UI, migration, client-data permission or release.
@@ -244,3 +255,13 @@ merge; prior-head green results do not verify this correction.
 ## Product planning refinement — 31 October 2026 (PR #141)
 
 The [detailed direction update](PRODUCT_DEFINITION_2026-10-31.md) is a proposed acceptance plan, not delivered software. PR #146 (`bcd52ff`) and #147 (`ff154a1`) were open at review with passing independent CI; integration is not proven. Preserve #146 regional anchors while assessing #147 normalization/coverage/versioning fixes; no merge or supersession is claimed. Local packaging, new exports, qualified signatures and German remain conditional work. No confidential-client authorization or paid validation follows from documentation.
+
+### #146/#147 combined branch review — 31 October 2026
+
+#146 now includes #147's explicit serialized coverage and rules version while
+retaining validated raw-offset regional selection. Unlocated comparisons remain
+page gates, including no-quotation references. Source/text binding is checked
+before offsets can exempt a disjoint region. Shared ligature/soft-hyphen folding
+retains original codepoint ranges. This is a branch integration, not a main merge
+or customer release. The existing signout cancellation regression is retained.
+Current-head cloud/live receipts must supersede historical run references.

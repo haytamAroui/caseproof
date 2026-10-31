@@ -1,0 +1,35 @@
+name: Representation fidelity full gate
+on:
+  pull_request:
+  push:
+    branches: [feat/complete-representation-gate]
+permissions:
+  contents: read
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CASEPROOF_OCR_SANDBOX: docker
+      CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
+      CASEPROOF_VISUAL_EXECUTABLE: 'YES'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - run: sudo apt-get update -qq && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-nld tesseract-ocr-fra fonts-dejavu-core
+      - run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
+      - name: Record OCR container content fingerprint
+        run: echo "CASEPROOF_OCR_BUILD=$(docker image inspect caseproof-ocr-worker:ci --format='{{.Id}}')" >> "$GITHUB_ENV"
+      - run: uv run --locked pytest -q tests/test_visual_gate_v2.py tests/test_representation_fidelity.py tests/test_visual_dossier_api.py
+      - run: uv run --locked python -m scripts.visual_gate_benchmark
+      - run: uv run --locked python -m scripts.verify_fidelity_browser
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: representation-fidelity-evidence
+          path: /tmp/caseproof-visual-gate
+          retention-days: 7

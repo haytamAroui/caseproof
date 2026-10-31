@@ -197,8 +197,13 @@ Use failures for root-cause analysis and rights-cleared regression tests; pause 
 Engineering receipt truth is in [STATUS.md](STATUS.md), not inferred from this journey. Older `PIV-00–20` and `F01–F42` ledgers document historical capability targets; they cannot silently override this acceptance.
 
 
-## Representation fidelity extension — 30 October 2026
+## Representation fidelity extension — 31 October 2026
 
+[ADR 0020](adr/0020-representation-conflict-gate.md) and the
+[v2 acceptance](m3/REPRESENTATION_GATE_ACCEPTANCE.md) extend the existing fidelity
+dimension. V1 merged in PR #142; v2 candidate integrates signed region assessment,
+immutable crops, review and export. Live/cloud evidence must be recorded before
+acceptance; no calibrated accuracy, complete detector or product pivot is claimed.
 See [ADR 0020](adr/0020-representation-conflict-gate.md). Text/visual disagreement
 is a fidelity review trigger, not a product pivot or semantic verdict. New
 synthetic fixtures and an opt-in resolver gate are under development; live adapter,

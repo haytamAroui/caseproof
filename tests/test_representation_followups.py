@@ -198,3 +198,43 @@ def test_incomplete_extraction_does_not_claim_other_page_visual_coverage():
     assert obs.state is CitationCheckState.INCOMPLETE_EXTRACTION
     assert obs.visual_coverage == "not_supplied"
     assert obs.visual_assessment == "not_assessed"
+
+
+def test_unlocated_page_conflict_gates_reference_without_quotation():
+    from tests.test_litigation_m2_brief_checks import check, rig
+
+    brief, register, previews = rig()
+    brief = replace(brief, references=(replace(brief.references[0], exact_quote=None),))
+    preview = previews[0]
+    item = comparison(original_sha256=preview.row.original_sha256, meaning_bearing_edit=True)
+    obs = check(brief, register, (replace(preview, representation_comparisons=(item,)),)).observations[0]
+    assert obs.state is CitationCheckState.REPRESENTATION_CONFLICT
+
+
+def test_regional_normalization_keeps_ligature_and_soft_hyphen_source_offsets():
+    from application.litigation.representation_normalization import normalize_region
+
+    raw = "of\ufb01ce pay\u00adment"
+    normalized = normalize_region(raw)
+    assert normalized.text == "office payment"
+    assert normalized.raw_ranges[2] == normalized.raw_ranges[3] == (2, 3)
+    assert raw[slice(normalized.raw_ranges[7][0], normalized.raw_ranges[-1][1])] == "pay\u00adment"
+
+
+def test_disjoint_offsets_cannot_hide_stale_or_unbound_comparison():
+    import pytest
+
+    from application.litigation.brief_checks import DraftCheckError
+    from tests.test_litigation_m2_brief_checks import check, rig
+
+    brief, register, previews = rig()
+    preview = previews[0]
+    start = preview.text.index("Ensuite")
+    item = comparison(original_sha256=preview.row.original_sha256,
+                      text_start=start, text_end=len(preview.text),
+                      extracted_text="forged offset text", visual_text="forged offset text")
+    with pytest.raises(DraftCheckError, match="not bound"):
+        check(brief, register, (replace(preview, representation_comparisons=(item,)),))
+    stale = replace(item, original_sha256="d" * 64)
+    obs = check(brief, register, (replace(preview, representation_comparisons=(stale,)),)).observations[0]
+    assert obs.state is CitationCheckState.INCOMPLETE_EXTRACTION
