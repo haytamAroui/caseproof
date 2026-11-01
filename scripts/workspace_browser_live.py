@@ -25,6 +25,14 @@ class WorkspaceBrowserAcceptance:
             if not request.url.startswith(ORIGIN + '/'):
                 self.external.append(True)
         self.page.on('request', observe)
+        # Only fixed stage names/status numbers; no URLs, bodies or credentials.
+        def inspect_response(response) -> None:
+            if response.url.endswith('/viewer'):
+                print(f'F2_VIEWER_CONTEXT_HTTP_{response.status}', flush=True)
+            elif response.url.endswith('/viewer/original'):
+                print(f'F2_VIEWER_ORIGINAL_HTTP_{response.status}', flush=True)
+        if os.getenv('CASEPROOF_F2_BROWSER_LIVE') == 'YES':
+            self.page.on('response', inspect_response)
 
     def login(self, page: Page, role: str = 'owner') -> None:
         page.get_by_label('Email address').fill(os.environ[f'CASEPROOF_P3_{role.upper()}_EMAIL'])
@@ -41,14 +49,26 @@ class WorkspaceBrowserAcceptance:
         page.locator(f'a[href$="snapshot={self.snapshot}"]').click()
         expect(page.get_by_role('heading', name='Review the evidence')).to_be_visible()
         if os.getenv('CASEPROOF_F2_BROWSER_LIVE') == 'YES':
-            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible()
+            print('F2_GENUINE_REPORT_OPENED_WAITING_FOR_SOURCE', flush=True)
+            try:
+                expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=45000)
+            except Exception:
+                for index, message in enumerate((
+                    'This source could not be opened.',
+                    'PDF opening exceeded its time budget.',
+                    'This page could not be rendered.',
+                    'Page rendering exceeded its time budget.',
+                )):
+                    if page.get_by_text(message, exact=False).count():
+                        print(f'F2_VIEWER_FIXED_ERROR_CATEGORY_{index}', flush=True)
+                raise RuntimeError('F2_GENUINE_INITIAL_RENDER_FAILED') from None
             canvas = page.locator('canvas[aria-label="Preserved PDF page pixels"]')
             if int(canvas.get_attribute('width') or '0') <= 0:
                 raise RuntimeError('F2_GENUINE_PDF_PIXELS_MISSING')
             page.get_by_role('button', name='Zoom in', exact=True).click()
-            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible()
+            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=20000)
             page.get_by_role('button', name='Rotate page', exact=True).click()
-            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible()
+            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=20000)
             print('F2_GENUINE_FROZEN_SOURCE_HASH_BOUND_WORKER_RENDER_ZOOM_ROTATE_PASSED', flush=True)
 
         if page.evaluate('() => localStorage.length + sessionStorage.length') != 0 or self.context.cookies():

@@ -70,8 +70,7 @@ export function ReportScreen({
         </p>
       </header>
       <Notice>
-        Read-only foundation · Page viewing and review actions are not connected
-        yet.
+        Read-only inspection · Human review actions are not connected yet.
       </Notice>
       <div className="review-layout">
         <section className="queue" aria-label="References">
