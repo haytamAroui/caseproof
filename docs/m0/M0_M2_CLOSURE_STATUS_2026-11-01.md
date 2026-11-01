@@ -30,7 +30,11 @@ uv run --locked python -m scripts.evaluate_litigation_detection --output /tmp/ca
 ```
 
 The review checker intentionally exits nonzero for empty/incomplete/disagreeing
-submissions. Passing it means ready for external credential/evidence verification,
+submissions. Disagreements can be supplied through a distinct competent reviewer using
+`--adjudication adjudicator.json` in the same completed submission format; the
+original two assessments remain unchanged and disagreements remain in the report.
+Mixed-language cases conservatively require declared NL/FR/EN competence.
+Passing it means ready for external credential/evidence verification,
 not that independent review or M0 acceptance happened. Do not fill blank forms on
 behalf of a real reviewer or replace their judgments with author-gold labels.
 

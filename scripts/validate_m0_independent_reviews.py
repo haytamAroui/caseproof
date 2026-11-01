@@ -20,12 +20,13 @@ STATES = {
 }
 
 
-def validate(packet, submissions):
+def validate(packet, submissions, adjudications=None):
     issues = []
     cases = {row['id']: row for row in packet['cases']}
     coverage = defaultdict(list)
     seen_people = set()
-    for index, submission in enumerate(submissions):
+    adjudications = adjudications or []
+    for index, submission in enumerate([*submissions, *adjudications]):
         prefix = f'submission[{index}]'
         reviewer = submission.get('reviewer', {})
         person = (reviewer.get('real_name', '').strip().casefold(), reviewer.get('organization', '').strip().casefold())
@@ -59,7 +60,7 @@ def validate(packet, submissions):
                 reject('unknown or duplicate case')
                 continue
             seen_cases.add(cid)
-            required = {'nl', 'fr'} if cases[cid]['language'] == 'mixed' else {cases[cid]['language']}
+            required = {'nl', 'fr', 'en'} if cases[cid]['language'] == 'mixed' else {cases[cid]['language']}
             if not required <= languages:
                 reject('case outside declared language competence')
                 continue
@@ -72,21 +73,27 @@ def validate(packet, submissions):
                 continue
         if valid:
             for row in submission.get('cases', []):
-                coverage[row['id']].append((person, row, bool(reviewer.get('belgian_legal_qualification', '').strip())))
+                coverage[row['id']].append((person, row, bool(reviewer.get('belgian_legal_qualification', '').strip()),
+                                            index >= len(submissions)))
     disagreements = []
+    adjudicated = []
     for cid in cases:
-        rows = coverage[cid]
+        rows = [r for r in coverage[cid] if not r[3]]
+        decisions = [r for r in coverage[cid] if r[3]]
         if len(rows) < 2:
             issues.append(cid + ': fewer than two distinct complete independent assessments')
-        if not any(qualified for _, _, qualified in rows):
+        if not any(qualified for _, _, qualified, _ in [*rows, *decisions]):
             issues.append(cid + ': Belgian procedural competence not recorded')
-        if len({tuple(str(row.get(key, '')).lower() for key in STATES) for _, row, _ in rows}) > 1:
+        if len({tuple(str(row.get(key, '')).lower() for key in STATES) for _, row, _, _ in rows}) > 1:
             disagreements.append(cid)
-            issues.append(cid + ': disagreement requires separately recorded adjudication')
+            if len(decisions) != 1 or not decisions[0][2]:
+                issues.append(cid + ': disagreement requires one separately recorded competent adjudication')
+            else:
+                adjudicated.append(cid)
     return {'schema': 'caseproof-independent-review-completeness-v1',
             'corpus_sha256': packet['corpus_sha256'], 'case_count': len(cases),
-            'complete_assessments': {cid: len(coverage[cid]) for cid in cases},
-            'disagreements': disagreements, 'issues': issues,
+            'complete_assessments': {cid: sum(not row[3] for row in coverage[cid]) for cid in cases},
+            'disagreements': disagreements, 'adjudicated_cases': adjudicated, 'issues': issues,
             'ready_for_owner_review': not issues, 'credentials_independently_verified': False,
             'm0_approved': False,
             'limitation': 'Completeness checks cannot authenticate people, signatures, source rights or legal judgments.'}
@@ -96,7 +103,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--packet', type=Path, required=True)
     parser.add_argument('--submission', type=Path, action='append', default=[])
+    parser.add_argument('--adjudication', type=Path, action='append', default=[])
     args = parser.parse_args()
-    result = validate(json.loads(args.packet.read_text()), [json.loads(p.read_text()) for p in args.submission])
+    result = validate(json.loads(args.packet.read_text()), [json.loads(p.read_text()) for p in args.submission],
+                      [json.loads(p.read_text()) for p in args.adjudication])
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['ready_for_owner_review'] else 1)

@@ -50,3 +50,16 @@ def test_duplicate_reviewer_hash_conflict_language_and_disagreement_fail_closed(
         else:
             altered['cases'][0]['independent_rationale'] = ''
         assert not validate(packet(), [a, altered])['ready_for_owner_review']
+
+
+def test_disagreement_retains_original_judgments_and_needs_distinct_qualified_adjudicator():
+    a, b, third = submission('Mock A'), submission('Mock B'), submission('Mock C')
+    b['cases'][0]['identity'] = 'resolved'
+    assert not validate(packet(), [a, b])['ready_for_owner_review']
+    resolved = validate(packet(), [a, b], [third])
+    assert resolved['ready_for_owner_review']
+    assert resolved['disagreements'] == ['blind-1'] and resolved['adjudicated_cases'] == ['blind-1']
+    assert resolved['complete_assessments']['blind-1'] == 2 and not resolved['m0_approved']
+    assert not validate(packet(), [a, b], [a])['ready_for_owner_review']
+    third['reviewer']['belgian_legal_qualification'] = ''
+    assert not validate(packet(), [a, b], [third])['ready_for_owner_review']
