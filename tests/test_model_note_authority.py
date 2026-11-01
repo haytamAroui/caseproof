@@ -15,7 +15,7 @@ def fixture():
               'human_decisions': [{'decision': 'CONFIRMED_CONTRADICTED'}]}
     release = ContentRelease('case', 'brief', 'a'*64, 'synthetic-provider',
                              sha256(b'signed').hexdigest(), now + timedelta(seconds=60))
-    return report, dict(provider='synthetic', model='fixture', model_version='v1',
+    return report, dict(provider='synthetic', model='fixture', model_version='v1', prompt_version='fixture-v1',
                         destination='synthetic-provider', bearer='signed', now=now, release=release)
 
 

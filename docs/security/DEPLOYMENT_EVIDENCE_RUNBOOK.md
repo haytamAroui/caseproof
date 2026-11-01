@@ -65,7 +65,7 @@ contracts, payload minimization and actual network/backup behavior require revie
 
 Model output is limited to `{kind: note|review_request, text: ...}`. Extra finding,
 verdict, approval, snapshot or human-decision keys are rejected. Host configuration
-supplies provider/model/version. A short-lived actor/destination/snapshot-bound
+supplies provider/model/version and prompt version. A short-lived actor/destination/snapshot-bound
 release is required; the function returns a labelled `ModelNote`, never a modified
 report. Prompt-injection text stays annotation data. No new model provider is
 configured, and no annotations are persisted or automatically rendered in reports.
