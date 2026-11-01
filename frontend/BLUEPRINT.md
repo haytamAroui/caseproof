@@ -278,3 +278,17 @@ The foundation is unmounted. Rollback removes/disables its static build/workflow
 - [CSP reference](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy), [frame-ancestors header limitation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors).
 - [WCAG 2.2](https://www.w3.org/TR/WCAG22/).
 - [OVB/OBFG AI guidance](https://www.ordevanvlaamsebalies.be/nl/kennisbank/digitalisering/richtlijnen-voor-advocaten-rond-gebruik-van-artificiele-intelligentie): relevant safeguards, not certification of this product.
+
+## 16. M3 engineering rules and CI enforcement
+
+Product philosophy: inspect evidence, preserve uncertainty, and require an attributable human decision. The interface is a delivery adapter, never an independent verifier, access-control authority or database client. Develop one observable lawyer outcome per slice.
+
+Database philosophy: browser code MUST NOT issue SQL, call database/storage/admin SDKs, create Auth identities, grant roles, bypass the API, own migrations or write a parallel ledger. The backend owns tenant predicates, transactions, idempotency, audit, persistence and retention. A schema change needs separately reviewed backend migrations and disposable isolation/recovery tests; a UI task grants no migration permission. No database connection string or service credential may enter a frontend build. An eventual auth-specific SDK adapter requires an explicit narrowly scoped policy change, not an exemption allowing direct data access.
+
+`scripts/m3-policy.json` is the machine-readable design-token/command projection of this blueprint. `npm run policy:check` rejects token/document drift, competing UI guidance, missing scripts, prohibited database packages, external CSS assets and weakened response-header policy. Update blueprint, projection, runtime tokens and tests together for approved changes. The projection is executable enforcement, not a second prose specification.
+
+AST checks additionally reject common direct database imports, raw HTML injection, screen-local inline styles and computed global-access shortcuts. Negative tests prove rejection. These checks are development guardrails, not a security sandbox or complete malicious-code detector. Security still needs server enforcement, review and runtime acceptance.
+
+CI gates: generated-contract drift and Python projection compatibility; strict TypeScript; ESLint/hooks; architecture negative controls; M3 design/database/security policy; unit tests; production static build; Playwright keyboard, accessibility, session, paging and failure tests; existing backend architecture/disposable integration workflows. No skip/disable/expected-output weakening to obtain green CI. New functionality adds relevant adversarial tests. Manual assistive-technology, genuine signed-browser and deployment/representative-data acceptance remain separate.
+
+Commands: from `frontend`, run `npm run policy:check` alongside Section 12 commands. Backend contract changes regenerate both schema and types. Runtime business changes cannot be justified by manually updating mock fixtures alone.

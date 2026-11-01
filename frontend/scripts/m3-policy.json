@@ -1,0 +1,19 @@
+{
+  "tokens": {
+    "accent": "#103a4b",
+    "ink": "#172d38",
+    "muted": "#435e6b",
+    "surface": "#ffffff",
+    "line": "#c7d4db",
+    "danger": "#9a2727",
+    "focus": "#126a9b"
+  },
+  "requiredScripts": [
+    "contracts:check",
+    "lint",
+    "test",
+    "build",
+    "test:e2e",
+    "policy:check"
+  ]
+}

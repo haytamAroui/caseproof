@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "contracts:generate": "node scripts/generate-types.mjs",
     "contracts:check": "node scripts/generate-types.mjs --check",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "policy:check": "node scripts/check-policy.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.105.0",

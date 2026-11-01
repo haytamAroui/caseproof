@@ -407,3 +407,7 @@ Branch `feat/frontend-foundation` adds the unmounted `frontend` React/Vite/TypeS
 ### UI foundation specification consolidation
 
 `frontend/BLUEPRINT.md` is the single maintained frontend execution and acceptance entry point. It incorporates corrected workspace UX while preserving generated backend contracts, authorized durable decisions, honest uncertainty, measured viewer geometry and deployment evidence. Client guidance files and ADR 0026 link to it; no new UI capability or acceptance is claimed by this documentation consolidation.
+
+## M3 rules and CI candidate — 1 November 2026
+
+`feat/m3-rules` extends the single frontend blueprint with database ownership and product philosophy, executable design/security policy, stronger AST boundaries and deliberate negative controls. It does not add a database schema, viewer or signed-user UI feature. CI evidence on the PR determines acceptance.
