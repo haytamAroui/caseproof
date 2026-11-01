@@ -79,6 +79,7 @@ test('frozen report, keyboard, accessibility, narrow layout and session removal'
     fullPage: true,
   });
   await page.getByRole('button', { name: 'End session' }).click();
+  await expect(page).toHaveURL('http://127.0.0.1:4173/workspace');
   await expect(
     page.getByRole('heading', { name: 'Connect your workspace session' }),
   ).toBeVisible();
@@ -123,7 +124,7 @@ test('schema mismatch and missing provider remain actionable', async ({
 test('empty results, provider absence and form validation are explicit', async ({
   page,
 }) => {
-  await page.goto('/workspace/');
+  await page.goto('/workspace/reports/open');
   await page.evaluate(() => {
     delete window.caseproofSession;
   });

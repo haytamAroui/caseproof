@@ -6,6 +6,7 @@ export default tseslint.config(
     ignores: [
       'src/shared/api/generated.ts',
       'src/shared/api/generated-validator*',
+      'src/shared/api/matters-generated*',
     ],
   },
   js.configs.recommended,

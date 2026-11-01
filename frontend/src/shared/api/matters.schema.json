@@ -1,0 +1,55 @@
+{
+  "$defs": {
+    "MatterView": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "case_revision": {
+          "minimum": 1,
+          "title": "Case Revision",
+          "type": "integer"
+        },
+        "state": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "case_revision",
+        "state"
+      ],
+      "title": "MatterView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "matters": {
+      "items": {
+        "$ref": "#/$defs/MatterView"
+      },
+      "maxItems": 100,
+      "title": "Matters",
+      "type": "array"
+    },
+    "schema": {
+      "const": "caseproof-workspace-matters-v1",
+      "title": "Schema",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "matters"
+  ],
+  "title": "MatterCatalogView",
+  "type": "object"
+}

@@ -22,9 +22,9 @@ jobs:
         with:
           python-version: '3.11'
       - run: uv run --locked python -m scripts.generate_frontend_contract --check
-      - run: uv run --locked pytest -q tests/test_frontend_contract.py
-      - run: uv run --locked ruff check application/litigation/frontend_contract.py scripts/generate_frontend_contract.py tests/test_frontend_contract.py
-      - run: uv run --locked mypy --explicit-package-bases application/litigation/frontend_contract.py scripts/generate_frontend_contract.py
+      - run: uv run --locked pytest -q tests/test_frontend_contract.py tests/test_workspace_catalog.py tests/test_clearbrief_signed_matter_catalog.py
+      - run: uv run --locked ruff check application/litigation/workspace_contract.py apps/api/workspace_catalog.py tests/test_workspace_catalog.py application/litigation/frontend_contract.py scripts/generate_frontend_contract.py tests/test_frontend_contract.py
+      - run: uv run --locked mypy --explicit-package-bases application/litigation/workspace_contract.py apps/api/workspace_catalog.py application/litigation/frontend_contract.py scripts/generate_frontend_contract.py
       - run: npm ci
         working-directory: frontend
       - name: Enforce M3 design, database and security policy

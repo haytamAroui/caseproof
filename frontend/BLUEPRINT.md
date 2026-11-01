@@ -443,3 +443,31 @@ URL state contains only approved opaque identifiers and bounded navigation/filte
 Implementation order follows F1–F6 in Section 13: signed host and permitted navigation → viewer spike → real intake/confirmation → full review → correction/recheck → export/reopen. Build the smallest complete flow, not every shell page first. P04 is assembled from real capabilities as they land; P08/P09 get listing/transport contracts before decorative placeholders. P10 disclosure appears when the processing mode is shown; administration and optional model notes do not block the core deterministic journey.
 
 Before each screen implementation, record its inputs, server contract, authority, loading/empty/error/stale states, primary action, keyboard/focus behavior, responsive arrangement and exit evidence in its PR against these IDs. Update this file if behavior changes; do not create another competing UI roadmap. Passing foundation CI does not accept these future flows or close M0/M2/security/practitioner gates.
+
+## 20. M3 implementation increment — permitted matter navigation
+
+P02 now consumes `GET /v2/workspace/matters`, mounted **only** in the injected
+loopback development composition. It wraps the existing `SignedMatterCatalog`:
+unchanged signed bearer → existing PostgREST invoker view/RLS → bounded projection.
+No new database query, migration, role, grant, auth provider or production mount.
+The generated `MatterCatalogView` schema permits at most 100 unique non-nil matter
+IDs with positive revisions and descriptive states. State text grants no action.
+Overflow fails closed; pagination beyond the bounded catalog is not implemented.
+
+P02 uses 20-row URL paging, explicit refresh and loading/empty/error states. A failed
+refresh hides prior results. Session end/access denial uses the existing request
+abort, generation fence and cache cleanup. Matter selection opens the existing
+report form with its matter field fixed; `/reports/open` retains manual report
+opening. Brief/snapshot history, creation and intake remain unavailable. A manually
+entered matter route is no permission proof; every report read reauthorizes.
+
+| Surface | Mounted API / schema                                                                                                          | Permission and reconciliation                                                                          | Evidence                                                                                                                                              |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P02     | `/v2/workspace/matters`; `application/litigation/workspace_contract.py` → `matters.schema.json` → precompiled validator/types | Existing signed invoker-view visibility; read-only explicit refresh, no optimistic records or mutation | `tests/test_workspace_catalog.py`, existing signed catalog adapter tests, `frontend/tests/matters.spec.ts`, `frontend/src/shared/api/matters.test.ts` |
+
+This is an F1 navigation increment, not F1 acceptance. The existing trusted-host
+bridge remains required; genuine signed React-browser grant/foreign/revoked/expiry
+acceptance, provider installation, NL/FR localization and manual accessibility
+review remain open. Browser transport fixtures are synthetic and do not prove RLS.
+Rollback removes this router include and matter feature/routes; existing catalog,
+reports, preserved sources and legacy clients are unchanged.
