@@ -187,6 +187,31 @@ Header/content/footer; bounded finding queue beside a dominant inspection area. 
 
 Reference repositories supply ideas, not authority or automatic adoption: OpenContracts for evidence workflows, Extend UI for source-linked inspection, tablecn/data-table-filters for data navigation, and Mozilla's own API/examples for PDF transforms. Verify repository, license, branch, source paths and commit before use. `sec-insights` is archived; old AllenAI/Extend file paths in prior proposals are not executable instructions. Prefer a reviewed small permissive component over maintaining unnecessary custom infrastructure; never import a whole product backend or incompatible workflow.
 
+
+### Design philosophy — evidence before decoration
+
+Audience: a litigation lawyer reviewing a consequential reference under time pressure. The interface's job is to make inspection, uncertainty and the next authorized action understandable. The design is a professional reading workspace, not a chat-first assistant, marketing dashboard or simulated Word editor.
+
+| Principle | Required design consequence | Review question |
+|---|---|---|
+| Evidence leads | The selected reference and preserved source receive the strongest spatial hierarchy. Provenance and inspection controls remain near the source. | Can the reviewer locate the actual evidence without opening unrelated panels? |
+| Uncertainty stays visible | Missing mapping, partial coverage, OCR conflict and unassessed support use explicit words and reasons. Filtering never hides the scope denominator. | Could a busy reader mistake an unchecked result for a confirmed one? |
+| Independent judgments | Keep deterministic dimensions and human disposition visually distinct; never merge them into an overall score or green document seal. | Is it obvious what the engine assessed and what a person decided? |
+| Reading comfort | Use restrained local typography, sufficient contrast, stable geometry and adjustable panes. Put visual emphasis on the selected evidence rather than ornamental cards. | Can the source and its context be read comfortably at normal and enlarged zoom? |
+| Progressive detail | Show the reason, source and next action first. Put hashes, parser versions and detailed coverage in clearly labelled disclosure panels, preserving access to them. | Does the initial view answer what needs attention without suppressing essential limitations? |
+| Useful density | Group related information and use compact rows where comparison benefits; retain readable text, focus visibility and operable targets. | Does density save navigation without requiring tiny text or unexplained abbreviations? |
+| Predictable interactions | One operation has one name, shared component and feedback pattern. Selection, navigation and saving are different actions. | Would the same action behave differently elsewhere in the workspace? |
+| Honest feedback | Distinguish loading, pending, saved, rejected, stale and uncertain completion. Announce success only after the relevant server receipt. | Does the feedback describe observed state rather than a hopeful animation? |
+| Accessible by default | Keyboard, pointer and assistive-technology users can inspect the same evidence and invoke equivalent actions. No hover-only explanation or drag-only layout control. | Is any essential information available only by color, hover or shortcut? |
+| Restraint builds trust | No flashing stale badges, decorative progress scores, approval confetti or gratuitous motion. Movement serves navigation and respects reduced motion. | Does this visual treatment help inspection or merely imply confidence? |
+| Privacy is ordinary UX | Do not expose source content in notifications, titles, browser history or telemetry. Describe the actual deployment mode without claiming unmeasured security. | Could a screenshot, notification or logged URL disclose unnecessary matter content? |
+
+**Composition:** workspace context → finding queue/filter scope → selected finding and source inspection → separate human review/correction action → attributable history/export. This is information hierarchy, not a mandate to fit every region into three narrow columns. At small widths, preserve the task sequence and source context rather than shrinking the desktop layout.
+
+**Reuse:** evaluate permitted source-linked review patterns and accessible primitives before inventing custom widgets. Adapt them to CaseProof's contracts and shared tokens. Do not copy another product's branding, business states or security assumptions. New shared patterns need documented purpose and interaction evidence; visual novelty alone is insufficient.
+
+**Design review before acceptance:** exercise a clean reference, missing source, unmapped page, OCR conflict, incomplete coverage, stale snapshot and failed save. Inspect desktop/narrow layout, keyboard focus, long NL/FR/EN text, 200% zoom and applicable high-contrast/reduced-motion behavior. Automated checks enforce selected rules only; manual review and practitioner observation assess comprehension. Record findings and limits, not an unsupported “fully accessible” claim. Changes to this philosophy must update affected tokens/components and verification together; this subsection and Section 11 remain the sole design guidance.
+
 ## 12. Verification, CI and commands
 
 From repository root:
