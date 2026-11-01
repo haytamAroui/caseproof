@@ -226,6 +226,27 @@ The frontend workflow tests the built static application under production CSP. K
 
 **Recorded foundation baseline:** code `d41ccca768d492f95917d170bc7639ab88d2c755` in [PR #162](https://github.com/haytamAroui/caseproof/pull/162): [frontend CI](https://github.com/haytamAroui/caseproof/actions/runs/41294319977) passed 15 unit/architecture tests, two Python projection tests and five Chromium browser tests; [kernel/integration CI](https://github.com/haytamAroui/caseproof/actions/runs/41294319980) passed 1,902 Python tests with four live gates intentionally skipped. All 16 automatic runs passed. This is dated foundation evidence, not a substitute for checks on later commits. No manual screen-reader, real signed React-browser, viewer or full M3/M4 acceptance follows from it.
 
+### Local operation and host integration
+
+Use Node 24 and the locked dependency tree. From `apps/web/client`, run `npm ci` then `npm run dev`. The development URL is `http://127.0.0.1:5173/workspace/`; Vite binds loopback and proxies `/v2` to `http://127.0.0.1:8000`. The existing backend must be started through its authorized injected development composition. Do not expose its fixture/admin interfaces. This foundation does not start the backend or create users/matters automatically.
+
+The current credential-source shape is the existing host bridge:
+
+```ts
+interface SessionHost {
+  getBearer(): Promise<string>;
+  clear?(): void;
+}
+// Current composition reads window.caseproofSession from a trusted host.
+// It is not accepted from a document, URL, localStorage or model output.
+```
+
+Clicking Connect session only attaches that credential source; the API still decides every permission. Without a configured host, the client displays an actionable unavailable state, not a sample login or fake dossier. Actual host/authentication-provider installation is F1. Developers MUST NOT paste tokens into committed code, product inputs, URLs or logs.
+
+An existing report can be opened at `/workspace/matters/:caseId/briefs/:briefId?snapshot=:snapshotHash`; the exact frozen snapshot must already exist and be authorized. `finding` and bounded `page` navigation are optional URL state. The foundation form takes these opaque report identifiers only; manual IDs are a foundation limitation, not the eventual intake experience.
+
+For an authorized build inspection, run `npm run build` then `npm run preview -- --port 4173`; open `http://127.0.0.1:4173/workspace/`. Preview enforces its configured response headers but is not a production hosting approval. A real deployment serves `dist` at `/workspace/`, gives that route an SPA fallback, keeps `/v2` on the existing API without an SPA fallback, and independently verifies headers, session routing, asset egress, revocation and rollback. No frontend environment variable may contain a service key or backend secret.
+
 ## 13. Build sequence and exit gates
 
 | Slice                      | Deliverable                                                                                                      | Exit evidence                                                                                                 | Current state                                     |
