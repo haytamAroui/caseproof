@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "ReportLinkView": {
+      "additionalProperties": false,
+      "properties": {
+        "brief_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "title": "Brief Id",
+          "type": "string"
+        },
+        "created_at": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Created At",
+          "type": "string"
+        },
+        "snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Snapshot Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "brief_id",
+        "snapshot_hash",
+        "created_at"
+      ],
+      "title": "ReportLinkView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    },
+    "reports": {
+      "items": {
+        "$ref": "#/$defs/ReportLinkView"
+      },
+      "maxItems": 20,
+      "title": "Reports",
+      "type": "array"
+    },
+    "schema": {
+      "const": "caseproof-workspace-reports-v1",
+      "title": "Schema",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "case_id",
+    "reports",
+    "next_cursor"
+  ],
+  "title": "ReportCatalogView",
+  "type": "object"
+}

@@ -424,6 +424,7 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
         "20261031234906_dossier_draft_revisions.sql",
         "20261031235117_dossier_draft_revision_fk_indexes.sql",
         "20261101004423_dossier_draft_revision_scoped_cleanup.sql",
+        "20261101205446_workspace_f1_report_catalog.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",

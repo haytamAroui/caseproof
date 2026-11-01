@@ -9,3 +9,9 @@ coverage
 src/shared/api/generated-validator*
 src/shared/api/matters-generated*
 src/shared/api/matters.schema.json
+
+src/shared/api/session-generated*
+src/shared/api/session.schema.json
+
+src/shared/api/reports-generated*
+src/shared/api/reports.schema.json

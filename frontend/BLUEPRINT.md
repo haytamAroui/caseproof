@@ -273,15 +273,15 @@ For an authorized build inspection, run `npm run build` then `npm run preview --
 
 ## 13. Build sequence and exit gates
 
-| Slice                      | Deliverable                                                                                                      | Exit evidence                                                                                                 | Current state                                       |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| F0 Foundation              | Structured client, generated projection, transport/session lifecycle, shared primitives, read-only frozen report | Architecture negatives; contract checks; unit/build/browser/axe; clear scope and rollback                     | Merged in PR #162 (main dcad45a); F1–F6 remain open |
-| F1 Signed host integration | Reviewed authentication/session adapter and authorized matter/report navigation                                  | Genuine signed browser grant/foreign/revoked/expiry tests; no token persistence                               | OPEN                                                |
-| F2 Viewer decision         | Same-fixture server-image/PDF.js comparison through the evidence port                                            | Section 7 matrix and accepted engine/asset/security record                                                    | OPEN                                                |
-| F3 Intake                  | User-created matter, full DOCX/inventory/text-PDF/scan upload, confirm and recovery                              | Browser journey without manually seeded identifiers; fresh original hash readback; interrupted/denied cleanup | OPEN                                                |
-| F4 Review workspace        | Source/brief navigation, page-space display, uncertainty/coverage, human rationale and durable receipt           | Genuine browser review, stale/revoked/unknown-outcome/restart tests; accessibility and language checks        | OPEN                                                |
-| F5 Correction/recheck      | Supported redline preview, new draft activation and canonical recheck                                            | Original unchanged; stale/competing/retry rejection; actual new draft/report reopened                         | OPEN                                                |
-| F6 M4 delivery             | Scoped report and supported corrected/annotated DOCX; actual source navigation                                   | Download/reopen/link/hash/permission tests on actual bytes; limitations disclosed                             | OPEN                                                |
+| Slice                      | Deliverable                                                                                                      | Exit evidence                                                                                                 | Current state                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| F0 Foundation              | Structured client, generated projection, transport/session lifecycle, shared primitives, read-only frozen report | Architecture negatives; contract checks; unit/build/browser/axe; clear scope and rollback                     | Merged in PR #162 (main dcad45a); F1–F6 remain open                                                               |
+| F1 Signed host integration | Reviewed authentication/session adapter and authorized matter/report navigation                                  | Genuine signed browser grant/foreign/revoked/expiry tests; no token persistence                               | Engineering exits passed; PR/independent review pending ([receipt](../docs/m3/F1_SIGNED_WORKSPACE_ACCEPTANCE.md)) |
+| F2 Viewer decision         | Same-fixture server-image/PDF.js comparison through the evidence port                                            | Section 7 matrix and accepted engine/asset/security record                                                    | OPEN                                                                                                              |
+| F3 Intake                  | User-created matter, full DOCX/inventory/text-PDF/scan upload, confirm and recovery                              | Browser journey without manually seeded identifiers; fresh original hash readback; interrupted/denied cleanup | OPEN                                                                                                              |
+| F4 Review workspace        | Source/brief navigation, page-space display, uncertainty/coverage, human rationale and durable receipt           | Genuine browser review, stale/revoked/unknown-outcome/restart tests; accessibility and language checks        | OPEN                                                                                                              |
+| F5 Correction/recheck      | Supported redline preview, new draft activation and canonical recheck                                            | Original unchanged; stale/competing/retry rejection; actual new draft/report reopened                         | OPEN                                                                                                              |
+| F6 M4 delivery             | Scoped report and supported corrected/annotated DOCX; actual source navigation                                   | Download/reopen/link/hash/permission tests on actual bytes; limitations disclosed                             | OPEN                                                                                                              |
 
 Do not block the evidence spike on a complete shell, or replace working backend services to suit a UI library. Practitioner interviews and representative review proceed independently of this engineering sequence. No practitioner findings are fabricated by tests.
 
@@ -471,3 +471,34 @@ acceptance, provider installation, NL/FR localization and manual accessibility
 review remain open. Browser transport fixtures are synthetic and do not prove RLS.
 Rollback removes this router include and matter feature/routes; existing catalog,
 reports, preserved sources and legacy clients are unchanged.
+
+## 21. F1 signed-workspace implementation candidate
+
+[ADR 0027](../docs/adr/0027-workspace-signed-session-and-report-navigation.md)
+records the existing-provider same-origin password adapter, memory-only access
+session, explicit expiry/relogin, protected genuine browser acceptance and read-only
+report navigation proposal. No refresh-token persistence, client database SDK,
+public listener or new provider. P01 owns sign-in with shared primitives; P02
+retains the existing matter list; selecting a matter now opens its bounded frozen
+report catalog and an existing report link. Manual `/reports/open` remains an
+advanced compatibility path. Hash-order paging is explicit and not chronological.
+
+| Surface               | Exact interface / schema                                                                                                      | Authority / acceptance                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| P01                   | POST `/v2/workspace/session`; `SessionView` → generated schema/types/precompiled validation; POST `/v2/workspace/session/end` | Existing pinned Auth password transport + remote user verification; no new permission or refresh-token exposure        |
+| P02 report navigation | GET `/v2/workspace/matters/{case_id}/reports?after=…`; `ReportCatalogView` → generated schema/types/precompiled validation    | New read-only SQL proposal over existing grants; actual installation and genuine denied/revoked browser proof required |
+| Runtime               | Explicit trusted built-static directory in loopback composition                                                               | Fixed asset allowlist, no SPA fallback for APIs, same-origin CSP; no automatic production mount                        |
+
+401/403/404 sensitive reads end the local session, cancel requests and clear query
+cache/private routes, including masked denied resources. This deliberate fail-closed
+variant can require re-sign-in after an invalid report link. 409 remains a stale
+snapshot error, never a successful write. Session expiry clears idle DOM as well as
+requests; every read rechecks expiry even if browser timers were suspended. Provider
+sign-out errors are disclosed without restoring local data. Downloaded files and
+unexpired issued JWTs cannot be recalled by browser clearing.
+
+F1 remains a candidate until the exact commit's synthetic/disposable and protected
+genuine signed-browser receipts pass. No provider/region/client-data, independent
+security, manual screen-reader or full M3 approval is implied.
+
+F1 engineering receipt: code `dfafb5769349c95cb1f5adcad09887251d4279cd` passed all 18 ordinary PR workflows and the protected genuine signed browser run with zero-residual teardown. See the [measured F1 acceptance record](../docs/m3/F1_SIGNED_WORKSPACE_ACCEPTANCE.md). This closes the F1 engineering exit tests, while independent review, security/privacy/manual accessibility and deployment approval remain separate. F2–F6 remain open.

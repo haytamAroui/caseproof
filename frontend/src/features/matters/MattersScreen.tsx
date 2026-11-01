@@ -31,8 +31,8 @@ export function MattersScreen({ api }: { api: ApiClient }) {
       <Notice>
         This development catalog lists up to 100 matters. Matter access does not
         grant permission to review, correct or export. Each request is
-        authorized separately. Report history and new matter intake are not
-        connected yet.
+        authorized separately. Select a matter to browse preserved reports. New
+        matter intake is not connected yet.
       </Notice>
       <div className="catalog-actions">
         <Button

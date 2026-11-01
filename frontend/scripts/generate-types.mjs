@@ -5,6 +5,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 for (const [name, type, stem] of [
   ['dossier', 'DossierView', 'generated'],
   ['matters', 'MatterCatalogView', 'matters-generated'],
+  ['session', 'SessionView', 'session-generated'],
+  ['reports', 'ReportCatalogView', 'reports-generated'],
 ]) {
   const source = new URL(
       `../src/shared/api/${name}.schema.json`,

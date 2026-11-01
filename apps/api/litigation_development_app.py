@@ -29,7 +29,9 @@ from apps.api.litigation_workspace_sources import create_clearbrief_sources_rout
 from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
+from apps.api.workspace_auth import SupabaseWorkspaceAuth, create_workspace_auth_router
 from apps.api.workspace_catalog import create_workspace_catalog_router
+from apps.api.workspace_reports import WorkspaceReports, create_workspace_reports_router
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 
 
@@ -44,6 +46,7 @@ def create_litigation_development_app(
     ocr: LocalPDFOCR | None = None,
     headless: HeadlessMatterStore | None = None,
     page_worker_secret: str | None = None,
+    workspace_directory: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(title="CaseProof loopback development", docs_url=None, redoc_url=None, openapi_url=None)
     # One shared checker ensures search and check use the same trust boundary.
@@ -77,6 +80,8 @@ def create_litigation_development_app(
 
     catalog = SignedMatterCatalog(publishable_key) if publishable_key else None
     app.include_router(create_workspace_catalog_router(catalog))
+    app.include_router(create_workspace_reports_router(WorkspaceReports(publishable_key) if publishable_key else None))
+    app.include_router(create_workspace_auth_router(SupabaseWorkspaceAuth(publishable_key) if publishable_key else None))
 
     @app.get("/dev/clearbrief/matters", include_in_schema=False)
     def lawyer_matters(authorization: str | None = Header(default=None)) -> dict[str, object]:
@@ -84,6 +89,21 @@ def create_litigation_development_app(
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return {"schema": "caseproof-clearbrief-matters-v1",
                 "matters": catalog.list_matters(_token(authorization))}
+
+    if workspace_directory is not None:
+        root = workspace_directory.resolve(strict=True)
+        assets = {str(p.relative_to(root)): p for p in root.rglob('*') if p.is_file() and not p.is_symlink()}
+        if 'index.html' not in assets:
+            raise ValueError('Built workspace index required')
+
+        @app.get('/workspace', include_in_schema=False)
+        @app.get('/workspace/{workspace_path:path}', include_in_schema=False)
+        def workspace_asset(workspace_path: str = '') -> FileResponse:
+            if workspace_path.startswith('assets/'):
+                if workspace_path not in assets:
+                    raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+                return FileResponse(assets[workspace_path])
+            return FileResponse(assets['index.html'], media_type='text/html')
 
     # Fixed static assets: no user-defined paths and no production mount.
     _workspace = Path(__file__).resolve().parents[1] / "web" / "clearbrief"
@@ -189,6 +209,12 @@ def create_litigation_development_app(
                 "style-src 'self'; connect-src 'self' https://ldwmocpxwskvhoojndrd.supabase.co; "
                 "img-src 'self' data:; base-uri 'none'; form-action 'none'; "
                 "frame-ancestors 'self' https://*.office.com https://*.officeapps.live.com"
+            )
+        elif request.url.path == '/workspace' or request.url.path.startswith('/workspace/'):
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'none'; script-src 'self'; style-src 'self'; "
+                "connect-src 'self'; img-src 'self' blob:; font-src 'self'; worker-src 'self'; "
+                "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
             )
         elif request.url.path.startswith("/dev/clearbrief"):
             response.headers["Content-Security-Policy"] = (

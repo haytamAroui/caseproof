@@ -1,6 +1,7 @@
 /** Memory-only host bridge; server authorization remains authoritative. */
 export interface SessionHost {
   getBearer(): Promise<string>;
+  expiresAt?: number;
   clear?(): void;
 }
 export class SessionEnded extends Error {
@@ -10,6 +11,7 @@ export class SessionEnded extends Error {
 }
 export class SessionController {
   private host: SessionHost | null = null;
+  private expiryTimer: ReturnType<typeof setTimeout> | undefined;
   private snapshot = { epoch: 0, connected: false };
   private listeners = new Set<() => void>();
   private aborters = new Set<AbortController>();
@@ -29,11 +31,23 @@ export class SessionController {
   };
   connect(host: SessionHost) {
     this.clear();
+    if (
+      host.expiresAt !== undefined &&
+      (!Number.isFinite(host.expiresAt) || host.expiresAt <= Date.now())
+    )
+      throw new SessionEnded();
     this.host = host;
+    if (host.expiresAt !== undefined)
+      this.expiryTimer = setTimeout(
+        () => this.clear(),
+        Math.min(host.expiresAt! - Date.now(), 2147483647),
+      );
     this.snapshot = { epoch: this.snapshot.epoch, connected: true };
     this.emit();
   }
   clear() {
+    clearTimeout(this.expiryTimer);
+    this.expiryTimer = undefined;
     const host = this.host;
     this.host = null;
     this.snapshot = { epoch: this.snapshot.epoch + 1, connected: false };
@@ -48,9 +62,23 @@ export class SessionController {
   }
   assert(epoch: number) {
     if (!this.host || epoch !== this.snapshot.epoch) throw new SessionEnded();
+    if (
+      this.host.expiresAt !== undefined &&
+      this.host.expiresAt <= Date.now()
+    ) {
+      this.clear();
+      throw new SessionEnded();
+    }
   }
   async bearer(epoch: number) {
     this.assert(epoch);
+    if (
+      this.host?.expiresAt !== undefined &&
+      this.host.expiresAt <= Date.now()
+    ) {
+      this.clear();
+      throw new SessionEnded();
+    }
     let token: string;
     try {
       token = await this.host!.getBearer();

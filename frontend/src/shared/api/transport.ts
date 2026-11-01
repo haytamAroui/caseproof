@@ -43,7 +43,11 @@ export class ApiClient {
       });
       this.session.assert(epoch);
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403)
+        if (
+          response.status === 401 ||
+          response.status === 403 ||
+          response.status === 404
+        )
           this.session.clear();
         throw new ApiError(response.status);
       }
@@ -81,5 +85,85 @@ export class ApiClient {
     } finally {
       release();
     }
+  }
+}
+
+/** Exact same-origin auth endpoints; no credentials or session material persisted. */
+export class AuthTransport {
+  constructor(private send: typeof fetch = (...args) => fetch(...args)) {}
+  async login(
+    email: string,
+    password: string,
+    signal: AbortSignal,
+  ): Promise<unknown> {
+    const response = await this.send('/v2/workspace/session', {
+      method: 'POST',
+      credentials: 'omit',
+      redirect: 'error',
+      cache: 'no-store',
+      referrerPolicy: 'no-referrer',
+      signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok)
+      throw new Error(
+        response.status === 401
+          ? 'Sign-in was rejected. Check your email and password.'
+          : response.status === 429
+            ? 'Too many sign-in attempts. Wait a minute and try again.'
+            : 'Sign-in is unavailable. Try again.',
+      );
+    if (
+      !response.headers.get('content-type')?.includes('application/json') ||
+      !response.body
+    )
+      throw new Error('Invalid sign-in response.');
+    const reader = response.body.getReader();
+    const parts: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const part = await reader.read();
+        if (part.done) break;
+        size += part.value.length;
+        if (size > 16384) throw new Error('Invalid sign-in response.');
+        parts.push(part.value);
+      }
+    } catch (error) {
+      await reader.cancel();
+      throw error;
+    } finally {
+      reader.releaseLock();
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const part of parts) {
+      bytes.set(part, offset);
+      offset += part.length;
+    }
+    if (signal.aborted) throw new SessionEnded();
+    try {
+      return JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(bytes),
+      ) as unknown;
+    } catch {
+      throw new Error('Invalid sign-in response.');
+    }
+  }
+  async logout(token: string): Promise<void> {
+    const response = await this.send('/v2/workspace/session/end', {
+      method: 'POST',
+      credentials: 'omit',
+      redirect: 'error',
+      cache: 'no-store',
+      referrerPolicy: 'no-referrer',
+      signal: AbortSignal.timeout(15000),
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok)
+      throw new Error(
+        'Workspace cleared. Provider sign-out could not be confirmed.',
+      );
   }
 }

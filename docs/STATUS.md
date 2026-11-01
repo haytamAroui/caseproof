@@ -426,3 +426,30 @@ lint, typing, generated-contract checks, policy and production build passed.
 Local Playwright could not launch because Chromium is absent and its download
 returned an invalid archive. Cloud/browser results are pending at this entry.
 F1 genuine signed-browser acceptance and the remaining F2–F6 flows stay open.
+
+## Complete F1 candidate — 1 November 2026
+
+Branch `feat/f1-signed-workspace` implements same-origin existing-provider password
+sign-in, verified access expiry, memory-only host, provider sign-out, idle expiry and
+masked-read clearing, explicit loopback static runtime and authorized frozen-report
+keyset navigation. ADR 0027 and frontend blueprint section 21 define scope,
+authority, proposal/rollback and acceptance. No new provider, client database SDK,
+refresh-token persistence, production mount or client data.
+
+A read-only catalog function proposal over the existing membership/grants/snapshots
+is prepared; it is not installed at this entry. Synthetic browser and actual
+disposable PostgreSQL checks are added. Protected genuine signed browser workflow
+requires native dev function installation and the exact reviewed protected branch;
+it reuses registered synthetic fixtures and finally zero-residual cleanup. No live
+F1 completion or independent security review is claimed before actual receipts.
+
+### F1 engineering exit evidence — supersedes pending state above
+
+PR #165 code head `dfafb5769349c95cb1f5adcad09887251d4279cd` passed 18 automatic
+PR workflows and the separate [protected genuine signed browser run](https://github.com/haytamAroui/caseproof/actions/runs/41349381335).
+Actual password login, authorized matter/report navigation, cold reload/relogin,
+foreign/ungranted/current-grant revocation and browser-clock expiry passed, followed
+by `ZERO_RESIDUAL_VERIFIED`. Native dev migration `20261101205446` is installed and
+recorded byte-for-byte. F1 engineering exit tests are passed; PR/human review and
+independent security/production gates remain open. [Measured record](m3/F1_SIGNED_WORKSPACE_ACCEPTANCE.md).
+F2 viewer, F3 intake, F4 review, F5 correction and F6 output are unchanged/open.
