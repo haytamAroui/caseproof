@@ -2,7 +2,7 @@ name: Complete signed dossier live acceptance
 # Final receipt revision: rerun protected acceptance on this exact documentation head.
 on:
   push:
-    branches: [feat/complete-dossier-journey, fix/dossier-ranges-mixed, feat/final-hardening-and-verification, feat/canonical-mcp-report-gate-20261031]
+    branches: [fix/m1-multisource-live-acceptance, feat/complete-dossier-journey, fix/dossier-ranges-mixed, feat/final-hardening-and-verification, feat/canonical-mcp-report-gate-20261031]
   workflow_dispatch:
     inputs:
       correction:
@@ -48,7 +48,7 @@ jobs:
           CASEPROOF_DOSSIER_EDGE_CASES: "YES"
         run: uv run --locked --with python-docx --with reportlab --with pillow python -m scripts.dossier_live
       - name: Installed-schema signed correction, retry, recheck and cold restart
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.correction }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.correction) || (github.event_name == 'push' && github.repository == 'haytamAroui/caseproof' && github.ref == 'refs/heads/fix/m1-multisource-live-acceptance') }}
         env:
           CASEPROOF_DOSSIER_CORRECTION: "YES"
         run: uv run --locked python -m scripts.dossier_live
