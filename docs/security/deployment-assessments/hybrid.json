@@ -1,0 +1,187 @@
+{
+  "schema": "caseproof-deployment-evidence-v1",
+  "status": "OPEN",
+  "mode": "hybrid",
+  "environment": null,
+  "build_sha": null,
+  "configuration_sha256": null,
+  "security_owner": null,
+  "privacy_owner": null,
+  "data_flows": [],
+  "network_capture": {
+    "scope": null,
+    "artifact_sha256": null,
+    "test_date": null,
+    "expected_destinations": null,
+    "unexpected_destinations": null,
+    "observation_limits": null,
+    "failure_retry_evidence": null,
+    "capture_access_roles": null,
+    "capture_retention_seconds": null
+  },
+  "retention": [
+    {
+      "data_class": "backups",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "expiry_rule": null,
+      "restore_test_evidence": null,
+      "restored_data_redeletion_rule": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "caches",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "crops",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "hashes",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "identifiers",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "logs",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "ocr_text",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "originals",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "queues",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "reference_strings",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "reports",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "reviews",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "temporary_files",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "timing",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "translations",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    },
+    {
+      "data_class": "verdicts",
+      "kept": null,
+      "location": null,
+      "duration_seconds": null,
+      "access_roles": [],
+      "deletion_rule": null,
+      "deletion_evidence": null,
+      "legal_hold_rule": null
+    }
+  ]
+}
