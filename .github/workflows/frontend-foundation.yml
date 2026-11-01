@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: apps/web/client/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: '3.11'
@@ -26,18 +26,18 @@ jobs:
       - run: uv run --locked ruff check application/litigation/frontend_contract.py scripts/generate_frontend_contract.py tests/test_frontend_contract.py
       - run: uv run --locked mypy --explicit-package-bases application/litigation/frontend_contract.py scripts/generate_frontend_contract.py
       - run: npm ci
-        working-directory: apps/web/client
+        working-directory: frontend
       - run: npm run contracts:check && npm run lint && npm test && npm run build
-        working-directory: apps/web/client
+        working-directory: frontend
       - run: npx playwright install --with-deps chromium
-        working-directory: apps/web/client
+        working-directory: frontend
       - run: npm run test:e2e
-        working-directory: apps/web/client
+        working-directory: frontend
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: frontend-synthetic-browser-evidence
           path: |
-            apps/web/client/test-results
-            apps/web/client/playwright-report
+            frontend/test-results
+            frontend/playwright-report
           retention-days: 7

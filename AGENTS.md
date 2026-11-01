@@ -45,4 +45,4 @@ After each task: implemented paths and commit, exact CI/test evidence, risk and 
 
 ## Real frontend foundation — single entry point
 
-For work in `apps/web/client`, read [BLUEPRINT.md](apps/web/client/BLUEPRINT.md). It is the single maintained UI foundation specification, covering architecture, contracts, security, design, interaction, build sequence and acceptance. Client README/DESIGN/UX files are pointers. Existing finance/ClearBrief documents remain scoped historical/regression references; no production or milestone permission follows from this blueprint.
+For work in `frontend`, read [BLUEPRINT.md](frontend/BLUEPRINT.md). It is the single maintained UI foundation specification, covering architecture, contracts, security, design, interaction, build sequence and acceptance. Client README/DESIGN/UX files are pointers. Existing finance/ClearBrief documents remain scoped historical/regression references; no production or milestone permission follows from this blueprint.

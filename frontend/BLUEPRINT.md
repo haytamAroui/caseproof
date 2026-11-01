@@ -4,11 +4,11 @@
 
 **Status:** Owner-requested engineering direction. The foundation is implemented in PR #162; the remaining workspace capabilities below are acceptance requirements, not delivered features. This document grants no deployment, client-data, legal or milestone approval.
 
-**Single entry point:** Read this file before designing, implementing or reviewing the real CaseProof frontend in `apps/web/client`. It owns frontend structure, interaction, design and acceptance rules. `AGENTS.md`, `DESIGN.md`, `UX-CONTRACT.md` and `README.md` in this directory are pointers, not competing specifications. Legacy finance/ClearBrief screens are regression references, not the new client's architecture.
+**Single entry point:** Read this file before designing, implementing or reviewing the real CaseProof frontend in `frontend`. It owns frontend structure, interaction, design and acceptance rules. `AGENTS.md`, `DESIGN.md`, `UX-CONTRACT.md` and `README.md` in this directory are pointers, not competing specifications. Legacy finance/ClearBrief screens are regression references, not the new client's architecture.
 
 ## 1. Authority, scope and change protocol
 
-Repository [CONSTITUTION.md](../../../CONSTITUTION.md), [ADR 0011](../../../docs/adr/0011-architecture-freeze-and-first-finance-slice.md), [ADR 0022](../../../docs/adr/0022-verification-contract-report.md), [ADR 0025](../../../docs/adr/0025-deployment-data-retention-and-model-authority.md), and the [roadmap](../../../docs/ROADMAP.md) retain authority for security, evidence and product behavior. [ADR 0026](../../../docs/adr/0026-frontend-foundation.md) records the frontend decision. If this file conflicts with those contracts, resolve the conflict explicitly before implementing the affected behavior.
+Repository [CONSTITUTION.md](../CONSTITUTION.md), [ADR 0011](../docs/adr/0011-architecture-freeze-and-first-finance-slice.md), [ADR 0022](../docs/adr/0022-verification-contract-report.md), [ADR 0025](../docs/adr/0025-deployment-data-retention-and-model-authority.md), and the [roadmap](../docs/ROADMAP.md) retain authority for security, evidence and product behavior. [ADR 0026](../docs/adr/0026-frontend-foundation.md) records the frontend decision. If this file conflicts with those contracts, resolve the conflict explicitly before implementing the affected behavior.
 
 M3 is the authenticated web review workflow. M4 is safe reviewed output and reproducible reopening. First market: Belgian post-assembly DOCX brief, inventory, text PDF and scanned exhibits; NL/FR/EN. German, legal research, filing, a general DOCX editor, public MCP hosting and a Word-mandatory product are outside this increment.
 
@@ -198,7 +198,7 @@ uv run --locked ruff check application/litigation/frontend_contract.py scripts/g
 uv run --locked mypy --explicit-package-bases application/litigation/frontend_contract.py scripts/generate_frontend_contract.py
 ```
 
-From `apps/web/client`:
+From `frontend`:
 
 ```bash
 npm ci
@@ -228,7 +228,7 @@ The frontend workflow tests the built static application under production CSP. K
 
 ### Local operation and host integration
 
-Use Node 24 and the locked dependency tree. From `apps/web/client`, run `npm ci` then `npm run dev`. The development URL is `http://127.0.0.1:5173/workspace/`; Vite binds loopback and proxies `/v2` to `http://127.0.0.1:8000`. The existing backend must be started through its authorized injected development composition. Do not expose its fixture/admin interfaces. This foundation does not start the backend or create users/matters automatically.
+Use Node 24 and the locked dependency tree. From `frontend`, run `npm ci` then `npm run dev`. The development URL is `http://127.0.0.1:5173/workspace/`; Vite binds loopback and proxies `/v2` to `http://127.0.0.1:8000`. The existing backend must be started through its authorized injected development composition. Do not expose its fixture/admin interfaces. This foundation does not start the backend or create users/matters automatically.
 
 The current credential-source shape is the existing host bridge:
 
@@ -271,7 +271,7 @@ The foundation is unmounted. Rollback removes/disables its static build/workflow
 
 ## 15. Primary references
 
-- [CaseProof frontend ADR](../../../docs/adr/0026-frontend-foundation.md), [canonical report contract](../../../docs/adr/0022-verification-contract-report.md), [deployment evidence](../../../docs/security/DEPLOYMENT_EVIDENCE_RUNBOOK.md).
+- [CaseProof frontend ADR](../docs/adr/0026-frontend-foundation.md), [canonical report contract](../docs/adr/0022-verification-contract-report.md), [deployment evidence](../docs/security/DEPLOYMENT_EVIDENCE_RUNBOOK.md).
 - [React application setup and tradeoffs](https://react.dev/learn/build-a-react-app-from-scratch), [Vite backend integration](https://vite.dev/guide/backend-integration), [React Router modes](https://reactrouter.com/start/modes), [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview).
 - [PDF.js API](https://mozilla.github.io/pdf.js/api/draft/module-pdfjsLib.html), [Mozilla PDF.js security advisories](https://github.com/mozilla/pdf.js/security/advisories).
 - [docx-preview limitations and break behavior](https://github.com/VolodymyrBaydalka/docxjs/blob/master/README.md).

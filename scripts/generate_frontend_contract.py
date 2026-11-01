@@ -5,7 +5,7 @@ from pathlib import Path
 
 from application.litigation.frontend_contract import DossierView
 
-TARGET = Path(__file__).resolve().parents[1] / "apps/web/client/src/shared/api/dossier.schema.json"
+TARGET = Path(__file__).resolve().parents[1] / "frontend/src/shared/api/dossier.schema.json"
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
