@@ -164,6 +164,7 @@ test('same-fixture server-image versus pinned PDF.js: geometry, budgets and clea
     },
     evidence,
   };
+  console.log('F2_COMPARISON_JSON:' + JSON.stringify(report));
   await writeFile(
     testInfo.outputPath('comparison.json'),
     JSON.stringify(report, null, 2),

@@ -28,6 +28,8 @@ jobs:
         run: |
           docker run --rm --network none caseproof-ocr-worker:ci pdftoppm -v > frontend/tests/viewer-comparison/generated/server-version.txt 2>&1
           docker image inspect --format '{{.Id}}' caseproof-ocr-worker:ci > frontend/tests/viewer-comparison/generated/server-image.txt
+      - name: Print bounded engine version receipts
+        run: cat frontend/tests/viewer-comparison/generated/server-version.txt frontend/tests/viewer-comparison/generated/server-image.txt
       - run: npm ci && npm run viewer:build
         working-directory: frontend
       - run: npx playwright install --with-deps chromium

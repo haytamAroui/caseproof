@@ -92,7 +92,7 @@ def main():
     parser.add_argument("--out", required=True)
     parser.add_argument("--server", action="store_true")
     args = parser.parse_args()
-    out = Path(args.out)
+    out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     specs = [
         ("clean", 0, False, 1, False, False),
