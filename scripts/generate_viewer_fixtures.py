@@ -133,6 +133,7 @@ def main():
             "cropBox": crop,
             "mediaBox": [0, 0, 600, 800],
             "expectedBox": expected_box(crop, rotation),
+            "expectedByRotation": {str(r): expected_box(crop, r) for r in (0, 90, 180, 270)},
             "pages": count,
             "supported": count <= 200,
             "scan": scan,

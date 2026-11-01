@@ -49,4 +49,24 @@ it('requires actual PDF digest/length/snapshot and rejects forged bytes', async 
       new AbortController().signal,
     ),
   ).rejects.toThrow();
+  const altered = bytes.slice();
+  altered[altered.length - 1] = 88;
+  const forged = new ApiClient(
+    session,
+    async () =>
+      new Response(altered, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'X-CaseProof-Snapshot': snapshot,
+          'X-CaseProof-Original-SHA256': sha,
+        },
+      }),
+  );
+  await expect(
+    forged.pdf(
+      '/v2/source',
+      { sha256: sha, snapshot, length: bytes.length },
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow();
 });

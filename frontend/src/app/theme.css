@@ -397,3 +397,8 @@ footer {
 .viewer-page canvas[hidden] {
   display: none;
 }
+
+.viewer-scroll:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}

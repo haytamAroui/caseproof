@@ -305,7 +305,13 @@ export function SourceViewer({
           </p>
         </>
       )}
-      <div ref={frame} className="viewer-scroll">
+      <div
+        ref={frame}
+        className="viewer-scroll"
+        role="region"
+        aria-label="Scrollable source page"
+        tabIndex={0}
+      >
         <div
           className={`viewer-page viewer-zoom-${zoom * 100}`}
           aria-busy={rendering}

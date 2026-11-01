@@ -5,6 +5,7 @@ interface Fixture {
   name: string;
   pages: number;
   expectedBox: number[];
+  expectedByRotation: Record<string, number[]>;
   scan: boolean;
   rotation: number;
   cropBox: number[];
@@ -108,6 +109,16 @@ test('same-fixture server-image versus pinned PDF.js: geometry, budgets and clea
           angle,
         );
         expect(r.rotation).toBe((fixture.rotation + angle) % 360);
+        const expected = fixture.expectedByRotation[String(r.rotation)]!;
+        const pixels = await page.evaluate(
+          (box) => window.f2Harness.probe(box),
+          expected,
+        );
+        for (let i = 0; i < 4; i++)
+          expect(
+            Math.abs(pixels.bounds[i]! - expected[i]!),
+          ).toBeLessThanOrEqual(2);
+
         expect(r.renderMs).toBeLessThan(5000);
       }
     }

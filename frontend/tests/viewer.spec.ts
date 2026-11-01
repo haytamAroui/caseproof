@@ -90,6 +90,13 @@ test('real worker pixels, repeated search, zoom/rotate/resize, page navigation a
   await expect(
     page.getByText('Source page rendered.', { exact: true }),
   ).toBeVisible();
+  const scroll = page.getByRole('region', { name: 'Scrollable source page' });
+  await scroll.focus();
+  const beforeScroll = await scroll.evaluate((node) => node.scrollTop);
+  await page.keyboard.press('ArrowDown');
+  await expect
+    .poll(() => scroll.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(beforeScroll);
   await page.getByLabel('Find text on this page').fill('Repeated source text');
   await expect(
     page.getByText('2 derived text locations in this page.', { exact: false }),
