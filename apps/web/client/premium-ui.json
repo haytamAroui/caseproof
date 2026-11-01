@@ -2,7 +2,7 @@
   "profile": "product-admin",
   "sourceRoots": ["src"],
   "locale": "en-BE",
-  "canonicalMap": "UX-CONTRACT.md",
+  "canonicalMap": "BLUEPRINT.md",
   "requiredCapabilities": ["Form", "Scrollbar", "Toast"],
   "requiredCommands": ["unit", "e2e", "typecheck", "lint", "build"],
   "commands": {

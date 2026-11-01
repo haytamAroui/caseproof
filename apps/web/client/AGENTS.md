@@ -1,3 +1,3 @@
-# Frontend boundaries
+# Frontend agent entry point
 
-Use strict TypeScript. App composes features through public indexes. Features depend on shared code only; cross-feature workflow orchestration belongs in app. Shared never imports features/app. All authenticated networking goes through shared/api; no browser storage or telemetry. Never derive verification results or approval from UI state. Read DESIGN.md and UX-CONTRACT.md here before changes. Run npm run contracts:check, lint, test, build and test:e2e. API tests require no client documents or real tokens. Viewer selection remains gated by clean/scan/rotation/CropBox/200-page acceptance. Do not copy components without license attribution and accessibility tests.
+Read [BLUEPRINT.md](BLUEPRINT.md) as the single frontend foundation specification before any UI work. It owns architecture, design tokens, interaction, security, commands and acceptance gates. This file is a navigation pointer only. Repository constitution and applicable parent AGENTS.md remain binding.
