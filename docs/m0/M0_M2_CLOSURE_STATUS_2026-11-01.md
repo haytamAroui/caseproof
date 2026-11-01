@@ -38,6 +38,10 @@ Passing it means ready for external credential/evidence verification,
 not that independent review or M0 acceptance happened. Do not fill blank forms on
 behalf of a real reviewer or replace their judgments with author-gold labels.
 
+CI preserves the actual measured DOCX files together with per-file SHA-256,
+brief-text SHA-256, corpus hash and algorithm/rule versions. This permits exact
+input-byte inspection; it does not authenticate the gold labels.
+
 The synthetic measurement contains 19 labelled occurrences across 18 cases: 13
 supported Stuk/Pièce occurrences and six unsupported English Exhibit occurrences.
 Flagging the six unsupported references does not make them technically verified,

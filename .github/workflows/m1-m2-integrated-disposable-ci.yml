@@ -51,11 +51,13 @@ jobs:
       - name: Measure actual synthetic DOCX reference detection with explicit misses
         run: |
           uv run --locked pytest -q tests/test_litigation_detection_evaluation.py tests/test_unsupported_exhibit_references.py tests/test_independent_review_completeness.py
-          uv run --locked python -m scripts.evaluate_litigation_detection --output /tmp/caseproof-detection-evaluation.json
+          uv run --locked python -m scripts.evaluate_litigation_detection --output /tmp/caseproof-detection-evaluation.json --fixtures-dir /tmp/caseproof-detection-inputs
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: synthetic-reference-detection-measurement
-          path: /tmp/caseproof-detection-evaluation.json
+          path: |
+            /tmp/caseproof-detection-evaluation.json
+            /tmp/caseproof-detection-inputs
           retention-days: 7
       - name: Initialize full protected local backend
         run: |
