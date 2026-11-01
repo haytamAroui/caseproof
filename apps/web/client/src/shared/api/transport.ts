@@ -13,7 +13,7 @@ export class ApiError extends Error {
 export class ApiClient {
   constructor(
     private session: SessionController,
-    private send: typeof fetch = fetch,
+    private send: typeof fetch = (...args) => fetch(...args),
   ) {}
   async get(path: string, signal?: AbortSignal): Promise<unknown> {
     if (

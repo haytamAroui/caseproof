@@ -100,7 +100,7 @@ test('denied access clears private view; no automatic retry', async ({
   await expect(
     page.getByRole('heading', { name: 'Connect your workspace session' }),
   ).toBeVisible();
-  expect(calls).toBe(1);
+  await expect.poll(() => calls).toBe(1);
 });
 test('schema mismatch and missing provider remain actionable', async ({
   page,
@@ -118,4 +118,59 @@ test('schema mismatch and missing provider remain actionable', async ({
   );
   await page.getByRole('button', { name: 'Connect session' }).click();
   await expect(page.getByRole('alert')).toContainText('report format changed');
+});
+
+test('empty results, provider absence and form validation are explicit', async ({
+  page,
+}) => {
+  await page.goto('/workspace/');
+  await page.evaluate(() => {
+    delete window.caseproofSession;
+  });
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(page.getByRole('status')).toContainText('No session provider');
+  await page.evaluate(() => {
+    window.caseproofSession = { getBearer: async () => 'synthetic' };
+  });
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await page.getByRole('button', { name: 'Open report' }).click();
+  await expect(page.getByLabel('Matter ID')).toBeFocused();
+  await expect(page.getByLabel('Matter ID')).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
+  await page.route('**/v2/**', (route) =>
+    route.fulfill({ json: { ...report, findings: [] } }),
+  );
+  await page.getByLabel('Matter ID').fill(matter);
+  await page.getByLabel('Brief version ID').fill(brief);
+  await page.getByLabel('Snapshot SHA-256').fill(hash);
+  await page.getByRole('button', { name: 'Open report' }).click();
+  await expect(
+    page.getByText('No explicit references were detected.', { exact: false }),
+  ).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
+
+test('large reference queues are paged and source text stays inert', async ({
+  page,
+}) => {
+  const findings = Array.from({ length: 120 }, (_, i) => ({
+    ...report.findings[0],
+    reference_id: `r${i}`,
+    literal: `Stuk ${i + 1}`,
+  }));
+  await page.route('**/v2/**', (route) =>
+    route.fulfill({ json: { ...report, findings } }),
+  );
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${hash}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(page.locator('.finding')).toHaveCount(50);
+  await page.getByRole('button', { name: 'Next references' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Stuk 51', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.finding')).toHaveCount(50);
 });

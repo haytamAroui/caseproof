@@ -47,6 +47,24 @@ describe('API confidentiality and lifecycle', () => {
     ).rejects.toThrow('same-origin');
     expect(getBearer).not.toHaveBeenCalled();
   });
+  it('cancels oversized streams before accepting content', async () => {
+    const s = session();
+    const cancelled = vi.fn();
+    const stream = new ReadableStream({
+      start(c) {
+        c.enqueue(new Uint8Array(2_000_001));
+      },
+      cancel: cancelled,
+    });
+    const send = vi.fn<typeof fetch>(
+      async () =>
+        new Response(stream, {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    await expect(new ApiClient(s, send).get('/v2/report')).rejects.toThrow();
+    expect(cancelled).toHaveBeenCalledOnce();
+  });
   it('uses no-store, no cookies, and rejects redirects', async () => {
     const s = session();
     const send = vi.fn<typeof fetch>(async () => Response.json({}));

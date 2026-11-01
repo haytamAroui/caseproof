@@ -20,6 +20,7 @@ declare global {
 function OpenReport() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
+  const [invalid, setInvalid] = useState<string[]>([]);
   return (
     <section className="open-report">
       <p className="eyebrow">Evidence workspace</p>
@@ -38,6 +39,14 @@ function OpenReport() {
           );
           if (!values.every(Boolean)) {
             setError('Enter all three report identifiers.');
+            const missing = ['matter', 'brief', 'snapshot'].filter(
+              (_, i) => !values[i],
+            );
+            setInvalid(missing);
+            const input = event.currentTarget.elements.namedItem(
+              missing[0] ?? 'matter',
+            );
+            if (input instanceof HTMLInputElement) input.focus();
             return;
           }
           navigate(
@@ -50,10 +59,24 @@ function OpenReport() {
             {name === 'snapshot'
               ? 'Snapshot SHA-256'
               : `${name === 'matter' ? 'Matter' : 'Brief version'} ID`}
-            <input name={name} autoComplete="off" spellCheck={false} />
+            <input
+              name={name}
+              autoComplete="off"
+              spellCheck={false}
+              aria-invalid={invalid.includes(name)}
+              aria-describedby={error ? 'report-error' : undefined}
+              onInput={() => {
+                setError('');
+                setInvalid([]);
+              }}
+            />
           </label>
         ))}
-        {error && <Notice error>{error}</Notice>}
+        {error && (
+          <div id="report-error">
+            <Notice error>{error}</Notice>
+          </div>
+        )}
         <Button type="submit">Open report</Button>
       </form>
     </section>

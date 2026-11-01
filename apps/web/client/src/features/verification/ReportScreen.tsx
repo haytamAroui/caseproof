@@ -31,6 +31,27 @@ export function ReportScreen({ api }: { api: ApiClient }) {
   const selected =
     report.findings.find((f) => f.reference_id === params.get('finding')) ??
     report.findings[0];
+  const pageSize = 50;
+  const rawPage = Number(params.get('page') ?? 0);
+  const page =
+    Number.isInteger(rawPage) && rawPage >= 0
+      ? Math.min(
+          rawPage,
+          Math.max(0, Math.ceil(report.findings.length / pageSize) - 1),
+        )
+      : 0;
+  const visible = report.findings.slice(page * pageSize, (page + 1) * pageSize);
+  function movePage(next: number) {
+    setParams(
+      (p) => {
+        p.set('page', String(next));
+        const first = report.findings[next * pageSize];
+        if (first) p.set('finding', first.reference_id);
+        return p;
+      },
+      { replace: true },
+    );
+  }
   return (
     <>
       <header className="page-heading">
@@ -57,7 +78,7 @@ export function ReportScreen({ api }: { api: ApiClient }) {
             </p>
           ) : (
             <ul>
-              {report.findings.map((f) => (
+              {visible.map((f) => (
                 <li key={f.reference_id}>
                   <button
                     className="finding"
@@ -82,6 +103,29 @@ export function ReportScreen({ api }: { api: ApiClient }) {
                 </li>
               ))}
             </ul>
+          )}
+          {report.findings.length > pageSize && (
+            <nav aria-label="Reference pages">
+              <p>
+                {page * pageSize + 1}–
+                {Math.min((page + 1) * pageSize, report.findings.length)} of{' '}
+                {report.findings.length}
+              </p>
+              <button
+                className="button"
+                disabled={page === 0}
+                onClick={() => movePage(page - 1)}
+              >
+                Previous references
+              </button>
+              <button
+                className="button"
+                disabled={(page + 1) * pageSize >= report.findings.length}
+                onClick={() => movePage(page + 1)}
+              >
+                Next references
+              </button>
+            </nav>
           )}
         </section>
         <section className="inspection" aria-labelledby="finding-title">
