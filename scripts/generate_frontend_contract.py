@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 from application.litigation.frontend_contract import DossierView
-from application.litigation.workspace_contract import MatterCatalogView
+from application.litigation.workspace_contract import MatterCatalogView, ReportCatalogView
+from apps.api.workspace_auth import SessionView
 
 TARGET = Path(__file__).resolve().parents[1] / "frontend/src/shared/api/dossier.schema.json"
 def main() -> None:
@@ -12,7 +13,9 @@ def main() -> None:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     for model, target in ((DossierView, TARGET),
-                          (MatterCatalogView, TARGET.with_name("matters.schema.json"))):
+                          (MatterCatalogView, TARGET.with_name("matters.schema.json")),
+                          (SessionView, TARGET.with_name("session.schema.json")),
+                          (ReportCatalogView, TARGET.with_name("reports.schema.json"))):
         schema = model.model_json_schema()
         schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
         content = json.dumps(schema, indent=2, sort_keys=True) + "\n"

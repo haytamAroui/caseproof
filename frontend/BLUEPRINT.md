@@ -471,3 +471,32 @@ acceptance, provider installation, NL/FR localization and manual accessibility
 review remain open. Browser transport fixtures are synthetic and do not prove RLS.
 Rollback removes this router include and matter feature/routes; existing catalog,
 reports, preserved sources and legacy clients are unchanged.
+
+## 21. F1 signed-workspace implementation candidate
+
+[ADR 0027](../docs/adr/0027-workspace-signed-session-and-report-navigation.md)
+records the existing-provider same-origin password adapter, memory-only access
+session, explicit expiry/relogin, protected genuine browser acceptance and read-only
+report navigation proposal. No refresh-token persistence, client database SDK,
+public listener or new provider. P01 owns sign-in with shared primitives; P02
+retains the existing matter list; selecting a matter now opens its bounded frozen
+report catalog and an existing report link. Manual `/reports/open` remains an
+advanced compatibility path. Hash-order paging is explicit and not chronological.
+
+| Surface               | Exact interface / schema                                                                                                      | Authority / acceptance                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| P01                   | POST `/v2/workspace/session`; `SessionView` → generated schema/types/precompiled validation; POST `/v2/workspace/session/end` | Existing pinned Auth password transport + remote user verification; no new permission or refresh-token exposure        |
+| P02 report navigation | GET `/v2/workspace/matters/{case_id}/reports?after=…`; `ReportCatalogView` → generated schema/types/precompiled validation    | New read-only SQL proposal over existing grants; actual installation and genuine denied/revoked browser proof required |
+| Runtime               | Explicit trusted built-static directory in loopback composition                                                               | Fixed asset allowlist, no SPA fallback for APIs, same-origin CSP; no automatic production mount                        |
+
+401/403/404 sensitive reads end the local session, cancel requests and clear query
+cache/private routes, including masked denied resources. This deliberate fail-closed
+variant can require re-sign-in after an invalid report link. 409 remains a stale
+snapshot error, never a successful write. Session expiry clears idle DOM as well as
+requests; every read rechecks expiry even if browser timers were suspended. Provider
+sign-out errors are disclosed without restoring local data. Downloaded files and
+unexpired issued JWTs cannot be recalled by browser clearing.
+
+F1 remains a candidate until the exact commit's synthetic/disposable and protected
+genuine signed-browser receipts pass. No provider/region/client-data, independent
+security, manual screen-reader or full M3 approval is implied.

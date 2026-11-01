@@ -7,6 +7,8 @@ export default tseslint.config(
       'src/shared/api/generated.ts',
       'src/shared/api/generated-validator*',
       'src/shared/api/matters-generated*',
+      'src/shared/api/session-generated*',
+      'src/shared/api/reports-generated*',
     ],
   },
   js.configs.recommended,

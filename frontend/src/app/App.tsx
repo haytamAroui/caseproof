@@ -8,7 +8,8 @@ import {
   useNavigate,
   useParams,
 } from 'react-router';
-import { MattersScreen } from '../features/matters';
+import { SignIn } from '../features/auth';
+import { MattersScreen, ReportsScreen } from '../features/matters';
 import { ReportScreen } from '../features/verification';
 import { ApiClient } from '../shared/api';
 import {
@@ -102,6 +103,7 @@ function Workspace({ api }: { api: ApiClient }) {
   const session = useSession();
   const controller = useSessionController();
   const navigate = useNavigate();
+  const [logoutMessage, setLogoutMessage] = useState('');
   useEffect(
     () =>
       controller.onClear(() => {
@@ -127,7 +129,10 @@ function Workspace({ api }: { api: ApiClient }) {
           <Routes>
             <Route path="/" element={<MattersScreen api={api} />} />
             <Route path="/reports/open" element={<ScopedOpenReport />} />
-            <Route path="/matters/:caseId" element={<ScopedOpenReport />} />
+            <Route
+              path="/matters/:caseId"
+              element={<ReportsScreen api={api} />}
+            />
             <Route
               path="/matters/:caseId/briefs/:briefId"
               element={<ReportScreen api={api} />}
@@ -147,9 +152,11 @@ function Workspace({ api }: { api: ApiClient }) {
             <p className="eyebrow">Private evidence review</p>
             <h1>Connect your workspace session</h1>
             <p>
-              A trusted host must supply your authenticated session. Connecting
-              cannot grant matter access.
+              Sign in to your workspace. Your account must have access to each
+              matter.
             </p>
+            {logoutMessage && <Notice>{logoutMessage}</Notice>}
+            <SignIn onLogoutFailure={setLogoutMessage} />
             <Connect />
           </section>
         )}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "access_token": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "title": "Access Token",
+      "type": "string"
+    },
+    "expires_at": {
+      "exclusiveMinimum": 0,
+      "title": "Expires At",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "access_token",
+    "expires_at"
+  ],
+  "title": "SessionView",
+  "type": "object"
+}

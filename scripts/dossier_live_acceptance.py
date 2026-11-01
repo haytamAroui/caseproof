@@ -132,7 +132,7 @@ def correction_acceptance(token, sessions, signin, credentials, case, base, curr
 
 
 def main():
-    if os.getenv('GITHUB_REF') not in {'refs/heads/fix/m1-multisource-live-acceptance', 'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main', 'refs/heads/feat/final-hardening-and-verification', 'refs/heads/feat/canonical-mcp-report-gate-20261031'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
+    if os.getenv('GITHUB_REF') not in {'refs/heads/fix/m1-multisource-live-acceptance', 'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main', 'refs/heads/feat/f1-live-acceptance', 'refs/heads/feat/final-hardening-and-verification', 'refs/heads/feat/canonical-mcp-report-gate-20261031'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
         raise RuntimeError('protected dossier branch required')
     key = os.environ['CASEPROOF_DEV_PUBLISHABLE_KEY']
     signin = SupabasePasswordSignin(PROJECT_REF, key)
@@ -141,6 +141,7 @@ def main():
                    for r in ('owner', 'ungranted', 'foreign')}
     sessions = {r: signin.sign_in(c) for r, c in credentials.items()}
     token = sessions['owner'].access_token
+    browser_acceptance = None
     proc = None
     try:
         proc = _server_start()
@@ -298,6 +299,13 @@ def main():
         if reopened != exported:
             raise RuntimeError('DOSSIER_COLD_RESTART_CHANGED_SOURCES_FINDINGS_OR_DECISIONS')
         print('DOSSIER_COLD_RESTART_FRESH_SIGNIN_IDENTICAL_REPORT_PASSED', flush=True)
+        if os.getenv('CASEPROOF_F1_BROWSER_LIVE') == 'YES':
+            from scripts.workspace_browser_live import WorkspaceBrowserAcceptance
+            browser_acceptance = WorkspaceBrowserAcceptance(case, report['snapshot_hash'])
+            try:
+                browser_acceptance.exercise()
+            except Exception:
+                raise RuntimeError('F1_BROWSER_ACCEPTANCE_FAILED') from None
         # Same source set, new human mapping revision: old decision must be stale.
         body['request_id'] = str(uuid4())
         json_request(token, 'POST', base + '/confirmation', body)
@@ -341,6 +349,11 @@ def main():
                                 release=synthetic_release(token), destination='protected-synthetic-acceptance')
         if mcp_revoked != {'isError': True, 'error': 'access_rejected'}:
             raise RuntimeError('MCP_LIVE_REVOKED_ACCESS_NOT_DENIED')
+        if browser_acceptance is not None:
+            try:
+                browser_acceptance.revoked()
+            except Exception:
+                raise RuntimeError('F1_BROWSER_REVOCATION_FAILED') from None
         print('MCP_LIVE_UNGRANTED_FOREIGN_REVOKED_DENIAL_PASSED', flush=True)
         print('DOSSIER_UNGRANTED_FOREIGN_REVOKED_ACCESS_DENIED', flush=True)
         print('DOSSIER_ACCEPTANCE_JSON:' + json.dumps({'commit': os.getenv('GITHUB_SHA'), **counts,
@@ -348,6 +361,8 @@ def main():
               'fully_checked': False, 'source_count': len(registered), 'human_decisions_reopened': 1,
               'source_hashes': [s.sha256 for s in bundle], 'cleanup': 'required_by_finally_wrapper'}, sort_keys=True), flush=True)
     finally:
+        if browser_acceptance is not None:
+            browser_acceptance.close()
         _server_stop(proc)
 
 

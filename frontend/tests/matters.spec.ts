@@ -45,8 +45,10 @@ test('server-returned matter selection, paging, keyboard and narrow layout', asy
   });
   await page.locator('.matter-list a').first().focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByLabel('Matter ID')).toHaveValue(rows[20]!.case_id);
-  await expect(page.getByLabel('Matter ID')).toHaveAttribute('readonly', '');
+  await expect(
+    page.getByRole('heading', { name: 'Preserved reports' }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(rows[20]!.case_id));
   await page.getByRole('link', { name: 'Back to permitted matters' }).click();
   await page.getByRole('button', { name: 'End session' }).click();
   await expect(page.locator('.matter-list li')).toHaveCount(0);
