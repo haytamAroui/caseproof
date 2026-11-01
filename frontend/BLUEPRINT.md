@@ -277,7 +277,7 @@ For an authorized build inspection, run `npm run build` then `npm run preview --
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | F0 Foundation              | Structured client, generated projection, transport/session lifecycle, shared primitives, read-only frozen report | Architecture negatives; contract checks; unit/build/browser/axe; clear scope and rollback                     | Merged in PR #162 (main dcad45a); F1–F6 remain open                                                               |
 | F1 Signed host integration | Reviewed authentication/session adapter and authorized matter/report navigation                                  | Genuine signed browser grant/foreign/revoked/expiry tests; no token persistence                               | Engineering exits passed; PR/independent review pending ([receipt](../docs/m3/F1_SIGNED_WORKSPACE_ACCEPTANCE.md)) |
-| F2 Viewer decision         | Same-fixture server-image/PDF.js comparison through the evidence port                                            | Section 7 matrix and accepted engine/asset/security record                                                    | OPEN                                                                                                              |
+| F2 Viewer decision         | Same-fixture server-image/PDF.js comparison through the evidence port                                            | Section 7 matrix and accepted engine/asset/security record                                                    | Engineering exits passed; PR/independent review open                                                              |
 | F3 Intake                  | User-created matter, full DOCX/inventory/text-PDF/scan upload, confirm and recovery                              | Browser journey without manually seeded identifiers; fresh original hash readback; interrupted/denied cleanup | OPEN                                                                                                              |
 | F4 Review workspace        | Source/brief navigation, page-space display, uncertainty/coverage, human rationale and durable receipt           | Genuine browser review, stale/revoked/unknown-outcome/restart tests; accessibility and language checks        | OPEN                                                                                                              |
 | F5 Correction/recheck      | Supported redline preview, new draft activation and canonical recheck                                            | Original unchanged; stale/competing/retry rejection; actual new draft/report reopened                         | OPEN                                                                                                              |
@@ -502,3 +502,33 @@ genuine signed-browser receipts pass. No provider/region/client-data, independen
 security, manual screen-reader or full M3 approval is implied.
 
 F1 engineering receipt: code `dfafb5769349c95cb1f5adcad09887251d4279cd` passed all 18 ordinary PR workflows and the protected genuine signed browser run with zero-residual teardown. See the [measured F1 acceptance record](../docs/m3/F1_SIGNED_WORKSPACE_ACCEPTANCE.md). This closes the F1 engineering exit tests, while independent review, security/privacy/manual accessibility and deployment approval remain separate. F2–F6 remain open.
+
+## 22. F2 evidence viewer
+
+[ADR 0028](../docs/adr/0028-evidence-viewer-candidate-and-geometry-boundary.md) and
+[comparison protocol](../docs/m3/F2_VIEWER_COMPARISON_PROTOCOL.md) retain the predeclared
+hard-fixture budgets. The executed [acceptance record](../docs/m3/F2_VIEWER_ACCEPTANCE.md)
+selects PDF.js 6.5.438 after the same-fixture isolated-server/browser comparison
+passed. The server-image comparator is test-only; there is one browser production
+renderer, loaded lazily. Independent review and deployment approval remain separate.
+
+| Surface                | Exact interface / schema                                                                                         | Authority / evidence                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W02/W03 PDF inspection | GET `D/snapshots/{snapshot}/references/{reference}/viewer` and `/original`; generated `ViewerContext` projection | Existing frozen HMAC/current-grant/source-set boundary; actual digest/length check before browser parsing; no check/review mutation                           |
+| Viewer adapter         | `shared/pdf` document interface and bounded explicit worker                                                      | Native viewport/CropBox/rotation/UserUnit; two canvas layers at matching CSS aspect; plain derived text; all repeated search locations retained               |
+| Comparison             | `tests/viewer-comparison` separate build/harness                                                                 | Same synthetic originals and independent fiducials; isolated Poppler versus pinned PDF.js; page 1/200/100/1, hostile/corrupt/overflow and cleanup/RSS budgets |
+
+Old raster boxes without complete page geometry stay unprojected and disclosed;
+this is a safe unsupported state, not a guessed overlay. Page 1 under an unmapped
+finding is explicitly an exploration starting point. Source inspection, extracted
+text and navigation boxes never change the four independent dimensions. Each
+component is keyed to the exact reference scope. Late/denied/switch/expiry paths
+abort reads and close document/worker tasks; raw PDF bytes are never cached in
+TanStack Query, persistent storage, object URLs or a service worker.
+
+The viewer pane owns bounded scrolling. Zoom/rotation/page controls have native
+button alternatives; rendering is cancelled on selection changes and resize uses
+the same viewport rather than CSS-percentage guesses. Manual screen-reader,
+independent security, representative-source and deployment approval remain open.
+
+F2 engineering receipt: final code `210326c018d95770fdd9ab632698473e639ff1fa` passed all 17 ordinary workflows and protected genuine signed-browser acceptance with zero-residual teardown. The [retained acceptance record](../docs/m3/F2_VIEWER_ACCEPTANCE.md) closes the F2 engineering exits; independent review and deployment approval remain separate. F3–F6 remain open.

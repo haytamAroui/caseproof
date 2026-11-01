@@ -9,6 +9,7 @@ export default tseslint.config(
       'src/shared/api/matters-generated*',
       'src/shared/api/session-generated*',
       'src/shared/api/reports-generated*',
+      'src/shared/api/viewer-generated*',
     ],
   },
   js.configs.recommended,
