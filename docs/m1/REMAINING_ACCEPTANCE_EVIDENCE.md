@@ -45,3 +45,16 @@ while retaining the protected development environment and synthetic-only fixture
 Its receipt must show correction commit/replay/recheck, cold process restart,
 revocation, and zero-residual cleanup on the tested commit. A queued workflow,
 catalog check or disposable PostgreSQL test is not this receipt.
+
+### First protected correction execution
+
+Run `41254845712` on commit `a675274` completed genuine Auth/private Storage,
+correction commit/replay/recheck, cold reopen and revocation. It then failed the
+guarded database teardown because the cleanup audit allowlist did not recognize
+`dossier_draft_reserved` and `dossier_draft_activated`. Storage empty verification
+passed, but zero-residual database/Auth cleanup did not. **The run is failed and
+must not be called accepted.** The repeat run `41255290975` encountered the same
+step. The proposed fix preserves the existing guards, allows only those two new
+audit events and rejects revisions owned by another actor. Supabase requested
+confirmation to replace the deletion-containing function; two confirmations
+expired. No claim that this cleanup fix was installed is made.

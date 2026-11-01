@@ -17,6 +17,7 @@ def main():
     migration = ROOT / 'supabase/migrations/20261031234906_dossier_draft_revisions.sql'
     if proposal.read_bytes() != migration.read_bytes():
         raise RuntimeError('Deployed draft revision SQL differs from proposal')
+    _run((ROOT / 'db/proposals/M1_M2_draft_revision_scoped_cleanup.sql').read_text(), env)
     actor, other, org, case = [str(uuid4()) for _ in range(4)]
     docs, versions = [[str(uuid4()) for _ in range(4)] for _ in range(2)]
     _run(f"""
@@ -26,7 +27,7 @@ insert into caseproof.organization_members(org_id,user_id,actions) values
 ('{org}','{actor}',array['case:read','evidence:read','finding:write','review:request']),
 ('{org}','{other}',array['case:read','evidence:read','finding:write','review:request']);
 insert into caseproof.cases(id,org_id,created_by_user,effective_policy_version)
-values('{case}','{org}','{actor}','test');
+values('{case}','{org}','{actor}','caseproof-dev-txt-v1');
 insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
 values('{org}','{case}','{actor}','reviewer',array['case:read','evidence:read','evidence:upload','draft:check','review:request']);
 """, env)
@@ -115,7 +116,20 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
     _run(f"update caseproof._m1_matter_grants set active=false where case_id='{case}';",env)
     call('caseproof_dossier_draft_activate',activation,service=True,succeeds=False)
     call('caseproof_dossier_draft_reserve',[case,request,'status',json.dumps(command)],succeeds=False)
-    print('DRAFT_REVISION_RESERVE_REPLAY_READBACK_FENCE_AUDIT_ROLLBACK_ACTIVATE_INVALIDATION_REVOKE_PASSED')
+    run, foreign, foreign_org = [str(uuid4()) for _ in range(3)]
+    _run(f"insert into auth.users(id,instance_id) values('{foreign}','{foreign_org}');"
+         f"insert into caseproof.organizations(id,display_name) values('{foreign_org}','Synthetic foreign');"
+         f"insert into caseproof._dev_journey_fixtures(run_id,owner_id,guest_id,foreign_id,org_id,foreign_org_id) "
+         f"values('{run}','{actor}','{other}','{foreign}','{org}','{foreign_org}');",env)
+    # The cleanup allowlist must still reject unexpected activity, transactionally.
+    _run(f"begin; set local request.jwt.claims='{{\"role\":\"service_role\"}}';"
+         f"insert into caseproof.audit_events(org_id,case_id,actor_type,actor_user_id,action,event_schema_version,correlation_id,input_sha256_hex) "
+         f"values('{org}','{case}','human','{actor}','unexpected_activity','test','{uuid4()}',repeat('a',64));"
+         f"select public.caseproof_dev_journey_cleanup('{run}','{actor}'); commit;",env,should_pass=False)
+    call('caseproof_dev_journey_cleanup',[run,actor],service=True)
+    assert _run(f"select count(*) from caseproof.dossier_draft_revisions where org_id='{org}';",env).strip() == '0'
+    assert _run(f"select count(*) from caseproof.cases where id='{case}';",env).strip() == '0'
+    print('DRAFT_REVISION_RESERVE_REPLAY_READBACK_FENCE_AUDIT_ROLLBACK_ACTIVATE_INVALIDATION_REVOKE_CLEANUP_PASSED')
 
 
 if __name__ == '__main__':
