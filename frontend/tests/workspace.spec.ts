@@ -79,6 +79,7 @@ test('frozen report, keyboard, accessibility, narrow layout and session removal'
     fullPage: true,
   });
   await page.getByRole('button', { name: 'End session' }).click();
+  await expect(page).toHaveURL(/\/workspace\/$/);
   await expect(
     page.getByRole('heading', { name: 'Connect your workspace session' }),
   ).toBeVisible();

@@ -94,9 +94,21 @@ function OpenReport() {
     </section>
   );
 }
+function ScopedOpenReport() {
+  const { caseId } = useParams();
+  return <OpenReport key={caseId ?? 'manual'} />;
+}
 function Workspace({ api }: { api: ApiClient }) {
   const session = useSession();
   const controller = useSessionController();
+  const navigate = useNavigate();
+  useEffect(
+    () =>
+      controller.onClear(() => {
+        if (session.connected) void navigate('/', { replace: true });
+      }),
+    [controller, navigate, session.connected],
+  );
   return (
     <>
       <a className="skip" href="#main">
@@ -114,8 +126,8 @@ function Workspace({ api }: { api: ApiClient }) {
         {session.connected ? (
           <Routes>
             <Route path="/" element={<MattersScreen api={api} />} />
-            <Route path="/reports/open" element={<OpenReport />} />
-            <Route path="/matters/:caseId" element={<OpenReport />} />
+            <Route path="/reports/open" element={<ScopedOpenReport />} />
+            <Route path="/matters/:caseId" element={<ScopedOpenReport />} />
             <Route
               path="/matters/:caseId/briefs/:briefId"
               element={<ReportScreen api={api} />}
