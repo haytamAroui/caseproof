@@ -25,6 +25,9 @@ def test_restart_failure_still_cleans_every_uploaded_object(monkeypatch):
     sessions = [SimpleNamespace(user_id=a, access_token=f"token-{i}") for i, a in enumerate(actors)]
     org, case = str(uuid4()), str(uuid4())
     sources = probe._sources()
+    # DOCX ZIP timestamps can change across calls: registration and upload
+    # must use the same captured bytes to reach the restart failure.
+    monkeypatch.setattr(probe, "_sources", lambda: sources)
     registered = {"case_id": case, "sources": [
         {"document_id": str(uuid4()), "version_id": str(uuid4()),
          "role": ("draft", "inventory", "exhibit", "exhibit")[index],
