@@ -1,0 +1,289 @@
+{
+  "schema": "caseproof-f2-viewer-comparison-v1",
+  "browser": "156.0.8078.4",
+  "cpu": "AMD EPYC 7763 64-Core Processor",
+  "runner": "Linux",
+  "rssBytes": 435580928,
+  "budgets": {
+    "openMs": 5000,
+    "pageMs": 5000,
+    "serverMs": 15000,
+    "chromiumRss": 1073741824,
+    "coordinateToleranceCssPx": 2
+  },
+  "evidence": [
+    {
+      "fixture": "clean",
+      "pdfjs": [
+        {
+          "page": 1,
+          "renderMs": 42.19999999999709,
+          "width": 1200,
+          "height": 1600
+        }
+      ],
+      "server": [
+        {
+          "page": 1,
+          "elapsed_ms": 456.9082440000045,
+          "png": "clean-server-1.png",
+          "size": [
+            1200,
+            1600
+          ],
+          "sha256": "1b2e3cdd75804ef2b108b1a3ec0616725094067d4102be7e6013512f9079eee7"
+        }
+      ],
+      "openMs": 143.29999999998836,
+      "maxCssGeometryError": 0
+    },
+    {
+      "fixture": "scan",
+      "pdfjs": [
+        {
+          "page": 1,
+          "renderMs": 47,
+          "width": 1200,
+          "height": 1600
+        }
+      ],
+      "server": [
+        {
+          "page": 1,
+          "elapsed_ms": 309.0601649999982,
+          "png": "scan-server-1.png",
+          "size": [
+            1200,
+            1600
+          ],
+          "sha256": "19c673973e26b7ac9d53c3360a1211555f8737346a9cd66a9885e73d94193f67"
+        }
+      ],
+      "openMs": 144.1999999999971,
+      "maxCssGeometryError": 2
+    },
+    {
+      "fixture": "rotate90",
+      "pdfjs": [
+        {
+          "page": 1,
+          "renderMs": 38,
+          "width": 1600,
+          "height": 1200
+        }
+      ],
+      "server": [
+        {
+          "page": 1,
+          "elapsed_ms": 281.3110860000023,
+          "png": "rotate90-server-1.png",
+          "size": [
+            1600,
+            1200
+          ],
+          "sha256": "421640469cabe1b78093f769746995326f6481b97fb9ce9198e01256d6f18e97"
+        }
+      ],
+      "openMs": 140.8000000000029,
+      "maxCssGeometryError": 0
+    },
+    {
+      "fixture": "rotate180",
+      "pdfjs": [
+        {
+          "page": 1,
+          "renderMs": 34.5,
+          "width": 1200,
+          "height": 1600
+        }
+      ],
+      "server": [
+        {
+          "page": 1,
+          "elapsed_ms": 285.8266229999984,
+          "png": "rotate180-server-1.png",
+          "size": [
+            1200,
+            1600
+          ],
+          "sha256": "4f2b402426b70cbbedfbd991e90db866bbeb685464a8bbc92552e23aa6233fc0"
+        }
+      ],
+      "openMs": 141.09999999999127,
+      "maxCssGeometryError": 0
+    },
+    {
+      "fixture": "rotate270",
+      "pdfjs": [
+        {
+          "page": 1,
+          "renderMs": 26.30000000000291,
+          "width": 1600,
+          "height": 1200
+        }
+      ],
+      "server": [
+        {
+          "page": 1,
+          "elapsed_ms": 279.8036350000004,
+          "png": "rotate270-server-1.png",
+          "size": [
+            1600,
+            1200
+          ],
+          "sha256": "67bab40a9d1c87b9337e114295ce1f04c4a94c109e44de95baaa301d9a2243b0"
+        }
+      ],
+      "openMs": 139.60000000000582,
+      "maxCssGeometryError": 0
+    },
+    {
+      "fixture": "crop",
+      "pdfjs": [
+        {
+          "page": 1,
+          "renderMs": 35.80000000000291,
+          "width": 1100,
+          "height": 800
+        }
+      ],
+      "server": [
+        {
+          "page": 1,
+          "elapsed_ms": 224.05444700000032,
+          "png": "crop-server-1.png",
+          "size": [
+            1100,
+            800
+          ],
+          "sha256": "b03d0ba22ba095cdd251a3d0fb088836d36782f84b0e4940ebff0230edcfbe81"
+        }
+      ],
+      "openMs": 144.8000000000029,
+      "maxCssGeometryError": 0
+    },
+    {
+      "fixture": "mixed",
+      "pdfjs": [
+        {
+          "page": 1,
+          "renderMs": 37,
+          "width": 1200,
+          "height": 1600
+        },
+        {
+          "page": 2,
+          "renderMs": 21,
+          "width": 2000,
+          "height": 1500
+        }
+      ],
+      "server": [
+        {
+          "page": 1,
+          "elapsed_ms": 289.990736,
+          "png": "mixed-server-1.png",
+          "size": [
+            1200,
+            1600
+          ],
+          "sha256": "1b2e3cdd75804ef2b108b1a3ec0616725094067d4102be7e6013512f9079eee7"
+        },
+        {
+          "page": 2,
+          "elapsed_ms": 283.5569810000038,
+          "png": "mixed-server-2.png",
+          "size": [
+            1600,
+            1200
+          ],
+          "sha256": "237901e398199bf2f6e0c8ccee35e18e3c60007869a9c1fb314853b662c9c143"
+        }
+      ],
+      "openMs": 141.6999999999971,
+      "maxCssGeometryError": 0
+    },
+    {
+      "fixture": "hostile",
+      "pdfjs": [
+        {
+          "page": 1,
+          "renderMs": 41.79999999998836,
+          "width": 1200,
+          "height": 1600
+        }
+      ],
+      "server": [
+        {
+          "page": 1,
+          "elapsed_ms": 282.25730099999424,
+          "png": "hostile-server-1.png",
+          "size": [
+            1200,
+            1600
+          ],
+          "sha256": "70817fd4389e5872822a9238e4bf04fddeee20c0c90384ac197bd4515d50420c"
+        }
+      ],
+      "openMs": 141.1999999999971,
+      "maxCssGeometryError": 0
+    },
+    {
+      "fixture": "large200",
+      "pdfjs": [
+        {
+          "page": 1,
+          "renderMs": 35.69999999999709,
+          "width": 1200,
+          "height": 1600
+        },
+        {
+          "page": 200,
+          "renderMs": 20.60000000000582,
+          "width": 1200,
+          "height": 1600
+        },
+        {
+          "page": 100,
+          "renderMs": 12.69999999999709,
+          "width": 1200,
+          "height": 1600
+        },
+        {
+          "page": 1,
+          "renderMs": 12.19999999999709,
+          "width": 1200,
+          "height": 1600
+        }
+      ],
+      "server": [
+        {
+          "page": 1,
+          "elapsed_ms": 295.8718500000046,
+          "png": "large200-server-1.png",
+          "size": [
+            1200,
+            1600
+          ],
+          "sha256": "1b2e3cdd75804ef2b108b1a3ec0616725094067d4102be7e6013512f9079eee7"
+        },
+        {
+          "page": 200,
+          "elapsed_ms": 289.09135700000377,
+          "png": "large200-server-200.png",
+          "size": [
+            1200,
+            1600
+          ],
+          "sha256": "723092c3ed259cd6f824fafee6b2caa2285695b8708533554232749314b177c0"
+        }
+      ],
+      "openMs": 148.8000000000029,
+      "maxCssGeometryError": 0
+    }
+  ],
+  "codeSha": "b560d5cec9e20d07750a1f51f3c8839ee42101a3",
+  "runUrl": "https://github.com/haytamAroui/caseproof/actions/runs/41353141202",
+  "serverEngine": "Poppler 22.12.0",
+  "serverImage": "sha256:b77d705f1ea1fdbaa2392ef323866478e201c16ca4407292600f216f35e39826"
+}

@@ -467,3 +467,19 @@ Same-fixture isolated-server/PDF.js comparison and browser/source-scope/genuine
 signed acceptance are added; measured results are pending at this entry. No F2
 engine adoption or full M3 completion is claimed before actual receipts. Legacy
 raster geometry without page-box provenance is disclosed and unprojected.
+
+
+## F2 engineering exits passed — 1 November 2026
+
+F1 #165 is merged at `66ca9f0`. F2 PR #166 final code `210326c` passed all
+17 ordinary workflows and the protected genuine signed-development browser run
+[41353602246](https://github.com/haytamAroui/caseproof/actions/runs/41353602246),
+including hash-bound frozen source rendering, zoom/rotation, current-grant denial,
+private-view clearing and `ZERO_RESIDUAL_VERIFIED`. The measured same-fixture
+comparison selects pinned PDF.js 6.5.438; isolated Poppler remains test-only.
+[Retained measurements and acceptance limits](m3/F2_VIEWER_ACCEPTANCE.md).
+
+No new migration, client documents or production deployment. Legacy raster boxes
+without full page geometry remain disclosed and unprojected. PR review,
+independent security/privacy/manual accessibility and deployment approval remain
+separate. F3–F6 and full M3 remain open. Earlier candidate entries are historical.

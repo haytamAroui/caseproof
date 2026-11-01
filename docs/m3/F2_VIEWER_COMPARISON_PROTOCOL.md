@@ -1,8 +1,9 @@
 # F2 viewer comparison protocol — budgets fixed before measurement
 
-Candidate protocol, 1 November 2026. No viewer adoption or completed measurement
-is claimed until the actual comparison artifact passes. This file is a measurement
-record/protocol; frontend/BLUEPRINT.md remains the sole frontend specification.
+Protocol fixed before measurement, 1 November 2026. Executed results and the
+engineering engine decision are retained in the [acceptance record](F2_VIEWER_ACCEPTANCE.md).
+This file preserves the original budgets; frontend/BLUEPRINT.md remains the sole
+frontend specification.
 
 Compare isolated Poppler server images with PDF.js 6.5.438 (exact npm pin,
 Apache-2.0; LICENSE included in local assets). Both use the same SHA-bound

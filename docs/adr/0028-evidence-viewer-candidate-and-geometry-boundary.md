@@ -1,8 +1,9 @@
 # ADR 0028 — replaceable evidence viewer and explicit geometry boundary
 
-1 November 2026. Status: F2 implementation/comparison candidate. Engine adoption
-requires the executed [comparison protocol](../m3/F2_VIEWER_COMPARISON_PROTOCOL.md)
-and exact-head browser/source-scope evidence. No independent reviewer is invented.
+1 November 2026. Status: PDF.js selected for the bounded F2 engineering implementation.
+The executed [comparison record](../m3/F2_VIEWER_ACCEPTANCE.md) satisfies the
+predeclared comparison budgets. Independent security, visual/accessibility review
+and deployment approval remain separate; no independent reviewer is invented.
 
 F1 is merged (#165, main 66ca9f0). F2 adds a frozen-reference inspection adapter
 through the existing receipt/grant/source-set boundary. Metadata and actual bytes
@@ -11,7 +12,7 @@ browser checks actual size, response snapshot/digest and computed SHA before par
 Every sensitive read is reauthorized; no Storage URL, service key, browser database
 access, report creation or verdict mutation is introduced. No migration needed.
 
-The candidate PDF.js adapter is pinned to 6.5.438, loaded lazily with an explicit
+The selected PDF.js adapter is pinned to 6.5.438, loaded lazily with an explicit
 same-origin worker, no fake worker, WASM/font asset loads or annotation DOM. Static
 painted annotations remain visible; actions/links/scripts are never exposed as
 interactive content. Current typed v6 no longer exposes `isEvalSupported`; old
