@@ -2,7 +2,7 @@ name: Frontend foundation
 on:
   pull_request:
   push:
-    branches: [main, feat/frontend-foundation]
+    branches: [main, feat/frontend-foundation, feat/m3-rules]
 permissions:
   contents: read
 jobs:
@@ -26,6 +26,9 @@ jobs:
       - run: uv run --locked ruff check application/litigation/frontend_contract.py scripts/generate_frontend_contract.py tests/test_frontend_contract.py
       - run: uv run --locked mypy --explicit-package-bases application/litigation/frontend_contract.py scripts/generate_frontend_contract.py
       - run: npm ci
+        working-directory: frontend
+      - name: Enforce M3 design, database and security policy
+        run: npm run policy:check
         working-directory: frontend
       - run: npm run contracts:check && npm run lint && npm test && npm run build
         working-directory: frontend

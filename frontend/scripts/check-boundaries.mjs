@@ -57,10 +57,45 @@ export function violations(path, code, root) {
       ['Function', 'WebSocket', 'XMLHttpRequest'].includes(node.expression.text)
     )
       errors.push('evaluation/network constructor forbidden');
+    if (
+      ts.isJsxAttribute(node) &&
+      ['dangerouslySetInnerHTML', 'style'].includes(node.name.getText(source))
+    )
+      errors.push('unsafe HTML or screen-local style bypass forbidden');
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      ['innerHTML', 'outerHTML', 'insertAdjacentHTML'].includes(node.name.text)
+    )
+      errors.push('raw HTML injection forbidden');
+    if (
+      ts.isElementAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      ['window', 'globalThis', 'self'].includes(node.expression.text)
+    ) {
+      const key = node.argumentExpression;
+      if (
+        !key ||
+        !ts.isStringLiteral(key) ||
+        [
+          'fetch',
+          'localStorage',
+          'sessionStorage',
+          'indexedDB',
+          'sendBeacon',
+        ].includes(key.text)
+      )
+        errors.push('computed global or storage access forbidden');
+    }
     ts.forEachChild(node, visit);
   }
   visit(source);
   for (const spec of imports) {
+    if (
+      /^(?:@supabase\/|@prisma\/|prisma$|pg$|postgres$|drizzle-orm|kysely|typeorm|mysql|mongodb|better-sqlite3|sql.js)/.test(
+        spec,
+      )
+    )
+      errors.push('database access belongs to backend');
     if (!spec.startsWith('.')) {
       if (spec.startsWith('@/') || spec.startsWith('/'))
         errors.push('unresolved alias import');
