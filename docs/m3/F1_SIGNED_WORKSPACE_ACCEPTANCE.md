@@ -45,3 +45,31 @@ uses real signed PostgREST grant reads. Browser expiry advances the browser cloc
 against the real verified provider expiry; it does not prove wall-clock provider
 expiry. No credential-bearing browser screenshots/traces are created. Existing
 M0.5 fixture registration, finally cleanup and independent zero-residual check apply.
+
+## Passed F1 engineering exits — supersedes the pending receipt above
+
+Code head `dfafb5769349c95cb1f5adcad09887251d4279cd` passed all **18** PR
+workflows plus the separate protected genuine signed browser workflow:
+[run 41349381335](https://github.com/haytamAroui/caseproof/actions/runs/41349381335).
+The live workflow built the actual static React client, served it from the loopback
+Python composition, used real ephemeral password accounts and signed PostgREST,
+and emitted these actual receipts:
+
+- `F1_GENUINE_SIGNIN_CATALOG_REPORT_COLD_RELOAD_FOREIGN_UNGRANTED_AND_BROWSER_CLOCK_EXPIRY_PASSED`
+- `F1_GENUINE_GRANT_REVOCATION_DENIAL_AND_PRIVATE_VIEW_CLEAR_PASSED`
+- `ZERO_RESIDUAL_VERIFIED`
+- `DOSSIER_COMPLETE_SIGNED_JOURNEY_AND_TEARDOWN_PASSED`
+
+The protected run used the exact code head also checked by
+[frontend CI](https://github.com/haytamAroui/caseproof/actions/runs/41349384258),
+[F1 PostgreSQL CI](https://github.com/haytamAroui/caseproof/actions/runs/41349384269)
+and [kernel/full integration CI](https://github.com/haytamAroui/caseproof/actions/runs/41349384267).
+The later receipt-only documentation commit changes no executable code or SQL;
+its parent is the fully tested code head above. No repeated live fixture run is
+needed merely to append these measured receipts.
+
+This closes the specified **F1 engineering exit tests**. PR review and independent
+security/privacy/manual accessibility and production approval remain separate.
+No human reviewer or release authority is fabricated. F2–F6 remain open. The
+four intentionally skipped general live pytest gates do not represent this
+separately executed browser workflow; its actual live receipt is linked above.

@@ -442,3 +442,14 @@ disposable PostgreSQL checks are added. Protected genuine signed browser workflo
 requires native dev function installation and the exact reviewed protected branch;
 it reuses registered synthetic fixtures and finally zero-residual cleanup. No live
 F1 completion or independent security review is claimed before actual receipts.
+
+### F1 engineering exit evidence — supersedes pending state above
+
+PR #165 code head `dfafb5769349c95cb1f5adcad09887251d4279cd` passed 18 automatic
+PR workflows and the separate [protected genuine signed browser run](https://github.com/haytamAroui/caseproof/actions/runs/41349381335).
+Actual password login, authorized matter/report navigation, cold reload/relogin,
+foreign/ungranted/current-grant revocation and browser-clock expiry passed, followed
+by `ZERO_RESIDUAL_VERIFIED`. Native dev migration `20261101205446` is installed and
+recorded byte-for-byte. F1 engineering exit tests are passed; PR/human review and
+independent security/production gates remain open. [Measured record](m3/F1_SIGNED_WORKSPACE_ACCEPTANCE.md).
+F2 viewer, F3 intake, F4 review, F5 correction and F6 output are unchanged/open.

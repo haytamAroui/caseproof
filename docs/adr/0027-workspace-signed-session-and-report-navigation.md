@@ -1,6 +1,6 @@
 # ADR 0027 — F1 signed workspace and frozen-report navigation
 
-Status: implementation candidate for owner-requested complete F1, 1 November 2026.
+Status: implemented F1 engineering candidate with passed synthetic/disposable and genuine signed-browser exits; PR/independent review pending, 1 November 2026. See [acceptance record](../m3/F1_SIGNED_WORKSPACE_ACCEPTANCE.md).
 No production or client-data approval. Security-sensitive changes require review;
 passing code tests does not establish independent review or live acceptance.
 
