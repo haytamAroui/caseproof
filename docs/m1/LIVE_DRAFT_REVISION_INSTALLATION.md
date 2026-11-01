@@ -32,3 +32,11 @@ version foreign keys on the new table. Migration `20261031235117` installed inde
 on `(org_id,document_id)` and `(org_id,parent_version_id)` to support referential
 checks and scoped cleanup without scanning unrelated revision rows. Exact SQL is
 recorded in `supabase/migrations/20261031235117_dossier_draft_revision_fk_indexes.sql`.
+
+
+Cleanup follow-up: the owner approved the Supabase confirmation and migration
+`20261101004423_dossier_draft_revision_scoped_cleanup` was applied. It preserves
+all existing cleanup checks, permits the two owned draft-revision audit actions
+and rejects correction rows owned by another actor. Exact deployed SQL is recorded
+in the matching migration file. The previous failed live runs remain failed receipts;
+a fresh successful correction run and zero-residual teardown are still required.
