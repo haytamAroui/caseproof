@@ -1,6 +1,8 @@
 # M1/M2 acceptance increment — 31 October 2026
 
-**State:** engineering PR acceptance in progress; **M1 and M2 are NOT formally complete**. The sole source of release truth is [ROADMAP.md](../ROADMAP.md) and its signed acceptance gates.
+**1 November superseding evidence:** merged PR #159 (`05576ba`), [protected live run](https://github.com/haytamAroui/caseproof/actions/runs/41258188700), installed migrations `20261031234906`, `20261031235117`, `20261101004423`, and [exact failed-fixture recovery](https://github.com/haytamAroui/caseproof/actions/runs/41258188830). Signed synthetic correction/recheck, cold restart, revocation and zero-residual cleanup passed. Historical pending-install/run statements below are superseded; independent external approval remains absent.
+
+**State:** signed synthetic development acceptance passed; **M1 and M2 are NOT formally complete**. The sole source of release truth is [ROADMAP.md](../ROADMAP.md) and its signed acceptance gates.
 
 ## Defects resolved by the increment
 
@@ -24,10 +26,10 @@
 
 | Gate | Still needed |
 |---|---|
-| M1 full signed staging | Genuine least-privilege hosted Auth session, approved installed RLS, private Storage and durable worker, 4-file DOCX+inventory+PDF+image-only scan with physically reopened crops and fresh revoke denial at each step |
+| M1 signed synthetic staging | **PASSED:** genuine Auth, private Storage, four-file intake, page/crop reopening, restart, revocation and cleanup in run 41258188700. Customer approval is separate. |
 | M1 custody and OCR policy | Customer-approved worker/region and egress, retention, backup/restore, malware/DOCX ZIP/PDF limits, external independent security and bar/professional-secrecy review |
 | M2 whole-draft coverage | Representative NL/FR/EN mixed real-format population, pinned detection denominators, unsupported DOCX story portions, explicit inventory confirmation and page-space correctness; no statement that “every reference” is caught |
-| M2 canonical signed lifecycle | Complete source/inventory/brief snapshot → check → review → correction → recheck → cold restart and revocation against approved staging, typed date/amount/translation abstention metrics, exact browser-bound source/crops and independent review |
+| M2 canonical signed lifecycle | **PASSED for supported synthetic API scope:** snapshot → check → review → correction → recheck → cold restart → revocation → cleanup. Representative typed date/amount/translation metrics, full browser acceptance and independent review remain open. |
 | Release authorization | Named owners for P3-01..04, current-head live acceptance receipt, security/ethics/privacy decisions and signed M1/M2 milestone exit; absent here |
 
 **Do not close M1 or M2 from this PR alone.** A signed-user synthetic test, disposable database or candidate crop is not a production-approved Belgian litigation dossier. M3 may consume the merged candidate contracts, but the separate pilot and live development gates remain.
@@ -49,7 +51,7 @@ two PDF exhibits (one image-only); it does **not** prove the complete DOCX → c
 
 The canonical dossier API now implements bounded DOCX preview, two-stage commit
 and recheck against the new active draft. The database implementation is proposed
-in `db/proposals/M1_M2_dossier_draft_revisions.sql`; it is **not installed live**.
+in `db/proposals/M1_M2_dossier_draft_revisions.sql`; it is **installed in caseproof-dev**; see [deployment receipt](LIVE_DRAFT_REVISION_INSTALLATION.md).
 Disposable PostgreSQL acceptance exercises pending-version signature isolation,
 idempotent reserve/activate, wrong readback rejection, activation privilege fences,
 audit rollback, active manifest switching, confirmation/snapshot invalidation and

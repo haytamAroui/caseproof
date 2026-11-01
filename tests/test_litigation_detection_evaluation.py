@@ -13,3 +13,4 @@ def test_actual_docx_evaluation_reports_all_reference_occurrences_and_limits():
     for row in report['cases']:
         assert len(row['missing']) == row['fn']
     assert report['cohorts']['en']['tp'] + report['cohorts']['en']['fn'] == 6
+    assert report['cohorts']['en']['flagged_unsupported'] == 6

@@ -13,6 +13,14 @@
 | External rights/real-document approval | [Rights declaration](TRILINGUAL_RIGHTS_AND_COVERAGE.md) for new entirely fictional material | Synthetic authorship declared; any later external real material requires distinct rights and confidentiality approvals |
 | Formal owner release of M0 | Signed owner acceptance with precise corpus hash, reviewers, corrections and remaining exclusions | **NOT SIGNED** |
 
+## Review submission processing
+
+`scripts/validate_m0_independent_reviews.py` checks submission completeness, exact
+corpus binding, distinct declared reviewers, language competence, source observations,
+independence/evidence fields and disagreements. It cannot authenticate people or
+signatures, establish rights or approve the milestone. Its `m0_approved` output is
+always false. Complete forms still require external verification and a named owner.
+
 ## Independent review required before acceptance
 
 The blind packet intentionally **excludes author gold labels**. Reviewers must have real identities/organizations, language competence, independent attestation, exact corpus hash and date. At least two independent judgments per case must be recorded; a qualified Belgian practitioner covers applicable procedure; disagreements need an adjudicator. The existing 19 legacy v2 cases have no separately confirmed inventory scope, so reviewers must not invent `NOT_IN_INVENTORY`. Those cases may need a new v4 gold definition before M0 closure.

@@ -48,12 +48,14 @@ def evaluate():
         expected = Counter(EXPECTED[case['id']])
         actual = Counter(('stuk' if ref.label.startswith('stuk') else 'piece', ref.number)
                          for ref in discovery.references)
+        unsupported = Counter(('exhibit', ref.number) for ref in discovery.unsupported_references)
+        flagged = sum((expected & unsupported).values())
         tp, fp, fn = sum((expected & actual).values()), sum((actual - expected).values()), sum((expected - actual).values())
-        cohort = cohorts.setdefault(case['language'], {'tp': 0, 'fp': 0, 'fn': 0, 'cases': 0})
-        for key, value in [('tp', tp), ('fp', fp), ('fn', fn), ('cases', 1)]:
+        cohort = cohorts.setdefault(case['language'], {'tp': 0, 'fp': 0, 'fn': 0, 'cases': 0, 'flagged_unsupported': 0})
+        for key, value in [('tp', tp), ('fp', fp), ('fn', fn), ('cases', 1), ('flagged_unsupported', flagged)]:
             cohort[key] += value
         rows.append({'case_id': case['id'], 'tp': tp, 'fp': fp, 'fn': fn,
-                     'missing': list((expected - actual).elements()),
+                     'missing': list((expected - actual).elements()), 'flagged_unsupported': flagged,
                      'coverage_complete_claimed': discovery.coverage_complete})
     for cohort in cohorts.values():
         cohort['recall'] = cohort['tp'] / (cohort['tp'] + cohort['fn'])
@@ -65,7 +67,7 @@ def evaluate():
             'cohorts': cohorts, 'cases': rows,
             'limitations': ['Author-supplied labels; no independent adjudication',
                             'Reference detection only; no OCR or semantic-support accuracy measurement',
-                            'Lettered English Exhibit references remain unsupported and counted as misses']}
+                            'English Exhibit references are flagged for manual review; unsupported verification remains counted separately']}
 
 
 if __name__ == '__main__':

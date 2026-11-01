@@ -50,7 +50,7 @@ jobs:
             tests/test_phase4_headless_api.py
       - name: Measure actual synthetic DOCX reference detection with explicit misses
         run: |
-          uv run --locked pytest -q tests/test_litigation_detection_evaluation.py
+          uv run --locked pytest -q tests/test_litigation_detection_evaluation.py tests/test_unsupported_exhibit_references.py tests/test_independent_review_completeness.py
           uv run --locked python -m scripts.evaluate_litigation_detection --output /tmp/caseproof-detection-evaluation.json
       - uses: actions/upload-artifact@v7.0.2
         with:
