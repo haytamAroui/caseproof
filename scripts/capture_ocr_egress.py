@@ -45,18 +45,31 @@ def capture(output: Path, image: str):
     pcap = output.resolve() / 'ocr-namespace.pcap'
     if pcap.exists():
         raise FileExistsError('use a fresh capture output directory')
+    # A generated bitmap containing only synthetic digits; no client fixture.
+    bitmap = bytearray([255] * (320 * 100))
+    glyphs = ['010111010010111', '110001010100111', '110001010001110']
+    for index, glyph in enumerate(glyphs):
+        for row in range(5):
+            for col in range(3):
+                if glyph[row * 3 + col] == '1':
+                    for dy in range(10):
+                        for dx in range(10):
+                            bitmap[(20 + row * 10 + dy) * 320 + 50 + index * 70 + col * 10 + dx] = 0
+    fixture = output.resolve() / 'synthetic.pgm'
+    fixture.write_bytes(b'P5\n320 100\n255\n' + bitmap)
     process = None
     created = False
     try:
         run(['docker', 'run', '--detach', '--name', name, '--network', 'none', '--read-only',
-             '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', image, 'sleep', '120'])
+             '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+             '--mount', f'type=bind,src={fixture},dst=/work/synthetic.pgm,readonly', image, 'sleep', '120'])
         created = True
         pid = run(['docker', 'inspect', '--format', '{{.State.Pid}}', name])
         if not pid.isdecimal() or int(pid) <= 1:
             raise RuntimeError('invalid test container PID')
         with (output / 'capture-diagnostics.txt').open('w') as diagnostics:
             process = subprocess.Popen(['sudo', 'nsenter', '--target', pid, '--net', '--',
-                'tcpdump', '-Z', 'root', '-i', 'any', '-U', '-w', str(pcap)],
+                'tcpdump', '-Z', 'root', '-i', 'any', '--immediate-mode', '-U', '-w', str(pcap)],
                 stdout=diagnostics, stderr=diagnostics, start_new_session=True)
             for _ in range(30):
                 if process.poll() is not None:
@@ -67,21 +80,30 @@ def capture(output: Path, image: str):
             else:
                 raise RuntimeError('packet capture readiness timeout')
             probe = json.loads(run(['sudo', 'nsenter', '--target', pid, '--net', '--', sys.executable, '-c', PROBE]))
-            # Exercise the real OCR executable inside the captured namespace.
-            run(['docker', 'exec', name, 'tesseract', '--version'])
-            time.sleep(0.3)
+            # Exercise actual OCR, a deterministic input failure, and a successful retry.
+            command = ['docker', 'exec', name, 'tesseract']
+            failed = subprocess.run(command + ['/work/missing.pgm', 'stdout', '--psm', '7', '-l', 'eng'],
+                                    capture_output=True, text=True)
+            if failed.returncode == 0:
+                raise RuntimeError('expected OCR input failure did not occur')
+            ocr_text = run(command + ['/work/synthetic.pgm', 'stdout', '--psm', '7', '-l', 'eng'])
+            time.sleep(1.2)
             run(['sudo', 'kill', '-INT', '--', '-' + str(process.pid)])
             process.wait(timeout=10)
         loopback = run(['sudo', 'tcpdump', '-nn', '-r', str(pcap), 'net', '127.0.0.0/8'])
         outbound = run(['sudo', 'tcpdump', '-nn', '-r', str(pcap), 'not', 'net', '127.0.0.0/8', 'and', 'not', 'host', '::1'])
+        (output / 'decoded-loopback.txt').write_text(loopback + '\n')
+        (output / 'decoded-non-loopback.txt').write_text(outbound + '\n')
         if not loopback or outbound:
             raise RuntimeError('capture control missing or unexpected egress observed')
         result = {'schema': 'caseproof-ocr-egress-capture-v1', 'synthetic_only': True,
                   'scope': 'ocr_network_namespace', 'whole_deployment_approved': False,
                   'modes_approved': [], 'model_or_client_data_used': False,
                   'loopback_control_observed': True, 'non_loopback_packets': 0,
+                  'ocr_input_failure_observed': True, 'ocr_retry_succeeded': True,
+                  'ocr_output_sha256': hashlib.sha256(ocr_text.encode()).hexdigest(),
                   'pcap_sha256': hashlib.sha256(pcap.read_bytes()).hexdigest(), **probe,
-                  'limits': ['Namespace probe plus OCR version command; not the whole application lifecycle',
+                  'limits': ['Namespace probe plus synthetic OCR failure/retry; not the whole application lifecycle',
                              'No claim about browser/Auth/API/Storage/telemetry/backups or any customer configuration']}
         (output / 'receipt.json').write_text(json.dumps(result, indent=2) + '\n')
         return result
