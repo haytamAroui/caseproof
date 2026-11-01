@@ -39,8 +39,10 @@ test('same-fixture server-image versus pinned PDF.js: geometry, budgets and clea
     pdfjs: { page: number; renderMs: number; width: number; height: number }[];
     server: Fixture['server'];
     openMs: number;
+    maxCssGeometryError: number;
   }[] = [];
   for (const fixture of corpus.fixtures.filter((f) => f.pages <= 200)) {
+    let maxCssGeometryError = 0;
     const opened = await page.evaluate(
       (name) => window.f2Harness.open(name),
       fixture.name,
@@ -72,7 +74,11 @@ test('same-fixture server-image versus pinned PDF.js: geometry, budgets and clea
         );
         for (let i = 0; i < 4; i++)
           expect(
-            Math.abs(probe.bounds[i]! - fixture.expectedBox[i]!),
+            (maxCssGeometryError = Math.max(
+              maxCssGeometryError,
+              Math.abs(probe.bounds[i]! - fixture.expectedBox[i]!) *
+                probe.cssScale,
+            )),
           ).toBeLessThanOrEqual(2);
         const server = fixture.server.find((s) => s.page === 1);
         expect(server, 'Missing real server candidate evidence').toBeTruthy();
@@ -84,9 +90,17 @@ test('same-fixture server-image versus pinned PDF.js: geometry, budgets and clea
         );
         for (let i = 0; i < 4; i++)
           expect(
-            Math.abs(serverProbe.bounds[i]! - fixture.expectedBox[i]!),
+            (maxCssGeometryError = Math.max(
+              maxCssGeometryError,
+              Math.abs(serverProbe.bounds[i]! - fixture.expectedBox[i]!) *
+                serverProbe.cssScale,
+            )),
           ).toBeLessThanOrEqual(2);
       }
+      if (fixture.name === 'hostile')
+        expect(
+          await page.evaluate(() => window.f2Harness.redPixels()),
+        ).toBeGreaterThan(20);
       if (fixture.scan) expect(rendered.text.trim()).toBe('');
       if (fixture.name === 'mixed' && physical === 2)
         expect(rendered.userUnit).toBe(1.25);
@@ -116,7 +130,10 @@ test('same-fixture server-image versus pinned PDF.js: geometry, budgets and clea
         );
         for (let i = 0; i < 4; i++)
           expect(
-            Math.abs(pixels.bounds[i]! - expected[i]!),
+            (maxCssGeometryError = Math.max(
+              maxCssGeometryError,
+              Math.abs(pixels.bounds[i]! - expected[i]!) * pixels.cssScale,
+            )),
           ).toBeLessThanOrEqual(2);
 
         expect(r.renderMs).toBeLessThan(5000);
@@ -127,6 +144,7 @@ test('same-fixture server-image versus pinned PDF.js: geometry, budgets and clea
       pdfjs,
       server: fixture.server,
       openMs: opened.openMs,
+      maxCssGeometryError,
     });
     const closed = await page.evaluate(() => window.f2Harness.close());
     expect(closed.pages).toBe(0);

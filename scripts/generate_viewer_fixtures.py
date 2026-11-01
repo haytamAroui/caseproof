@@ -12,7 +12,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 from pypdf import PdfReader, PdfWriter
+from pypdf.actions import JavaScript
 from pypdf.generic import (
+    ArrayObject,
     DictionaryObject,
     FloatObject,
     NameObject,
@@ -47,7 +49,9 @@ def vector(pages=1, scan=False, hostile=False, mixed=False):
     writer = PdfWriter()
     writer.append(PdfReader(io.BytesIO(raw.getvalue())))
     if hostile:
-        writer.add_js("globalThis.__caseproofPdfExecuted=1; app.alert('hostile synthetic');")
+        writer.add_open_action(
+            JavaScript("globalThis.__caseproofPdfExecuted=1; app.alert('hostile synthetic');")
+        )
         annotation = DictionaryObject(
             {
                 NameObject("/Type"): NameObject("/Annot"),
@@ -62,6 +66,20 @@ def vector(pages=1, scan=False, hostile=False, mixed=False):
             }
         )
         writer.add_annotation(0, annotation)
+        writer.add_annotation(
+            0,
+            DictionaryObject(
+                {
+                    NameObject("/Type"): NameObject("/Annot"),
+                    NameObject("/Subtype"): NameObject("/StrikeOut"),
+                    NameObject("/Rect"): RectangleObject([140, 395, 250, 410]),
+                    NameObject("/QuadPoints"): ArrayObject(
+                        [FloatObject(n) for n in [140, 410, 250, 410, 140, 395, 250, 395]]
+                    ),
+                    NameObject("/C"): ArrayObject([FloatObject(1), FloatObject(0), FloatObject(0)]),
+                }
+            ),
+        )
     out = io.BytesIO()
     writer.write(out)
     return out.getvalue()
@@ -111,7 +129,9 @@ def main():
         writer = PdfWriter()
         writer.append(PdfReader(io.BytesIO(vector(count, scan, hostile, name == "mixed"))))
         if hostile:
-            writer.add_js("globalThis.__caseproofPdfExecuted=1; app.alert('hostile synthetic');")
+            writer.add_open_action(
+                JavaScript("globalThis.__caseproofPdfExecuted=1; app.alert('hostile synthetic');")
+            )
         for p in writer.pages:
             if rotation:
                 p.rotate(rotation)

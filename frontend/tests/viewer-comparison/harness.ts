@@ -2,6 +2,16 @@ import { PdfInspection } from '../../src/shared/pdf/engine';
 import type { PdfPageResult } from '../../src/shared/pdf/geometry';
 let inspection: PdfInspection | null = null;
 window.f2Harness = {
+  redPixels() {
+    const canvas = document.querySelector('canvas')!,
+      ctx = canvas.getContext('2d')!;
+    const pixels = ctx.getImageData(270, 770, 250, 80).data;
+    let red = 0;
+    for (let i = 0; i < pixels.length; i += 4)
+      if (pixels[i]! > 180 && pixels[i + 1]! < 100 && pixels[i + 2]! < 100)
+        red++;
+    return red;
+  },
   probe(box: number[]) {
     return measureBlackBox(document.querySelector('canvas')!, box);
   },
@@ -13,7 +23,10 @@ window.f2Harness = {
     canvas.height = image.height;
     canvas.getContext('2d')!.drawImage(image, 0, 0);
     image.close();
-    return measureBlackBox(canvas, box);
+    document.body.append(canvas);
+    const measured = measureBlackBox(canvas, box);
+    canvas.remove();
+    return measured;
   },
 
   async open(name: string) {
@@ -48,11 +61,16 @@ window.f2Harness = {
 declare global {
   interface Window {
     f2Harness: {
-      probe(box: number[]): { bounds: number[]; size: number[] };
+      redPixels(): number;
+      probe(box: number[]): {
+        bounds: number[];
+        size: number[];
+        cssScale: number;
+      };
       serverProbe(
         file: string,
         box: number[],
-      ): Promise<{ bounds: number[]; size: number[] }>;
+      ): Promise<{ bounds: number[]; size: number[]; cssScale: number }>;
       open(name: string): Promise<{ pages: number; openMs: number }>;
       render(
         page: number,
@@ -91,6 +109,7 @@ function measureBlackBox(canvas: HTMLCanvasElement, expected: number[]) {
       }
     }
   return {
+    cssScale: canvas.getBoundingClientRect().width / canvas.width,
     bounds: [minX, minY, maxX, maxY],
     size: [canvas.width, canvas.height],
   };
