@@ -1,0 +1,30 @@
+name: Recover exact owned failed correction fixtures
+on:
+  push:
+    branches: [fix/m1-multisource-live-acceptance]
+    paths: [.github/workflows/recover-owned-correction-fixtures.yml]
+permissions:
+  contents: read
+concurrency:
+  group: caseproof-dev-fixture-reaper
+  cancel-in-progress: false
+jobs:
+  recover:
+    if: ${{ github.repository == 'haytamAroui/caseproof' }}
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 10
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Recover only the three revoked and Storage-empty failed CI runs
+        run: |
+          uv run --locked python -m scripts.teardown_test_run --run-id 3dd743f1-2684-4562-a573-2afd01accf96
+          uv run --locked python -m scripts.teardown_test_run --run-id c3241db5-588f-40bf-b4a8-55880805aea4
+          uv run --locked python -m scripts.teardown_test_run --run-id cfc04e6d-a34a-466c-8ebb-0198820f35f4
