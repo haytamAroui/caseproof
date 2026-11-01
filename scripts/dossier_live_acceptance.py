@@ -132,7 +132,7 @@ def correction_acceptance(token, sessions, signin, credentials, case, base, curr
 
 
 def main():
-    if os.getenv('GITHUB_REF') not in {'refs/heads/fix/m1-multisource-live-acceptance', 'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main', 'refs/heads/feat/f1-live-acceptance', 'refs/heads/feat/final-hardening-and-verification', 'refs/heads/feat/canonical-mcp-report-gate-20261031'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
+    if os.getenv('GITHUB_REF') not in {'refs/heads/fix/m1-multisource-live-acceptance', 'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main', 'refs/heads/feat/f1-live-acceptance', 'refs/heads/feat/f2-live-acceptance', 'refs/heads/feat/final-hardening-and-verification', 'refs/heads/feat/canonical-mcp-report-gate-20261031'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
         raise RuntimeError('protected dossier branch required')
     key = os.environ['CASEPROOF_DEV_PUBLISHABLE_KEY']
     signin = SupabasePasswordSignin(PROJECT_REF, key)

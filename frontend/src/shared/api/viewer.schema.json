@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "brief_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Brief Id",
+      "type": "string"
+    },
+    "byte_length": {
+      "maximum": 20000000,
+      "minimum": 1,
+      "title": "Byte Length",
+      "type": "integer"
+    },
+    "case_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Case Id",
+      "type": "string"
+    },
+    "geometry_policy": {
+      "const": "derived_pdf_text_only_legacy_raster_not_projected",
+      "title": "Geometry Policy",
+      "type": "string"
+    },
+    "legacy_region_count": {
+      "maximum": 96,
+      "minimum": 0,
+      "title": "Legacy Region Count",
+      "type": "integer"
+    },
+    "original_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Original Sha256",
+      "type": "string"
+    },
+    "page_mapping": {
+      "enum": [
+        "mapped",
+        "unmapped",
+        "conflicting"
+      ],
+      "title": "Page Mapping",
+      "type": "string"
+    },
+    "pdf_page": {
+      "anyOf": [
+        {
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Pdf Page"
+    },
+    "reference_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Reference Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "caseproof-viewer-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    },
+    "version_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Version Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "case_id",
+    "brief_id",
+    "snapshot_hash",
+    "reference_id",
+    "version_id",
+    "original_sha256",
+    "byte_length",
+    "page_mapping",
+    "pdf_page",
+    "legacy_region_count",
+    "geometry_policy"
+  ],
+  "title": "ViewerContext",
+  "type": "object"
+}

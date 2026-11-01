@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from application.litigation.frontend_contract import DossierView
+from application.litigation.viewer_contract import ViewerContext
 from application.litigation.workspace_contract import MatterCatalogView, ReportCatalogView
 from apps.api.workspace_auth import SessionView
 
@@ -15,7 +16,8 @@ def main() -> None:
     for model, target in ((DossierView, TARGET),
                           (MatterCatalogView, TARGET.with_name("matters.schema.json")),
                           (SessionView, TARGET.with_name("session.schema.json")),
-                          (ReportCatalogView, TARGET.with_name("reports.schema.json"))):
+                          (ReportCatalogView, TARGET.with_name("reports.schema.json")),
+                          (ViewerContext, TARGET.with_name("viewer.schema.json"))):
         schema = model.model_json_schema()
         schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
         content = json.dumps(schema, indent=2, sort_keys=True) + "\n"

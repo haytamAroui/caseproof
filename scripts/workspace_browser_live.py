@@ -40,6 +40,17 @@ class WorkspaceBrowserAcceptance:
         expect(page.get_by_role('heading', name='Preserved reports')).to_be_visible()
         page.locator(f'a[href$="snapshot={self.snapshot}"]').click()
         expect(page.get_by_role('heading', name='Review the evidence')).to_be_visible()
+        if os.getenv('CASEPROOF_F2_BROWSER_LIVE') == 'YES':
+            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible()
+            canvas = page.locator('canvas[aria-label="Preserved PDF page pixels"]')
+            if int(canvas.get_attribute('width') or '0') <= 0:
+                raise RuntimeError('F2_GENUINE_PDF_PIXELS_MISSING')
+            page.get_by_role('button', name='Zoom in', exact=True).click()
+            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible()
+            page.get_by_role('button', name='Rotate page', exact=True).click()
+            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible()
+            print('F2_GENUINE_FROZEN_SOURCE_HASH_BOUND_WORKER_RENDER_ZOOM_ROTATE_PASSED', flush=True)
+
         if page.evaluate('() => localStorage.length + sessionStorage.length') != 0 or self.context.cookies():
             raise RuntimeError('F1_PERSISTENT_SESSION_MATERIAL')
         page.reload()

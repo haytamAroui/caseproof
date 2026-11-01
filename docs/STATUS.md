@@ -453,3 +453,17 @@ by `ZERO_RESIDUAL_VERIFIED`. Native dev migration `20261101205446` is installed 
 recorded byte-for-byte. F1 engineering exit tests are passed; PR/human review and
 independent security/production gates remain open. [Measured record](m3/F1_SIGNED_WORKSPACE_ACCEPTANCE.md).
 F2 viewer, F3 intake, F4 review, F5 correction and F6 output are unchanged/open.
+
+## F2 evidence viewer candidate — after merged F1
+
+F1 #165 is merged at `66ca9f0`. Branch `feat/f2-evidence-viewer` implements the
+frozen-reference source projection/download, hash-bound binary transport and
+replaceable lazy PDF.js candidate with explicit same-origin worker, bounded
+page/text/pixel budgets, zoom/rotation/navigation, selectable derived text and
+uncertainty-preserving search boxes. No database migration, verdict mutation,
+review write, production deployment or client documents.
+
+Same-fixture isolated-server/PDF.js comparison and browser/source-scope/genuine
+signed acceptance are added; measured results are pending at this entry. No F2
+engine adoption or full M3 completion is claimed before actual receipts. Legacy
+raster geometry without page-box provenance is disclosed and unprojected.

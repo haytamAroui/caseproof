@@ -1,0 +1,46 @@
+name: F2 same-fixture viewer comparison
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CASEPROOF_OCR_SANDBOX: docker
+      CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - run: sudo apt-get update -qq && sudo apt-get install -y poppler-utils
+      - run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
+      - name: Same originals rendered by isolated server candidate
+        run: uv run --locked python -m scripts.generate_viewer_fixtures --out frontend/tests/viewer-comparison/generated/fixtures --server
+      - name: Record actual server engine and image
+        run: |
+          docker run --rm --network none caseproof-ocr-worker:ci pdftoppm -v > frontend/tests/viewer-comparison/generated/server-version.txt 2>&1
+          docker image inspect --format '{{.Id}}' caseproof-ocr-worker:ci > frontend/tests/viewer-comparison/generated/server-image.txt
+      - run: npm ci && npm run viewer:build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run viewer:test
+        working-directory: frontend
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: f2-synthetic-viewer-comparison
+          path: |
+            frontend/test-results/viewer-comparison
+            frontend/tests/viewer-comparison/generated/fixtures/manifest.json
+            frontend/tests/viewer-comparison/generated/server-version.txt
+            frontend/tests/viewer-comparison/generated/server-image.txt
+          retention-days: 7

@@ -502,3 +502,31 @@ genuine signed-browser receipts pass. No provider/region/client-data, independen
 security, manual screen-reader or full M3 approval is implied.
 
 F1 engineering receipt: code `dfafb5769349c95cb1f5adcad09887251d4279cd` passed all 18 ordinary PR workflows and the protected genuine signed browser run with zero-residual teardown. See the [measured F1 acceptance record](../docs/m3/F1_SIGNED_WORKSPACE_ACCEPTANCE.md). This closes the F1 engineering exit tests, while independent review, security/privacy/manual accessibility and deployment approval remain separate. F2–F6 remain open.
+
+## 22. F2 evidence-viewer implementation candidate
+
+[ADR 0028](../docs/adr/0028-evidence-viewer-candidate-and-geometry-boundary.md) and
+[comparison protocol](../docs/m3/F2_VIEWER_COMPARISON_PROTOCOL.md) record the candidate
+and predeclared hard-fixture budgets. PDF.js 6.5.438 is a candidate until the actual
+same-fixture isolated-server/browser comparison passes. The server-image candidate
+is test-only; there is one browser production renderer, loaded lazily. Adoption
+and measured artifacts must be recorded before claiming the F2 engineering exit.
+
+| Surface                | Exact interface / schema                                                                                         | Authority / evidence                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W02/W03 PDF inspection | GET `D/snapshots/{snapshot}/references/{reference}/viewer` and `/original`; generated `ViewerContext` projection | Existing frozen HMAC/current-grant/source-set boundary; actual digest/length check before browser parsing; no check/review mutation                           |
+| Viewer adapter         | `shared/pdf` document interface and bounded explicit worker                                                      | Native viewport/CropBox/rotation/UserUnit; two canvas layers at matching CSS aspect; plain derived text; all repeated search locations retained               |
+| Comparison             | `tests/viewer-comparison` separate build/harness                                                                 | Same synthetic originals and independent fiducials; isolated Poppler versus pinned PDF.js; page 1/200/100/1, hostile/corrupt/overflow and cleanup/RSS budgets |
+
+Old raster boxes without complete page geometry stay unprojected and disclosed;
+this is a safe unsupported state, not a guessed overlay. Page 1 under an unmapped
+finding is explicitly an exploration starting point. Source inspection, extracted
+text and navigation boxes never change the four independent dimensions. Each
+component is keyed to the exact reference scope. Late/denied/switch/expiry paths
+abort reads and close document/worker tasks; raw PDF bytes are never cached in
+TanStack Query, persistent storage, object URLs or a service worker.
+
+The viewer pane owns bounded scrolling. Zoom/rotation/page controls have native
+button alternatives; rendering is cancelled on selection changes and resize uses
+the same viewport rather than CSS-percentage guesses. Manual screen-reader,
+independent security, representative-source and deployment approval remain open.

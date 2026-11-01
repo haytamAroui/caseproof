@@ -7,9 +7,11 @@ import {
   Routes,
   useNavigate,
   useParams,
+  useSearchParams,
 } from 'react-router';
 import { SignIn } from '../features/auth';
 import { MattersScreen, ReportsScreen } from '../features/matters';
+import { SourceViewer } from '../features/evidence';
 import { ReportScreen } from '../features/verification';
 import { ApiClient } from '../shared/api';
 import {
@@ -99,6 +101,23 @@ function ScopedOpenReport() {
   const { caseId } = useParams();
   return <OpenReport key={caseId ?? 'manual'} />;
 }
+function ReviewWorkspace({ api }: { api: ApiClient }) {
+  const { caseId = '', briefId = '' } = useParams();
+  const [params] = useSearchParams();
+  const snapshot = params.get('snapshot') ?? '';
+  return (
+    <ReportScreen
+      api={api}
+      renderSource={(referenceId) => (
+        <SourceViewer
+          key={`${caseId}:${briefId}:${snapshot}:${referenceId}`}
+          api={api}
+          scope={{ caseId, briefId, snapshot, referenceId }}
+        />
+      )}
+    />
+  );
+}
 function Workspace({ api }: { api: ApiClient }) {
   const session = useSession();
   const controller = useSessionController();
@@ -135,7 +154,7 @@ function Workspace({ api }: { api: ApiClient }) {
             />
             <Route
               path="/matters/:caseId/briefs/:briefId"
-              element={<ReportScreen api={api} />}
+              element={<ReviewWorkspace api={api} />}
             />
             <Route
               path="*"

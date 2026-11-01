@@ -331,3 +331,69 @@ footer {
     scroll-behavior: auto !important;
   }
 }
+
+.source-viewer {
+  margin-top: 24px;
+}
+.viewer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 18px 0;
+}
+.viewer-scroll {
+  height: 60vh;
+  min-height: 320px;
+  max-height: 800px;
+  scrollbar-gutter: stable;
+  overflow: auto;
+  width: 100%;
+  border: 1px solid var(--line);
+}
+.viewer-page {
+  position: relative;
+  width: 100%;
+  min-height: 240px;
+  margin: 20px 0;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.viewer-page canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.viewer-page .viewer-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.viewer-zoom-50 {
+  width: 50%;
+}
+.viewer-zoom-75 {
+  width: 75%;
+}
+.viewer-zoom-100 {
+  width: 100%;
+}
+.viewer-zoom-125 {
+  width: 125%;
+}
+.viewer-zoom-150 {
+  width: 150%;
+}
+.viewer-zoom-175 {
+  width: 175%;
+}
+.viewer-zoom-200 {
+  width: 200%;
+}
+
+.viewer-page canvas[hidden] {
+  display: none;
+}
