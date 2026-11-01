@@ -55,6 +55,23 @@ test.beforeEach(async ({ page }) => {
     window.caseproofSession = {
       getBearer: async () => 'synthetic-viewer-token',
     };
+    const NativeWorker = window.Worker;
+    window.f2ActiveWorkers = 0;
+    class TrackedWorker extends NativeWorker {
+      private ended = false;
+      constructor(...args: ConstructorParameters<typeof Worker>) {
+        super(...args);
+        window.f2ActiveWorkers++;
+      }
+      override terminate() {
+        if (!this.ended) {
+          this.ended = true;
+          window.f2ActiveWorkers--;
+        }
+        super.terminate();
+      }
+    }
+    window.Worker = TrackedWorker;
   });
   await page.route('**/dossier?*', (route) => route.fulfill({ json: report }));
   await page.route('**/viewer', (route) =>
@@ -163,6 +180,7 @@ test('real worker pixels, repeated search, zoom/rotate/resize, page navigation a
   ).toBeVisible();
   await page.getByRole('button', { name: 'End session', exact: true }).click();
   await expect(page.locator('canvas')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(0);
   expect(external).toEqual([]);
 });
 test('wrong hash fails closed before PDF parsing', async ({ page }) => {
@@ -187,3 +205,9 @@ test('wrong hash fails closed before PDF parsing', async ({ page }) => {
     page.getByRole('button', { name: 'Next source page' }),
   ).toHaveCount(0);
 });
+
+declare global {
+  interface Window {
+    f2ActiveWorkers: number;
+  }
+}

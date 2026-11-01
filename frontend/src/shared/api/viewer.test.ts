@@ -70,3 +70,27 @@ it('requires actual PDF digest/length/snapshot and rejects forged bytes', async 
     ),
   ).rejects.toThrow();
 });
+
+it('fences a late binary response after session end', async () => {
+  const session = new SessionController();
+  session.connect({ getBearer: async () => 'synthetic' });
+  let finish!: (response: Response) => void;
+  const send = vi.fn<typeof fetch>(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const pending = new ApiClient(session, send).pdf(
+    '/v2/source',
+    { sha256: 'a'.repeat(64), snapshot: 'b'.repeat(64), length: 5 },
+    new AbortController().signal,
+  );
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+  session.clear();
+  finish(
+    new Response('%PDF-', { headers: { 'Content-Type': 'application/pdf' } }),
+  );
+  await expect(pending).rejects.toThrow('Session ended');
+  expect(send.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+});
