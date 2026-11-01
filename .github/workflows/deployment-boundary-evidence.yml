@@ -1,0 +1,34 @@
+name: Deployment boundary and model-note evidence
+on:
+  pull_request:
+  push:
+    branches: [main, docs/deployment-retention-model-authority]
+permissions:
+  contents: read
+jobs:
+  boundary-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - run: sudo apt-get update -qq && sudo apt-get install -y tcpdump util-linux
+      - run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
+      - name: Capture synthetic OCR namespace traffic with a positive capture control
+        run: uv run --locked python -m scripts.capture_ocr_egress --output /tmp/caseproof-egress-evidence
+      - name: Model authority and per-mode retention/data-flow regression
+        run: uv run --locked pytest -q tests/test_model_note_authority.py tests/test_deployment_assessment.py tests/test_unsupported_exhibit_references.py
+      - name: Boundary lint and typing
+        run: |
+          uv run --locked ruff check application/litigation/model_notes.py application/security scripts/capture_ocr_egress.py scripts/assess_deployment_evidence.py tests/test_model_note_authority.py tests/test_deployment_assessment.py
+          uv run --locked mypy --explicit-package-bases application/litigation/model_notes.py application/security/deployment_assessment.py
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: synthetic-ocr-network-capture
+          path: /tmp/caseproof-egress-evidence
+          retention-days: 7

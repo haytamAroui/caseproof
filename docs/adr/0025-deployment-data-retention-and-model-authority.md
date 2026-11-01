@@ -57,3 +57,7 @@ This ADR creates no new legal conclusion, customer permission, English inventory
 support or optional-model requirement. Corpus review, practitioner evaluation and
 formal M0/M1/M2 acceptance remain separate. Implementations and tests must be
 recorded as later evidence; this document alone closes none of those gates.
+
+## Implementation and evidence
+
+The [deployment evidence runbook](../security/DEPLOYMENT_EVIDENCE_RUNBOOK.md) supplies four fail-closed mode records, retention and backup fields, a completeness checker, and a synthetic OCR namespace packet-capture CI job. The model-note constructor accepts only a separate labelled note or review request bound to a content release; it does not mutate reports or human decisions. Tests cover authoritative-field rejection and unchanged deterministic/human values. These are engineering controls, not whole-mode captures or independent approval. Named owners and actual deployment retention evidence remain required. English Exhibit handling remains covered by PR #160, including its six unsupported verification misses.
