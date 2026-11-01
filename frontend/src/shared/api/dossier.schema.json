@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "FindingView": {
+      "additionalProperties": true,
+      "properties": {
+        "fidelity": {
+          "enum": [
+            "not_assessed",
+            "ocr_unreliable",
+            "representation_conflict",
+            "translation_review_required",
+            "multiple_matches",
+            "exact_match",
+            "quote_not_found"
+          ],
+          "title": "Fidelity",
+          "type": "string"
+        },
+        "identity": {
+          "enum": [
+            "not_assessed",
+            "not_in_inventory",
+            "source_missing",
+            "ambiguous",
+            "resolved"
+          ],
+          "title": "Identity",
+          "type": "string"
+        },
+        "literal": {
+          "maxLength": 10000,
+          "title": "Literal",
+          "type": "string"
+        },
+        "page_mapping": {
+          "enum": [
+            "mapped",
+            "unmapped",
+            "conflicting"
+          ],
+          "title": "Page Mapping",
+          "type": "string"
+        },
+        "reference_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Reference Id",
+          "type": "string"
+        },
+        "support": {
+          "enum": [
+            "not_assessed",
+            "supported",
+            "qualified",
+            "contradicted"
+          ],
+          "title": "Support",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference_id",
+        "literal",
+        "identity",
+        "page_mapping",
+        "fidelity",
+        "support"
+      ],
+      "title": "FindingView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "brief_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Brief Id",
+      "type": "string"
+    },
+    "case_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Case Id",
+      "type": "string"
+    },
+    "coverage": {
+      "additionalProperties": true,
+      "title": "Coverage",
+      "type": "object"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/FindingView"
+      },
+      "maxItems": 10000,
+      "title": "Findings",
+      "type": "array"
+    },
+    "schema": {
+      "const": "caseproof-dossier-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "case_id",
+    "brief_id",
+    "snapshot_hash",
+    "findings",
+    "coverage"
+  ],
+  "title": "DossierView",
+  "type": "object"
+}

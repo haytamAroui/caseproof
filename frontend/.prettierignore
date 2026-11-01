@@ -1,0 +1,9 @@
+package-lock.json
+src/shared/api/dossier.schema.json
+src/shared/api/generated.ts
+node_modules
+dist
+playwright-report
+test-results
+coverage
+src/shared/api/generated-validator*

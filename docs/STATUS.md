@@ -399,3 +399,11 @@ outbound probe with no captured non-loopback traffic. This is OCR-namespace-only
 not full deployment-mode approval. Final-head checks remain authoritative on the PR.
 Named owners, configured per-mode retention, whole-deployment capture and independent
 SEC-01–16 approval remain open. No database, production or customer data changes.
+
+## 1 November — structured frontend foundation candidate
+
+Branch `feat/frontend-foundation` adds the unmounted `frontend` React/Vite/TypeScript client, ADR 0026, Python-generated response projection/schema/types, precompiled CSP-compatible runtime validation, feature import checks and session cancellation/cache clearing. First screen is read-only exact-snapshot inspection. No viewer engine, matter intake, review writes, login provider or production route is connected. Existing temporary clients remain regression references. Cloud CI and browser artifacts on the PR are authoritative; full M3/M4 and confidential-client acceptance remain open.
+
+### UI foundation specification consolidation
+
+`frontend/BLUEPRINT.md` is the single maintained frontend execution and acceptance entry point. It incorporates corrected workspace UX while preserving generated backend contracts, authorized durable decisions, honest uncertainty, measured viewer geometry and deployment evidence. Client guidance files and ADR 0026 link to it; no new UI capability or acceptance is claimed by this documentation consolidation.
