@@ -13,3 +13,15 @@ def test_actual_docx_evaluation_reports_all_reference_occurrences_and_limits():
     for row in report['cases']:
         assert len(row['missing']) == row['fn']
     assert report['cohorts']['en']['tp'] + report['cohorts']['en']['fn'] == 6
+    assert report['cohorts']['en']['flagged_unsupported'] == 6
+
+
+def test_measurement_preserves_actual_input_bytes_and_provenance(tmp_path):
+    from hashlib import sha256
+    report = evaluate(tmp_path)
+    assert len(report['corpus_sha256']) == 64
+    assert report['dossier_algorithm'] == 'caseproof-dossier-v4'
+    for row in report['cases']:
+        original = tmp_path / (row['case_id'] + '.docx')
+        assert sha256(original.read_bytes()).hexdigest() == row['docx_sha256']
+        assert len(row['brief_utf8_sha256']) == 64

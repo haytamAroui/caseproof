@@ -1,5 +1,8 @@
 # Remaining M1/M2 acceptance evidence
 
+**Superseding live receipt:** PR #159 merged as `05576ba`; run [41258188700](https://github.com/haytamAroui/caseproof/actions/runs/41258188700) passed the genuine-user correction/recheck/cold-reopen/revocation path and zero-residual cleanup. Cleanup migration `20261101004423` is installed; exact failed-run recovery [41258188830](https://github.com/haytamAroui/caseproof/actions/runs/41258188830) also passed. Historical failures below remain failures, but no longer describe the latest acceptance status.
+
+
 ## Executed accuracy measurement
 
 `scripts/evaluate_litigation_detection.py` runs the actual DOCX parser/reference
@@ -19,7 +22,7 @@ Local baseline measured on 1 November 2026:
 
 This is 13 detected reference occurrences out of 19 labelled occurrences. English
 lettered Exhibit references are unsupported by the numbered Stuk/Pièce detector;
-they remain false negatives in the denominator. No coverage-complete flag is set.
+they remain unsupported-verification misses in the denominator. The new unsupported-reference detector flags all six for manual review, and canonical findings keep all their verification dimensions unassessed. This is disclosure, not support for verifying lettered Exhibit inventories. No coverage-complete flag is set.
 These tiny author-labelled synthetic cohorts are **not representative-client
 accuracy acceptance**, OCR accuracy or independently adjudicated semantic support.
 Do not advertise their NL/FR point estimates as population guarantees.

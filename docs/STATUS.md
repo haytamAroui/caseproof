@@ -371,3 +371,14 @@ revision SQL as `20261031234906` to `caseproof-dev`. Post-install grants, RLS an
 search_path were inspected; no revision data was created. This supersedes the
 uninstalled-schema status above. See `docs/m1/LIVE_DRAFT_REVISION_INSTALLATION.md`.
 Genuine signed correction/recheck acceptance remains pending.
+
+## 1 November — merged M0–M2 baseline and closure follow-up
+
+PR #159 merged as `05576ba`. Protected live run 41258188700 passed the genuine-user
+correction/recheck, cold restart, revocation and zero-residual cleanup gates on code
+`9c587f4`; failed-fixture recovery 41258188830 passed. Installed revision/cleanup
+migrations and those receipts supersede earlier pending-install/run entries.
+See `docs/m0/M0_M2_CLOSURE_STATUS_2026-11-01.md` for remaining actual evidence gates.
+The follow-up detects English Exhibit labels as explicitly unsupported review
+items and adds a completeness validator for genuine independent submissions.
+Neither change fabricates outside assessments or grants confidential-client use.

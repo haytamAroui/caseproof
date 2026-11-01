@@ -43,3 +43,17 @@ def detect_exhibit_references(text: str, *, region: str) -> tuple[ExhibitReferen
             )
         )
     return tuple(found)
+
+
+_UNSUPPORTED_EXHIBIT = re.compile(
+    r"(?<![\w])(?P<label>(?i:exhibits?))\s+(?P<number>[A-Z](?:[-.]?\d{1,4})?|\d{1,4})(?![\w])",
+)
+
+
+def detect_unsupported_references(text: str, *, region: str) -> tuple[ExhibitReference, ...]:
+    """Surface explicit English labels without granting Belgian inventory identity."""
+    if not region.strip():
+        raise ValueError("region must identify the source representation")
+    return tuple(ExhibitReference(label='exhibit', number=match['number'].upper(),
+                                 raw=match.group(0), start=match.start(), end=match.end(), region=region)
+                 for match in _UNSUPPORTED_EXHIBIT.finditer(text))

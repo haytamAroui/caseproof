@@ -6,7 +6,7 @@ from typing import Any
 
 from domains.disputes.exhibit_identity import InventoryStatus, resolve_exhibit_identity
 
-ALGORITHM = 'caseproof-dossier-v3'
+ALGORITHM = 'caseproof-dossier-v4'
 _PAGE = re.compile(r'^\s*[,;:]?\s*(?:(PDF|printed|gedrukte|imprimée|bundle|bundel|liasse)\s+)?(?:pp?|pages?)\.?\s*(\d+)\b', re.I)
 
 
@@ -17,9 +17,11 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
                                   InventoryStatus.INCOMPLETE if confirmation else InventoryStatus.UNCONFIRMED)
     complete = status is InventoryStatus.CONFIRMED_COMPLETE
     findings = []
-    for index, ref in enumerate(discovery.references):
+    references = (*discovery.references, *getattr(discovery, 'unsupported_references', ()))
+    for index, ref in enumerate(references):
+        supported = ref.label in {'stuk', 'stukken', 'piece', 'pièce', 'pieces', 'pièces'}
         label = 'stuk' if ref.label.startswith('stuk') else 'piece'
-        matches = [e for e in entries if e['label'] == label and e['number'] == ref.number]
+        matches = [e for e in entries if supported and e['label'] == label and e['number'] == ref.number]
         entry = matches[0] if len(matches) == 1 else None
         version = entry.get('source_version_id') if entry else None
         candidates = [s for s in sources if s['version_id'] == version and s['role'] == 'exhibit']
@@ -27,7 +29,7 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
         identities = tuple(f"entry-{i}" for i, _ in enumerate(matches))
         decision = resolve_exhibit_identity(inventory_status=status, matching_exhibit_ids=identities,
                                             authorized_source_ids=frozenset({"entry-0"}) if source else frozenset())
-        identity = decision.state.value.lower()
+        identity = decision.state.value.lower() if supported else 'not_assessed'
         page = _PAGE.match(regions.get(ref.region, '')[ref.end:])
         requested = None
         unsupported_sequence = False
@@ -61,7 +63,8 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
         findings.append({
             'reference_id': f'ref-{index:04d}', 'literal': ref.raw, 'region': ref.region,
             'offsets': {'start': ref.start, 'end': ref.end}, 'number': ref.number,
-            'identity': identity, 'identity_reason': decision.reason.value if decision.reason else None,
+            'identity': identity, 'identity_reason': (decision.reason.value if decision.reason else None)
+                         if supported else 'UNSUPPORTED_REFERENCE_DIALECT',
             'requested_page': requested,
             'source_id': source['document_id'] if source else None,
             'version_id': source['version_id'] if source else None,
@@ -82,13 +85,15 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
         })
     checked = sum(f['technical_check'] == 'checked' for f in findings)
     return {'algorithm': ALGORITHM, 'findings': findings,
-            'coverage': {'detected': len(findings), 'checked': checked,
+            'coverage': {'detected': len(findings),
+                         'unsupported_references': len(getattr(discovery, 'unsupported_references', ())), 'checked': checked,
                          'unresolved': len(findings) - checked,
                          'unprocessed_regions': len(discovery.unscanned_parts),
                          'unprocessed_parts': list(discovery.unscanned_parts),
                          'text_coverage_complete': discovery.text_coverage_complete,
                          'reference_recall_measured': False, 'fully_checked': False,
                          'inventory_confirmed_complete': complete,
-                         'limits': ['Explicit Stuk/Pièce numbers only; ranges and implicit references are not expanded.',
+                         'limits': ['English Exhibit labels are detected for review only; no identity or pinpoint verification.',
+                                    'Explicit Stuk/Pièce numbers only; ranges and implicit references are not expanded.',
                                     'Checked means identity and pinpoint checks, not quote fidelity or semantic support.',
                                     'Printed/bundle labels require explicit reviewer mappings; plain p. is ambiguous.']}}
