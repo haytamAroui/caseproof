@@ -10,7 +10,8 @@ from scripts.verify_s2_002_database import _env, _run
 def main():
     install()
     env = _env()
-    _run(Path('db/proposals/PIV-F1_workspace_report_catalog.sql').read_text(), env)
+    assert Path('db/proposals/PIV-F1_workspace_report_catalog.sql').read_bytes() == Path('supabase/migrations/20261101205446_workspace_f1_report_catalog.sql').read_bytes()
+    assert _run("select to_regprocedure('public.caseproof_workspace_reports(uuid,text)') is not null", env) == 't'
     owner, guest, foreign, org, org2, case, brief = (str(uuid4()) for _ in range(7))
     _run(f"""
 insert into auth.users(id,instance_id) values('{owner}','{org}'),('{guest}','{org}'),('{foreign}','{org2}');
