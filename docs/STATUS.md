@@ -341,3 +341,33 @@ identity abstention and consistent frozen web/JSON/Markdown/DOCX output. See
 [matrix](m3/VERIFICATION_CONTRACT_ACCEPTANCE.md). No migration, confidential input,
 new provider, local installer, Word host or legal/practitioner approval. Exact tests
 and cloud/live receipts belong to the PR; no complete M3/M4 release claim.
+
+## 1 November 2026 — dossier correction and recheck candidate (PR #159)
+
+The canonical dossier service now includes source/snapshot-bound DOCX correction
+preview, two-phase reserve/upload/fresh-readback/activate commit, idempotent retry
+and canonical recheck of the active new draft. The SQL implementation remains a
+**reviewed-installation proposal**, not a live deployment. Pending revisions leave
+the current manifest/signature unchanged; activation switches the manifest and
+invalidates dependent confirmation/review snapshots without changing originals.
+
+The dedicated disposable PostgreSQL workflow passed on candidate `58eb209`,
+including concurrent activation, competing children, audit rollback, fresh report
+persistence and revoked access. Subsequent hardening binds reservations to the
+exact parent snapshot and reference; use the PR's current commit CI as authority.
+Local full-suite evidence before that hardening: 1,880 passed, four skipped.
+
+The protected dossier workflow has opt-in correction/replay/recheck/cold-restart
+acceptance with pre-upload cleanup registration. It remains unexecuted against
+shared staging because the proposed schema has not been independently reviewed
+and installed. No migration was applied and no client data was processed. Formal
+M1/M2 acceptance, representative accuracy and independent security/legal approval
+remain open. See `docs/m1/DRAFT_REVISION_PERSISTENCE_DESIGN.md` and PR #159.
+
+### Development installation update
+
+At the owner's explicit request, connected Supabase MCP applied the exact draft
+revision SQL as `20261031234906` to `caseproof-dev`. Post-install grants, RLS and
+search_path were inspected; no revision data was created. This supersedes the
+uninstalled-schema status above. See `docs/m1/LIVE_DRAFT_REVISION_INSTALLATION.md`.
+Genuine signed correction/recheck acceptance remains pending.

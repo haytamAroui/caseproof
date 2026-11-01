@@ -168,6 +168,9 @@ def test_all_new_code_is_unwired_and_migration_unchanged() -> None:
     assert "/v2/" not in app
     assert {p.name for p in (root / "supabase/migrations").glob("*.sql")} == {
         "20261031112127_signed_page_worker.sql",
+        "20261031234906_dossier_draft_revisions.sql",
+        "20261031235117_dossier_draft_revision_fk_indexes.sql",
+        "20261101004423_dossier_draft_revision_scoped_cleanup.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",

@@ -19,17 +19,22 @@ from application.litigation.dossier_contracts import add_report_contract, assess
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
 from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.dossier_draft_revisions import DraftRevisionClient
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
 from apps.api.litigation_live_journey import HOST, JourneyClient
 from apps.api.signed_document_parse import parse_verified_original
-from apps.api.signed_supabase_originals import PrivateStorageFailure
+from apps.api.signed_supabase_originals import (
+    PrivateStorageExists,
+    PrivateStorageFailure,
+    PrivateStorageOutcomeUnknown,
+)
 from domains.disputes.dossier_verification import build_findings
 from domains.disputes.exhibit_identity import InventoryStatus
 from domains.disputes.reference_detection import detect_exhibit_references
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
-from infrastructure.parsers.dossier_docx_export import annotated_docx
+from infrastructure.parsers.dossier_docx_export import annotated_docx, corrected_docx_preview
 from infrastructure.parsers.pdf_ocr import OCRUnavailable
 from infrastructure.parsers.pdf_visual_fidelity import PDFVisualFidelity
 
@@ -70,6 +75,20 @@ class VerificationOptions(BaseModel):
     source_languages: dict[str, Literal['nl', 'fr', 'en', 'de']] = Field(default_factory=dict, max_length=32)
 
 
+class CorrectionPreviewBody(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    snapshot_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+    original_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    reference_id: str = Field(min_length=1, max_length=256)
+    paragraph_index: int = Field(ge=0, le=100000)
+    before: str = Field(min_length=1, max_length=4000)
+    after: str = Field(max_length=4000)
+
+
+class CorrectionCommitBody(CorrectionPreviewBody):
+    request_id: str = Field(pattern=r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+
+
 class CropBatchBody(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     region_ids: list[str] = Field(min_length=1, max_length=96)
@@ -83,6 +102,7 @@ class DossierStore:
     def __init__(self, key: str, receipt_secret: str | None = None):
         self.key = key
         self.client = JourneyClient(key)
+        self.revisions = DraftRevisionClient(key, receipt_secret)
         self.visual = PDFVisualFidelity()
         # Domain-separated receipt key, never the public client key. No key is
         # serialized, logged, persisted in source, or accepted from HTTP.
@@ -115,6 +135,61 @@ class DossierStore:
         if not isinstance(result, dict):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
+
+    def commit_correction(self, bearer: str, case: str, brief: str,
+                          command: CorrectionCommitBody) -> dict[str, Any]:
+        values = command.model_dump()
+        values.pop('request_id')
+        command_sha = hashlib.sha256(canonical({'case': case, 'brief': brief, **values}).encode()).hexdigest()
+        existing = self.revisions.reserve(bearer, case, command.request_id, 'status',
+                                          {'command_sha256': command_sha})
+        if existing.get('state') in ('reserved', 'active') and (
+                existing.get('parent_snapshot_hash') != command.snapshot_hash
+                or existing.get('reference_id') != command.reference_id
+                or existing.get('parent_version_id') != brief):
+            raise HTTPException(409, 'correction reservation differs from command')
+        if existing.get('state') == 'active':
+            return {**existing, 'committed': True, 'requires_recheck': True}
+        if existing.get('state') == 'absent':
+            report, original = self.load(bearer, case, brief)
+            if report['snapshot_hash'] != command.snapshot_hash:
+                raise HTTPException(409, 'stale dossier correction')
+            if not any(f['reference_id'] == command.reference_id for f in report['findings']):
+                raise HTTPException(422, 'unknown correction reference')
+        elif existing.get('state') == 'reserved':
+            original = self.client.library.read(bearer=bearer, case_id=case,
+                document_id=existing['document_id'], version_id=brief)
+        else:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            derivative = corrected_docx_preview(original, expected_sha256=command.original_sha256,
+                paragraph_index=command.paragraph_index, before=command.before, after=command.after)
+        except ValueError:
+            raise HTTPException(422, 'unsupported or stale correction range') from None
+        digest = hashlib.sha256(derivative).hexdigest()
+        reserved = self.revisions.reserve(bearer, case, command.request_id, 'reserve', {
+            'command_sha256': command_sha, 'snapshot_hash': command.snapshot_hash,
+            'parent_version_id': brief, 'parent_sha256': command.original_sha256,
+            'reference_id': command.reference_id, 'sha256': digest, 'byte_length': len(derivative)})
+        if (reserved.get('parent_version_id') != brief
+                or reserved.get('parent_snapshot_hash') != command.snapshot_hash
+                or reserved.get('reference_id') != command.reference_id
+                or reserved.get('original_sha256') != digest
+                or reserved.get('byte_length') != len(derivative)):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        params = {'bearer': bearer, 'case_id': case, 'document_id': reserved['document_id'],
+                  'version_id': reserved['version_id']}
+        try:
+            self.client.library.put_once(data=derivative, **params)
+        except (PrivateStorageExists, PrivateStorageOutcomeUnknown):
+            pass  # Only the following fresh signed readback can reconcile the write.
+        readback = self.client.library.read(**params)
+        if len(readback) != len(derivative) or hashlib.sha256(readback).hexdigest() != digest:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        activated = self.revisions.activate(bearer, case, command.request_id, digest, len(readback))
+        if activated.get('state') != 'active' or activated.get('version_id') != reserved['version_id']:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return {**activated, 'committed': True, 'requires_recheck': True}
 
     def receipt(self, payload: dict[str, Any]) -> str:
         key = getattr(self, 'receipt_key', None)
@@ -329,6 +404,41 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
                              authorization: str | None = Header(default=None)) -> dict[str, Any]:
         s, bearer = active(authorization)
         return s.load(bearer, case_id, brief_id, language_context=body.model_dump())[0]
+
+    @router.post(base + '/corrections/preview')
+    def correction_preview(case_id: str, brief_id: str, body: CorrectionPreviewBody,
+                           authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        report, original = s.load(bearer, case_id, brief_id)
+        if report['snapshot_hash'] != body.snapshot_hash:
+            raise HTTPException(409, 'stale dossier correction')
+        if not any(f['reference_id'] == body.reference_id for f in report['findings']):
+            raise HTTPException(422, 'unknown correction reference')
+        try:
+            derivative = corrected_docx_preview(original, expected_sha256=body.original_sha256,
+                paragraph_index=body.paragraph_index, before=body.before, after=body.after)
+        except ValueError:
+            raise HTTPException(422, 'unsupported or stale correction range') from None
+        return {'schema': 'caseproof-docx-correction-preview-v1', 'committed': False,
+                'requires_new_draft_version': True, 'requires_recheck': True,
+                'invalidates_snapshot_hash': body.snapshot_hash,
+                'original_sha256': body.original_sha256,
+                'derivative_sha256': hashlib.sha256(derivative).hexdigest(),
+                'content_base64': base64.b64encode(derivative).decode('ascii')}
+
+    @router.post(base + '/corrections/commit')
+    def correction_commit(case_id: str, brief_id: str, body: CorrectionCommitBody,
+                          authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        return s.commit_correction(bearer, case_id, brief_id, body)
+
+    @router.post(base + '/recheck')
+    def recheck(case_id: str, brief_id: str,
+                authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        # The same canonical loader resolves the active draft and creates a new
+        # frozen report. Old confirmation/decisions do not carry to a new bundle.
+        return s.load(bearer, case_id, brief_id)[0]
 
     @router.post(base + '/confirmation')
     def confirm(case_id: str, brief_id: str, body: InventoryConfirmation,

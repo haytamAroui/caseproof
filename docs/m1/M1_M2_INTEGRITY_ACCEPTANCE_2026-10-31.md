@@ -31,3 +31,29 @@
 | Release authorization | Named owners for P3-01..04, current-head live acceptance receipt, security/ethics/privacy decisions and signed M1/M2 milestone exit; absent here |
 
 **Do not close M1 or M2 from this PR alone.** A signed-user synthetic test, disposable database or candidate crop is not a production-approved Belgian litigation dossier. M3 may consume the merged candidate contracts, but the separate pilot and live development gates remain.
+
+## Live multi-source probe repair (candidate)
+
+The protected multi-source probe now uses the installed DOCX/inventory/two-PDF contract,
+checks signed Auth identity and registered source metadata, generates parseable PDF bytes, retains a separate
+cleanup list across process restart failures, requires explicit authorization-denial
+HTTP status codes, and permits manual dispatch from protected `main` rather than the
+historic feature branch. The companion regression tests exercise PDF parsing and a
+forced failure during restart. This is a candidate until the PR head passes required
+CI and a separately protected live run succeeds. The probe covers a DOCX draft, one inventory and
+two PDF exhibits (one image-only); it does **not** prove the complete DOCX → check → review → correction
+→ recheck journey, representative OCR accuracy, or independent security/legal approval.
+
+
+## Draft correction/recheck candidate
+
+The canonical dossier API now implements bounded DOCX preview, two-stage commit
+and recheck against the new active draft. The database implementation is proposed
+in `db/proposals/M1_M2_dossier_draft_revisions.sql`; it is **not installed live**.
+Disposable PostgreSQL acceptance exercises pending-version signature isolation,
+idempotent reserve/activate, wrong readback rejection, activation privilege fences,
+audit rollback, active manifest switching, confirmation/snapshot invalidation and
+revocation. Coordinator tests exercise real DOCX bytes and uncertain upload retry.
+See [persistence design](DRAFT_REVISION_PERSISTENCE_DESIGN.md). All-current-head CI,
+reviewed deployment, protected signed staging acceptance and independent evaluation
+remain separate requirements; these additions do not close M1/M2 by themselves.

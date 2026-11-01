@@ -38,7 +38,7 @@ jobs:
       - name: Signed page job SQL fences and audit rollback
         run: uv run --locked python -m scripts.verify_signed_page_jobs_disposable
       - name: Test deterministic dossier, original preservation and annotations
-        run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_dossier_journey.py
+        run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_dossier_journey.py tests/test_dossier_download_reopen.py
       - name: ASVS file-boundary and canonical MCP contract regression
         run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_asvs_file_boundaries.py tests/test_mcp_adapter_contract.py tests/test_mcp_canonical_dossier.py tests/test_mcp_http_parity.py tests/test_page_coordinator.py tests/test_private_telemetry.py tests/test_report_markdown_security.py tests/test_docx_export_security.py
       - name: Signed worker 200-page recovery and adversarial receipt tests

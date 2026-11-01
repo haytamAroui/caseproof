@@ -41,8 +41,98 @@ def json_request(token, method, path, payload=None):
     return json.loads(raw)
 
 
+def validate_reopened_artifacts(page: bytes, crop: bytes, derivative: bytes) -> None:
+    """Independently decode downloaded artifacts; magic bytes alone are insufficient."""
+    from docx import Document
+    from PIL import Image
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(page), strict=True)
+    if len(reader.pages) != 1:
+        raise RuntimeError('DOSSIER_EXPORTED_PAGE_COUNT_INVALID')
+    with Image.open(io.BytesIO(crop)) as image:
+        image.verify()
+    with Image.open(io.BytesIO(crop)) as image:
+        image.load()
+        if image.format != 'PNG' or min(image.size) < 1:
+            raise RuntimeError('DOSSIER_CROP_DECODE_FAILED')
+    document = Document(io.BytesIO(derivative))
+    if not any('scoped review annotations' in paragraph.text for paragraph in document.paragraphs):
+        raise RuntimeError('DOSSIER_REOPENED_DOCX_ANNOTATIONS_MISSING')
+
+
+def correction_acceptance(token, sessions, signin, credentials, case, base, current, bundle, registered, proc):
+    """Opt-in installed-schema acceptance; reserve cleanup ownership before upload."""
+    first = current['findings'][0]
+    command = {'snapshot_hash': current['snapshot_hash'], 'original_sha256': bundle[0].sha256,
+               'reference_id': first['reference_id'], 'paragraph_index': 0,
+               'before': 'PDF p. 1', 'after': 'PDF p. 99', 'request_id': str(uuid4())}
+    json_request(token, 'POST', base + '/reviews', {
+        'snapshot_hash': current['snapshot_hash'], 'reference_id': first['reference_id'],
+        'request_id': str(uuid4()), 'decision': 'CONFIRMED_QUALIFIED',
+        'rationale': 'Synthetic reviewer requests an explicit page correction',
+        'reviewed_region_ids': [r['region_id'] for r in first.get('visual_assessment', {}).get('regions', [])]})
+    preview = json_request(token, 'POST', base + '/corrections/preview',
+                           {k: v for k, v in command.items() if k != 'request_id'})
+    values = {k: v for k, v in command.items() if k != 'request_id'}
+    brief = registered[0]['version_id']
+    canonical = json.dumps({'case': case, 'brief': brief, **values}, sort_keys=True,
+                           separators=(',', ':'), ensure_ascii=False)
+    command_sha = hashlib.sha256(canonical.encode()).hexdigest()
+    derivative = base64.b64decode(preview['content_base64'], validate=True)
+    reservation = {'command_sha256': command_sha, 'snapshot_hash': command['snapshot_hash'],
+        'parent_version_id': brief, 'parent_sha256': command['original_sha256'],
+        'reference_id': first['reference_id'], 'sha256': hashlib.sha256(derivative).hexdigest(),
+        'byte_length': len(derivative)}
+    status, raw = direct(token, os.environ['CASEPROOF_DEV_PUBLISHABLE_KEY'],
+        '/rest/v1/rpc/caseproof_dossier_draft_reserve', 'POST',
+        {'p_case': case, 'p_request': command['request_id'], 'p_action': 'reserve', 'p_data': reservation})
+    if status != 200:
+        raise RuntimeError('CORRECTION_RESERVATION_FAILED')
+    reserved = json.loads(raw)
+    path = '/'.join((os.environ['CASEPROOF_P3_ORG_ID'], case, reserved['document_id'],
+                     reserved['version_id'], reserved['original_sha256']))
+    record(os.environ['CASEPROOF_DEV_AUTH_ADMIN_KEY'], os.environ['CASEPROOF_P3_RUN_ID'], 'storage_file', path)
+    for role in ('ungranted', 'foreign'):
+        code, _ = request(sessions[role].access_token, 'POST', base + '/corrections/commit', command)
+        if code not in (403, 404):
+            raise RuntimeError('CORRECTION_UNGRANTED_COMMIT_NOT_DENIED')
+    committed = json_request(token, 'POST', base + '/corrections/commit', command)
+    replayed = json_request(token, 'POST', base + '/corrections/commit', command)
+    if not committed['committed'] or committed['version_id'] != reserved['version_id'] or replayed['version_id'] != committed['version_id']:
+        raise RuntimeError('CORRECTION_COMMIT_REPLAY_FAILED')
+    new_base = base.replace(brief, committed['version_id'])
+    rechecked = json_request(token, 'POST', new_base + '/recheck')
+    if rechecked['snapshot_hash'] == current['snapshot_hash'] or rechecked['coverage']['checked'] != 0:
+        raise RuntimeError('CORRECTION_RECHECK_INHERITED_OLD_CONFIRMATION')
+    exported = json_request(token, 'GET', new_base + '/export')
+    if exported['human_decisions']:
+        raise RuntimeError('CORRECTION_RECHECK_INHERITED_OLD_DECISIONS')
+    # Originals and every exhibit retain the exact bytes supplied before correction.
+    for source, row in zip(bundle[1:], registered[1:], strict=True):
+        code, raw = request(token, 'GET', new_base + '/sources/' + row['version_id'] + '/original')
+        if code != 200 or hashlib.sha256(raw).hexdigest() != source.sha256:
+            raise RuntimeError('CORRECTION_CHANGED_EVIDENCE')
+    _server_stop(proc)
+    proc = _server_start()
+    try:
+        fresh = signin.sign_in(credentials['owner']).access_token
+        reopened = json_request(fresh, 'GET', new_base + '/export?snapshot_hash=' + rechecked['snapshot_hash'])
+        if reopened != exported:
+            raise RuntimeError('CORRECTION_COLD_REOPEN_CHANGED_REPORT')
+        admin_rpc(os.environ['CASEPROOF_DEV_AUTH_ADMIN_KEY'], 'revoke', {
+            'p_run': os.environ['CASEPROOF_P3_RUN_ID'], 'p_owner': str(sessions['owner'].user_id), 'p_case': case})
+        for suffix in ('/recheck', '/corrections/commit'):
+            code, _ = request(fresh, 'POST', new_base + suffix, None if suffix == '/recheck' else command)
+            if code not in (403, 404):
+                raise RuntimeError('CORRECTION_REVOKED_OPERATION_NOT_DENIED')
+        print('DOSSIER_CORRECTION_COMMIT_REPLAY_RECHECK_COLD_REOPEN_REVOKE_PASSED', flush=True)
+    finally:
+        _server_stop(proc)
+
+
 def main():
-    if os.getenv('GITHUB_REF') not in {'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main', 'refs/heads/feat/final-hardening-and-verification', 'refs/heads/feat/canonical-mcp-report-gate-20261031'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
+    if os.getenv('GITHUB_REF') not in {'refs/heads/fix/m1-multisource-live-acceptance', 'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main', 'refs/heads/feat/final-hardening-and-verification', 'refs/heads/feat/canonical-mcp-report-gate-20261031'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
         raise RuntimeError('protected dossier branch required')
     key = os.environ['CASEPROOF_DEV_PUBLISHABLE_KEY']
     signin = SupabasePasswordSignin(PROJECT_REF, key)
@@ -187,6 +277,8 @@ def main():
         with ZipFile(io.BytesIO(derivative)) as archive:
             if b'scoped review annotations' not in archive.read('word/document.xml'):
                 raise RuntimeError('DOSSIER_DOCX_ANNOTATIONS_MISSING')
+        validate_reopened_artifacts(page, png, derivative)
+        print('DOSSIER_DOWNLOADED_PDF_PNG_DOCX_INDEPENDENTLY_REOPENED', flush=True)
         artifacts = Path('/tmp/caseproof-dossier-demo')
         artifacts.mkdir(exist_ok=True)
         for source in bundle:
@@ -217,6 +309,10 @@ def main():
         if stale != 409 or current['human_decisions'] or current['snapshot_hash'] == review['snapshot_hash']:
             raise RuntimeError('DOSSIER_STALE_REVIEW_NOT_INVALIDATED')
         print('DOSSIER_CHANGED_CONFIRMATION_INVALIDATES_OLD_REVIEW_PASSED', flush=True)
+        if os.getenv('CASEPROOF_DOSSIER_CORRECTION') == 'YES':
+            correction_acceptance(token, sessions, signin, credentials, case, base, current, bundle, registered, proc)
+            return
+
         for role in ('ungranted', 'foreign'):
             denied_token = sessions[role].access_token
             for suffix in ('', '/export', f'/sources/{scan["version_id"]}/original', f'/sources/{scan["version_id"]}/pages/1'):

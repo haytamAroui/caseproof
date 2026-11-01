@@ -122,3 +122,61 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
                 target.writestr(item, document.toxml(encoding='utf-8')
                                 if item.filename == 'word/document.xml' else source.read(item))
     return output.getvalue()
+
+
+def corrected_docx_preview(original: bytes, *, expected_sha256: str,
+                           paragraph_index: int, before: str, after: str) -> bytes:
+    """Bounded single-run correction; preserve all other ZIP member bytes.
+
+    Complex paragraphs abstain instead of flattening fields, tracked changes,
+    hyperlinks, bookmarks or multiple formatted runs. This creates a derivative,
+    never a new accepted source version or a persisted reviewer decision.
+    """
+    from hashlib import sha256
+
+    if (sha256(original).hexdigest() != expected_sha256
+            or type(paragraph_index) is not int or paragraph_index < 0
+            or not before or before == after or len(after) > 4000
+            or any(ord(c) < 32 and c not in '\t\n\r' for c in after)):
+        raise ValueError('stale or invalid correction')
+    _validate_derivative_package(original)
+    with ZipFile(io.BytesIO(original)) as archive:
+        xml_bytes = archive.read('word/document.xml')
+        SafeXML.fromstring(xml_bytes, forbid_dtd=True, forbid_entities=True, forbid_external=True)
+        # Preserve namespace declarations, including prefixes referenced only by
+        # mc:Ignorable. ElementTree would drop such declarations on serialization.
+        document = minidom.parseString(xml_bytes)
+
+        def elements(node: Any) -> list[Any]:
+            return [child for child in node.childNodes if child.nodeType == child.ELEMENT_NODE]
+
+        bodies = [node for node in elements(document.documentElement)
+                  if node.namespaceURI == NS and node.localName == 'body']
+        paragraphs = [] if len(bodies) != 1 else [node for node in elements(bodies[0])
+                     if node.namespaceURI == NS and node.localName == 'p']
+        if paragraph_index >= len(paragraphs):
+            raise ValueError('paragraph unavailable')
+        paragraph = paragraphs[paragraph_index]
+        children = elements(paragraph)
+        runs = [node for node in children if node.namespaceURI == NS and node.localName == 'r']
+        if (len(runs) != 1 or any(node.namespaceURI != NS or node.localName not in {'pPr', 'r'}
+                                  for node in children)):
+            raise ValueError('complex paragraph requires manual correction')
+        children = elements(runs[0])
+        texts = [node for node in children if node.namespaceURI == NS and node.localName == 't']
+        if (len(texts) != 1 or any(node.namespaceURI != NS or node.localName not in {'rPr', 't'}
+                                   for node in children)):
+            raise ValueError('complex run requires manual correction')
+        text = ''.join(node.data for node in texts[0].childNodes if node.nodeType == node.TEXT_NODE)
+        if text.count(before) != 1:
+            raise ValueError('ambiguous or stale correction range')
+        for child in list(texts[0].childNodes):
+            texts[0].removeChild(child)
+        texts[0].appendChild(document.createTextNode(text.replace(before, after, 1)))
+        texts[0].setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve')
+        output = io.BytesIO()
+        with ZipFile(output, 'w', compression=ZIP_DEFLATED) as target:
+            for entry in archive.infolist():
+                target.writestr(entry, document.toxml(encoding='utf-8')
+                                if entry.filename == 'word/document.xml' else archive.read(entry))
+    return output.getvalue()

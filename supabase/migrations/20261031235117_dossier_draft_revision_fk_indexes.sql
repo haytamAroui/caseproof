@@ -1,0 +1,2 @@
+create index dossier_draft_revision_document_fk_idx on caseproof.dossier_draft_revisions(org_id,document_id);
+create index dossier_draft_revision_parent_fk_idx on caseproof.dossier_draft_revisions(org_id,parent_version_id);

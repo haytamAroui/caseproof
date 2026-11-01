@@ -1,0 +1,46 @@
+name: Dossier draft correction disposable acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, feat/complete-dossier-journey, feat/live-page-worker-and-hosted-mcp]
+permissions:
+  contents: read
+jobs:
+  retention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: caseproof_s2_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: caseproof_ephemeral_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caseproof_s2_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 8
+    env:
+      CASEPROOF_DISPOSABLE_DB: "YES"
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: caseproof_s2_ci
+      PGUSER: postgres
+      PGPASSWORD: caseproof_ephemeral_ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Two-stage correction SQL adversarial acceptance
+        run: uv run --locked python -m scripts.verify_dossier_draft_revisions
+      - name: Correction coordinator interruption and replay tests
+        run: uv run --locked pytest -q tests/test_dossier_correction_commit.py tests/test_dossier_correction_preview.py
+      - name: Type and lint correction integration
+        run: |
+          uv run --locked ruff check .
+          uv run --locked mypy --explicit-package-bases apps/api/dossier_journey.py apps/api/dossier_draft_revisions.py

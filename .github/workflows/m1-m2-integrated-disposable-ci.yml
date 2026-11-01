@@ -43,10 +43,20 @@ jobs:
       - name: Validate real-format NL FR EN intake and fail-closed M1/M2 discovery
         run: |
           uv run --locked pytest -q \
+            tests/test_live_multisource_probe.py \
             tests/test_signed_multisource_journey.py \
             tests/test_m1_m2_fail_closed_acceptance.py \
             tests/test_m1_m2_real_format_intake.py \
             tests/test_phase4_headless_api.py
+      - name: Measure actual synthetic DOCX reference detection with explicit misses
+        run: |
+          uv run --locked pytest -q tests/test_litigation_detection_evaluation.py
+          uv run --locked python -m scripts.evaluate_litigation_detection --output /tmp/caseproof-detection-evaluation.json
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: synthetic-reference-detection-measurement
+          path: /tmp/caseproof-detection-evaluation.json
+          retention-days: 7
       - name: Initialize full protected local backend
         run: |
           set -euo pipefail
