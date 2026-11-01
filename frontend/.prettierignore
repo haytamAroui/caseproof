@@ -7,3 +7,5 @@ playwright-report
 test-results
 coverage
 src/shared/api/generated-validator*
+src/shared/api/matters-generated*
+src/shared/api/matters.schema.json

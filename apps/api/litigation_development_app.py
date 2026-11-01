@@ -29,6 +29,7 @@ from apps.api.litigation_workspace_sources import create_clearbrief_sources_rout
 from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
+from apps.api.workspace_catalog import create_workspace_catalog_router
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 
 
@@ -75,6 +76,7 @@ def create_litigation_development_app(
         return {"schema": "caseproof-clearbrief-dev-config-v1", "publishable_key": publishable_key}
 
     catalog = SignedMatterCatalog(publishable_key) if publishable_key else None
+    app.include_router(create_workspace_catalog_router(catalog))
 
     @app.get("/dev/clearbrief/matters", include_in_schema=False)
     def lawyer_matters(authorization: str | None = Header(default=None)) -> dict[str, object]:

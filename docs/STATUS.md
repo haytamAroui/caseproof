@@ -411,3 +411,18 @@ Branch `feat/frontend-foundation` adds the unmounted `frontend` React/Vite/TypeS
 ## M3 rules and CI candidate — 1 November 2026
 
 `feat/m3-rules` extends the single frontend blueprint with database ownership and product philosophy, executable design/security policy, stronger AST boundaries and deliberate negative controls. It does not add a database schema, viewer or signed-user UI feature. CI evidence on the PR determines acceptance.
+
+## M3 permitted-matter navigation candidate — 1 November 2026
+
+Branch `feat/m3-permitted-matter-navigation` starts P02/F1 after merged #163.
+The real frontend now consumes a generated, bounded read-only catalog projection
+over the existing signed matter adapter, only in the loopback development
+composition. Matter selection pre-fills the preserved-report form; brief/snapshot
+identifiers remain required. No migration, production mount, auth-provider change
+or client data. See [frontend blueprint increment](../frontend/BLUEPRINT.md#20-m3-implementation-increment--permitted-matter-navigation).
+
+Local affected Python tests: 15 passed; frontend unit/architecture tests: 29 passed;
+lint, typing, generated-contract checks, policy and production build passed.
+Local Playwright could not launch because Chromium is absent and its download
+returned an invalid archive. Cloud/browser results are pending at this entry.
+F1 genuine signed-browser acceptance and the remaining F2–F6 flows stay open.

@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Link, Route, Routes, useNavigate } from 'react-router';
+import {
+  BrowserRouter,
+  Link,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+} from 'react-router';
+import { MattersScreen } from '../features/matters';
 import { ReportScreen } from '../features/verification';
 import { ApiClient } from '../shared/api';
 import {
@@ -19,6 +27,7 @@ declare global {
 }
 function OpenReport() {
   const navigate = useNavigate();
+  const { caseId } = useParams();
   const [error, setError] = useState('');
   const [invalid, setInvalid] = useState<string[]>([]);
   return (
@@ -26,9 +35,10 @@ function OpenReport() {
       <p className="eyebrow">Evidence workspace</p>
       <h1>Open a preserved report</h1>
       <p>
-        Open an existing authorized snapshot. New matter intake will follow in
-        the next slice.
+        Open an existing authorized snapshot. Report history is not connected
+        yet; the brief version and frozen snapshot identifiers are required.
       </p>
+      <Link to="/">Back to permitted matters</Link>
       <form
         noValidate
         onSubmit={(event) => {
@@ -61,6 +71,8 @@ function OpenReport() {
               : `${name === 'matter' ? 'Matter' : 'Brief version'} ID`}
             <input
               name={name}
+              defaultValue={name === 'matter' ? caseId : undefined}
+              readOnly={name === 'matter' && Boolean(caseId)}
               autoComplete="off"
               spellCheck={false}
               aria-invalid={invalid.includes(name)}
@@ -101,7 +113,9 @@ function Workspace({ api }: { api: ApiClient }) {
       <main id="main" tabIndex={-1}>
         {session.connected ? (
           <Routes>
-            <Route path="/" element={<OpenReport />} />
+            <Route path="/" element={<MattersScreen api={api} />} />
+            <Route path="/reports/open" element={<OpenReport />} />
+            <Route path="/matters/:caseId" element={<OpenReport />} />
             <Route
               path="/matters/:caseId/briefs/:briefId"
               element={<ReportScreen api={api} />}

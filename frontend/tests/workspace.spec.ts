@@ -123,7 +123,7 @@ test('schema mismatch and missing provider remain actionable', async ({
 test('empty results, provider absence and form validation are explicit', async ({
   page,
 }) => {
-  await page.goto('/workspace/');
+  await page.goto('/workspace/reports/open');
   await page.evaluate(() => {
     delete window.caseproofSession;
   });
