@@ -11,7 +11,7 @@ The ADR remains proposed and SEC-01–16 remain independently evidenced approval
 | Hybrid | `deployment-assessments/hybrid.json` plus completeness checker | Assess both firm and service sides; no inherited approval from hosted | Named deployment/security/privacy owners TBD |
 | Firm-controlled | `deployment-assessments/firm_controlled.json` plus checker | Installer/customer configuration and full-perimeter evidence not supplied | Firm operator + security/privacy owners TBD |
 | Offline | `deployment-assessments/offline.json` plus checker | Separate claimed configuration; no whole-machine no-egress claim | Firm operator + security/privacy owners TBD |
-| OCR namespace | `scripts.capture_ocr_egress`, CI PCAP and receipt | Real isolated namespace capture, loopback positive control and denied synthetic outbound TCP attempt; OCR version executable runs during capture | Engineering evidence; no customer approval |
+| OCR namespace | `scripts.capture_ocr_egress`, CI PCAP and receipt | Real isolated namespace capture, loopback positive control and denied synthetic outbound TCP attempt; synthetic bitmap OCR, missing-input failure and successful retry run during capture | Engineering evidence; no customer approval |
 | Generative annotations | `application/litigation/model_notes.py`, prompt-injection/authority tests | Separate immutable note/review request bound to snapshot and authorized destination; no provider invocation, persistence or authoritative mutation | Verification lead, named reviewer TBD |
 | English references | M2 canonical unsupported-reference tests and #160 measurement | Six lettered Exhibit examples flagged for manual review, not inventory/source/page/fidelity matched | Detection/evaluation owner TBD |
 
@@ -50,7 +50,8 @@ The capture tool needs Linux, Docker, sudo, nsenter and tcpdump. It captures onl
 the isolated OCR network namespace, with fixed synthetic sentinels; it must not be
 used with client data. A positive loopback packet is required, preventing an empty
 or broken capture from being called proof. The outbound probe must fail and the
-capture must contain no non-loopback packets. It is **not** a full OCR-document
+capture must contain no non-loopback packets. Synthetic bitmap OCR and an input
+failure/retry are exercised. It is **not** a full dossier-document
 processing, browser/Auth/API/Storage/telemetry/update/support capture or a test of
 all failure/retry paths. Each mode's whole-perimeter capture and field-level trace
 still needs actual authorized configuration, matching build/config hashes and

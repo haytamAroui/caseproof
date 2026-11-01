@@ -382,3 +382,20 @@ See `docs/m0/M0_M2_CLOSURE_STATUS_2026-11-01.md` for remaining actual evidence g
 The follow-up detects English Exhibit labels as explicitly unsupported review
 items and adds a completeness validator for genuine independent submissions.
 Neither change fabricates outside assessments or grants confidential-client use.
+
+## 1 November — PR #161 deployment evidence and model-note controls
+
+Branch `docs/deployment-retention-model-authority` adds ADR 0025, four explicit
+mode evidence/retention records, a completeness CLI, separate immutable model notes
+and synthetic namespace capture CI. Model annotations cannot supply canonical
+finding or human-decision fields; no provider, persistence or production route is
+introduced. Hashes, references, verdicts and timing are treated as potentially
+sensitive. Backup expiry/restore/re-deletion and legal holds require evidence.
+
+Local locked suite: 1,899 passed, four live gates skipped; added profile regression
+also passes. Cloud capture [41279255356](https://github.com/haytamAroui/caseproof/actions/runs/41279255356)
+passed actual bitmap OCR, missing-input failure/retry, loopback control and denied
+outbound probe with no captured non-loopback traffic. This is OCR-namespace-only,
+not full deployment-mode approval. Final-head checks remain authoritative on the PR.
+Named owners, configured per-mode retention, whole-deployment capture and independent
+SEC-01–16 approval remain open. No database, production or customer data changes.

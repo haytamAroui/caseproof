@@ -46,3 +46,18 @@ def test_worker_capture_unknown_retention_and_missing_backup_proof_cannot_close_
         else:
             record['network_capture']['unexpected_destinations'] = ['unreviewed-provider']
         assert not assess(record)['ready_for_independent_review']
+
+
+def test_checked_in_mode_profiles_remain_open_until_real_evidence_is_supplied():
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / 'docs/security/deployment-assessments'
+    assert {path.stem for path in root.glob('*.json')} == MODES
+    for path in root.glob('*.json'):
+        record = json.loads(path.read_text())
+        assert record['mode'] == path.stem
+        result = assess(record)
+        assert result['issues']
+        assert not result['ready_for_independent_review']
+        assert not result['sec_01_16_approved']
