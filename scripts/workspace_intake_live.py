@@ -6,6 +6,7 @@ owns Auth/org cleanup; register matter and exact object paths before transfer.
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 
 from playwright.sync_api import expect
@@ -15,13 +16,34 @@ from scripts.verify_dev_live_review_roundtrip import _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import admin_rpc
 from scripts.workspace_browser_live import ORIGIN, WorkspaceBrowserAcceptance
 from tests.fixtures.dossier_journey import dossier_bundle
+from tests.fixtures.factory import SyntheticSource
 
 
 def _exercise() -> None:
-    if os.getenv('GITHUB_REF') not in {'refs/heads/feat/f3-complete-intake', 'refs/heads/main'}:
+    if os.getenv('GITHUB_REF') not in {'refs/heads/feat/f3-complete-intake', 'refs/heads/main', 'refs/pull/175/merge'}:
         raise RuntimeError('F3_PROTECTED_BRANCH_REQUIRED')
     key, run, org = (os.environ[n] for n in ('CASEPROOF_DEV_AUTH_ADMIN_KEY', 'CASEPROOF_P3_RUN_ID', 'CASEPROOF_P3_ORG_ID'))
-    bundle = dossier_bundle()
+    bundle = list(dossier_bundle())
+    # Owned real-format fixture: the printed label on physical PDF page 6 is 4.
+    # Keep the original inventory and scanned second exhibit unchanged.
+    from docx import Document
+    from reportlab.pdfgen import canvas
+
+    document = Document()
+    document.add_paragraph('Zie Stuk 1, printed p. 4.')
+    document.add_paragraph('Voir Pièce 2, printed p. 7.')
+    draft = io.BytesIO()
+    document.save(draft)
+    bundle[0] = SyntheticSource(bundle[0].filename, bundle[0].role, bundle[0].media_type, draft.getvalue())
+    rendered = io.BytesIO()
+    six_pages = canvas.Canvas(rendered, pagesize=(595, 842), invariant=1)
+    for number in range(1, 7):
+        six_pages.drawString(60, 760, f'STUK 1 PRESERVED SYNTHETIC PDF PHYSICAL PAGE {number}')
+        if number == 6:
+            six_pages.drawString(60, 720, 'PRINTED PAGE 4 - INSPECTED PDF PAGE 6')
+        six_pages.showPage()
+    six_pages.save()
+    bundle[2] = SyntheticSource(bundle[2].filename, bundle[2].role, bundle[2].media_type, rendered.getvalue())
     proc = _server_start()
     acceptance = WorkspaceBrowserAcceptance('', '')
     page = acceptance.page
@@ -116,6 +138,10 @@ def _exercise() -> None:
         page.get_by_label('Physical PDF page', exact=True).first.fill('1')
         page.get_by_label('Mapping rationale').first.fill('Inspected synthetic PDF page')
         page.get_by_role('button', name='Add inspected mapping').first.click()
+        page.get_by_label('Page label', exact=True).first.fill('4')
+        page.get_by_label('Physical PDF page', exact=True).first.fill('6')
+        page.get_by_label('Mapping rationale').first.fill('Inspected printed four on physical PDF page six')
+        page.get_by_role('button', name='Add inspected mapping').first.click()
         page.get_by_role('checkbox').check()
         page.get_by_role('button', name='Save inventory confirmation').click()
         expect(page.get_by_text('Inventory confirmation saved and freshly read back.', exact=False)).to_be_visible(timeout=120000)
@@ -124,6 +150,9 @@ def _exercise() -> None:
         expect(page.get_by_role('button', name='Run explicit check')).to_be_enabled(timeout=120000)
         page.get_by_role('button', name='Run explicit check').click()
         expect(page.get_by_role('heading', name='Review the evidence')).to_be_visible(timeout=180000)
+        expect(page.get_by_text('PDF page 6 of 6', exact=True)).to_be_visible(timeout=180000)
+        expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=180000)
+        print('F3_SIGNED_UPLOAD_CONFIRMED_PRINTED_4_PDF_6_REPORT_VIEWER_PASSED', flush=True)
         print('F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_EXPLICIT_CHECK_PASSED', flush=True)
         for role in ('ungranted', 'foreign'):
             context = acceptance.browser.new_context()
