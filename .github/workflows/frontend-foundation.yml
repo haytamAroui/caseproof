@@ -38,7 +38,6 @@ jobs:
         working-directory: frontend
       - name: Check generated TypeScript and AJV artifacts are committed
         run: git diff --exit-code -- frontend/src/shared/api
-        working-directory: frontend
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
       - run: npm run test:e2e
