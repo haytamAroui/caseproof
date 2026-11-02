@@ -309,18 +309,23 @@ function FindingInspection({
 }: {
   finding: FindingView;
   historical: boolean;
-  renderSource?: ((
-    finding: FindingView,
-    historical: boolean,
-    onInspected: () => void,
-  ) => ReactNode) | undefined;
-  renderDraft?: ((finding: FindingView, historical: boolean) => ReactNode) | undefined;
-  renderReview?: ((
-    finding: FindingView,
-    historical: boolean,
-    inspected: boolean,
-    onNext: () => void,
-  ) => ReactNode) | undefined;
+  renderSource?:
+    | ((
+        finding: FindingView,
+        historical: boolean,
+        onInspected: () => void,
+      ) => ReactNode)
+    | undefined;
+  renderDraft?:
+    ((finding: FindingView, historical: boolean) => ReactNode) | undefined;
+  renderReview?:
+    | ((
+        finding: FindingView,
+        historical: boolean,
+        inspected: boolean,
+        onNext: () => void,
+      ) => ReactNode)
+    | undefined;
   onNext: () => void;
 }) {
   const [inspected, setInspected] = useState(false);
