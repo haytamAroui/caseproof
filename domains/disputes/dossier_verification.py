@@ -7,14 +7,17 @@ from typing import Any
 from domains.disputes.exhibit_identity import InventoryStatus, resolve_exhibit_identity
 
 ALGORITHM = 'caseproof-dossier-v4'
-_PAGE = re.compile(r'^\s*[,;:]?\s*(?:(PDF|printed|gedrukte|imprimée|bundle|bundel|liasse)\s+)?(?:pp?|pages?)\.?\s*(\d+)\b', re.I)
+_PAGE = re.compile(r'^\s*[,;:]?\s*(?:(PDF|printed|gedrukte|imprimée|bundle|bundel|liasse)\s+)?(?:pp?|pages?)\.?\s*([0-9]+|[IVXLCDMivxlcdm]{1,12})\b', re.I)
 
 
 def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[str, Any]], confirmation: dict[str, Any] | None, *, inventory_status: InventoryStatus | None = None) -> dict[str, Any]:
     entries = confirmation['payload']['entries'] if confirmation else []
-    complete = bool(confirmation and confirmation['payload']['inventory_complete'])
+    complete = bool(confirmation and confirmation['payload']['inventory_complete']
+                    and not confirmation['payload'].get('exceptions'))
     status = inventory_status or (InventoryStatus.CONFIRMED_COMPLETE if complete else
                                   InventoryStatus.INCOMPLETE if confirmation else InventoryStatus.UNCONFIRMED)
+    if confirmation and confirmation['payload'].get('exceptions'):
+        status = InventoryStatus.INCOMPLETE
     complete = status is InventoryStatus.CONFIRMED_COMPLETE
     findings = []
     references = (*discovery.references, *getattr(discovery, 'unsupported_references', ()))
@@ -44,9 +47,10 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
         mapped = []
         if source and entry and requested and not unsupported_sequence and requested['space'] != 'unspecified':
             if requested['space'] == 'pdf':
-                physical = int(requested['label'])
-                if 1 <= physical <= source.get('page_count', 0):
-                    mapped = [{'pdf_page': physical, 'basis': 'physical_pdf_index'}]
+                if requested['label'].isascii() and requested['label'].isdigit():
+                    physical = int(requested['label'])
+                    if 1 <= physical <= source.get('page_count', 0):
+                        mapped = [{'pdf_page': physical, 'basis': 'physical_pdf_index'}]
             else:
                 mapped = [p for p in entry['pages'] if p['space'] == requested['space'] and p['label'] == requested['label']
                           and 1 <= p['pdf_page'] <= source.get('page_count', 0)]
@@ -92,6 +96,7 @@ def build_findings(discovery: Any, regions: dict[str, str], sources: list[dict[s
                          'unprocessed_parts': list(discovery.unscanned_parts),
                          'text_coverage_complete': discovery.text_coverage_complete,
                          'reference_recall_measured': False, 'fully_checked': False,
+                         'inventory_exceptions_pending': len(confirmation['payload'].get('exceptions', [])) if confirmation else 0,
                          'inventory_confirmed_complete': complete,
                          'limits': ['English Exhibit labels are detected for review only; no identity or pinpoint verification.',
                                     'Explicit Stuk/Pièce numbers only; ranges and implicit references are not expanded.',
