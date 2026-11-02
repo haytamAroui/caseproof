@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "enum": [
+        "CONFIRMED_SUPPORTED",
+        "CONFIRMED_QUALIFIED",
+        "CONFIRMED_CONTRADICTED"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "rationale": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "reference_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Reference Id",
+      "type": "string"
+    },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "reviewed_region_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 96,
+      "title": "Reviewed Region Ids",
+      "type": "array"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "snapshot_hash",
+    "reference_id",
+    "request_id",
+    "decision",
+    "rationale"
+  ],
+  "title": "VisualDecisionBody",
+  "type": "object"
+}

@@ -17,13 +17,20 @@ export function parseReviewLedger(
     value.case_id !== expected.caseId ||
     value.brief_id !== expected.briefId ||
     value.snapshot_hash !== expected.snapshot ||
-    new Set(value.decisions.map((row) => row.request_id)).size !== value.decisions.length
-  ) throw new ContractError();
+    new Set(value.decisions.map((row) => row.request_id)).size !==
+      value.decisions.length
+  )
+    throw new ContractError();
   return value;
 }
 export function parseDraftExcerpt(
   value: unknown,
-  expected: { caseId: string; briefId: string; snapshot: string; referenceId: string },
+  expected: {
+    caseId: string;
+    briefId: string;
+    snapshot: string;
+    referenceId: string;
+  },
 ): DraftExcerptView {
   if (!excerptValidator(value)) throw new ContractError();
   if (
@@ -35,16 +42,21 @@ export function parseDraftExcerpt(
     (value.available &&
       (value.selection_start >= value.selection_end ||
         value.selection_end > value.excerpt.length)) ||
-    (!value.available && (value.excerpt !== '' || value.reason !== 'unsupported_or_ambiguous_anchor'))
-  ) throw new ContractError();
+    (!value.available &&
+      (value.excerpt !== '' ||
+        value.reason !== 'unsupported_or_ambiguous_anchor'))
+  )
+    throw new ContractError();
   return value;
 }
 export function assertReviewCommand(value: unknown): VisualDecisionBody {
   if (!reviewCommandValidator(value)) throw new ContractError();
   if (
-    new Set(value.reviewed_region_ids ?? []).size !== (value.reviewed_region_ids ?? []).length ||
+    new Set(value.reviewed_region_ids ?? []).size !==
+      (value.reviewed_region_ids ?? []).length ||
     !/^[0-9a-f]{64}$/.test(value.snapshot_hash)
-  ) throw new ContractError();
+  )
+    throw new ContractError();
   return value;
 }
 export function parseReviewWriteReceipt(
@@ -60,5 +72,6 @@ export function parseReviewWriteReceipt(
     row.decision !== command.decision ||
     typeof row.reviewer_id !== 'string' ||
     row.reviewer_id.length === 0
-  ) throw new ContractError();
+  )
+    throw new ContractError();
 }

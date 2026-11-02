@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Bounded plain-text excerpt from the exact signed preserved DOCX.",
+  "properties": {
+    "available": {
+      "title": "Available",
+      "type": "boolean"
+    },
+    "brief_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Brief Id",
+      "type": "string"
+    },
+    "case_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Case Id",
+      "type": "string"
+    },
+    "excerpt": {
+      "maxLength": 2400,
+      "title": "Excerpt",
+      "type": "string"
+    },
+    "original_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Original Sha256",
+      "type": "string"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "const": "unsupported_or_ambiguous_anchor",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "reference_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Reference Id",
+      "type": "string"
+    },
+    "region": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Region"
+    },
+    "schema": {
+      "const": "caseproof-draft-excerpt-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "selection_end": {
+      "maximum": 2400,
+      "minimum": 0,
+      "title": "Selection End",
+      "type": "integer"
+    },
+    "selection_start": {
+      "maximum": 2400,
+      "minimum": 0,
+      "title": "Selection Start",
+      "type": "integer"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "case_id",
+    "brief_id",
+    "snapshot_hash",
+    "reference_id",
+    "original_sha256",
+    "available",
+    "excerpt",
+    "selection_start",
+    "selection_end"
+  ],
+  "title": "DraftExcerptView",
+  "type": "object"
+}
