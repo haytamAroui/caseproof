@@ -414,6 +414,30 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         return {'mode': 'historical_read_only', 'currentness': 'not_asserted',
                 'source_availability': 'not_assessed', 'report': report}
 
+    @router.get(base + '/history/{snapshot_hash}/sources/{version_id}/original')
+    def historical_original(case_id: str, brief_id: str, snapshot_hash: str, version_id: str,
+                            authorization: str | None = Header(default=None)) -> Response:
+        s, bearer = active(authorization)
+        if len(snapshot_hash) != 64 or any(c not in '0123456789abcdef' for c in snapshot_hash):
+            raise HTTPException(422, 'invalid snapshot identity')
+        report = s.frozen_report(bearer, case_id, brief_id, snapshot_hash, historical=True)
+        matches = [row for row in report.get('sources', []) if row.get('version_id') == version_id]
+        if len(matches) != 1:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        row = matches[0]
+        try:
+            raw = s.client.library.read(bearer=bearer, case_id=case_id,
+                                        document_id=row['document_id'], version_id=version_id)
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        if len(raw) != row['byte_length'] or hashlib.sha256(raw).hexdigest() != row['sha256']:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return Response(raw, media_type='application/octet-stream', headers={
+            'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+            'Content-Disposition': 'attachment; filename=caseproof-historical-original',
+            'X-CaseProof-Snapshot': snapshot_hash, 'X-CaseProof-Original-SHA256': row['sha256'],
+        })
+
     @router.post(base + '/checks')
     def check_with_languages(case_id: str, brief_id: str, body: VerificationOptions,
                              authorization: str | None = Header(default=None)) -> dict[str, Any]:
