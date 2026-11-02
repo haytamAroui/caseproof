@@ -10,5 +10,6 @@ export type {
   IntakeView,
   IdentityConfirmation,
   PageConfirmation,
+  InventoryReviewException,
   InventoryConfirmation,
 } from './intake';
