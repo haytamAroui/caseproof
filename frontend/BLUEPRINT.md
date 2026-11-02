@@ -540,24 +540,3 @@ P03 `/workspace/matters/new`, P05 `/workspace/matters/:caseId/sources` and P06 `
 Installed bundle registration accepts exactly one DOCX, one UTF-8 text inventory and two PDF exhibits; the UI explicitly enforces this bound. Each original is at most 5 MiB, total at most 12 MB; the inventory is at most 1 MiB/512 distinct identities and each PDF at most 64 pages; format/hash/container validation precedes writes. Reservation receipt is not preservation. Fresh signed original readback precedes completion; partial processing remains explicit. Native selects use platform-owned popups with canonical control tokens. No new UI library or token palette.
 
 Recovery preserves immutable source identity: reselect exact originals to replay a case/metadata-derived registration after cold restart. Creation may retain an opaque `operation` UUID in query state; titles, file names, credentials and organization selections are never persisted there. Session loss clears forms and requests. A stopped transfer may have a partial remote outcome. No browser cleanup/delete permission or automated mutation retry is introduced.
-
-
-## 23. Workflow v3.1 implementation guide and F1–F3 audit
-
-The [workflow guide](../docs/CASEPROOF_WORKFLOW_BLUEPRINT_V3_1.md) is required journey and scenario guidance for F4–F6. This frontend blueprint remains authoritative for frontend architecture, routes, contracts, design and acceptance. Do not create parallel APIs, verification states or signing systems.
-
-Stages map to existing increments as follows: S0 to F1; S1 and S3 to F3; S2 to F2 and backend; S4–S8 to F4 and backend; S9 to F5; S10 to F6/M4; S11 to F4–F6; S12 and S13 cross-cut all increments. Optional S6 model notes are deferred.
-
-### F1–F3 retrofit verification
-
-**F1:** Check authorized and foreign-matter access, historical versus current reports, expiry and revocation cache clearing, accessible focus and recovery. Existing engineering receipts remain valid; independent approval is separate.
-
-**F2:** Check original hash and provenance, printed/piece/bundle labels, OCR uncertainty, representation conflicts, zoom/rotation/DPR geometry and keyboard access. A crop is not proof of page mapping.
-
-**F3:** Check incomplete inventory and aliases, ambiguous or missing sources, original DOCX/inventory/PDF/scan hashes and readback, unknown upload outcomes, partial ingestion and cold resume. Incomplete inventory must not produce definitive not-in-inventory.
-
-These are audit targets, not verified omissions. Write regression tests before narrow fixes and do not retroactively reopen an engineering milestone without a demonstrated contract violation.
-
-### F4–F6 PR acceptance
-
-Each PR must list affected S0–S13 stages, existing backend contracts, known gaps and deferred cases, signed-browser and CI evidence, stale/revoked/restart behavior and independent approvals still open. F4 delivers review and durable receipts; F5 delivers correction and recheck; F6 delivers reviewed export and reopening. No F4 test can certify F5 or F6.
