@@ -79,6 +79,15 @@ test.beforeEach(async ({ page }) => {
       json: view(route.request().url().includes('/r2/') ? 'r2' : 'r1'),
     }),
   );
+  await page.route('**/viewer/regions', (route) =>
+    route.fulfill({ json: {
+      schema: 'caseproof-raster-overlays-v1',
+      snapshot_hash: snapshot, original_sha256: fixture.sha256,
+      source_version_id: 'source', regions: [],
+      unassessed_region_count: 2,
+      interpretation: 'navigation_only_never_a_verdict',
+    } }),
+  );
   await page.route('**/viewer/original', async (route) =>
     route.fulfill({
       body: await readFile(
@@ -120,7 +129,7 @@ test('real worker pixels, repeated search, zoom/rotate/resize, page navigation a
   ).toBeVisible();
   await expect(
     page.getByText(
-      '2 frozen raster regions lack complete PDF page-box geometry.',
+      'region(s) in this report have unassessed provenance.',
       { exact: false },
     ),
   ).toBeVisible();
@@ -482,4 +491,31 @@ test('late old-source bytes cannot replace the newly selected reference', async 
   await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(1);
   await page.getByRole('button', { name: 'End session', exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(0);
+});
+
+test('a stale snapshot opens its preserved PDF in explicitly historical read-only mode', async ({
+  page,
+}) => {
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({ status: 409 }),
+  );
+  await page.route(`**/dossier/history/${snapshot}`, (route) =>
+    route.fulfill({ json: {
+      mode: 'historical_read_only',
+      currentness: 'not_asserted',
+      source_availability: 'not_assessed',
+      report,
+    } }),
+  );
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(page.getByText('Historical report · read-only')).toBeVisible();
+  await expect(page.getByText('Historical original version · read-only.', {
+    exact: false,
+  })).toBeVisible();
+  await expect(page.getByText('Source page rendered.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /confirm support/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /export signed/i })).toHaveCount(0);
 });

@@ -20,6 +20,7 @@ class Store:
     def __init__(self):
         self.changed = False
         self.revoked = False
+        self.read_count = 0
         self.page = 1
         self.mapping = "mapped"
         self.client = SimpleNamespace(library=SimpleNamespace(read=self.read, source=self.metadata))
@@ -28,6 +29,7 @@ class Store:
         return SimpleNamespace(sha256_hex=HASH), len(RAW)
 
     def read(self, **kwargs):
+        self.read_count += 1
         assert kwargs == {"bearer": "owner", "case_id": "case", "document_id": "doc", "version_id": "source"}
         return RAW[:-1] + b"X" if self.changed else RAW
 
@@ -160,3 +162,10 @@ def test_reused_bytes_reject_selected_source_metadata_drift():
     store, client = rig()
     store.client.library.source = lambda **kwargs: (SimpleNamespace(sha256_hex="c" * 64), len(RAW))
     assert client.get(BASE + "/original", headers={"Authorization": "Bearer owner"}).status_code == 503
+
+
+def test_original_transport_reads_selected_verified_bytes_once_not_twice():
+    store, client = rig()
+    response = client.get(BASE + "/original", headers={"Authorization": "Bearer owner"})
+    assert response.status_code == 200
+    assert store.read_count == 1

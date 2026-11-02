@@ -153,6 +153,26 @@ class PDFVisualFidelity:
             raise ValueError('visual_original_hash_mismatch')
         if not raw.startswith(b'%PDF-') or not 0 < len(raw) <= 3*1024*1024 or not 1 <= page_number <= 64:
             raise OCRUnavailable('visual_input_budget')
+        # Capture the exact CropBox basis that the rasterizer uses. A raster
+        # without trustworthy origin, rotation and UserUnit is never projected.
+        try:
+            pdf_page = PdfReader(io.BytesIO(raw), strict=True).pages[page_number - 1]
+            box, media = pdf_page.cropbox, pdf_page.mediabox
+            crop = [float(box.left), float(box.bottom), float(box.right), float(box.top)]
+            mediabox = [float(media.left), float(media.bottom), float(media.right), float(media.top)]
+            rotation = int(pdf_page.rotation) % 360
+            user_unit = float(pdf_page.get('/UserUnit', 1))
+            if (rotation not in (0, 90, 180, 270)
+                    or not all(math.isfinite(v) and abs(v) <= 100000 for v in crop + mediabox)
+                    or not 0 < user_unit <= 75
+                    or crop[0] < mediabox[0] or crop[1] < mediabox[1]
+                    or crop[2] > mediabox[2] or crop[3] > mediabox[3]
+                    or crop[2] <= crop[0] or crop[3] <= crop[1]):
+                raise ValueError("unsupported page box")
+        except (ValueError, IndexError, TypeError, KeyError):
+            raise OCRUnavailable('visual_page_geometry_unassessed') from None
+        provenance = {'crop_box': crop, 'rotation': rotation,
+                      'user_unit': user_unit, 'cropbox_rasterized': True}
         binaries = {name: shutil.which(name) for name in ('pdftoppm', 'pdftotext', 'tesseract')}
         if not all(binaries.values()):
             raise OCRUnavailable('visual_binaries_missing')
@@ -161,7 +181,7 @@ class PDFVisualFidelity:
             source, prefix = root/'source.pdf', root/'page'
             source.write_bytes(raw)
             _run([str(binaries['pdftoppm']), '-f', str(page_number), '-l', str(page_number),
-                  '-singlefile', '-r', str(RASTER_DPI), '-png', str(source), str(prefix)], timeout=12)
+                  '-singlefile', '-cropbox', '-r', str(RASTER_DPI), '-png', str(source), str(prefix)], timeout=12)
             png = prefix.with_suffix('.png').read_bytes()
             if len(png) > 12*1024*1024:
                 raise OCRUnavailable('visual_raster_budget')
@@ -180,7 +200,15 @@ class PDFVisualFidelity:
                   '-l', 'nld+fra+eng', 'tsv'], timeout=20)
             ocr = [RasterWord(w.text, (w.left, w.top, w.left+w.width, w.top+w.height), w.confidence)
                    for w in parse_tsv(prefix.with_suffix('.tsv').read_bytes(), width=image.width, height=image.height)]
-        return self.compare(image, png, raw, page_number, layer, ocr)
+        # Layer bounding boxes on cropped pages may retain the MediaBox
+        # basis. Do not combine incompatible representations as a match.
+        if crop != mediabox:
+            layer = []
+        result = self.compare(image, png, raw, page_number, layer, ocr)
+        result['raster_provenance'] = provenance
+        for region in [*result.get('regions', []), *([result['page_context']] if result.get('page_context') else [])]:
+            region['raster_provenance'] = provenance
+        return result
 
     def compare(self, image: Image.Image, png: bytes, raw: bytes, page_number: int,
                 layer: list[RasterWord], ocr: list[RasterWord]) -> dict[str, Any]:

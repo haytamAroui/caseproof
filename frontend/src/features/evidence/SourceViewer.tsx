@@ -8,12 +8,14 @@ import { pageSpaceLabel } from './pageSpaces';
 import { ApiClient, parseViewer } from '../../shared/api';
 import { Button, Notice } from '../../shared/ui';
 import type { DocumentInspection } from '../../shared/pdf/geometry';
-import type { PdfPageResult } from '../../shared/pdf/geometry';
+import type { PdfPageResult, RasterRegion } from '../../shared/pdf/geometry';
+import { parseRasterRegions, projectRasterBox } from '../../shared/pdf/geometry';
 export interface ViewerScope {
   caseId: string;
   briefId: string;
   snapshot: string;
   referenceId: string;
+  historical?: boolean;
 }
 interface SourceViewerProps {
   api: ApiClient;
@@ -58,9 +60,11 @@ function SourceInspection({
   const [mapping, setMapping] = useState('');
   const [hash, setHash] = useState('');
   const [legacy, setLegacy] = useState(0);
+  const [rasterRegions, setRasterRegions] = useState<RasterRegion[]>([]);
+  const [unassessed, setUnassessed] = useState(0);
   const [mappedPage, setMappedPage] = useState<number | null>(null);
   const [version, setVersion] = useState('');
-  const { caseId, briefId, snapshot, referenceId } = scope;
+  const { caseId, briefId, snapshot, referenceId, historical = false } = scope;
   useEffect(() => {
     if (!frame.current) return;
     const observer = new ResizeObserver((entries) => {
@@ -79,7 +83,10 @@ function SourceInspection({
     const pixels = canvas.current,
       boxes = overlay.current;
     let inspection: DocumentInspection | null = null;
-    const path = `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(briefId)}/dossier/snapshots/${encodeURIComponent(snapshot)}/references/${encodeURIComponent(referenceId)}/viewer`;
+    const base = `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(briefId)}/dossier`;
+    const path = historical
+      ? `${base}/history/${encodeURIComponent(snapshot)}/references/${encodeURIComponent(referenceId)}/viewer`
+      : `${base}/snapshots/${encodeURIComponent(snapshot)}/references/${encodeURIComponent(referenceId)}/viewer`;
     void (async () => {
       try {
         const context = parseViewer(await api.get(path, controller.signal), {
@@ -97,7 +104,14 @@ function SourceInspection({
           },
           controller.signal,
         );
+        const regions = parseRasterRegions(await api.get(path + '/regions', controller.signal), {
+          snapshot,
+          sha256: context.original_sha256,
+          version: context.version_id,
+        });
         if (controller.signal.aborted) return;
+        setRasterRegions(regions.regions);
+        setUnassessed(regions.unassessed);
         const { PdfInspection } = await import('../../shared/pdf/engine');
         if (controller.signal.aborted) return;
         inspection = new PdfInspection();
@@ -144,7 +158,7 @@ function SourceInspection({
         boxes.height = 0;
       }
     };
-  }, [api, caseId, briefId, snapshot, referenceId]);
+  }, [api, caseId, briefId, snapshot, referenceId, historical]);
   useEffect(() => {
     if (!ready || !engine.current || !canvas.current) return;
     let active = true;
@@ -196,11 +210,19 @@ function SourceInspection({
     layer.width = canvas.current.width;
     layer.height = canvas.current.height;
     const context = layer.getContext('2d');
-    if (!context || !result || !showBoxes || !search.trim()) return;
+    if (!context || !result || !showBoxes) return;
     const xScale = layer.width / result.width,
       yScale = layer.height / result.height;
     context.strokeStyle = getComputedStyle(layer).getPropertyValue('--focus');
     context.lineWidth = 2 * xScale;
+    for (const region of rasterRegions) {
+      if (region.page_number !== page || region.original_sha256 !== hash) continue;
+      const box = projectRasterBox(region, result);
+      if (!box) continue; // Unsupported geometry is never guessed.
+      context.strokeRect(box[0] * xScale, box[1] * yScale,
+        (box[2] - box[0]) * xScale, (box[3] - box[1]) * yScale);
+    }
+    if (!search.trim()) return;
     for (const item of result.textBoxes.filter((item) =>
       item.text.includes(search),
     )) {
@@ -212,7 +234,7 @@ function SourceInspection({
         (y2 - y1) * yScale,
       );
     }
-  }, [result, search, showBoxes]);
+  }, [result, search, showBoxes, rasterRegions, page, hash]);
   function clearPage() {
     if (canvas.current) canvas.current.width = 0;
     if (overlay.current) overlay.current.width = 0;
@@ -291,16 +313,24 @@ function SourceInspection({
             </Button>
           )}
           <p>
+            {historical ? 'Historical original version · read-only. ' : ''}
             Reference page mapping: {mapping}.{' '}
             {mapping !== 'mapped' &&
               'Page 1 is an exploration starting point, not a mapped reference.'}
           </p>
-          {legacy > 0 && (
+          {(legacy > 0 || unassessed > 0) && (
             <Notice>
-              {legacy} frozen raster regions lack complete PDF page-box
-              geometry. They are not projected onto this page. Inspect their
-              original crops separately.
+              Legacy and unsupported raster regions are not guessed. {unassessed}
+              region(s) in this report have unassessed provenance. Overlay outlines
+              are navigation aids, not an assessment or a human decision.
             </Notice>
+          )}
+          {rasterRegions.length > 0 && (
+            <p role="status">
+              {rasterRegions.filter((region) => region.page_number === page &&
+                result && projectRasterBox(region, result)).length} source-bound
+              raster outline(s) aligned on this page.
+            </p>
           )}
           <div className="viewer-controls" aria-label="Source page controls">
             <Button
