@@ -113,8 +113,8 @@ class DossierStore:
     def rpc(self, bearer: str, case: str, action: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         con = http.client.HTTPSConnection(HOST, timeout=30)
         try:
-            function = 'caseproof_dossier_snapshot_read' if action == 'read' else 'caseproof_dossier'
-            params = ({'p_case': case, 'p_snapshot': (data or {}).get('snapshot_hash')} if action == 'read'
+            function = ({'read': 'caseproof_dossier_snapshot_read', 'historical_read': 'caseproof_dossier_historical_read'}.get(action, 'caseproof_dossier'))
+            params = ({'p_case': case, 'p_snapshot': (data or {}).get('snapshot_hash')} if action in {'read', 'historical_read'}
                       else {'p_case': case, 'p_action': action, 'p_data': data or {}})
             con.request('POST', '/rest/v1/rpc/' + function, canonical(params).encode(),
                         {'apikey': self.key, 'Authorization': 'Bearer ' + bearer,
@@ -197,8 +197,8 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return hmac.new(key, canonical(payload).encode(), hashlib.sha256).hexdigest()
 
-    def frozen_report(self, bearer: str, case: str, brief: str, snapshot: str) -> dict[str, Any]:
-        stored = self.rpc(bearer, case, 'read', {'snapshot_hash': snapshot})
+    def frozen_report(self, bearer: str, case: str, brief: str, snapshot: str, *, historical: bool = False) -> dict[str, Any]:
+        stored = self.rpc(bearer, case, 'historical_read' if historical else 'read', {'snapshot_hash': snapshot})
         serialized = stored.get('serialized')
         if not isinstance(serialized, str) or hashlib.sha256(serialized.encode()).hexdigest() != snapshot:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -403,6 +403,16 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
     def dossier(case_id: str, brief_id: str, snapshot_hash: str | None = None, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         s, bearer = active(authorization)
         return read_dossier_report(s, bearer, case_id, brief_id, snapshot_hash)[0]
+
+    @router.get(base + '/history/{snapshot_hash}')
+    def historical_dossier(case_id: str, brief_id: str, snapshot_hash: str,
+                           authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        if len(snapshot_hash) != 64 or any(c not in '0123456789abcdef' for c in snapshot_hash):
+            raise HTTPException(422, 'invalid snapshot identity')
+        report = s.frozen_report(bearer, case_id, brief_id, snapshot_hash, historical=True)
+        return {'mode': 'historical_read_only', 'currentness': 'not_asserted',
+                'source_availability': 'not_assessed', 'report': report}
 
     @router.post(base + '/checks')
     def check_with_languages(case_id: str, brief_id: str, body: VerificationOptions,
