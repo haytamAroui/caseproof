@@ -1,5 +1,9 @@
 # CaseProof — engineering state and dated evidence
 
+## 2 November 2026 — F2 workflow v3.1 retrofit candidate
+
+Branch `feat/f2-v31-evidence-inspection` implements canonical page-space display, reference return navigation, OCR/representation uncertainty explanations, explicit authorized source reopening, and cancellation/deadline fences for late renderer results. A mapped finding without a physical PDF target is rejected by the existing viewer boundary. [Audit and evidence](m3/F2_V3_1_AUDIT.md) preserves prior renderer/signed receipts and separates new exact-head acceptance. No new API fields, engine, grants, database, provider or deployment. Cloud and protected signed acceptance are pending until recorded; independent release gates remain open.
+
 ## 2 November 2026 — F1 workflow v3.1 retrofit engineering checks passed
 
 Branch `feat/f1-v31-session-recovery` closes confirmed F1 gaps from S0/S11–S13: cancelled-read late-status/body fencing, validated memory-only read-navigation recovery after fresh sign-in, and processing/access disclosure. Adds section 23 to the authoritative frontend blueprint, correcting the guide's dangling pointer. Existing contracts, auth/provider/grants and stored data are unchanged. [Audit and evidence](m3/F1_V3_1_AUDIT.md) distinguishes prior genuine signed acceptance from new exact-head checks. Executable head `ffe83b45d42948be9de47b7f89958c31317cfd03` passed 17 ordinary workflows and protected genuine signed-browser [run 41437514935](https://github.com/haytamAroui/caseproof/actions/runs/41437514935), including explicit expiry/relogin/history reopening and independent zero-residual teardown. Frontend: 61 unit and 17 production-build browser tests passed. PR #172 remains subject to owner/independent review and production approval. Receipt-only follow-up changes no executable behavior; check its final cloud status before merge.

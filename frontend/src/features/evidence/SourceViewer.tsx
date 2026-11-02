@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import type { FindingView } from '../../shared/api';
+import {
+  boundedInspection,
+  InspectionTimeout,
+} from '../../shared/pdf/lifecycle';
+import { pageSpaceLabel } from './pageSpaces';
 import { ApiClient, parseViewer } from '../../shared/api';
 import { Button, Notice } from '../../shared/ui';
 import type { DocumentInspection } from '../../shared/pdf/geometry';
@@ -9,13 +15,31 @@ export interface ViewerScope {
   snapshot: string;
   referenceId: string;
 }
-export function SourceViewer({
-  api,
-  scope,
-}: {
+interface SourceViewerProps {
   api: ApiClient;
   scope: ViewerScope;
-}) {
+  finding: FindingView;
+}
+export function SourceViewer(props: SourceViewerProps) {
+  const [attempt, setAttempt] = useState(0);
+  if (props.finding.reference_id !== props.scope.referenceId)
+    return (
+      <Notice error>The source selection changed. Reopen this report.</Notice>
+    );
+  return (
+    <SourceInspection
+      key={JSON.stringify([props.scope, attempt])}
+      {...props}
+      onRetry={() => setAttempt((value) => value + 1)}
+    />
+  );
+}
+function SourceInspection({
+  api,
+  scope,
+  finding,
+  onRetry,
+}: SourceViewerProps & { onRetry: () => void }) {
   const frame = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(600);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -34,6 +58,8 @@ export function SourceViewer({
   const [mapping, setMapping] = useState('');
   const [hash, setHash] = useState('');
   const [legacy, setLegacy] = useState(0);
+  const [mappedPage, setMappedPage] = useState<number | null>(null);
+  const [version, setVersion] = useState('');
   const { caseId, briefId, snapshot, referenceId } = scope;
   useEffect(() => {
     if (!frame.current) return;
@@ -53,7 +79,6 @@ export function SourceViewer({
     const pixels = canvas.current,
       boxes = overlay.current;
     let inspection: DocumentInspection | null = null;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const path = `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(briefId)}/dossier/snapshots/${encodeURIComponent(snapshot)}/references/${encodeURIComponent(referenceId)}/viewer`;
     void (async () => {
       try {
@@ -77,15 +102,17 @@ export function SourceViewer({
         if (controller.signal.aborted) return;
         inspection = new PdfInspection();
         engine.current = inspection;
-        timer = setTimeout(() => {
-          controller.abort();
-          void inspection?.close();
-          setError('PDF opening exceeded its time budget.');
-        }, 15000);
-        await inspection.open(bytes);
-        clearTimeout(timer);
+        await boundedInspection(
+          inspection.open(bytes),
+          controller.signal,
+          () => {
+            void inspection?.close();
+          },
+        );
         if (controller.signal.aborted) return;
         setHash(context.original_sha256);
+        setVersion(context.version_id);
+        setMappedPage(context.pdf_page);
         setPages(inspection.pages);
         setMapping(context.page_mapping);
         setLegacy(context.legacy_region_count);
@@ -94,17 +121,18 @@ export function SourceViewer({
         setPage(context.pdf_page ?? 1);
         setRendering(true);
         setReady(true);
-      } catch {
+      } catch (reason) {
         if (!controller.signal.aborted)
           setError(
-            'This source could not be opened. It may be unavailable, unsupported or outside the inspection budget.',
+            reason instanceof InspectionTimeout
+              ? 'PDF opening exceeded its time budget.'
+              : 'This source could not be opened. It may be unavailable, unsupported or outside the inspection budget.',
           );
         void inspection?.close();
       }
     })();
     return () => {
       controller.abort();
-      clearTimeout(timer);
       void inspection?.close();
       engine.current = null;
       if (pixels) {
@@ -124,43 +152,42 @@ export function SourceViewer({
     setRendering(true);
     setError('');
     setResult(null);
-    const timer = setTimeout(() => {
-      if (active) {
-        void inspection.close();
-        setError(
-          'Page rendering exceeded its time budget. Reopen the report to retry.',
-        );
-        setRendering(false);
-      }
-    }, 15000);
-    void inspection
-      .render(
+    const controller = new AbortController();
+    void boundedInspection(
+      inspection.render(
         canvas.current,
         page,
         zoom,
         rotation,
         Math.max(1, Math.min(devicePixelRatio || 1, 3)),
         availableWidth,
-      )
+      ),
+      controller.signal,
+      () => {
+        void inspection.close();
+      },
+    )
       .then((value) => {
         if (active) setResult(value);
       })
-      .catch(() => {
+      .catch((reason: unknown) => {
         if (active) {
           if (canvas.current) canvas.current.width = 0;
+          setResult(null);
           setError(
-            'This page could not be rendered. Reduce zoom or select another page.',
+            reason instanceof InspectionTimeout
+              ? 'Page rendering exceeded its time budget. Reopen this source to retry.'
+              : 'This page could not be rendered. Reduce zoom or select another page.',
           );
         }
       })
       .finally(() => {
-        clearTimeout(timer);
         if (active) setRendering(false);
       });
     return () => {
       active = false;
       inspection.cancelRender();
-      clearTimeout(timer);
+      controller.abort();
     };
   }, [ready, page, zoom, rotation, availableWidth]);
   useEffect(() => {
@@ -205,10 +232,59 @@ export function SourceViewer({
         human support. Extracted text and search boxes below are derived
         navigation aids.
       </Notice>
-      {error && <Notice error>{error}</Notice>}
+      {error && (
+        <>
+          <Notice error>{error}</Notice>
+          <Button onClick={onRetry}>Reopen source</Button>
+        </>
+      )}
       {!ready && !error && <Notice>Opening the authorized source…</Notice>}
       {ready && (
         <>
+          <dl className="dimensions" aria-label="Reference page spaces">
+            <div className="dimension">
+              <dt>Reference PDF page</dt>
+              <dd>{mappedPage ?? 'Unmapped'}</dd>
+            </div>
+            <div className="dimension">
+              <dt>Printed page</dt>
+              <dd>
+                {pageSpaceLabel(finding.page_spaces, 'printed', mappedPage)}
+              </dd>
+            </div>
+            <div className="dimension">
+              <dt>Bundle page</dt>
+              <dd>
+                {pageSpaceLabel(finding.page_spaces, 'bundle', mappedPage)}
+              </dd>
+            </div>
+          </dl>
+          {(finding.fidelity === 'ocr_unreliable' ||
+            finding.fidelity === 'representation_conflict') && (
+            <Notice>
+              {finding.fidelity === 'ocr_unreliable'
+                ? 'OCR is unreliable for this reference. Inspect the preserved pixels; extracted text does not resolve that uncertainty.'
+                : 'The source representations conflict. Inspect the preserved pixels alongside the literal text; finding states remain unchanged.'}
+            </Notice>
+          )}
+          {mappedPage !== null && page !== mappedPage && (
+            <Notice>
+              Browsing another PDF page. The reference targets PDF page{' '}
+              {mappedPage}; printed and bundle labels above describe that
+              reference target.
+            </Notice>
+          )}
+          {mappedPage !== null && (
+            <Button
+              disabled={page === mappedPage}
+              onClick={() => {
+                clearPage();
+                setPage(mappedPage);
+              }}
+            >
+              Return to reference page
+            </Button>
+          )}
           <p>
             Reference page mapping: {mapping}.{' '}
             {mapping !== 'mapped' &&
@@ -343,6 +419,8 @@ export function SourceViewer({
               {JSON.stringify(
                 {
                   originalSha256: hash,
+                  sourceVersion: version,
+                  referenceId,
                   snapshot,
                   physicalPage: page,
                   viewBox: result.view,

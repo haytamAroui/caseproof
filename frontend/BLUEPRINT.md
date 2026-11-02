@@ -559,3 +559,11 @@ F1 return navigation retains only a validated matter or matter/brief/snapshot pa
 A caller-cancelled read is discarded before HTTP status handling and during streamed-body reads, even if the transport delivers after abort. An obsolete denial cannot clear a still-current signed session after leaving that view. Active 401/403/404 responses retain the fail-closed session policy. No auth, RLS, backend DTO or persistence change.
 
 Each new implementation PR must name stages, canonical contracts, existing/confirmed-missing/unverified/deferred behavior, regression and browser/CI evidence, and independent gates. Existing F1–F3 receipts remain scoped historical evidence; this retrofit needs its own exact-head CI evidence.
+
+### F2 v3.1 retrofit — inspection and recovery
+
+[ADR 0030](../docs/adr/0030-f2-workflow-inspection-recovery.md) and [audit](../docs/m3/F2_V3_1_AUDIT.md) govern the S2/S3/S5/S7/S12/S13 retrofit. Keep the selected renderer and predeclared comparison budgets. Reference PDF, printed and bundle labels come from existing backend metadata, with physical-target agreement; exploratory page navigation does not change those labels. Missing/conflicting metadata and OCR/representation uncertainty remain visible.
+
+A mapped reference must have a physical PDF target; missing targets fail closed. Explicit Reopen source clears private inspection state and freshly authorizes/validates original bytes. Open/render deadlines and selection cancellation fence all late results, not just canvas rendering. Scope changes remount inspection even if a caller omits a key. Source version/reference/hash provenance is visible; derived text/search never establishes fidelity or human support. No route/schema/grant/storage/dependency change, automatic write/retry or raster-geometry guess.
+
+Required evidence: mapped printed p.4 → PDF p.6 at 200%, keyboard return from exploration, OCR scan/no-text and representation conflict, delayed source switch, denial/reopen cleanup, existing geometry/hostile/200-page comparison and protected genuine signed browser with zero-residual teardown. See audit for actual receipts and independent gates. F4 human attestation remains separate.

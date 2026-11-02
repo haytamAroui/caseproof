@@ -2,12 +2,12 @@ name: F2 genuine signed frozen-source viewer acceptance
 on:
   workflow_dispatch:
   push:
-    branches: [feat/f2-live-acceptance]
+    branches: [feat/f2-live-acceptance, feat/f2-v31-evidence-inspection]
 permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f2-live-acceptance' || github.ref == 'refs/heads/main')
+    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f2-live-acceptance' || github.ref == 'refs/heads/feat/f2-v31-evidence-inspection' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 20

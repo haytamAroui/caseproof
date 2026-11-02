@@ -49,6 +49,8 @@ def create_dossier_viewer_router(store: DossierStore | None) -> APIRouter:
         if not raw.startswith(b"%PDF-"):
             raise HTTPException(422, "Viewer source is not a supported PDF")
         page = finding.get("pdf_page") if finding.get("page_mapping") == "mapped" else None
+        if finding.get("page_mapping") == "mapped" and page is None:
+            raise HTTPException(422, "Mapped viewer page is missing")
         if page is not None and (type(page) is not int or not 1 <= page <= 200):
             raise HTTPException(422, "Viewer physical page is unsupported")
         regions = finding.get("visual_assessment", {}).get("regions", [])
