@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ApiClient, FindingView } from '../../shared/api';
 import {
@@ -59,14 +59,14 @@ export function ReviewPanel({
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<'idle' | 'unknown' | 'rejected' | 'saved'>('idle');
   const [message, setMessage] = useState('');
-  const submitted = useRef<VisualDecisionBody | null>(null);
+  const [submitted, setSubmitted] = useState<VisualDecisionBody | null>(null);
   const regions = requiredRegions(finding);
   const rows = ledger.data?.decisions.filter((row) => row.reference_id === finding.reference_id) ?? [];
-  const saved = submitted.current && ledger.data?.decisions.some((row) =>
-    row.request_id === submitted.current?.request_id &&
-    row.reference_id === submitted.current.reference_id &&
-    row.decision === submitted.current.decision &&
-    row.rationale === submitted.current.rationale,
+  const saved = submitted && ledger.data?.decisions.some((row) =>
+    row.request_id === submitted?.request_id &&
+    row.reference_id === submitted.reference_id &&
+    row.decision === submitted.decision &&
+    row.rationale === submitted.rationale,
   );
   const dirty = Boolean(rationale.trim()) && outcome !== 'saved' && !saved;
 
@@ -74,7 +74,7 @@ export function ReviewPanel({
     try {
       const result = await ledger.refetch();
       if (result.isError || !result.data) throw new Error('Ledger could not be reopened');
-      const current = submitted.current;
+      const current = submitted;
       if (current && result.data.decisions.some((row) =>
         row.request_id === current.request_id &&
         row.reference_id === current.reference_id &&
@@ -151,7 +151,7 @@ export function ReviewPanel({
           {regions.map((id, index) => (
             <label key={id}>
               <input type="checkbox" checked={confirmed.includes(id)}
-                disabled={!inspected || Boolean(submitted.current)}
+                disabled={!inspected || Boolean(submitted)}
                 onChange={(event) => setConfirmed((old) => event.target.checked ? [...old, id] : old.filter((r) => r !== id))} />
               Region {index + 1} — {id.slice(0, 12)}
             </label>
@@ -159,7 +159,7 @@ export function ReviewPanel({
         </fieldset>
       )}
       {!inspected && <Notice>Open and inspect the preserved original reference page before recording a decision.</Notice>}
-      <fieldset disabled={busy || Boolean(submitted.current)}>
+      <fieldset disabled={busy || Boolean(submitted)}>
         <legend>Disposition</legend>
         {dispositions.map(({ id, label }) => (
           <label key={id}>
@@ -172,7 +172,7 @@ export function ReviewPanel({
       <label>
         Rationale (required, visible to authorized reviewers)
         <textarea rows={3} maxLength={2000} value={rationale}
-          disabled={busy || Boolean(submitted.current)}
+          disabled={busy || Boolean(submitted)}
           onChange={(event) => setRationale(event.target.value)}
         />
       </label>
@@ -180,7 +180,7 @@ export function ReviewPanel({
       <div className="catalog-actions">
         <Button disabled={busy || ledger.isPending || ledger.isError || !inspected ||
           regions === null || confirmed.length !== regions.length ||
-          !rationale.trim() || Boolean(submitted.current) ||
+          !rationale.trim() || Boolean(submitted) ||
           (decision === 'CONFIRMED_SUPPORTED' &&
             (finding.page_mapping !== 'mapped' || finding.identity !== 'resolved'))}
           onClick={() => {
@@ -193,7 +193,7 @@ export function ReviewPanel({
                 rationale: rationale.trim(),
                 reviewed_region_ids: [...confirmed].sort(),
               });
-              submitted.current = command;
+              setSubmitted(command);
               void send(command);
             } catch {
               setMessage('The decision could not be validated. No write was sent.');
@@ -201,12 +201,12 @@ export function ReviewPanel({
           }}>
           Save human decision
         </Button>
-        {submitted.current && outcome !== 'saved' && (
+        {submitted && outcome !== 'saved' && (
           <>
             <Button disabled={busy} onClick={() => void reconcile()}>Reconcile durable receipt</Button>
             {outcome === 'unknown' && (
               <Button disabled={busy || ledger.isError || !inspected}
-                onClick={() => { if (submitted.current) void send(submitted.current); }}>
+                onClick={() => { if (submitted) void send(submitted); }}>
                 Retry identical request
               </Button>
             )}

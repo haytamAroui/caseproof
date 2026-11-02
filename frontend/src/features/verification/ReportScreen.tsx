@@ -25,6 +25,7 @@ export function ReportScreen({
   const session = useSession();
   const valid =
     uuid.test(caseId) && uuid.test(briefId) && /^[0-9a-f]{64}$/.test(snapshot);
+  const [filter, setFilter] = useState<'attention' | 'all'>('attention');
   const query = useQuery({
     queryKey: ['report', session.epoch, caseId, briefId, snapshot],
     queryFn: ({ signal }) =>
@@ -44,7 +45,6 @@ export function ReportScreen({
   const selected =
     report.findings.find((f) => f.reference_id === params.get('finding')) ??
     report.findings[0];
-  const [filter, setFilter] = useState<'attention' | 'all'>('attention');
   const needsAttention = (f: FindingView) => f.identity !== 'resolved' || f.page_mapping !== 'mapped' || f.fidelity !== 'exact_match' || f.support === 'not_assessed';
   const filtered = filter === 'attention' ? report.findings.filter(needsAttention) : report.findings;
   const pageSize = 50;
@@ -170,8 +170,6 @@ export function ReportScreen({
               </dl>
               <FindingInspection
                 key={selected.reference_id}
-                api={api}
-                scope={{ caseId, briefId, snapshot }}
                 finding={selected}
                 historical={historical}
                 renderSource={renderSource}
