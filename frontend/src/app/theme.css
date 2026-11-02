@@ -466,11 +466,51 @@ dialog::backdrop {
 }
 
 /* F4 evidence-first panels; no decision colors or inferred machine verdicts. */
-.review-panel, .draft-context {border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 18px; margin: 18px 0; overflow-wrap: anywhere;}
-.review-panel fieldset {border: 1px solid var(--line); margin: 14px 0; display: grid; gap: 10px;}
-.review-panel fieldset label {display: flex; align-items: center; font-weight: 400; gap: 10px;}
-.review-panel input[type='checkbox'], .review-panel input[type='radio'] {width: 22px; min-height: 22px; flex: none;}
-.review-panel textarea {width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 10px; font: inherit; color: var(--ink); background: var(--surface);}
-.review-panel textarea:focus-visible {outline: 3px solid var(--focus);}
-.draft-quote {white-space: pre-wrap; overflow-wrap: anywhere;}
-.draft-context mark {background: #e2edf6; color: var(--ink); font-weight: bold;}
+.review-panel,
+.draft-context {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 18px;
+  margin: 18px 0;
+  overflow-wrap: anywhere;
+}
+.review-panel fieldset {
+  border: 1px solid var(--line);
+  margin: 14px 0;
+  display: grid;
+  gap: 10px;
+}
+.review-panel fieldset label {
+  display: flex;
+  align-items: center;
+  font-weight: 400;
+  gap: 10px;
+}
+.review-panel input[type='checkbox'],
+.review-panel input[type='radio'] {
+  width: 22px;
+  min-height: 22px;
+  flex: none;
+}
+.review-panel textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+}
+.review-panel textarea:focus-visible {
+  outline: 3px solid var(--focus);
+}
+.draft-quote {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.draft-context mark {
+  background: #e2edf6;
+  color: var(--ink);
+  font-weight: bold;
+}

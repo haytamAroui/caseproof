@@ -62,10 +62,18 @@ export function ReportScreen({
     f.support === 'not_assessed';
   const filtered = report.findings
     .filter((f) => filter === 'all' || needsAttention(f))
-    .filter((f) => f.literal.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
+    .filter((f) =>
+      f.literal.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+    )
     .sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
   function selectReference(referenceId: string) {
-    setParams((p) => { p.set('finding', referenceId); return p; }, { replace: true });
+    setParams(
+      (p) => {
+        p.set('finding', referenceId);
+        return p;
+      },
+      { replace: true },
+    );
   }
   const pageSize = 50;
   const rawPage = Number(params.get('page') ?? 0);
@@ -108,13 +116,27 @@ export function ReportScreen({
           : 'Current snapshot inspection. Human decisions remain separate from source rendering.'}
       </Notice>
       <div className="review-layout">
-        <section className="queue" aria-label="References" onKeyDown={(event) => {
-          if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.nativeEvent.isComposing) return;
-          if (event.key !== 'j' && event.key !== 'k') return;
-          const index = filtered.findIndex((f) => f.reference_id === selected?.reference_id);
-          const next = filtered[index + (event.key === 'j' ? 1 : -1)];
-          if (next) { event.preventDefault(); selectReference(next.reference_id); }
-        }}>
+        <section
+          className="queue"
+          aria-label="References"
+          onKeyDown={(event) => {
+            if (
+              event.target instanceof HTMLInputElement ||
+              event.target instanceof HTMLTextAreaElement ||
+              event.nativeEvent.isComposing
+            )
+              return;
+            if (event.key !== 'j' && event.key !== 'k') return;
+            const index = filtered.findIndex(
+              (f) => f.reference_id === selected?.reference_id,
+            );
+            const next = filtered[index + (event.key === 'j' ? 1 : -1)];
+            if (next) {
+              event.preventDefault();
+              selectReference(next.reference_id);
+            }
+          }}
+        >
           <h2>
             References <span>{report.findings.length}</span>
           </h2>
@@ -145,11 +167,33 @@ export function ReportScreen({
               Show all
             </button>
           </div>
-          <label>Search reference text (this session only)
-            <input value={search} onChange={(event) => { setSearch(event.target.value); movePage(0); }} placeholder="Reference text" maxLength={200} />
+          <label>
+            Search reference text (this session only)
+            <input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                movePage(0);
+              }}
+              placeholder="Reference text"
+              maxLength={200}
+            />
           </label>
-          {search && <button className="button" onClick={() => { setSearch(''); movePage(0); }}>Clear reference search</button>}
-          <p className="small">When a reference button is focused, press J/K for next/previous. No decision is saved by a shortcut.</p>
+          {search && (
+            <button
+              className="button"
+              onClick={() => {
+                setSearch('');
+                movePage(0);
+              }}
+            >
+              Clear reference search
+            </button>
+          )}
+          <p className="small">
+            When a reference button is focused, press J/K for next/previous. No
+            decision is saved by a shortcut.
+          </p>
           {report.findings.length === 0 ? (
             <p>
               No explicit references were detected. Inspect processing coverage
@@ -234,7 +278,9 @@ export function ReportScreen({
                 renderDraft={renderDraft}
                 renderReview={renderReview}
                 onNext={() => {
-                  const current = report.findings.findIndex((f) => f.reference_id === selected.reference_id);
+                  const current = report.findings.findIndex(
+                    (f) => f.reference_id === selected.reference_id,
+                  );
                   const next = report.findings[current + 1];
                   if (next) selectReference(next.reference_id);
                 }}
@@ -295,9 +341,12 @@ function FindingInspection({
 }
 
 function CoverageSummary({ coverage }: { coverage: Record<string, unknown> }) {
-  const count = (key: string) => typeof coverage[key] === 'number' &&
-    Number.isInteger(coverage[key]) && (coverage[key] as number) >= 0
-    ? (coverage[key] as number) : null;
+  const count = (key: string) =>
+    typeof coverage[key] === 'number' &&
+    Number.isInteger(coverage[key]) &&
+    (coverage[key] as number) >= 0
+      ? (coverage[key] as number)
+      : null;
   const values = [
     ['Detected references', count('detected')],
     ['Checked identity and pinpoint', count('checked')],
@@ -309,9 +358,15 @@ function CoverageSummary({ coverage }: { coverage: Record<string, unknown> }) {
     ['Visual findings not assessed', count('visual_findings_not_assessed')],
   ] as const;
   return (
-    <section aria-label="Verification and processing coverage" className="draft-context">
+    <section
+      aria-label="Verification and processing coverage"
+      className="draft-context"
+    >
       <h3>Coverage and exclusions</h3>
-      <p>These denominators describe assessed scope, not legal support or full reference recall.</p>
+      <p>
+        These denominators describe assessed scope, not legal support or full
+        reference recall.
+      </p>
       <dl className="dimensions">
         {values.map(([label, value]) => (
           <div className="dimension" key={label}>
@@ -321,16 +376,28 @@ function CoverageSummary({ coverage }: { coverage: Record<string, unknown> }) {
         ))}
       </dl>
       {coverage.reference_recall_measured !== true && (
-        <Notice>Reference detection recall has not been measured; an absence of references cannot mean all claims were checked.</Notice>
+        <Notice>
+          Reference detection recall has not been measured; an absence of
+          references cannot mean all claims were checked.
+        </Notice>
       )}
       {coverage.text_coverage_complete !== true && (
-        <Notice>DOCX text coverage is partial or unknown. Unsupported regions may contain additional assertions.</Notice>
+        <Notice>
+          DOCX text coverage is partial or unknown. Unsupported regions may
+          contain additional assertions.
+        </Notice>
       )}
       {Array.isArray(coverage.limits) && (
-        <ul>{coverage.limits.filter((x): x is string => typeof x === 'string').map((limit) =>
-          <li key={limit}>{limit}</li>)}</ul>
+        <ul>
+          {coverage.limits
+            .filter((x): x is string => typeof x === 'string')
+            .map((limit) => (
+              <li key={limit}>{limit}</li>
+            ))}
+        </ul>
       )}
-      <details><summary>Machine-readable coverage record</summary>
+      <details>
+        <summary>Machine-readable coverage record</summary>
         <pre>{JSON.stringify(coverage, null, 2)}</pre>
       </details>
     </section>
