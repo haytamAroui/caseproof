@@ -120,7 +120,10 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
       renderDraft={(finding, historical) => historical ? null : (
         <DraftContext api={api} caseId={caseId} briefId={briefId} snapshot={snapshot} referenceId={finding.reference_id} />
       )}
-      renderReview={(finding, historical, inspected) => historical ? null : (
+      renderReview={(finding, historical, inspected) => historical ? null :
+        finding.visual_assessment === undefined ? (
+          <Notice error>Visual review metadata is unavailable. Human disposition is disabled for this snapshot.</Notice>
+        ) : (
         <ReviewPanel key={finding.reference_id} api={api} scope={{ caseId, briefId, snapshot }} finding={finding} inspected={inspected} />
       )}
       renderSource={(finding, historical, onInspected) => (
