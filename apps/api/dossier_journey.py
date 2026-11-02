@@ -11,7 +11,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pypdf import PdfReader, PdfWriter
 
 from application.extraction.contracts import ExtractionError
@@ -32,6 +32,7 @@ from apps.api.signed_supabase_originals import (
 from domains.disputes.dossier_verification import build_findings
 from domains.disputes.exhibit_identity import InventoryStatus
 from domains.disputes.reference_detection import detect_exhibit_references
+from domains.disputes.page_labels import PAGE_LABEL_PATTERN
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from infrastructure.parsers.dossier_docx_export import annotated_docx, corrected_docx_preview
@@ -48,7 +49,7 @@ def canonical(value: object) -> str:
 class PageConfirmation(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     space: Literal['printed', 'bundle']
-    label: str = Field(pattern=r'^\d{1,6}$')
+    label: str = Field(min_length=1, max_length=12, pattern=PAGE_LABEL_PATTERN)
     pdf_page: int = Field(ge=1, le=64)
     rationale: str = Field(min_length=3, max_length=500)
 
@@ -61,12 +62,31 @@ class IdentityConfirmation(BaseModel):
     pages: list[PageConfirmation] = Field(default_factory=list, max_length=128)
 
 
+class InventoryReviewException(BaseModel):
+    """Versioned, source-anchored human observation, not a verified identity."""
+    model_config = ConfigDict(extra='forbid', strict=True)
+    version: Literal[1] = 1
+    kind: Literal['detector_miss', 'unsupported_notation']
+    citation: str = Field(min_length=3, max_length=200)
+    rationale: str = Field(min_length=5, max_length=500)
+    review_state: Literal['review_needed'] = 'review_needed'
+
+
 class InventoryConfirmation(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     bundle_signature: str = Field(pattern=r'^[0-9a-f]{64}$')
     request_id: str
     inventory_complete: bool
     entries: list[IdentityConfirmation] = Field(max_length=512)
+    exceptions: list[InventoryReviewException] = Field(default_factory=list, max_length=64)
+
+    @model_validator(mode='after')
+    def guard_exceptions(self) -> InventoryConfirmation:
+        if self.exceptions and self.inventory_complete:
+            raise ValueError('pending inventory exceptions cannot be declared complete')
+        if len({(e.kind, e.citation) for e in self.exceptions}) != len(self.exceptions):
+            raise ValueError('duplicate pending inventory exception')
+        return self
 
 
 class VerificationOptions(BaseModel):
@@ -295,7 +315,8 @@ class DossierStore:
                            for label, number in sorted(inventory_identities - supplied_identities)]
             confirmation = {**confirmation, 'payload': {**confirmation['payload'], 'entries': normalized,
                 'inventory_complete': bool(inventory_readable and confirmation['payload']['inventory_complete']
-                                           and supplied_identities == inventory_identities)}}
+                                           and supplied_identities == inventory_identities
+                                           and not confirmation['payload'].get('exceptions'))}}
         inventory_status = (InventoryStatus.MISSING if inventory is None else
                             InventoryStatus.UNPARSEABLE if not inventory_readable else
                             InventoryStatus.UNCONFIRMED if not confirmation else
@@ -365,6 +386,7 @@ class DossierStore:
                   'inventory_confirmation': {k: confirmation.get(k) for k in ('request_id', 'reviewer_id', 'timestamp')} if confirmation else None,
                   'sources': sources, 'visual_pages': {v + ':' + str(p): data for (v,p),data in visual_pages.items()}, **found, 'professional_certificate': False, 'filing_status': 'not_assessed'}
         report['coverage']['unprocessed_sources'] = sum(bool(s.get('parse_error')) for s in sources)
+        report['coverage']['inventory_exceptions_pending'] = len(confirmation['payload'].get('exceptions', [])) if confirmation else 0
         add_report_contract(report, discovery.region_manifest, languages)
         report['server_receipt'] = self.receipt(report)
         serialized = canonical(report)
@@ -491,7 +513,11 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             inventory = [x for x in sources if x['role'] == 'inventory']
             if len(inventory) != 1:
                 raise ValueError('missing inventory')
-            refs = detect_exhibit_references(originals[inventory[0]['version_id']].decode('utf-8'), region='inventory')
+            inventory_text = originals[inventory[0]['version_id']].decode('utf-8')
+            refs = detect_exhibit_references(inventory_text, region='inventory')
+            for exception in body.exceptions:
+                if exception.citation not in inventory_text:
+                    raise ValueError('inventory exception not anchored in original')
             identities = {('stuk' if r.label.startswith('stuk') else 'piece', r.number) for r in refs}
             for entry in body.entries:
                 if (entry.label, entry.number) not in identities:
