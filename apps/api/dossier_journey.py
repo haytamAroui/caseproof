@@ -13,14 +13,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
-
-from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
 from pypdf import PdfReader, PdfWriter
 
 from application.extraction.contracts import ExtractionError
 from application.litigation.dossier_contracts import add_report_contract, assess_fidelity, quotation_context
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
+from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.dossier_draft_revisions import DraftRevisionClient
 from apps.api.litigation_evidence_app import _token

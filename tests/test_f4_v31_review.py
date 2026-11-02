@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
-from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.access_control import AccessRejected
 from apps.api.dossier_journey import VisualDecisionBody, create_dossier_router
 from tests.test_phase4_headless_api import docx
 
