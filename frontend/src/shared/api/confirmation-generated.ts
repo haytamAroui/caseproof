@@ -1,5 +1,12 @@
 /* Generated from Python InventoryConfirmation. Do not edit. */
 
+export type InventoryConfirmation = {
+  bundle_signature: BundleSignature;
+  entries: Entries;
+  exceptions?: Exceptions;
+  inventory_complete: InventoryComplete;
+  request_id: RequestId;
+};
 export type BundleSignature = string;
 export type Label = "stuk" | "piece";
 export type Number = string;
@@ -28,13 +35,6 @@ export type Exceptions = InventoryReviewException[];
 export type InventoryComplete = boolean;
 export type RequestId = string;
 
-export interface InventoryConfirmation {
-  bundle_signature: BundleSignature;
-  entries: Entries;
-  exceptions?: Exceptions;
-  inventory_complete: InventoryComplete;
-  request_id: RequestId;
-}
 export interface IdentityConfirmation {
   label: Label;
   number: Number;

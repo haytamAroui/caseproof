@@ -132,6 +132,24 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "inventory_complete": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exceptions": {
+            "maxItems": 0
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "bundle_signature": {
       "pattern": "^[0-9a-f]{64}$",

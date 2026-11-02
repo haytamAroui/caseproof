@@ -78,7 +78,9 @@ export function parseIntake(value: unknown, caseId: string): IntakeView {
 export function assertConfirmationCommand(value: unknown) {
   if (!confirmationValidator(value)) throw new ContractError();
   const exceptions = value.exceptions ?? [];
-  const keys = exceptions.map((entry) => JSON.stringify([entry.kind, entry.citation]));
+  const keys = exceptions.map((entry) =>
+    JSON.stringify([entry.kind, entry.citation]),
+  );
   if (new Set(keys).size !== keys.length) throw new ContractError();
   return value;
 }

@@ -427,11 +427,15 @@ test('Roman printed page and detector miss remain review-needed after durable co
   const confirmation = saved as Record<string, unknown> | null;
   expect(confirmation?.['inventory_complete']).toBe(false);
   expect(
-    (confirmation?.['exceptions'] as { review_state: string }[])[0]?.review_state,
+    (confirmation?.['exceptions'] as { review_state: string }[])[0]
+      ?.review_state,
   ).toBe('review_needed');
   expect(
-    (confirmation?.['entries'] as { pages: { label: string; pdf_page: number }[] }[])[0]
-      ?.pages[0],
+    (
+      confirmation?.['entries'] as {
+        pages: { label: string; pdf_page: number }[];
+      }[]
+    )[0]?.pages[0],
   ).toMatchObject({
     label: 'iv',
     pdf_page: 6,
