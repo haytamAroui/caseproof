@@ -1,0 +1,36 @@
+name: F4 final exact ledger review-format gate
+on:
+  push:
+    branches: [feat/m3-f4-v31-reviewer-closure]
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: github.repository == 'haytamAroui/caseproof'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: true
+          ref: feat/m3-f4-v31-reviewer-closure
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: |
+          npm ci
+          npx prettier --write src/features/review/ReviewPanel.tsx
+          npm run contracts:check
+          npm run lint
+          npm test
+          npm run build
+        working-directory: frontend
+      - name: Commit reviewed code and remove one-shot
+        run: |
+          git config user.name 'caseproof-contract-bot'
+          git config user.email 'caseproof-contract-bot@users.noreply.github.com'
+          git add frontend/src/features/review/ReviewPanel.tsx
+          git rm .github/workflows/f4-last-review-format-once.yml
+          git commit -m 'F4: format strict exact-persisted-region receipt gate'
+          git push origin HEAD:feat/m3-f4-v31-reviewer-closure
