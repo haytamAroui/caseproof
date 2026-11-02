@@ -78,7 +78,29 @@ test('create through returned organization, unknown upload recovery, inventory a
       json: saved
         ? {
             ...intake(),
-            entries: saved.entries,
+            entries: (
+              saved.entries as {
+                label: string;
+                number: string;
+                source_version_id: string | null;
+                pages: {
+                  space: string;
+                  label: string;
+                  pdf_page: number;
+                  rationale: string;
+                }[];
+              }[]
+            ).map((e) => ({
+              label: e.label,
+              number: e.number,
+              source_version_id: e.source_version_id,
+              pages: e.pages.map((p) => ({
+                space: p.space,
+                label: p.label,
+                pdf_page: p.pdf_page,
+                rationale: p.rationale,
+              })),
+            })),
             confirmation_id: saved.request_id,
             inventory_complete: true,
           }

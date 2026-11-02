@@ -9,6 +9,20 @@ import type {
 } from '../../shared/api';
 import { useSessionController } from '../../shared/session';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
+function confirmationFingerprint(
+  entries: IdentityConfirmation[],
+  complete: boolean,
+) {
+  return JSON.stringify([
+    complete,
+    entries.map((e) => [
+      e.label,
+      e.number,
+      e.source_version_id ?? null,
+      (e.pages ?? []).map((p) => [p.space, p.label, p.pdf_page, p.rationale]),
+    ]),
+  ]);
+}
 export function InventoryScreen({ api }: { api: ApiClient }) {
   const { caseId = '' } = useParams();
   const valid =
@@ -90,7 +104,7 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
   const base = `/v2/matters/${data.case_id}/briefs/${data.brief_id}/dossier`;
   async function confirm() {
     if (lock.current) return;
-    const fingerprint = JSON.stringify({ entries, complete });
+    const fingerprint = confirmationFingerprint(entries, complete);
     if (frozen.current && frozen.current.fingerprint !== fingerprint) {
       setMessage(
         'Reconcile the previous confirmation before changing its contents. Refresh inventory to load the current server revision.',
@@ -127,7 +141,8 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
         current.confirmation_id !== request ||
         current.bundle_signature !== data.bundle_signature ||
         current.inventory_complete !== complete ||
-        JSON.stringify(current.entries) !== JSON.stringify(entries)
+        confirmationFingerprint(current.entries, current.inventory_complete) !==
+          fingerprint
       )
         throw Error('Confirmation differs');
       frozen.current = null;

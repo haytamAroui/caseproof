@@ -55,6 +55,7 @@ def main() -> None:
 
         def own_reservation(route) -> None:
             response = route.fetch(timeout=180000)
+            print(f'F3_RESERVATION_HTTP_{response.status}', flush=True)
             if response.status != 200:
                 raise RuntimeError('F3_RESERVATION_FAILED')
             rows = response.json()['sources']
@@ -69,21 +70,31 @@ def main() -> None:
             route.fulfill(response=response)
         page.route('**/intake/matters/*/reservations', own_reservation)
         count = 0
+        transfer_status = 0
         def lose_first_ack(route) -> None:
-            nonlocal count
+            nonlocal count, transfer_status
             count += 1
             if count == 1:
                 response = route.fetch(timeout=180000)
+                transfer_status = response.status
+                print(f'F3_FIRST_TRANSFER_HTTP_{response.status}', flush=True)
                 if response.status != 200:
-                    raise RuntimeError('F3_REAL_TRANSFER_FAILED')
+                    route.fulfill(response=response)
+                    return
                 route.abort('failed')  # Actual server writes committed; browser gets no acknowledgement.
             else:
                 route.continue_()
         page.route('**/intake/matters/*/sources', lose_first_ack)
         page.get_by_role('button', name='Preserve or reconcile originals').click()
         expect(page.get_by_text('No completed intake receipt was received.', exact=False)).to_be_visible(timeout=180000)
+        if transfer_status != 200:
+            raise RuntimeError(f'F3_REAL_TRANSFER_HTTP_{transfer_status}')
         original_ids = [r['version_id'] for r in registered]
-        page.get_by_role('button', name='Preserve or reconcile originals').click()
+        with page.expect_response(lambda r: r.url.endswith('/sources'), timeout=180000) as repeated:
+            page.get_by_role('button', name='Preserve or reconcile originals').click()
+        print(f'F3_REPEATED_TRANSFER_HTTP_{repeated.value.status}', flush=True)
+        if repeated.value.status != 200:
+            raise RuntimeError('F3_REPEATED_TRANSFER_FAILED')
         expect(page.get_by_text('All originals passed fresh authorized hash readback.', exact=False)).to_be_visible(timeout=180000)
         if [r['version_id'] for r in registered] != original_ids:
             raise RuntimeError('F3_RETRY_DUPLICATED_ORIGINALS')
@@ -97,13 +108,19 @@ def main() -> None:
         expect(page.get_by_role('heading', name='Confirm inventory')).to_be_visible()
         expect(page.get_by_label('Preserved exhibit').first).to_be_visible(timeout=120000)
         page.get_by_label('Preserved exhibit').first.select_option(registered[2]['version_id'])
+        page.get_by_label('Page label', exact=True).first.fill('12')
+        page.get_by_label('Physical PDF page', exact=True).first.fill('1')
+        page.get_by_label('Mapping rationale').first.fill('Inspected synthetic PDF page')
+        page.get_by_role('button', name='Add inspected mapping').first.click()
         page.get_by_role('checkbox').check()
         page.get_by_role('button', name='Save inventory confirmation').click()
         expect(page.get_by_text('Inventory confirmation saved and freshly read back.', exact=False)).to_be_visible(timeout=120000)
         page.reload()
         acceptance.login(page)
         expect(page.get_by_role('button', name='Run explicit check')).to_be_enabled(timeout=120000)
-        print('F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_PASSED', flush=True)
+        page.get_by_role('button', name='Run explicit check').click()
+        expect(page.get_by_role('heading', name='Review the evidence')).to_be_visible(timeout=180000)
+        print('F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_EXPLICIT_CHECK_PASSED', flush=True)
         for role in ('ungranted', 'foreign'):
             context = acceptance.browser.new_context()
             denied = context.new_page()
@@ -121,7 +138,8 @@ def main() -> None:
         owner = next(r['resource_id'].split(':', 1)[1] for r in rows(key, run)
                      if r['resource_type'] == 'auth_user' and r['resource_id'].startswith('owner:') and '@' not in r['resource_id'])
         admin_rpc(key, 'revoke', {'p_run': run, 'p_owner': owner, 'p_case': case})
-        page.get_by_role('link', name='Back to sources').click()
+        page.goto(ORIGIN + f'/workspace/matters/{case}/sources')
+        acceptance.login(page)
         expect(page.get_by_role('button', name='Sign in', exact=True)).to_be_visible(timeout=120000)
         expect(page.get_by_role('heading', name='Preserve the source bundle')).to_have_count(0)
         print('F3_GENUINE_BROWSER_CREATE_INTAKE_CONFIRM_COLD_RESUME_DENIAL_REVOCATION_PASSED', flush=True)

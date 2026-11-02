@@ -131,3 +131,42 @@ def test_oversized_intake_body_is_rejected_before_route_validation():
     response = client.post('/v2/workspace/intake/matters', content=b' ' * 17_000_001,
                            headers={'Content-Type': 'application/json'})
     assert response.status_code == 413
+
+
+def test_complete_http_intake_projects_real_parser_manifest_and_confirmation_candidates(monkeypatch):
+    import json
+    from uuid import UUID
+
+    import apps.api.workspace_intake as module
+    from apps.api.dossier_journey import DossierStore
+    from apps.api.signed_supabase_originals import OriginalRef
+    c = command()
+    source_rows = [dict(f.model_dump(exclude={'content_base64'}), document_id=str(uuid4()), version_id=str(uuid4())) for f in c.files]
+    client = Mock()
+    client.bundle_manifest.return_value = {'case_id': CASE, 'sources': source_rows}
+    client.library.source.side_effect = lambda **kw: next((OriginalRef(UUID('11111111-1111-4111-8111-111111111111'), UUID(CASE), UUID(r['document_id']), UUID(r['version_id']), r['sha256'], r['media_type']), r['byte_length']) for r in source_rows if r['version_id'] == kw['version_id'])
+    content = {}
+    client.library.put_once.side_effect = lambda **kw: content.__setitem__(kw['version_id'], kw['data'])
+    client.library.read.side_effect = lambda **kw: content[kw['version_id']]
+    store = DossierStore.__new__(DossierStore)
+    store.client = client
+    store.rpc = Mock(return_value={'bundle_signature': 'a' * 64, 'confirmation': None})
+    service = WorkspaceIntake(client, store)
+    service.register = Mock(return_value={'case_id': CASE, 'sources': source_rows})
+    connection = Mock()
+    connection.getresponse.return_value.status = 200
+    connection.getresponse.return_value.read.return_value = json.dumps([{'version_id': source_rows[0]['version_id']}]).encode()
+    monkeypatch.setattr(module.http.client, 'HTTPSConnection', Mock(return_value=connection))
+    app = FastAPI()
+    app.include_router(create_workspace_intake_router(service))
+    response = TestClient(app).post(f'/v2/workspace/intake/matters/{CASE}/sources',
+        headers={'Authorization': 'Bearer synthetic'}, json=c.model_dump())
+    assert response.status_code == 200
+    result = response.json()
+    assert result['schema'] == 'caseproof-workspace-intake-v1'
+    assert result['readback_complete'] is True
+    assert result['brief_id'] == source_rows[0]['version_id']
+    assert len(result['entries']) == 4
+    assert result['sources'][3]['processing'] == 'partial'
+    assert result['sources'][2]['page_count'] == 1
+    assert result['inventory_complete'] is False
