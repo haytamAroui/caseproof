@@ -58,7 +58,8 @@ export class ApiClient {
     const combined = AbortSignal.any([
       controller.signal,
       AbortSignal.timeout(
-        body !== undefined && path.startsWith('/v2/workspace/intake/')
+        path.startsWith('/v2/workspace/intake/') ||
+          /\/dossier\/(confirmation|checks)$/.test(path)
           ? 180000
           : 30000,
       ),

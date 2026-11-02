@@ -450,3 +450,17 @@ fieldset {
 .intake code {
   overflow-wrap: anywhere;
 }
+
+dialog {
+  max-width: min(540px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 24px;
+  background: var(--surface);
+  color: var(--ink);
+}
+dialog::backdrop {
+  background: #172d3880;
+}

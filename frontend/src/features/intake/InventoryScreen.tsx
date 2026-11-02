@@ -8,10 +8,15 @@ import type {
   PageConfirmation,
 } from '../../shared/api';
 import { useSessionController } from '../../shared/session';
-import { Button, Notice } from '../../shared/ui';
+import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 export function InventoryScreen({ api }: { api: ApiClient }) {
   const { caseId = '' } = useParams();
+  const valid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      caseId,
+    );
   const query = useQuery({
+    enabled: valid,
     queryKey: ['inventory', caseId],
     queryFn: async ({ signal }) =>
       parseIntake(
@@ -19,6 +24,7 @@ export function InventoryScreen({ api }: { api: ApiClient }) {
         caseId,
       ),
   });
+  if (!valid) return <Notice error>This matter link is invalid.</Notice>;
   return (
     <section className="intake">
       <Link to={`/matters/${caseId}/sources`}>Back to sources</Link>
@@ -74,7 +80,9 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
     const a = abort.current;
     return () => a.abort();
   }, []);
+  const [dirty, setDirty] = useState(false);
   function update(index: number, entry: IdentityConfirmation) {
+    setDirty(true);
     setSaved(false);
     setEntries((current) => current.map((e, i) => (i === index ? entry : e)));
   }
@@ -124,6 +132,7 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
         throw Error('Confirmation differs');
       frozen.current = null;
       setUncertain(false);
+      setDirty(false);
       setSaved(true);
       setMessage(
         'Inventory confirmation saved and freshly read back. Unbound exhibits and uncertain page mappings remain unresolved.',
@@ -147,6 +156,7 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
   }
   return (
     <>
+      <UnsavedChanges dirty={dirty} />
       <Notice>
         Entries are candidates detected in the preserved inventory. Bind each
         exhibit explicitly. Leave a source unbound when missing or ambiguous. A
@@ -221,6 +231,7 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
           checked={complete}
           disabled={busy}
           onChange={(e) => {
+            setDirty(true);
             setComplete(e.target.checked);
             setSaved(false);
           }}

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { ApiClient, parseOrganizations, parseCreated } from '../../shared/api';
 import { useSessionController } from '../../shared/session';
-import { Button, Notice } from '../../shared/ui';
+import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 export function CreateMatter({ api }: { api: ApiClient }) {
   const session = useSessionController();
   const navigate = useNavigate();
@@ -13,6 +13,7 @@ export function CreateMatter({ api }: { api: ApiClient }) {
     if (!operationId || !/^[0-9a-f-]{36}$/.test(operationId))
       setParams({ operation: crypto.randomUUID() }, { replace: true });
   }, [operationId, setParams]);
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [uncertain, setUncertain] = useState(false);
@@ -36,6 +37,7 @@ export function CreateMatter({ api }: { api: ApiClient }) {
   });
   return (
     <section className="open-report">
+      <UnsavedChanges dirty={dirty && !busy} />
       <Link to="/">Back to permitted matters</Link>
       <h1>Create a private matter</h1>
       <p>
@@ -137,6 +139,7 @@ export function CreateMatter({ api }: { api: ApiClient }) {
             Matter title
             <input
               name="name"
+              onChange={() => setDirty(true)}
               maxLength={160}
               disabled={busy}
               aria-describedby="create-status"

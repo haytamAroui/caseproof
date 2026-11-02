@@ -4,14 +4,21 @@ import { Link, useParams } from 'react-router';
 import { ApiClient, parseIntake } from '../../shared/api';
 import type { IntakeView } from '../../shared/api';
 import { useSessionController } from '../../shared/session';
-import { Button, Notice } from '../../shared/ui';
+import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 import { slots, prepareFiles } from './files';
 export function IntakeScreen({ api }: { api: ApiClient }) {
   const { caseId = '' } = useParams();
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      caseId,
+    )
+  )
+    return <Notice error>This matter link is invalid.</Notice>;
   return <IntakeForm key={caseId} caseId={caseId} api={api} />;
 }
 function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
   const session = useSessionController();
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState('');
   const [receipt, setReceipt] = useState<IntakeView | null>(null);
@@ -29,6 +36,7 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
   const data = receipt ?? (query.isError ? undefined : query.data);
   return (
     <section className="intake">
+      <UnsavedChanges dirty={dirty} />
       <nav className="catalog-actions">
         <Link to="/">Permitted matters</Link>
         <Link to={`/matters/${caseId}`}>Preserved reports</Link>
@@ -145,6 +153,9 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
                 caseId,
               );
               session.assert(epoch);
+              if (!result.readback_complete)
+                throw Error('No complete readback receipt');
+              setDirty(false);
               setReceipt(result);
               setMessage('Original preservation acknowledged by the backend.');
               form.reset();
@@ -167,6 +178,7 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
               <input
                 name={`file-${i}`}
                 type="file"
+                onChange={() => setDirty(true)}
                 accept={slot.accept}
                 disabled={busy}
                 aria-describedby="intake-status"

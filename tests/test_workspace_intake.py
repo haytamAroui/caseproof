@@ -71,12 +71,13 @@ def test_unknown_upload_only_recovers_after_exact_fresh_readback_and_stable_regi
     client.library.read.side_effect = raw + raw
     service = WorkspaceIntake(client, Mock())
     service.register = Mock(return_value={'case_id': CASE, 'sources': rows})
-    service.context = Mock(return_value='fresh receipt')
-    assert service.upload('synthetic', CASE, c) == 'fresh receipt'
+    receipt = SimpleNamespace(readback_complete=True)
+    service.context = Mock(return_value=receipt)
+    assert service.upload('synthetic', CASE, c) is receipt
     first = service.register.call_args.args[2]
     # Cold caller request IDs do not duplicate the same immutable source set.
     c.request_id = str(uuid4())
-    assert service.upload('synthetic', CASE, c) == 'fresh receipt'
+    assert service.upload('synthetic', CASE, c) is receipt
     assert service.register.call_args.args[2] == first
     assert client.library.read.call_count == 8
     client.library.source.side_effect = [(SimpleNamespace(org_id='same', sha256_hex=r['sha256'], content_type=r['media_type']), r['byte_length']) for r in rows]
@@ -110,3 +111,23 @@ def test_router_unconfigured_and_invalid_body_fail_closed():
     client = TestClient(app)
     assert client.post('/v2/workspace/intake/matters', headers={'Authorization': 'Bearer synthetic'}, json={'org_id': CASE, 'name': 'Sample', 'request_id': CASE, 'actor_id': CASE}).status_code == 422
     fake.client.call.assert_not_called()
+
+
+def test_revoked_preflight_does_not_parse_register_or_write():
+    from apps.api.access_control import AccessFailure
+    client = Mock()
+    client.call.side_effect = AccessRejected(AccessFailure.RESOURCE_MASKED)
+    service = WorkspaceIntake(client, Mock())
+    service.register = Mock()
+    with pytest.raises(AccessRejected):
+        service.upload('revoked', CASE, command())
+    service.register.assert_not_called()
+    client.library.put_once.assert_not_called()
+
+
+def test_oversized_intake_body_is_rejected_before_route_validation():
+    from apps.api.litigation_development_app import create_litigation_development_app
+    client = TestClient(create_litigation_development_app(), client=('127.0.0.1', 40000), base_url='http://127.0.0.1')
+    response = client.post('/v2/workspace/intake/matters', content=b' ' * 17_000_001,
+                           headers={'Content-Type': 'application/json'})
+    assert response.status_code == 413

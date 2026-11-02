@@ -153,6 +153,10 @@ test('create through returned organization, unknown upload recovery, inventory a
     .getByLabel('Mapping rationale')
     .fill('Inspected synthetic page label');
   await page.getByRole('button', { name: 'Add inspected mapping' }).click();
+  await page.getByRole('link', { name: 'Back to sources' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button', { name: 'Stay here' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.getByRole('checkbox').check();
   await page
     .getByRole('button', { name: 'Save inventory confirmation' })

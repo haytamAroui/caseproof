@@ -201,7 +201,10 @@ class WorkspaceIntake:
                     raise ValueError('readback differs')
         except (PrivateStorageFailure, ValueError):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
-        return self.context(bearer, case)
+        result = self.context(bearer, case)
+        if not result.readback_complete:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return result
 
     def context(self, bearer: str, case: str) -> IntakeView:
         # State handles empty matters. Bundle context is read only once a bundle exists.
