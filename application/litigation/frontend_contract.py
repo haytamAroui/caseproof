@@ -34,6 +34,10 @@ class FindingView(BaseModel):
                     raise ValueError("invalid physical page")
             elif not isinstance(value, str) or not value.isascii() or not value.isdigit() or not 1 <= len(value) <= 6:
                 raise ValueError("invalid page label")
+        # Match the TypeScript parser: a supplied PDF page-space mapping
+        # must not contradict the canonical finding mapping.
+        if (self.page_mapping == 'mapped') != (spaces['pdf']['state'] == 'mapped'):
+            raise ValueError('physical page space contradicts finding page mapping')
         return self
 
 class DossierView(BaseModel):
