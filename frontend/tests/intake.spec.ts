@@ -422,12 +422,15 @@ test('Roman printed page and detector miss remain review-needed after durable co
       exact: false,
     }),
   ).toBeVisible();
-  expect(saved?.inventory_complete).toBe(false);
+  // Playwright route callbacks mutate this value asynchronously; do not
+  // treat the declaration-time null as an exhaustive control-flow value.
+  const confirmation = saved as Record<string, unknown> | null;
+  expect(confirmation?.['inventory_complete']).toBe(false);
   expect(
-    (saved?.exceptions as { review_state: string }[])[0]?.review_state,
+    (confirmation?.['exceptions'] as { review_state: string }[])[0]?.review_state,
   ).toBe('review_needed');
   expect(
-    (saved?.entries as { pages: { label: string; pdf_page: number }[] }[])[0]
+    (confirmation?.['entries'] as { pages: { label: string; pdf_page: number }[] }[])[0]
       ?.pages[0],
   ).toMatchObject({
     label: 'iv',
