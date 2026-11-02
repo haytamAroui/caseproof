@@ -145,3 +145,18 @@ def test_shared_viewer_model_enforces_page_mapping_invariant(mapping, page, vali
     else:
         with pytest.raises(ValidationError):
             ViewerContext.model_validate(payload)
+
+
+def test_reused_bytes_still_require_fresh_selected_source_authorization():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied
+    store, client = rig()
+    def revoked(**kwargs):
+        raise PrivateStorageDenied("revoked during read")
+    store.client.library.source = revoked
+    assert client.get(BASE + "/original", headers={"Authorization": "Bearer owner"}).status_code == 404
+
+
+def test_reused_bytes_reject_selected_source_metadata_drift():
+    store, client = rig()
+    store.client.library.source = lambda **kwargs: (SimpleNamespace(sha256_hex="c" * 64), len(RAW))
+    assert client.get(BASE + "/original", headers={"Authorization": "Bearer owner"}).status_code == 503
