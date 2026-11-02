@@ -1,13 +1,11 @@
 """F3 v3.1 fail-closed regression tests on synthetic source content only."""
 from __future__ import annotations
 
-import hashlib
 import json
 from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 from pydantic import ValidationError
 
 from application.litigation.frontend_contract import FindingView
@@ -95,7 +93,6 @@ def test_roman_does_not_become_a_physical_pdf_offset():
 
 
 def test_printed_four_to_physical_six_can_open_source_viewer():
-    from fastapi.testclient import TestClient
     store, client = rig()
     store.page = 6
     report = assess(docx("Stuk 1, printed p. 4."), [{
