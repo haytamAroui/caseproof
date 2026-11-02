@@ -99,7 +99,13 @@
       "type": "string"
     }
   },
-  "required": ["schema", "case_id", "brief_id", "snapshot_hash", "decisions"],
+  "required": [
+    "schema",
+    "case_id",
+    "brief_id",
+    "snapshot_hash",
+    "decisions"
+  ],
   "title": "ReviewLedgerView",
   "type": "object"
 }

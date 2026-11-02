@@ -2,8 +2,7 @@
 
 export type BriefId = string;
 export type CaseId = string;
-export type Decision =
-  'CONFIRMED_SUPPORTED' | 'CONFIRMED_QUALIFIED' | 'CONFIRMED_CONTRADICTED';
+export type Decision = "CONFIRMED_SUPPORTED" | "CONFIRMED_QUALIFIED" | "CONFIRMED_CONTRADICTED";
 export type Rationale = string;
 export type ReferenceId = string;
 export type RequestId = string;
@@ -17,7 +16,7 @@ export type Timestamp = string;
  * @maxItems 10000
  */
 export type Decisions = ReviewDecisionView[];
-export type Schema = 'caseproof-review-ledger-v1';
+export type Schema = "caseproof-review-ledger-v1";
 export type SnapshotHash = string;
 
 export interface ReviewLedgerView {

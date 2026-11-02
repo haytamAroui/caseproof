@@ -249,7 +249,13 @@ function SourceInspection({
     }
   }, [result, search, showBoxes, rasterRegions, page, hash]);
   useEffect(() => {
-    if (result && !rendering && mapping === 'mapped' && page === mappedPage && !historical) {
+    if (
+      result &&
+      !rendering &&
+      mapping === 'mapped' &&
+      page === mappedPage &&
+      !historical
+    ) {
       onInspected?.();
     }
   }, [result, rendering, mapping, page, mappedPage, historical, onInspected]);

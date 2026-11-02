@@ -1,7 +1,6 @@
 /* Generated from Python VisualDecisionBody. Do not edit. */
 
-export type Decision =
-  'CONFIRMED_SUPPORTED' | 'CONFIRMED_QUALIFIED' | 'CONFIRMED_CONTRADICTED';
+export type Decision = "CONFIRMED_SUPPORTED" | "CONFIRMED_QUALIFIED" | "CONFIRMED_CONTRADICTED";
 export type Rationale = string;
 export type ReferenceId = string;
 export type RequestId = string;

@@ -15,9 +15,17 @@ export function ReportScreen({
   renderReview,
 }: {
   api: ApiClient;
-  renderSource?: (finding: FindingView, historical: boolean, onInspected: () => void) => ReactNode;
+  renderSource?: (
+    finding: FindingView,
+    historical: boolean,
+    onInspected: () => void,
+  ) => ReactNode;
   renderDraft?: (finding: FindingView, historical: boolean) => ReactNode;
-  renderReview?: (finding: FindingView, historical: boolean, inspected: boolean) => ReactNode;
+  renderReview?: (
+    finding: FindingView,
+    historical: boolean,
+    inspected: boolean,
+  ) => ReactNode;
 }) {
   const { caseId = '', briefId = '' } = useParams();
   const [params, setParams] = useSearchParams();
@@ -45,8 +53,15 @@ export function ReportScreen({
   const selected =
     report.findings.find((f) => f.reference_id === params.get('finding')) ??
     report.findings[0];
-  const needsAttention = (f: FindingView) => f.identity !== 'resolved' || f.page_mapping !== 'mapped' || f.fidelity !== 'exact_match' || f.support === 'not_assessed';
-  const filtered = filter === 'attention' ? report.findings.filter(needsAttention) : report.findings;
+  const needsAttention = (f: FindingView) =>
+    f.identity !== 'resolved' ||
+    f.page_mapping !== 'mapped' ||
+    f.fidelity !== 'exact_match' ||
+    f.support === 'not_assessed';
+  const filtered =
+    filter === 'attention'
+      ? report.findings.filter(needsAttention)
+      : report.findings;
   const pageSize = 50;
   const rawPage = Number(params.get('page') ?? 0);
   const page =
@@ -92,17 +107,44 @@ export function ReportScreen({
           <h2>
             References <span>{report.findings.length}</span>
           </h2>
-          <p role="status">{report.findings.filter(needsAttention).length} need attention out of {report.findings.length} detected references. Review coverage separately.</p>
+          <p role="status">
+            {report.findings.filter(needsAttention).length} need attention out
+            of {report.findings.length} detected references. Review coverage
+            separately.
+          </p>
           <div className="catalog-actions">
-            <button className="button" aria-pressed={filter === 'attention'} onClick={() => { setFilter('attention'); movePage(0); }}>Needs attention</button>
-            <button className="button" aria-pressed={filter === 'all'} onClick={() => { setFilter('all'); movePage(0); }}>Show all</button>
+            <button
+              className="button"
+              aria-pressed={filter === 'attention'}
+              onClick={() => {
+                setFilter('attention');
+                movePage(0);
+              }}
+            >
+              Needs attention
+            </button>
+            <button
+              className="button"
+              aria-pressed={filter === 'all'}
+              onClick={() => {
+                setFilter('all');
+                movePage(0);
+              }}
+            >
+              Show all
+            </button>
           </div>
           {report.findings.length === 0 ? (
             <p>
               No explicit references were detected. Inspect processing coverage
               before drawing conclusions.
             </p>
-          ) : visible.length === 0 ? <p>No references in this filter. Choose Show all to inspect the full scope.</p> : (
+          ) : visible.length === 0 ? (
+            <p>
+              No references in this filter. Choose Show all to inspect the full
+              scope.
+            </p>
+          ) : (
             <ul>
               {visible.map((f) => (
                 <li key={f.reference_id}>
@@ -194,20 +236,38 @@ export function ReportScreen({
 }
 
 function FindingInspection({
-  finding, historical, renderSource, renderDraft, renderReview,
+  finding,
+  historical,
+  renderSource,
+  renderDraft,
+  renderReview,
 }: {
   finding: FindingView;
   historical: boolean;
-  renderSource?: (finding: FindingView, historical: boolean, onInspected: () => void) => ReactNode;
+  renderSource?: (
+    finding: FindingView,
+    historical: boolean,
+    onInspected: () => void,
+  ) => ReactNode;
   renderDraft?: (finding: FindingView, historical: boolean) => ReactNode;
-  renderReview?: (finding: FindingView, historical: boolean, inspected: boolean) => ReactNode;
+  renderReview?: (
+    finding: FindingView,
+    historical: boolean,
+    inspected: boolean,
+  ) => ReactNode;
 }) {
   const [inspected, setInspected] = useState(false);
   return (
     <>
       {renderDraft?.(finding, historical)}
-      {renderSource ? renderSource(finding, historical, () => setInspected(true)) :
-        <Notice error>Preserved source viewer unavailable. No human source inspection may be recorded.</Notice>}
+      {renderSource ? (
+        renderSource(finding, historical, () => setInspected(true))
+      ) : (
+        <Notice error>
+          Preserved source viewer unavailable. No human source inspection may be
+          recorded.
+        </Notice>
+      )}
       {renderReview?.(finding, historical, inspected)}
     </>
   );
