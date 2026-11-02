@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { DraftContext, ReviewPanel } from '../review';
 import { useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
 import { useSession } from '../../shared/session';
@@ -12,9 +11,13 @@ const uuid =
 export function ReportScreen({
   api,
   renderSource,
+  renderDraft,
+  renderReview,
 }: {
   api: ApiClient;
   renderSource?: (finding: FindingView, historical: boolean, onInspected: () => void) => ReactNode;
+  renderDraft?: (finding: FindingView, historical: boolean) => ReactNode;
+  renderReview?: (finding: FindingView, historical: boolean, inspected: boolean) => ReactNode;
 }) {
   const { caseId = '', briefId = '' } = useParams();
   const [params, setParams] = useSearchParams();
@@ -172,6 +175,8 @@ export function ReportScreen({
                 finding={selected}
                 historical={historical}
                 renderSource={renderSource}
+                renderDraft={renderDraft}
+                renderReview={renderReview}
               />
             </>
           ) : (
@@ -191,21 +196,21 @@ export function ReportScreen({
 }
 
 function FindingInspection({
-  api, scope, finding, historical, renderSource,
+  finding, historical, renderSource, renderDraft, renderReview,
 }: {
-  api: ApiClient;
-  scope: { caseId: string; briefId: string; snapshot: string };
   finding: FindingView;
   historical: boolean;
   renderSource?: (finding: FindingView, historical: boolean, onInspected: () => void) => ReactNode;
+  renderDraft?: (finding: FindingView, historical: boolean) => ReactNode;
+  renderReview?: (finding: FindingView, historical: boolean, inspected: boolean) => ReactNode;
 }) {
   const [inspected, setInspected] = useState(false);
   return (
     <>
-      {!historical && <DraftContext api={api} {...scope} referenceId={finding.reference_id} />}
+      {renderDraft?.(finding, historical)}
       {renderSource ? renderSource(finding, historical, () => setInspected(true)) :
         <Notice error>Preserved source viewer unavailable. No human source inspection may be recorded.</Notice>}
-      {!historical && <ReviewPanel api={api} scope={scope} finding={finding} inspected={inspected} />}
+      {renderReview?.(finding, historical, inspected)}
     </>
   );
 }

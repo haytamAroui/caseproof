@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ApiClient, FindingView } from '../../shared/api';
 import {
@@ -68,10 +68,7 @@ export function ReviewPanel({
     row.decision === submitted.current.decision &&
     row.rationale === submitted.current.rationale,
   );
-  useEffect(() => {
-    if (saved) setOutcome('saved');
-  }, [saved]);
-  const dirty = Boolean(rationale.trim()) && outcome !== 'saved';
+  const dirty = Boolean(rationale.trim()) && outcome !== 'saved' && !saved;
 
   async function reconcile() {
     try {

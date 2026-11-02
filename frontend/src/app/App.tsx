@@ -19,6 +19,7 @@ import {
 import { IntakeScreen, InventoryScreen } from '../features/intake';
 import { SourceViewer } from '../features/evidence';
 import { ReportScreen } from '../features/verification';
+import { DraftContext, ReviewPanel } from '../features/review';
 import { ApiClient } from '../shared/api';
 import {
   SessionContext,
@@ -116,6 +117,12 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
   return (
     <ReportScreen
       api={api}
+      renderDraft={(finding, historical) => historical ? null : (
+        <DraftContext api={api} caseId={caseId} briefId={briefId} snapshot={snapshot} referenceId={finding.reference_id} />
+      )}
+      renderReview={(finding, historical, inspected) => historical ? null : (
+        <ReviewPanel key={finding.reference_id} api={api} scope={{ caseId, briefId, snapshot }} finding={finding} inspected={inspected} />
+      )}
       renderSource={(finding, historical, onInspected) => (
         <SourceViewer
           key={`${caseId}:${briefId}:${snapshot}:${finding.reference_id}:${historical}`}
