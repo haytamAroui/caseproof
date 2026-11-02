@@ -447,6 +447,8 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         try:
             UUID(body.request_id)
             sources, originals = s.sources(bearer, case_id)
+            if not any(x['role'] == 'draft' and x['version_id'] == brief_id for x in sources):
+                raise ValueError('draft outside preserved matter')
             inventory = [x for x in sources if x['role'] == 'inventory']
             if len(inventory) != 1:
                 raise ValueError('missing inventory')

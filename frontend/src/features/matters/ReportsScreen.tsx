@@ -30,6 +30,7 @@ export function ReportsScreen({ api }: { api: ApiClient }) {
     <section>
       <Link to="/">Back to permitted matters</Link>
       <h1>Preserved reports</h1>
+      <Link to={`/matters/${caseId}/sources`}>Sources and intake</Link>
       <Notice>
         Reports are ordered by snapshot identifier, not by date. Each is a
         historical check; opening it rechecks current access and source

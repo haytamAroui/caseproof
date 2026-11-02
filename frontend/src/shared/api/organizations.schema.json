@@ -1,0 +1,49 @@
+{
+  "$defs": {
+    "Organization": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "org_id": {
+          "pattern": "^[0-9a-f-]{36}$",
+          "title": "Org Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "org_id",
+        "name"
+      ],
+      "title": "Organization",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "organizations": {
+      "items": {
+        "$ref": "#/$defs/Organization"
+      },
+      "maxItems": 100,
+      "title": "Organizations",
+      "type": "array"
+    },
+    "schema": {
+      "const": "caseproof-workspace-create-orgs-v1",
+      "title": "Schema",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "organizations"
+  ],
+  "title": "OrganizationView",
+  "type": "object"
+}

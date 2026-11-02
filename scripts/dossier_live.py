@@ -13,7 +13,7 @@ from tests.fixtures.run_lifecycle import credentials, new_run_id
 
 
 def main() -> int:
-    if os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof" or os.getenv("GITHUB_REF") not in {"refs/heads/fix/m1-multisource-live-acceptance", "refs/heads/feat/canonical-mcp-report-gate-20261031", "refs/heads/feat/verification-contract-report", "refs/heads/feat/complete-representation-gate", "refs/heads/feat/complete-dossier-journey", "refs/heads/fix/dossier-ranges-mixed", "refs/heads/main", "refs/heads/feat/f1-live-acceptance", "refs/heads/feat/f2-live-acceptance", "refs/heads/feat/final-hardening-and-verification"}:
+    if os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof" or os.getenv("GITHUB_REF") not in {"refs/heads/fix/m1-multisource-live-acceptance", "refs/heads/feat/canonical-mcp-report-gate-20261031", "refs/heads/feat/verification-contract-report", "refs/heads/feat/complete-representation-gate", "refs/heads/feat/complete-dossier-journey", "refs/heads/fix/dossier-ranges-mixed", "refs/heads/main", "refs/heads/feat/f1-live-acceptance", "refs/heads/feat/f2-live-acceptance", "refs/heads/feat/f3-complete-intake", "refs/heads/feat/final-hardening-and-verification"}:
         raise RuntimeError("protected M0.5 branch required")
     key = os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"]
     run = new_run_id()
@@ -40,7 +40,9 @@ def main() -> int:
         org = str(UUID(setup["org_id"]))
         os.environ["CASEPROOF_P3_ORG_ID"] = org
         os.environ["CASEPROOF_P3_RUN_ID"] = run
-        if os.getenv("CASEPROOF_VISUAL_LIVE") == "YES":
+        if os.getenv("CASEPROOF_F3_BROWSER_LIVE") == "YES":
+            from scripts.workspace_intake_live import main as phase3
+        elif os.getenv("CASEPROOF_VISUAL_LIVE") == "YES":
             from scripts.visual_gate_live_acceptance import main as phase3
         else:
             from scripts.dossier_live_acceptance import main as phase3

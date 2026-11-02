@@ -32,6 +32,7 @@ from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, 
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.workspace_auth import SupabaseWorkspaceAuth, create_workspace_auth_router
 from apps.api.workspace_catalog import create_workspace_catalog_router
+from apps.api.workspace_intake import WorkspaceIntake, create_workspace_intake_router
 from apps.api.workspace_reports import WorkspaceReports, create_workspace_reports_router
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 
@@ -68,6 +69,8 @@ def create_litigation_development_app(
 
     dossier_store = DossierStore(publishable_key, trusted_ingest_key) if publishable_key else None
     app.include_router(create_dossier_router(dossier_store))
+    app.include_router(create_workspace_intake_router(
+        WorkspaceIntake(dossier_store.client, dossier_store) if dossier_store else None))
     app.include_router(create_dossier_viewer_router(dossier_store))
     if dossier_store is not None and page_worker_secret is not None:
         from apps.api.signed_page_jobs import SignedPageJobs, create_page_job_router
@@ -198,6 +201,15 @@ def create_litigation_development_app(
             local = False
         if not local:
             return JSONResponse({"error": "loopback_only"}, status_code=403)
+        if request.method == 'POST' and request.url.path.startswith('/v2/workspace/intake/'):
+            chunks = []
+            size = 0
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > 17_000_000:
+                    return JSONResponse({'error': 'intake_body_too_large'}, status_code=413)
+                chunks.append(chunk)
+            request._body = b''.join(chunks)
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"

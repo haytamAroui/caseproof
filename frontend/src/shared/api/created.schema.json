@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "pattern": "^[0-9a-f-]{36}$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "request_id": {
+      "pattern": "^[0-9a-f-]{36}$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "caseproof-workspace-created-v1",
+      "title": "Schema",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "case_id",
+    "request_id"
+  ],
+  "title": "CreatedMatter",
+  "type": "object"
+}

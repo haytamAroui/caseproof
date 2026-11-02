@@ -6,7 +6,9 @@ from pathlib import Path
 from application.litigation.frontend_contract import DossierView
 from application.litigation.viewer_contract import ViewerContext
 from application.litigation.workspace_contract import MatterCatalogView, ReportCatalogView
+from apps.api.dossier_journey import InventoryConfirmation
 from apps.api.workspace_auth import SessionView
+from apps.api.workspace_intake import CreatedMatter, IntakeView, OrganizationView
 
 TARGET = Path(__file__).resolve().parents[1] / "frontend/src/shared/api/dossier.schema.json"
 def main() -> None:
@@ -17,6 +19,10 @@ def main() -> None:
                           (MatterCatalogView, TARGET.with_name("matters.schema.json")),
                           (SessionView, TARGET.with_name("session.schema.json")),
                           (ReportCatalogView, TARGET.with_name("reports.schema.json")),
+                          (OrganizationView, TARGET.with_name("organizations.schema.json")),
+                          (CreatedMatter, TARGET.with_name("created.schema.json")),
+                          (IntakeView, TARGET.with_name("intake.schema.json")),
+                          (InventoryConfirmation, TARGET.with_name("confirmation.schema.json")),
                           (ViewerContext, TARGET.with_name("viewer.schema.json"))):
         schema = model.model_json_schema()
         schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"

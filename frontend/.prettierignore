@@ -21,3 +21,12 @@ src/shared/api/viewer.schema.json
 
 viewer-dist
 tests/viewer-comparison/generated
+
+src/shared/api/intake-generated*
+src/shared/api/intake.schema.json
+src/shared/api/organizations-generated*
+src/shared/api/organizations.schema.json
+src/shared/api/created-generated*
+src/shared/api/created.schema.json
+src/shared/api/confirmation-generated*
+src/shared/api/confirmation.schema.json

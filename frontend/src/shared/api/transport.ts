@@ -18,6 +18,13 @@ export class ApiClient {
   async get(path: string, signal?: AbortSignal): Promise<unknown> {
     return this.read(path, signal);
   }
+  async post(
+    path: string,
+    body: unknown,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    return this.read(path, signal, undefined, body);
+  }
   async pdf(
     path: string,
     binding: { sha256: string; snapshot: string; length: number },
@@ -37,6 +44,7 @@ export class ApiClient {
     path: string,
     signal?: AbortSignal,
     binding?: { sha256: string; snapshot: string; length: number },
+    body?: unknown,
   ): Promise<unknown> {
     if (
       !path.startsWith('/v2/') ||
@@ -49,14 +57,24 @@ export class ApiClient {
     const { controller, release } = this.session.requestController();
     const combined = AbortSignal.any([
       controller.signal,
-      AbortSignal.timeout(30000),
+      AbortSignal.timeout(
+        path.startsWith('/v2/workspace/intake/') ||
+          /\/dossier\/(confirmation|checks)$/.test(path)
+          ? 180000
+          : 30000,
+      ),
       ...(signal ? [signal] : []),
     ]);
     try {
       const token = await this.session.bearer(epoch);
       if (combined.aborted) throw new SessionEnded();
       const response = await this.send(path, {
-        headers: { Authorization: `Bearer ${token}` },
+        method: body === undefined ? 'GET' : 'POST',
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
         signal: combined,
         credentials: 'omit',
         redirect: 'error',
