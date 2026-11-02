@@ -108,7 +108,10 @@ it('refuses contradictory supplied page spaces without inventing physical pages'
     printed: { state: 'mapped', value: '4' },
     bundle: { state: 'unmapped', value: null },
   };
-  expect(parseDossier({ ...dossier, findings: [{ ...finding, page_spaces }] }).findings).toHaveLength(1);
+  expect(
+    parseDossier({ ...dossier, findings: [{ ...finding, page_spaces }] })
+      .findings,
+  ).toHaveLength(1);
   for (const mutated of [
     { ...page_spaces, pdf: { state: 'mapped', value: null } },
     { ...page_spaces, pdf: { state: 'mapped', value: true } },
@@ -116,10 +119,17 @@ it('refuses contradictory supplied page spaces without inventing physical pages'
     { ...page_spaces, printed: { state: 'mapped', value: 'p4' } },
     { ...page_spaces, bundle: { state: 'mapped', value: 12 } },
     { ...page_spaces, future: {} },
-  ]) expect(() => parseDossier({ ...dossier, findings: [
-    { ...finding, page_spaces: mutated },
-  ] })).toThrow();
-  expect(() => parseDossier({ ...dossier, findings: [
-    { ...finding, page_mapping: 'unmapped', page_spaces },
-  ] })).toThrow();
+  ])
+    expect(() =>
+      parseDossier({
+        ...dossier,
+        findings: [{ ...finding, page_spaces: mutated }],
+      }),
+    ).toThrow();
+  expect(() =>
+    parseDossier({
+      ...dossier,
+      findings: [{ ...finding, page_mapping: 'unmapped', page_spaces }],
+    }),
+  ).toThrow();
 });

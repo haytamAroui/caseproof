@@ -63,7 +63,11 @@ export function ReportScreen({
   return (
     <>
       <header className="page-heading">
-        <p className="eyebrow">{historical ? 'Historical report · read-only' : 'Current preserved report'}</p>
+        <p className="eyebrow">
+          {historical
+            ? 'Historical report · read-only'
+            : 'Current preserved report'}
+        </p>
         <h1>Review the evidence</h1>
         <p>
           Each result describes a separate check. Human judgment remains

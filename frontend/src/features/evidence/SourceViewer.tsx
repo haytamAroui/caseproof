@@ -9,7 +9,10 @@ import { ApiClient, parseViewer } from '../../shared/api';
 import { Button, Notice } from '../../shared/ui';
 import type { DocumentInspection } from '../../shared/pdf/geometry';
 import type { PdfPageResult, RasterRegion } from '../../shared/pdf/geometry';
-import { parseRasterRegions, projectRasterBox } from '../../shared/pdf/geometry';
+import {
+  parseRasterRegions,
+  projectRasterBox,
+} from '../../shared/pdf/geometry';
 export interface ViewerScope {
   caseId: string;
   briefId: string;
@@ -104,11 +107,14 @@ function SourceInspection({
           },
           controller.signal,
         );
-        const regions = parseRasterRegions(await api.get(path + '/regions', controller.signal), {
-          snapshot,
-          sha256: context.original_sha256,
-          version: context.version_id,
-        });
+        const regions = parseRasterRegions(
+          await api.get(path + '/regions', controller.signal),
+          {
+            snapshot,
+            sha256: context.original_sha256,
+            version: context.version_id,
+          },
+        );
         if (controller.signal.aborted) return;
         setRasterRegions(regions.regions);
         setUnassessed(regions.unassessed);
@@ -216,11 +222,16 @@ function SourceInspection({
     context.strokeStyle = getComputedStyle(layer).getPropertyValue('--focus');
     context.lineWidth = 2 * xScale;
     for (const region of rasterRegions) {
-      if (region.page_number !== page || region.original_sha256 !== hash) continue;
+      if (region.page_number !== page || region.original_sha256 !== hash)
+        continue;
       const box = projectRasterBox(region, result);
       if (!box) continue; // Unsupported geometry is never guessed.
-      context.strokeRect(box[0] * xScale, box[1] * yScale,
-        (box[2] - box[0]) * xScale, (box[3] - box[1]) * yScale);
+      context.strokeRect(
+        box[0] * xScale,
+        box[1] * yScale,
+        (box[2] - box[0]) * xScale,
+        (box[3] - box[1]) * yScale,
+      );
     }
     if (!search.trim()) return;
     for (const item of result.textBoxes.filter((item) =>
@@ -320,16 +331,24 @@ function SourceInspection({
           </p>
           {(legacy > 0 || unassessed > 0) && (
             <Notice>
-              Legacy and unsupported raster regions are not guessed. {unassessed}
-              region(s) in this report have unassessed provenance. Overlay outlines
-              are navigation aids, not an assessment or a human decision.
+              Legacy and unsupported raster regions are not guessed.{' '}
+              {unassessed}
+              region(s) in this report have unassessed provenance. Overlay
+              outlines are navigation aids, not an assessment or a human
+              decision.
             </Notice>
           )}
           {rasterRegions.length > 0 && (
             <p role="status">
-              {rasterRegions.filter((region) => region.page_number === page &&
-                result && projectRasterBox(region, result)).length} source-bound
-              raster outline(s) aligned on this page.
+              {
+                rasterRegions.filter(
+                  (region) =>
+                    region.page_number === page &&
+                    result &&
+                    projectRasterBox(region, result),
+                ).length
+              }{' '}
+              source-bound raster outline(s) aligned on this page.
             </p>
           )}
           <div className="viewer-controls" aria-label="Source page controls">

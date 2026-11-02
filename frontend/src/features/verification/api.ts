@@ -1,4 +1,9 @@
-import { ApiClient, ApiError, ContractError, parseDossier } from '../../shared/api';
+import {
+  ApiClient,
+  ApiError,
+  ContractError,
+  parseDossier,
+} from '../../shared/api';
 import type { DossierView } from '../../shared/api';
 
 export interface ReportScope {
@@ -20,14 +25,18 @@ export async function readReport(
   let mode: OpenedReport['mode'] = 'current';
   try {
     report = parseDossier(
-      await api.get(`${base}?snapshot_hash=${encodeURIComponent(scope.snapshot)}`, signal),
+      await api.get(
+        `${base}?snapshot_hash=${encodeURIComponent(scope.snapshot)}`,
+        signal,
+      ),
     );
   } catch (error) {
     // Only a confirmed stale response permits the read-only historical path.
     // Authorization denials and service failures never trigger a fallback.
     if (!(error instanceof ApiError) || error.status !== 409) throw error;
     const response = await api.get(
-      `${base}/history/${encodeURIComponent(scope.snapshot)}`, signal,
+      `${base}/history/${encodeURIComponent(scope.snapshot)}`,
+      signal,
     );
     if (!response || typeof response !== 'object') throw new ContractError();
     const historical = response as Record<string, unknown>;
@@ -35,7 +44,8 @@ export async function readReport(
       historical.mode !== 'historical_read_only' ||
       historical.currentness !== 'not_asserted' ||
       historical.source_availability !== 'not_assessed'
-    ) throw new ContractError();
+    )
+      throw new ContractError();
     report = parseDossier(historical.report);
     mode = 'historical_read_only';
   }
@@ -43,6 +53,7 @@ export async function readReport(
     report.case_id !== scope.caseId ||
     report.brief_id !== scope.briefId ||
     report.snapshot_hash !== scope.snapshot
-  ) throw new ContractError();
+  )
+    throw new ContractError();
   return { report, mode };
 }
