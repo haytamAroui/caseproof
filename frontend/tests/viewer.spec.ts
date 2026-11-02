@@ -196,7 +196,9 @@ test('fractional device pixel ratio renders and disposes the real worker', async
   await expect(
     page.getByText('Source page rendered.', { exact: true }),
   ).toBeVisible();
-  await expect(page.locator('canvas')).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: 'Preserved PDF page pixels' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'End session', exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(0);
 });
