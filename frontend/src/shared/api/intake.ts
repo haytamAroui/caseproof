@@ -7,6 +7,7 @@ export type {
   IntakeView,
   IdentityConfirmation,
   PageConfirmation,
+  InventoryReviewException,
 } from './intake-generated';
 export type { InventoryConfirmation } from './confirmation-generated';
 const uuid = (s: string) =>
