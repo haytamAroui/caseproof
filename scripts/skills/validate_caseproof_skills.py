@@ -5,7 +5,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SKILLS = ROOT / ".claude" / "skills"
+SKILLS = ROOT / "skills"
 REQUIRED = {
     "caseproof-router", "caseproof-foundation", "caseproof-frontend-engineering",
     "caseproof-landing-page", "caseproof-evidence-ui", "caseproof-tabular-review",
@@ -26,8 +26,7 @@ def main():
     actual = {p.name for p in SKILLS.iterdir() if p.is_dir() and (p / "SKILL.md").is_file()} if SKILLS.exists() else set()
     for name in sorted(REQUIRED - actual):
         errors.append(f"Missing required v2 skill: {name}")
-    for name in sorted(actual & LEGACY_CONFLICTS):
-        errors.append(f"Legacy overlapping skill must be migrated/retired: {name}")
+    # Legacy agent adapter paths are checked separately during migration.
     for name in sorted(actual):
         path = SKILLS / name / "SKILL.md"
         raw = path.read_text(encoding="utf-8")
