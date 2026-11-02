@@ -41,11 +41,13 @@ export function ReviewPanel({
   scope,
   finding,
   inspected,
+  onNext,
 }: {
   api: ApiClient;
   scope: Scope;
   finding: FindingView;
   inspected: boolean;
+  onNext?: () => void;
 }) {
   const session = useSession();
   const controller = useSessionController();
@@ -329,9 +331,10 @@ export function ReviewPanel({
           </>
         )}
       </div>
-      {outcome === 'saved' && (
+      {(outcome === 'saved' || saved) && (
         <p role="status">
-          Saved. Choose the next finding above to continue reviewing.
+          Saved. Your decision is confirmed from the durable ledger.
+          {onNext && <Button onClick={onNext}>Save &amp; Next finding</Button>}
         </p>
       )}
     </section>

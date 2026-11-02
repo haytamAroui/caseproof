@@ -128,7 +128,7 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
           />
         )
       }
-      renderReview={(finding, historical, inspected) =>
+      renderReview={(finding, historical, inspected, onNext) =>
         historical ? null : finding.visual_assessment === undefined ? (
           <Notice error>
             Visual review metadata is unavailable. Human disposition is disabled
@@ -141,6 +141,7 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
             scope={{ caseId, briefId, snapshot }}
             finding={finding}
             inspected={inspected}
+            onNext={onNext}
           />
         )
       }
