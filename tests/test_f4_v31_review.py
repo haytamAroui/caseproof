@@ -34,7 +34,7 @@ class Stub:
                 "reference_id": REF, "literal": "Stuk 1",
                 "region": "word/document.xml", "offsets": {"start": 7, "end": 13},
                 "technical_check": "checked",
-                "visual_assessment": {"regions": [{"region_id": "region-one"}]},
+                "visual_assessment": {"regions": [{"region_id": "c" * 64}]},
             }],
         }
 
@@ -125,7 +125,7 @@ def test_review_replay_returns_one_persisted_receipt_and_rejects_changed_input()
     command = {
         "snapshot_hash": SNAP, "reference_id": REF, "request_id": str(uuid4()),
         "decision": "CONFIRMED_SUPPORTED", "rationale": "Compared pixels and context",
-        "reviewed_region_ids": ["region-one"],
+        "reviewed_region_ids": ["c" * 64],
     }
     first = client.post(route("reviews"), json=command, headers=auth())
     assert first.status_code == 200

@@ -21,7 +21,7 @@ const finding = {
   page_mapping: 'mapped',
   fidelity: 'ocr_unreliable',
   support: 'not_assessed',
-  visual_assessment: { regions: [{ region_id: 'first-region' }] },
+  visual_assessment: { regions: [{ region_id: 'c'.repeat(64) }] },
 };
 const report = {
   schema: 'caseproof-dossier-v1',

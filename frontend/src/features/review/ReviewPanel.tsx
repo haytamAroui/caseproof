@@ -29,7 +29,7 @@ function requiredRegions(finding: FindingView): string[] | null {
       ? (region as Record<string, unknown>).region_id
       : null,
   );
-  if (ids.some((id) => typeof id !== 'string' || !id || id.length > 200))
+  if (ids.some((id) => typeof id !== 'string' || !/^[0-9a-f]{64}$/.test(id)))
     return null;
   if (new Set(ids).size !== ids.length) return null;
   return ids as string[];
