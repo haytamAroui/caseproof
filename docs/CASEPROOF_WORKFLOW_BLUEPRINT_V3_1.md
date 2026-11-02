@@ -272,3 +272,27 @@ No change to canonical enum vocabulary, public route shape, retention semantics,
 - External commercial/open-source references in v3.0 are **design inspiration only**, not proof of CaseProof functionality, benchmark performance, legal compliance or code-license permission. Re-verify sources and licenses before implementation.
 
 **Bottom line:** Build the lawyer's evidence-first journey on CaseProof's existing engine and contracts. Treat every proposed extension as an explicit, testable gap—not a reason to rewrite working infrastructure.
+
+## 11. Implementation guide — F1–F6 adoption and audit
+
+This document is the required journey, edge-case and acceptance traceability guide, not a replacement architecture. The authoritative frontend blueprint (frontend/BLUEPRINT.md, section 23) maps stages to increments and records F1–F3 retrofit audits. Any new backend state, contract, route, security policy or storage model requires an ADR, contract review and tests first.
+
+For each implementation PR: identify affected S0–S13 stages; link authoritative contracts and acceptance receipts; classify behavior as verified missing, already implemented, unverified or deferred; write failing regression tests for confirmed gaps; test signed authorization, stale revisions, unknown outcomes and restart/reopen; attach CI and browser evidence; identify independent approvals still open.
+
+### F1–F3 guide audit checklist
+
+| Increment | v3.1 scenarios to inspect | Expected action |
+| --- | --- | --- |
+| F1 | S0, S11, S12, S13: signed grants, foreign matter, revocation, expiry, history, cache purge, accessible recovery | Audit existing integration; add targeted tests only for proven omissions |
+| F2 | S2, S3, S5, S7: text PDF vs scan/OCR, crop provenance, zoom/rotation/DPR, page-space labels, representation conflict | Verify viewer and source navigation; crop coordinates alone do not prove page mapping |
+| F3 | S1, S3, S12: original roles and hash readback, partial/unknown upload, incomplete inventory, aliases, source/page ambiguity, cold resume | Verify confirmation and fail-closed readiness; patch only demonstrated gaps |
+
+### F4–F6 delivery
+
+- F4 owns S4–S8 and S11: findings and uncertainty, brief/source navigation, signed reviewer rationale, durable receipt, stale/revoked/restart behavior.
+- F5 owns S9: correction preview, immutable original, activation, canonical recheck and competing/stale denial.
+- F6/M4 owns S10–S11: authorized reviewed export, manifest/hash, source navigation and real-byte reopening.
+
+### Change control
+
+If the guide conflicts with the constitution, ADRs, roadmap, generated backend contracts or frontend blueprint, do not implement the conflicting interpretation. Propose an explicit governed change with compatibility, security, migration and acceptance consequences. Existing F1–F3 engineering receipts are preserved; independent approvals remain separate.
