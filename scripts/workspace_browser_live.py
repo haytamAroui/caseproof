@@ -119,7 +119,7 @@ class WorkspaceBrowserAcceptance:
             expect(expired.get_by_role('link', name='Open preserved report')).to_have_count(0)
             # Restore wall time before a fresh provider login; no synthetic token.
             print('F1_STAGE_EXPIRED_PRIVATE_DOM_CLEARED', flush=True)
-            expired.clock.set_system_time(int(time.time() * 1000))
+            expired.clock.set_system_time(time.time())
             self.login(expired)
             expect(expired.get_by_role('heading', name='Your permitted matters')).to_be_visible()
             expect(expired.get_by_role('heading', name='Preserved reports')).to_have_count(0)
