@@ -540,3 +540,36 @@ P03 `/workspace/matters/new`, P05 `/workspace/matters/:caseId/sources` and P06 `
 Installed bundle registration accepts exactly one DOCX, one UTF-8 text inventory and two PDF exhibits; the UI explicitly enforces this bound. Each original is at most 5 MiB, total at most 12 MB; the inventory is at most 1 MiB/512 distinct identities and each PDF at most 64 pages; format/hash/container validation precedes writes. Reservation receipt is not preservation. Fresh signed original readback precedes completion; partial processing remains explicit. Native selects use platform-owned popups with canonical control tokens. No new UI library or token palette.
 
 Recovery preserves immutable source identity: reselect exact originals to replay a case/metadata-derived registration after cold restart. Creation may retain an opaque `operation` UUID in query state; titles, file names, credentials and organization selections are never persisted there. Session loss clears forms and requests. A stopped transfer may have a partial remote outcome. No browser cleanup/delete permission or automated mutation retry is introduced.
+
+
+## 23. Operational use of Workflow Blueprint v3.1 — F1–F6 traceability (2 November 2026)
+
+The [CaseProof end-to-end workflow guide](../docs/CASEPROOF_WORKFLOW_BLUEPRINT_V3_1.md) is the **required journey and scenario checklist** for frontend changes. This frontend blueprint remains the authority for design, routes, contracts, security and acceptance; the workflow guide cannot silently override it. Before each F4–F6 PR, record the S-stage coverage, relevant source contract, browser evidence and explicitly deferred cases in the PR description. Do not introduce duplicate /api/v1 endpoints, a parallel state machine or new signing protocol.
+
+| Stage | Existing increment | Required guide checkpoint | Follow-up classification |
+| --- | --- | --- | --- |
+| S0 signed access, matter | F1 | Authorized organization/matter selection; no cross-tenant leakage; session expiry and revocation | Reuse tested F1; audit real journey in F4 |
+| S1 source preservation | F3 | Original hash, size, role, fresh authorized readback; interrupted/unknown outcome | Reuse tested F3; extend edge-case coverage if missing |
+| S2 OCR geometry | F2 + backend | Scanned source, crop and bounding box provenance; explicit OCR uncertainty | F2 viewer integration and F4 display, not a new OCR engine |
+| S3 inventory and page spaces | F3 | Complete/incomplete inventory, aliases, ambiguous/missing source, printed/piece/bundle page | Audit F3 confirmation and display in F4 |
+| S4 discovery/coverage | F4 + backend | DOCX supported/unsupported regions, language/translation flags, reference denominators | F4 presentation; backend gaps separately gated |
+| S5 canonical check | F4 + backend | Four independent dimensions and explicit abstention; frozen snapshot | F4 consumption, no invented aggregate verified score |
+| S6 model notes | Later | Optional, separately labelled, never overrides deterministic finding | Deferred |
+| S7–S8 review | F4 | Side-by-side navigation, rationale, durable authorized human decision receipt | F4 delivery |
+| S9 correction | F5 | Preview, immutable original, new draft and recheck, competing/stale rejection | F5 delivery |
+| S10 export | F6/M4 | Scoped reviewed bytes, provenance, supported output formats | F6 delivery |
+| S11 reopen | F4–F6 | Frozen report, historical/current distinction and durable review receipts | F4 start, F6 closure |
+| S12 recovery | F1–F6 | Revoke, restart, unknown write, retry without false success | Cross-cutting acceptance |
+| S13 privacy | F1–F6 | Local/perimeter network and retention truth, no secret persistence | Cross-cutting acceptance |
+
+### F1–F3 retrofit rule
+
+F1, F2 and F3 **retain their existing engineering acceptance receipts**; this guide does not retroactively fail or certify them. Any identified missing capability is a narrowly scoped follow-up with a failing regression test first. Reopen a milestone only for a demonstrable violation of its signed exit contract. Record independent security, legal-source, accessibility and deployment approvals separately from engineering CI.
+
+**F1 follow-ups:** prove the full S0→S11 navigation journey with real signed permissions and historical/current report labels; check session-expiry/revocation clears cached protected matter/report data; verify keyboard focus and accessible error/recovery states. These are integration/independent-acceptance gaps until code inspection proves otherwise.
+
+**F2 follow-ups:** expose source identity, SHA-256 and page-space provenance next to the PDF/crop; compare text-PDF versus scan/X-ray paths with OCR unreliability and representation conflict visible; test bbox geometry under zoom, rotation, DPR and missing crops; test keyboard/screen-reader navigation. Do not treat crop availability as proof of page mapping. These are verification targets, not claims of absent implementation.
+
+**F3 follow-ups:** validate incomplete inventory never yields a definitive not-in-inventory result; surface alias/source ambiguity and independent page-space confirmation; verify all original DOCX, inventory, PDF and scan roles, hash/readback, interrupted transfer, unknown outcome and cold resume; show partial ingestion and unsupported regions without marking ready. These are audit/regression targets; add code only when tests reveal a gap.
+
+**F4 acceptance entry:** link the actual F1–F3 receipt files and the workflow guide, list any discovered retrofits, then deliver S4–S8 and S11 in a signed browser test. F5 and F6 must not be described as complete by passing F4.
