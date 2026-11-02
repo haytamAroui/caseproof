@@ -124,17 +124,15 @@ export function CreateMatter({ api }: { api: ApiClient }) {
             }
           }}
         >
-          <label>
-            Organization
-            <select name="org" disabled={busy} defaultValue="">
-              <option value="">Choose organization</option>
-              {query.data.organizations.map((o) => (
-                <option key={o.org_id} value={o.org_id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <label htmlFor="create-org">Organization</label>
+          <select id="create-org" name="org" disabled={busy} defaultValue="">
+            <option value="">Choose organization</option>
+            {query.data.organizations.map((o) => (
+              <option key={o.org_id} value={o.org_id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
           <label>
             Matter title
             <input

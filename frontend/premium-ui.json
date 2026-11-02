@@ -3,7 +3,7 @@
   "sourceRoots": ["src"],
   "locale": "en-BE",
   "canonicalMap": "BLUEPRINT.md",
-  "requiredCapabilities": ["Form", "Scrollbar", "Toast"],
+  "requiredCapabilities": ["Form", "Scrollbar", "Toast", "Select/Listbox"],
   "requiredCommands": ["unit", "e2e", "typecheck", "lint", "build"],
   "commands": {
     "unit": "npm test",
@@ -15,5 +15,8 @@
   "evidence": {
     "crudFullFlow": "tests/workspace.spec.ts",
     "failurePaths": "src/shared/api/transport.test.ts"
+  },
+  "ownership": {
+    "Select/Listbox": "native"
   }
 }

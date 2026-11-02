@@ -127,3 +127,20 @@ describe('runtime contract', () => {
     ).toThrow();
   });
 });
+
+it('consequential POST is sent once with the session fence and never automatically retried', async () => {
+  const session = new SessionController();
+  session.connect({ getBearer: async () => 'synthetic' });
+  let calls = 0;
+  const api = new ApiClient(session, async (_path, init) => {
+    calls++;
+    expect(init?.method).toBe('POST');
+    expect(init?.credentials).toBe('omit');
+    expect(JSON.parse(String(init?.body))).toEqual({ request_id: 'stable' });
+    throw new Error('Lost acknowledgement');
+  });
+  await expect(
+    api.post('/v2/workspace/intake/matters', { request_id: 'stable' }),
+  ).rejects.toThrow('Lost acknowledgement');
+  expect(calls).toBe(1);
+});
