@@ -218,6 +218,11 @@ class DossierStore:
         return report
 
     def reopen(self, bearer: str, case: str, brief: str, snapshot: str) -> tuple[dict[str, Any], bytes]:
+        report, originals = self.reopen_originals(bearer, case, brief, snapshot)
+        return report, originals[brief]
+
+    def reopen_originals(self, bearer: str, case: str, brief: str, snapshot: str) -> tuple[dict[str, Any], dict[str, bytes]]:
+        """Request-local verified originals; never a cross-request source cache."""
         report = self.frozen_report(bearer, case, brief, snapshot)
         sources, originals = self.sources(bearer, case, inspect_pdf=False)
         current = {(s['version_id'], s['sha256']) for s in sources}
@@ -225,7 +230,7 @@ class DossierStore:
         if not recorded or recorded != current:
             raise HTTPException(409, 'source snapshot changed')
         report['snapshot_hash'] = snapshot
-        return report, originals[brief]
+        return report, originals
 
     def sources(self, bearer: str, case: str, *, inspect_pdf: bool = True) -> tuple[list[dict[str, Any]], dict[str, bytes]]:
         manifest = self.client.bundle_manifest(bearer, case)['sources']
