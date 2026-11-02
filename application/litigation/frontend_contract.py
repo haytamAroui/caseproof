@@ -1,7 +1,7 @@
 """Read-only canonical report projection. Validation never computes verdicts."""
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class FindingView(BaseModel):
@@ -12,6 +12,29 @@ class FindingView(BaseModel):
     page_mapping: Literal["mapped", "unmapped", "conflicting"]
     fidelity: Literal["not_assessed", "ocr_unreliable", "representation_conflict", "translation_review_required", "multiple_matches", "exact_match", "quote_not_found"]
     support: Literal["not_assessed", "supported", "qualified", "contradicted"]
+
+    @model_validator(mode="after")
+    def validate_page_spaces(self) -> Self:
+        spaces = self.model_extra.get("page_spaces") if self.model_extra else None
+        if spaces is None:
+            return self
+        if not isinstance(spaces, dict) or set(spaces) != {"pdf", "printed", "bundle"}:
+            raise ValueError("invalid page spaces")
+        for name, row in spaces.items():
+            if not isinstance(row, dict) or set(row) != {"state", "value"}:
+                raise ValueError("invalid page space row")
+            state, value = row["state"], row["value"]
+            if state not in {"mapped", "unmapped", "conflicting"}:
+                raise ValueError("invalid page space state")
+            if state != "mapped":
+                if value is not None:
+                    raise ValueError("unresolved page space has a value")
+            elif name == "pdf":
+                if type(value) is not int or not 1 <= value <= 100000:
+                    raise ValueError("invalid physical page")
+            elif not isinstance(value, str) or not value.isascii() or not value.isdigit() or not 1 <= len(value) <= 6:
+                raise ValueError("invalid page label")
+        return self
 
 class DossierView(BaseModel):
     model_config = ConfigDict(extra="allow", strict=True)
