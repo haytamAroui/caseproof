@@ -30,3 +30,11 @@ src/shared/api/created-generated*
 src/shared/api/created.schema.json
 src/shared/api/confirmation-generated*
 src/shared/api/confirmation.schema.json
+
+# Python-authoritative generated F4 schema and types (byte-exact generator output)
+src/shared/api/review-ledger.schema.json
+src/shared/api/review-ledger-generated*
+src/shared/api/draft-excerpt.schema.json
+src/shared/api/draft-excerpt-generated*
+src/shared/api/review-command.schema.json
+src/shared/api/review-command-generated*
