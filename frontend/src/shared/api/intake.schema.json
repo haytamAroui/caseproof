@@ -44,11 +44,58 @@
       "title": "IdentityConfirmation",
       "type": "object"
     },
+    "InventoryReviewException": {
+      "additionalProperties": false,
+      "description": "Versioned, source-anchored human observation, not a verified identity.",
+      "properties": {
+        "citation": {
+          "maxLength": 200,
+          "minLength": 3,
+          "title": "Citation",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "detector_miss",
+            "unsupported_notation"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 5,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "review_state": {
+          "const": "review_needed",
+          "default": "review_needed",
+          "title": "Review State",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "citation",
+        "rationale"
+      ],
+      "title": "InventoryReviewException",
+      "type": "object"
+    },
     "PageConfirmation": {
       "additionalProperties": false,
       "properties": {
         "label": {
-          "pattern": "^\\d{1,6}$",
+          "maxLength": 12,
+          "minLength": 1,
+          "pattern": "^(?:[0-9]{1,6}|m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})|M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3}))$",
           "title": "Label",
           "type": "string"
         },
@@ -129,6 +176,16 @@
             "unavailable"
           ],
           "title": "Processing",
+          "type": "string"
+        },
+        "readback": {
+          "default": "unknown",
+          "enum": [
+            "verified",
+            "unknown",
+            "integrity_mismatch"
+          ],
+          "title": "Readback",
           "type": "string"
         },
         "role": {
@@ -218,6 +275,14 @@
       },
       "maxItems": 512,
       "title": "Entries",
+      "type": "array"
+    },
+    "exceptions": {
+      "items": {
+        "$ref": "#/$defs/InventoryReviewException"
+      },
+      "maxItems": 64,
+      "title": "Exceptions",
       "type": "array"
     },
     "inventory_complete": {

@@ -22,7 +22,13 @@ function confirmationFingerprint(
 ) {
   return JSON.stringify([
     complete,
-    exceptions.map((e) => [e.version, e.kind, e.citation, e.rationale, e.review_state]),
+    exceptions.map((e) => [
+      e.version,
+      e.kind,
+      e.citation,
+      e.rationale,
+      e.review_state,
+    ]),
     entries.map((e) => [
       e.label,
       e.number,
@@ -90,8 +96,12 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
   const session = useSessionController(),
     navigate = useNavigate();
   const [entries, setEntries] = useState<IdentityConfirmation[]>(data.entries);
-  const [exceptions, setExceptions] = useState<InventoryReviewException[]>(data.exceptions ?? []);
-  const [exceptionKind, setExceptionKind] = useState<'detector_miss' | 'unsupported_notation'>('detector_miss');
+  const [exceptions, setExceptions] = useState<InventoryReviewException[]>(
+    data.exceptions ?? [],
+  );
+  const [exceptionKind, setExceptionKind] = useState<
+    'detector_miss' | 'unsupported_notation'
+  >('detector_miss');
   const [exceptionCitation, setExceptionCitation] = useState('');
   const [exceptionRationale, setExceptionRationale] = useState('');
   const [complete, setComplete] = useState(data.inventory_complete),
@@ -154,8 +164,11 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
         current.confirmation_id !== request ||
         current.bundle_signature !== data.bundle_signature ||
         current.inventory_complete !== complete ||
-        confirmationFingerprint(current.entries, current.inventory_complete, current.exceptions ?? []) !==
-          fingerprint
+        confirmationFingerprint(
+          current.entries,
+          current.inventory_complete,
+          current.exceptions ?? [],
+        ) !== fingerprint
       )
         throw Error('Confirmation differs');
       frozen.current = null;
@@ -227,7 +240,9 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
                   })
                 }
               >
-                <option value="">No source supplied (missing or unavailable)</option>
+                <option value="">
+                  No source supplied (missing or unavailable)
+                </option>
                 {exhibits.map((s) => (
                   <option key={s.version_id} value={s.version_id}>
                     {s.filename}
@@ -235,12 +250,22 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
                 ))}
               </select>
             </label>
-            {entries.filter((e) => e.label === entry.label && e.number === entry.number).length > 1 ? (
-              <Notice>Multiple candidate source bindings: identity remains ambiguous until alternatives are resolved.</Notice>
+            {entries.filter(
+              (e) => e.label === entry.label && e.number === entry.number,
+            ).length > 1 ? (
+              <Notice>
+                Multiple candidate source bindings: identity remains ambiguous
+                until alternatives are resolved.
+              </Notice>
             ) : !entry.source_version_id ? (
-              <Notice>No preserved exhibit is bound; source identity is unresolved.</Notice>
+              <Notice>
+                No preserved exhibit is bound; source identity is unresolved.
+              </Notice>
             ) : !saved ? (
-              <Notice>Selected source awaiting durable reviewer confirmation. Selection alone does not verify identity.</Notice>
+              <Notice>
+                Selected source awaiting durable reviewer confirmation.
+                Selection alone does not verify identity.
+              </Notice>
             ) : null}
             <Button
               onClick={() => {
@@ -287,52 +312,105 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
         ))}
       </fieldset>
       <fieldset disabled={busy}>
-        <legend>Inventory detector misses and unsupported notation ({exceptions.length})</legend>
+        <legend>
+          Inventory detector misses and unsupported notation (
+          {exceptions.length})
+        </legend>
         <p>
           Record exact text visible in the preserved inventory and your reason
-          for review. This note is not a verified exhibit identity.
-          Reconcile by correcting the inventory in a new preserved bundle.
+          for review. This note is not a verified exhibit identity. Reconcile by
+          correcting the inventory in a new preserved bundle.
         </p>
         {exceptions.map((entry, index) => (
           <div key={index}>
-            <p>{entry.kind}: {entry.citation} — {entry.rationale} (review needed)</p>
-            <Button onClick={() => {
-              setExceptions((current) => current.filter((_, i) => i !== index));
-              setSaved(false);
-              setDirty(true);
-            }}>Remove exception {index + 1}</Button>
+            <p>
+              {entry.kind}: {entry.citation} — {entry.rationale} (review needed)
+            </p>
+            <Button
+              onClick={() => {
+                setExceptions((current) =>
+                  current.filter((_, i) => i !== index),
+                );
+                setSaved(false);
+                setDirty(true);
+              }}
+            >
+              Remove exception {index + 1}
+            </Button>
           </div>
         ))}
         <label>
           Exception type
-          <select value={exceptionKind} onChange={(event) => setExceptionKind(event.target.value as 'detector_miss' | 'unsupported_notation')}>
-            <option value="detector_miss">Inventory reference missed by detector</option>
-            <option value="unsupported_notation">Unsupported inventory notation</option>
+          <select
+            value={exceptionKind}
+            onChange={(event) =>
+              setExceptionKind(
+                event.target.value as 'detector_miss' | 'unsupported_notation',
+              )
+            }
+          >
+            <option value="detector_miss">
+              Inventory reference missed by detector
+            </option>
+            <option value="unsupported_notation">
+              Unsupported inventory notation
+            </option>
           </select>
         </label>
         <label>
           Exact inventory excerpt
-          <input value={exceptionCitation} onChange={(event) => setExceptionCitation(event.target.value)} maxLength={200} />
+          <input
+            value={exceptionCitation}
+            onChange={(event) => setExceptionCitation(event.target.value)}
+            maxLength={200}
+          />
         </label>
         <label>
           Reason for human review
-          <input value={exceptionRationale} onChange={(event) => setExceptionRationale(event.target.value)} maxLength={500} />
+          <input
+            value={exceptionRationale}
+            onChange={(event) => setExceptionRationale(event.target.value)}
+            maxLength={500}
+          />
         </label>
-        <Button disabled={exceptions.length >= 64} onClick={() => {
-          if (exceptionCitation.length < 3 || exceptionRationale.length < 5 ||
-            exceptions.some((e) => e.kind === exceptionKind && e.citation === exceptionCitation)) {
-            setMessage('Provide an exact excerpt of at least three characters, a review reason of at least five characters and no duplicate exception.');
-            return;
-          }
-          setExceptions((current) => [...current, { version: 1, kind: exceptionKind,
-            citation: exceptionCitation, rationale: exceptionRationale, review_state: 'review_needed' }]);
-          setComplete(false);
-          setSaved(false);
-          setDirty(true);
-          setMessage('Exception recorded locally; save confirmation to preserve it. Completeness is blocked.');
-          setExceptionCitation('');
-          setExceptionRationale('');
-        }}>Add review-needed exception</Button>
+        <Button
+          disabled={exceptions.length >= 64}
+          onClick={() => {
+            if (
+              exceptionCitation.length < 3 ||
+              exceptionRationale.length < 5 ||
+              exceptions.some(
+                (e) =>
+                  e.kind === exceptionKind && e.citation === exceptionCitation,
+              )
+            ) {
+              setMessage(
+                'Provide an exact excerpt of at least three characters, a review reason of at least five characters and no duplicate exception.',
+              );
+              return;
+            }
+            setExceptions((current) => [
+              ...current,
+              {
+                version: 1,
+                kind: exceptionKind,
+                citation: exceptionCitation,
+                rationale: exceptionRationale,
+                review_state: 'review_needed',
+              },
+            ]);
+            setComplete(false);
+            setSaved(false);
+            setDirty(true);
+            setMessage(
+              'Exception recorded locally; save confirmation to preserve it. Completeness is blocked.',
+            );
+            setExceptionCitation('');
+            setExceptionRationale('');
+          }}
+        >
+          Add review-needed exception
+        </Button>
       </fieldset>
       <label className="check-label">
         <input
@@ -470,7 +548,10 @@ function PageMappings({
               rationale = value('mapping-rationale').trim(),
               space = value('space') as 'printed' | 'bundle';
             if (
-              !/^(?:[0-9]{1,6}|m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})|M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3}))$/.test(label) || !label ||
+              !/^(?:[0-9]{1,6}|m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})|M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3}))$/.test(
+                label,
+              ) ||
+              !label ||
               !Number.isInteger(pdf) ||
               pdf < 1 ||
               pdf > max ||

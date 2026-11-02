@@ -1,6 +1,7 @@
 import validate from './generated-validator';
 
-const pageLabel = /^(?:[0-9]{1,6}|m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})|M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3}))$/;
+const pageLabel =
+  /^(?:[0-9]{1,6}|m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})|M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3}))$/;
 import type { DossierView } from './generated';
 export class ContractError extends Error {
   constructor() {
@@ -39,7 +40,9 @@ export function parseDossier(value: unknown): DossierView {
           ? !Number.isInteger(row.value) ||
             (row.value as number) < 1 ||
             (row.value as number) > 100000
-          : typeof row.value !== 'string' || !row.value || !pageLabel.test(row.value))
+          : typeof row.value !== 'string' ||
+            !row.value ||
+            !pageLabel.test(row.value))
       )
         throw new ContractError();
     }

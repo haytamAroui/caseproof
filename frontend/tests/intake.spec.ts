@@ -316,13 +316,20 @@ test('definite validation rejection permits correction with a new operation', as
   expect(attempts).toBe(2);
 });
 
-test('registered originals show independent unknown and signed verified readbacks before recovery', async ({ page }) => {
+test('registered originals show independent unknown and signed verified readbacks before recovery', async ({
+  page,
+}) => {
   const partial = {
     ...intake(false),
     bundle_signature: 'b'.repeat(64),
     sources: sources.map((source, index) => ({
       ...source,
-      readback: index === 0 ? 'verified' : index === 2 ? 'integrity_mismatch' : 'unknown',
+      readback:
+        index === 0
+          ? 'verified'
+          : index === 2
+            ? 'integrity_mismatch'
+            : 'unknown',
       processing: 'unavailable',
     })),
   };
@@ -330,25 +337,51 @@ test('registered originals show independent unknown and signed verified readback
     route.fulfill({ json: partial }),
   );
   await connect(page, `/workspace/matters/${caseId}/sources`);
-  await expect(page.getByRole('region', { name: 'Registered original status' })).toBeVisible();
-  await expect(page.getByText('readback verified', { exact: false })).toHaveCount(1);
-  await expect(page.getByText('readback unknown', { exact: false })).toHaveCount(2);
-  await expect(page.getByText('readback integrity_mismatch', { exact: false })).toHaveCount(1);
-  await expect(page.getByRole('link', { name: 'Review inventory and page mappings' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Preserve or reconcile originals' })).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Registered original status' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('readback verified', { exact: false }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText('readback unknown', { exact: false }),
+  ).toHaveCount(2);
+  await expect(
+    page.getByText('readback integrity_mismatch', { exact: false }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole('link', { name: 'Review inventory and page mappings' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Preserve or reconcile originals' }),
+  ).toBeVisible();
 });
 
-test('Roman printed page and detector miss remain review-needed after durable confirmation', async ({ page }) => {
+test('Roman printed page and detector miss remain review-needed after durable confirmation', async ({
+  page,
+}) => {
   let saved: Record<string, unknown> | null = null;
   await page.route(`**/intake/matters/${caseId}`, (route) =>
     route.fulfill({
-      json: saved ? { ...intake(), sources: sources.map((s) => ({
-        ...s, page_count: s.role === 'exhibit' ? 6 : null
-      })), entries: saved.entries, exceptions: saved.exceptions,
-        inventory_complete: false, confirmation_id: saved.request_id }
-        : { ...intake(), sources: sources.map((s) => ({
-          ...s, page_count: s.role === 'exhibit' ? 6 : null
-        })) },
+      json: saved
+        ? {
+            ...intake(),
+            sources: sources.map((s) => ({
+              ...s,
+              page_count: s.role === 'exhibit' ? 6 : null,
+            })),
+            entries: saved.entries,
+            exceptions: saved.exceptions,
+            inventory_complete: false,
+            confirmation_id: saved.request_id,
+          }
+        : {
+            ...intake(),
+            sources: sources.map((s) => ({
+              ...s,
+              page_count: s.role === 'exhibit' ? 6 : null,
+            })),
+          },
     }),
   );
   await page.route('**/dossier/confirmation', async (route) => {
@@ -359,21 +392,45 @@ test('Roman printed page and detector miss remain review-needed after durable co
   await page.getByLabel('Preserved exhibit').selectOption(ids[2]!);
   await page.getByLabel('Page label', { exact: true }).fill('IC');
   await page.getByLabel('Physical PDF page').fill('6');
-  await page.getByLabel('Mapping rationale').fill('Inspected real printed label');
+  await page
+    .getByLabel('Mapping rationale')
+    .fill('Inspected real printed label');
   await page.getByRole('button', { name: 'Add inspected mapping' }).click();
-  await expect(page.getByText('Use a unique literal numeric or canonical Roman label', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText('Use a unique literal numeric or canonical Roman label', {
+      exact: false,
+    }),
+  ).toBeVisible();
   await page.getByLabel('Page label', { exact: true }).fill('iv');
   await page.getByRole('button', { name: 'Add inspected mapping' }).click();
-  await expect(page.getByText('printed iv → PDF 6:', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText('printed iv → PDF 6:', { exact: false }),
+  ).toBeVisible();
   await page.getByLabel('Exact inventory excerpt').fill('Annex 9');
-  await page.getByLabel('Reason for human review').fill('Detector missed a literal source reference');
-  await page.getByRole('button', { name: 'Add review-needed exception' }).click();
+  await page
+    .getByLabel('Reason for human review')
+    .fill('Detector missed a literal source reference');
+  await page
+    .getByRole('button', { name: 'Add review-needed exception' })
+    .click();
   await expect(page.getByRole('checkbox')).toBeDisabled();
-  await page.getByRole('button', { name: 'Save inventory confirmation' }).click();
-  await expect(page.getByText('Inventory confirmation saved and freshly read back.', { exact: false })).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Save inventory confirmation' })
+    .click();
+  await expect(
+    page.getByText('Inventory confirmation saved and freshly read back.', {
+      exact: false,
+    }),
+  ).toBeVisible();
   expect(saved?.inventory_complete).toBe(false);
-  expect((saved?.exceptions as { review_state: string }[])[0]?.review_state).toBe('review_needed');
-  expect((saved?.entries as { pages: { label: string; pdf_page: number }[] }[])[0]?.pages[0]).toMatchObject({
-    label: 'iv', pdf_page: 6,
+  expect(
+    (saved?.exceptions as { review_state: string }[])[0]?.review_state,
+  ).toBe('review_needed');
+  expect(
+    (saved?.entries as { pages: { label: string; pdf_page: number }[] }[])[0]
+      ?.pages[0],
+  ).toMatchObject({
+    label: 'iv',
+    pdf_page: 6,
   });
 });

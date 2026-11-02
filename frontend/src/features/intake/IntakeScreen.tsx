@@ -88,7 +88,8 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
                 <strong>{s.filename}</strong>
                 <p>
                   {s.role} · registered · readback{' '}
-                  {s.readback ?? (data.readback_complete ? 'verified' : 'unknown')}
+                  {s.readback ??
+                    (data.readback_complete ? 'verified' : 'unknown')}
                   {' · '}processing {s.processing.replaceAll('_', ' ')}
                   {s.page_count != null ? ` · ${s.page_count} PDF pages` : ''}
                 </p>
@@ -96,12 +97,19 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
                   <p>Some pages still require OCR or processing review.</p>
                 )}
                 {s.processing === 'unavailable' && (
-                  <p>Processing has not been established. Do not assume OCR completed.</p>
+                  <p>
+                    Processing has not been established. Do not assume OCR
+                    completed.
+                  </p>
                 )}
                 <details>
                   <summary>Registered original provenance</summary>
-                  <p>Version <code>{s.version_id}</code></p>
-                  <p>SHA-256 <code>{s.sha256}</code></p>
+                  <p>
+                    Version <code>{s.version_id}</code>
+                  </p>
+                  <p>
+                    SHA-256 <code>{s.sha256}</code>
+                  </p>
                 </details>
               </li>
             ))}
@@ -110,8 +118,13 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
       )}
       {data?.readback_complete && !query.isError ? (
         <>
-          <Notice>All originals passed fresh authorized hash readback. Processing and inventory confirmation remain separate.</Notice>
-          <Link to={`/matters/${caseId}/inventory`}>Review inventory and page mappings</Link>
+          <Notice>
+            All originals passed fresh authorized hash readback. Processing and
+            inventory confirmation remain separate.
+          </Notice>
+          <Link to={`/matters/${caseId}/inventory`}>
+            Review inventory and page mappings
+          </Link>
         </>
       ) : (
         <form
