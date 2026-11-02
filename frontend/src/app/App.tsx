@@ -10,7 +10,12 @@ import {
   useSearchParams,
 } from 'react-router';
 import { SignIn } from '../features/auth';
-import { MattersScreen, ReportsScreen } from '../features/matters';
+import {
+  MattersScreen,
+  ReportsScreen,
+  CreateMatter,
+} from '../features/matters';
+import { IntakeScreen, InventoryScreen } from '../features/intake';
 import { SourceViewer } from '../features/evidence';
 import { ReportScreen } from '../features/verification';
 import { ApiClient } from '../shared/api';
@@ -147,6 +152,15 @@ function Workspace({ api }: { api: ApiClient }) {
         {session.connected ? (
           <Routes>
             <Route path="/" element={<MattersScreen api={api} />} />
+            <Route path="/matters/new" element={<CreateMatter api={api} />} />
+            <Route
+              path="/matters/:caseId/sources"
+              element={<IntakeScreen api={api} />}
+            />
+            <Route
+              path="/matters/:caseId/inventory"
+              element={<InventoryScreen api={api} />}
+            />
             <Route path="/reports/open" element={<ScopedOpenReport />} />
             <Route
               path="/matters/:caseId"

@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "IdentityConfirmation": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "stuk",
+            "piece"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "number": {
+          "pattern": "^\\d{1,4}(?:bis|ter)?$",
+          "title": "Number",
+          "type": "string"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/PageConfirmation"
+          },
+          "maxItems": 128,
+          "title": "Pages",
+          "type": "array"
+        },
+        "source_version_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Version Id"
+        }
+      },
+      "required": [
+        "label",
+        "number"
+      ],
+      "title": "IdentityConfirmation",
+      "type": "object"
+    },
+    "PageConfirmation": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "pattern": "^\\d{1,6}$",
+          "title": "Label",
+          "type": "string"
+        },
+        "pdf_page": {
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Pdf Page",
+          "type": "integer"
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 3,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "space": {
+          "enum": [
+            "printed",
+            "bundle"
+          ],
+          "title": "Space",
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "label",
+        "pdf_page",
+        "rationale"
+      ],
+      "title": "PageConfirmation",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bundle_signature": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Bundle Signature",
+      "type": "string"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/IdentityConfirmation"
+      },
+      "maxItems": 512,
+      "title": "Entries",
+      "type": "array"
+    },
+    "inventory_complete": {
+      "title": "Inventory Complete",
+      "type": "boolean"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "bundle_signature",
+    "request_id",
+    "inventory_complete",
+    "entries"
+  ],
+  "title": "InventoryConfirmation",
+  "type": "object"
+}

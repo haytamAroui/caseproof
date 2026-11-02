@@ -1,0 +1,255 @@
+{
+  "$defs": {
+    "IdentityConfirmation": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "stuk",
+            "piece"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "number": {
+          "pattern": "^\\d{1,4}(?:bis|ter)?$",
+          "title": "Number",
+          "type": "string"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/PageConfirmation"
+          },
+          "maxItems": 128,
+          "title": "Pages",
+          "type": "array"
+        },
+        "source_version_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Version Id"
+        }
+      },
+      "required": [
+        "label",
+        "number"
+      ],
+      "title": "IdentityConfirmation",
+      "type": "object"
+    },
+    "PageConfirmation": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "pattern": "^\\d{1,6}$",
+          "title": "Label",
+          "type": "string"
+        },
+        "pdf_page": {
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Pdf Page",
+          "type": "integer"
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 3,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "space": {
+          "enum": [
+            "printed",
+            "bundle"
+          ],
+          "title": "Space",
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "label",
+        "pdf_page",
+        "rationale"
+      ],
+      "title": "PageConfirmation",
+      "type": "object"
+    },
+    "SourceView": {
+      "additionalProperties": false,
+      "properties": {
+        "byte_length": {
+          "maximum": 20971520,
+          "minimum": 1,
+          "title": "Byte Length",
+          "type": "integer"
+        },
+        "document_id": {
+          "pattern": "^[0-9a-f-]{36}$",
+          "title": "Document Id",
+          "type": "string"
+        },
+        "filename": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 100,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "page_count": {
+          "anyOf": [
+            {
+              "maximum": 200,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Count"
+        },
+        "processing": {
+          "enum": [
+            "preserved",
+            "text_extracted",
+            "partial",
+            "unavailable"
+          ],
+          "title": "Processing",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "draft",
+            "inventory",
+            "exhibit"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "version_id": {
+          "pattern": "^[0-9a-f-]{36}$",
+          "title": "Version Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "filename",
+        "document_id",
+        "version_id",
+        "sha256",
+        "byte_length",
+        "media_type",
+        "processing"
+      ],
+      "title": "SourceView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "brief_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f-]{36}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Brief Id"
+    },
+    "bundle_signature": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bundle Signature"
+    },
+    "case_id": {
+      "pattern": "^[0-9a-f-]{36}$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "confirmation_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confirmation Id"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/IdentityConfirmation"
+      },
+      "maxItems": 512,
+      "title": "Entries",
+      "type": "array"
+    },
+    "inventory_complete": {
+      "title": "Inventory Complete",
+      "type": "boolean"
+    },
+    "readback_complete": {
+      "title": "Readback Complete",
+      "type": "boolean"
+    },
+    "schema": {
+      "const": "caseproof-workspace-intake-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourceView"
+      },
+      "maxItems": 32,
+      "title": "Sources",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "case_id",
+    "sources",
+    "entries",
+    "inventory_complete",
+    "readback_complete"
+  ],
+  "title": "IntakeView",
+  "type": "object"
+}

@@ -1,0 +1,112 @@
+"""Synthetic intake boundary/recovery tests; no claim of live Auth or Storage."""
+import base64
+from hashlib import sha256
+from types import SimpleNamespace
+from unittest.mock import Mock
+from uuid import uuid4
+
+import pytest
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
+from apps.api.access_control import AccessRejected
+from apps.api.signed_supabase_originals import PrivateStorageOutcomeUnknown
+from apps.api.workspace_intake import (
+    IntakeCommand,
+    WorkspaceIntake,
+    create_workspace_intake_router,
+    preflight,
+)
+from tests.fixtures.dossier_journey import dossier_bundle
+
+CASE = str(uuid4())
+
+
+def command():
+    return IntakeCommand(request_id=str(uuid4()), files=[dict(role=s.role, filename=s.filename,
+        media_type=s.media_type, byte_length=len(s.content), sha256=sha256(s.content).hexdigest(),
+        content_base64=base64.b64encode(s.content).decode()) for s in dossier_bundle()])
+
+
+def test_real_formats_preflight_and_corrupt_last_has_no_registration_or_writes():
+    good = command()
+    assert len(preflight(good)) == 4
+    last = good.files[-1]
+    last.content_base64 = base64.b64encode(b'%PDF-1.7 invalid').decode()
+    last.byte_length = len(b'%PDF-1.7 invalid')
+    last.sha256 = sha256(b'%PDF-1.7 invalid').hexdigest()
+    client = Mock()
+    service = WorkspaceIntake(client, Mock())
+    service.register = Mock()
+    with pytest.raises(HTTPException) as failure:
+        service.upload('synthetic', CASE, good)
+    assert failure.value.status_code == 422
+    service.register.assert_not_called()
+    client.library.put_once.assert_not_called()
+
+
+def test_duplicates_wrong_roles_size_and_hash_are_rejected():
+    good = command()
+    values = good.model_dump()
+    values['files'][-1]['filename'] = values['files'][0]['filename']
+    with pytest.raises(ValidationError):
+        IntakeCommand(**values)
+    good.files[-1].sha256 = '0' * 64
+    with pytest.raises(HTTPException):
+        preflight(good)
+    good = command()
+    good.files[-1].filename = '../escape.pdf'
+    with pytest.raises(HTTPException):
+        preflight(good)
+
+
+def test_unknown_upload_only_recovers_after_exact_fresh_readback_and_stable_registration():
+    c = command()
+    raw = preflight(c)
+    rows = [dict(f.model_dump(exclude={'content_base64'}), document_id=str(uuid4()), version_id=str(uuid4())) for f in c.files]
+    client = Mock()
+    client.library.source.side_effect = [(SimpleNamespace(org_id='same', sha256_hex=r['sha256'], content_type=r['media_type']), r['byte_length']) for r in rows] * 2
+    client.library.put_once.side_effect = PrivateStorageOutcomeUnknown('synthetic interruption')
+    client.library.read.side_effect = raw + raw
+    service = WorkspaceIntake(client, Mock())
+    service.register = Mock(return_value={'case_id': CASE, 'sources': rows})
+    service.context = Mock(return_value='fresh receipt')
+    assert service.upload('synthetic', CASE, c) == 'fresh receipt'
+    first = service.register.call_args.args[2]
+    # Cold caller request IDs do not duplicate the same immutable source set.
+    c.request_id = str(uuid4())
+    assert service.upload('synthetic', CASE, c) == 'fresh receipt'
+    assert service.register.call_args.args[2] == first
+    assert client.library.read.call_count == 8
+    client.library.source.side_effect = [(SimpleNamespace(org_id='same', sha256_hex=r['sha256'], content_type=r['media_type']), r['byte_length']) for r in rows]
+    client.library.read.side_effect = [b'tampered']
+    service.context.reset_mock()
+    with pytest.raises(AccessRejected):
+        service.upload('synthetic', CASE, c)
+    service.context.assert_not_called()
+
+
+def test_cross_organization_registered_refs_never_write():
+    c = command()
+    rows = [dict(f.model_dump(exclude={'content_base64'}), document_id=str(uuid4()), version_id=str(uuid4())) for f in c.files]
+    client = Mock()
+    client.library.source.side_effect = [(SimpleNamespace(org_id=str(i), sha256_hex=r['sha256'], content_type=r['media_type']), r['byte_length']) for i, r in enumerate(rows)]
+    service = WorkspaceIntake(client, Mock())
+    service.register = Mock(return_value={'case_id': CASE, 'sources': rows})
+    with pytest.raises(AccessRejected):
+        service.upload('synthetic', CASE, c)
+    client.library.put_once.assert_not_called()
+
+
+def test_router_unconfigured_and_invalid_body_fail_closed():
+    from apps.api.litigation_development_app import create_litigation_development_app
+    client = TestClient(create_litigation_development_app(), client=('127.0.0.1', 40000), base_url='http://127.0.0.1')
+    assert client.get('/v2/workspace/intake/organizations').status_code == 503
+    assert client.post(f'/v2/workspace/intake/matters/{CASE}/sources', json={}).status_code == 422
+    fake = Mock()
+    app = FastAPI()
+    app.include_router(create_workspace_intake_router(fake))
+    client = TestClient(app)
+    assert client.post('/v2/workspace/intake/matters', headers={'Authorization': 'Bearer synthetic'}, json={'org_id': CASE, 'name': 'Sample', 'request_id': CASE, 'actor_id': CASE}).status_code == 422
+    fake.client.call.assert_not_called()

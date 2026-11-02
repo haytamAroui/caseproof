@@ -532,3 +532,11 @@ the same viewport rather than CSS-percentage guesses. Manual screen-reader,
 independent security, representative-source and deployment approval remain open.
 
 F2 engineering receipt: final code `210326c018d95770fdd9ab632698473e639ff1fa` passed all 17 ordinary workflows and protected genuine signed-browser acceptance with zero-residual teardown. The [retained acceptance record](../docs/m3/F2_VIEWER_ACCEPTANCE.md) closes the F2 engineering exits; independent review and deployment approval remain separate. F3–F6 remain open.
+
+## 22. F3 intake implementation candidate — 2 November 2026
+
+P03 `/workspace/matters/new`, P05 `/workspace/matters/:caseId/sources` and P06 `/workspace/matters/:caseId/inventory` use the loopback `/v2/workspace/intake` adapter and generated organization/create/intake/confirmation contracts. P04 preserved-report navigation links to sources. Canonical dossier confirmation/check endpoints remain the only confirmation/verification authority. [ADR 0029](../docs/adr/0029-workspace-intake.md) records permissions, limits, transaction/recovery boundaries and rollback; [F3 acceptance](../docs/m3/F3_INTAKE_ACCEPTANCE.md) distinguishes implemented candidate from executed evidence.
+
+Installed bundle registration accepts exactly one DOCX, one UTF-8 text inventory and two PDF exhibits; the UI explicitly enforces this bound. Each original is at most 5 MiB, total at most 12 MB; format/hash/container validation precedes writes. Reservation receipt is not preservation. Fresh signed original readback precedes completion; partial processing remains explicit. Native selects use platform-owned popups with canonical control tokens. No new UI library or token palette.
+
+Recovery preserves immutable source identity: reselect exact originals to replay a case/metadata-derived registration after cold restart. Creation may retain an opaque `operation` UUID in query state; titles, file names, credentials and organization selections are never persisted there. Session loss clears forms and requests. A stopped transfer may have a partial remote outcome. No browser cleanup/delete permission or automated mutation retry is introduced.
