@@ -20,15 +20,20 @@ class Store:
     def __init__(self):
         self.changed = False
         self.revoked = False
+        self.read_count = 0
         self.page = 1
         self.mapping = "mapped"
-        self.client = SimpleNamespace(library=SimpleNamespace(read=self.read))
+        self.client = SimpleNamespace(library=SimpleNamespace(read=self.read, source=self.metadata))
+
+    def metadata(self, **kwargs):
+        return SimpleNamespace(sha256_hex=HASH), len(RAW)
 
     def read(self, **kwargs):
+        self.read_count += 1
         assert kwargs == {"bearer": "owner", "case_id": "case", "document_id": "doc", "version_id": "source"}
         return RAW[:-1] + b"X" if self.changed else RAW
 
-    def reopen(self, bearer, case, brief, snapshot):
+    def reopen_originals(self, bearer, case, brief, snapshot):
         if (bearer, case, brief, snapshot) != ("owner", "case", "brief", SNAP) or self.revoked:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return {
@@ -50,7 +55,7 @@ class Store:
                     "page_mapping": self.mapping,
                 }
             ],
-        }, b"draft"
+        }, {"source": self.read(bearer=bearer, case_id=case, document_id="doc", version_id="source")}
 
 
 def rig():
@@ -121,3 +126,46 @@ def test_unmapped_source_is_explicitly_explorable_without_a_target_page():
     assert response.status_code == 200
     assert response.json()["page_mapping"] == "unmapped"
     assert response.json()["pdf_page"] is None
+
+
+@pytest.mark.parametrize("mapping,page,valid", [
+    ("mapped", 1, True), ("mapped", None, False),
+    ("unmapped", None, True), ("conflicting", None, True),
+    ("unmapped", 1, False), ("conflicting", 1, False),
+])
+def test_shared_viewer_model_enforces_page_mapping_invariant(mapping, page, valid):
+    from pydantic import ValidationError
+
+    from application.litigation.viewer_contract import ViewerContext
+    payload = {"schema": "caseproof-viewer-v1", "case_id": "case", "brief_id": "brief",
+               "snapshot_hash": SNAP, "reference_id": "ref", "version_id": "source",
+               "original_sha256": HASH, "byte_length": len(RAW), "page_mapping": mapping,
+               "pdf_page": page, "legacy_region_count": 0,
+               "geometry_policy": "derived_pdf_text_only_legacy_raster_not_projected"}
+    if valid:
+        assert ViewerContext.model_validate(payload).pdf_page == page
+    else:
+        with pytest.raises(ValidationError):
+            ViewerContext.model_validate(payload)
+
+
+def test_reused_bytes_still_require_fresh_selected_source_authorization():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied
+    store, client = rig()
+    def revoked(**kwargs):
+        raise PrivateStorageDenied("revoked during read")
+    store.client.library.source = revoked
+    assert client.get(BASE + "/original", headers={"Authorization": "Bearer owner"}).status_code == 404
+
+
+def test_reused_bytes_reject_selected_source_metadata_drift():
+    store, client = rig()
+    store.client.library.source = lambda **kwargs: (SimpleNamespace(sha256_hex="c" * 64), len(RAW))
+    assert client.get(BASE + "/original", headers={"Authorization": "Bearer owner"}).status_code == 503
+
+
+def test_original_transport_reads_selected_verified_bytes_once_not_twice():
+    store, client = rig()
+    response = client.get(BASE + "/original", headers={"Authorization": "Bearer owner"})
+    assert response.status_code == 200
+    assert store.read_count == 1

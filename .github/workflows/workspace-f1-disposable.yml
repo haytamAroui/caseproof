@@ -34,3 +34,4 @@ jobs:
           python-version: "3.11"
       - run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
       - run: uv run --locked python -m scripts.verify_workspace_reports_disposable
+      - run: uv run --locked python -m scripts.verify_historical_snapshot_disposable

@@ -26,3 +26,27 @@ def test_identity_projection_tracks_domain_enum_and_rejects_unknown_success():
             'brief_id': 'brief', 'snapshot_hash': 'a' * 64, 'coverage': {},
             'findings': [{'reference_id': 'r', 'literal': 'Stuk 1', 'identity': 'verified',
                 'page_mapping': 'mapped', 'fidelity': 'not_assessed', 'support': 'not_assessed'}]})
+
+def test_supplied_page_spaces_must_agree_with_canonical_mapping():
+    from application.litigation.frontend_contract import FindingView
+
+    finding = {
+        'reference_id': 'r', 'literal': 'Pièce 2, printed p. 4',
+        'identity': 'resolved', 'page_mapping': 'mapped',
+        'fidelity': 'not_assessed', 'support': 'not_assessed',
+        'page_spaces': {
+            'pdf': {'state': 'mapped', 'value': 6},
+            'printed': {'state': 'mapped', 'value': '4'},
+            'bundle': {'state': 'unmapped', 'value': None},
+        },
+    }
+    assert FindingView.model_validate(finding).model_extra['page_spaces']['pdf']['value'] == 6
+    with pytest.raises(ValidationError, match='physical page space contradicts'):
+        FindingView.model_validate({**finding, 'page_mapping': 'unmapped'})
+    with pytest.raises(ValidationError, match='physical page space contradicts'):
+        FindingView.model_validate({**finding, 'page_spaces': {
+            **finding['page_spaces'], 'pdf': {'state': 'unmapped', 'value': None}}})
+    for name in ('printed', 'bundle'):
+        with pytest.raises(ValidationError):
+            FindingView.model_validate({**finding, 'page_spaces': {
+                **finding['page_spaces'], name: {'state': 'mapped', 'value': True}}})

@@ -12,7 +12,7 @@ export function ReportScreen({
   renderSource,
 }: {
   api: ApiClient;
-  renderSource?: (finding: FindingView) => ReactNode;
+  renderSource?: (finding: FindingView, historical: boolean) => ReactNode;
 }) {
   const { caseId = '', briefId = '' } = useParams();
   const [params, setParams] = useSearchParams();
@@ -34,7 +34,8 @@ export function ReportScreen({
     );
   if (query.isPending) return <Notice>Opening the preserved report…</Notice>;
   if (query.isError) return <Notice error>{query.error.message}</Notice>;
-  const report = query.data;
+  const { report, mode } = query.data;
+  const historical = mode === 'historical_read_only';
   const selected =
     report.findings.find((f) => f.reference_id === params.get('finding')) ??
     report.findings[0];
@@ -62,7 +63,11 @@ export function ReportScreen({
   return (
     <>
       <header className="page-heading">
-        <p className="eyebrow">Preserved report</p>
+        <p className="eyebrow">
+          {historical
+            ? 'Historical report · read-only'
+            : 'Current preserved report'}
+        </p>
         <h1>Review the evidence</h1>
         <p>
           Each result describes a separate check. Human judgment remains
@@ -70,7 +75,9 @@ export function ReportScreen({
         </p>
       </header>
       <Notice>
-        Read-only inspection · Human review actions are not connected yet.
+        {historical
+          ? 'Historical snapshot. Current permissions were checked again, but this report cannot be reviewed, corrected, rechecked or exported as current. Source availability is checked separately.'
+          : 'Current snapshot inspection. Human decisions remain separate from source rendering.'}
       </Notice>
       <div className="review-layout">
         <section className="queue" aria-label="References">
@@ -149,7 +156,7 @@ export function ReportScreen({
                 <StateValue label="Human support" value={selected.support} />
               </dl>
               {renderSource ? (
-                renderSource(selected)
+                renderSource(selected, historical)
               ) : (
                 <div className="page-empty">
                   <h3>Original page not loaded</h3>

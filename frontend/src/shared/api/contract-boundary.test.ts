@@ -3,6 +3,7 @@ import validateDossier from './generated-validator.js';
 import validateViewer from './viewer-generated-validator.js';
 import validateConfirmation from './confirmation-generated-validator.js';
 import type { DossierView, FindingView } from './generated';
+import { parseDossier } from './contracts';
 
 const finding: FindingView = {
   reference_id: 'r1',
@@ -99,4 +100,36 @@ function supportsFinding(f: FindingView): boolean {
 
 it('generated TypeScript support union is exhaustive', () => {
   expect(supportsFinding(finding)).toBe(true);
+});
+
+it('refuses contradictory supplied page spaces without inventing physical pages', () => {
+  const page_spaces = {
+    pdf: { state: 'mapped', value: 6 },
+    printed: { state: 'mapped', value: '4' },
+    bundle: { state: 'unmapped', value: null },
+  };
+  expect(
+    parseDossier({ ...dossier, findings: [{ ...finding, page_spaces }] })
+      .findings,
+  ).toHaveLength(1);
+  for (const mutated of [
+    { ...page_spaces, pdf: { state: 'mapped', value: null } },
+    { ...page_spaces, pdf: { state: 'mapped', value: true } },
+    { ...page_spaces, printed: { state: 'conflicting', value: '4' } },
+    { ...page_spaces, printed: { state: 'mapped', value: 'p4' } },
+    { ...page_spaces, bundle: { state: 'mapped', value: 12 } },
+    { ...page_spaces, future: {} },
+  ])
+    expect(() =>
+      parseDossier({
+        ...dossier,
+        findings: [{ ...finding, page_spaces: mutated }],
+      }),
+    ).toThrow();
+  expect(() =>
+    parseDossier({
+      ...dossier,
+      findings: [{ ...finding, page_mapping: 'unmapped', page_spaces }],
+    }),
+  ).toThrow();
 });
