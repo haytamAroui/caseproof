@@ -102,3 +102,7 @@ These receipts close the specified F2 **engineering exits**. The later receipt-o
 documentation commit changes no executable code. PR review and the independent
 approvals identified above remain separate. F3 intake, F4 review, F5 corrections,
 F6 artifacts and full M3 completion remain open.
+
+## Owner-authorized merge — 2 November 2026
+
+PR #166 merged as `c673b0652c5ea5d10c90d1778413d5eea95e4ce6`. Before merge, review finding discussion_r4437505660 was fixed: the caller clamps device pixel ratio to the supported minimum so browser zoom below 100% renders normally. Final PR head `73d25556ba8932823af4a8fd9990d8473a3ca2ab` passed all 18 checks, including the production-build real-worker fractional-DPR regression and cleanup. Existing genuine signed-run receipts above remain scoped to their tested code. Independent representative/manual/security and deployment gates remain separate.
