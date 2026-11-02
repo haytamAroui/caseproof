@@ -1,12 +1,13 @@
 name: PR174 genuine signed historical report and raster acceptance
 on:
-  push:
-    branches: [feat/f1-f2-backend-contract-hardening]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
 permissions:
   contents: read
 jobs:
   signed-historical:
-    if: github.repository == 'haytamAroui/caseproof' && github.ref == 'refs/heads/feat/f1-f2-backend-contract-hardening'
+    if: github.repository == 'haytamAroui/caseproof' && github.head_ref == 'feat/f1-f2-backend-contract-hardening' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 25
