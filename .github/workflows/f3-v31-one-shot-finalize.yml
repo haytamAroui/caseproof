@@ -1,0 +1,41 @@
+name: Finalize F3 v3.1 schema and formatting
+on:
+  push:
+    branches: [feat/m3-f3-v31-intake-hardening]
+permissions:
+  contents: write
+jobs:
+  finalize:
+    if: github.repository == 'haytamAroui/caseproof'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Regenerate Python contracts
+        run: uv run --locked python -m scripts.generate_frontend_contract
+      - name: Regenerate TS and AJV validators
+        run: npm ci && npm run contracts:generate
+        working-directory: frontend
+      - name: Format modified Python and frontend files
+        run: |
+          uv run --locked ruff format apps/api/dossier_journey.py apps/api/workspace_intake.py scripts/workspace_intake_live.py
+          cd frontend
+          npx prettier --write src/features/intake/IntakeScreen.tsx src/features/intake/InventoryScreen.tsx src/shared/api/intake.ts src/shared/api/index.ts src/shared/api/contracts.ts src/shared/api/contract-boundary.test.ts tests/intake.spec.ts src/shared/api/confirmation.schema.json src/shared/api/intake.schema.json src/shared/api/confirmation-generated.ts src/shared/api/intake-generated.ts src/shared/api/confirmation-generated-validator.js src/shared/api/intake-generated-validator.js
+      - name: Commit synchronized generated files and remove one-shot workflow
+        run: |
+          rm .github/workflows/f3-v31-one-shot-finalize.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore(f3): synchronize conditional exception schema and formatted regression'
+          git push origin HEAD:feat/m3-f3-v31-intake-hardening
