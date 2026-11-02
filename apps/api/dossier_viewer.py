@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import ValidationError
@@ -25,7 +25,7 @@ def create_dossier_viewer_router(store: DossierStore | None) -> APIRouter:
     def source(
         token: str, case: str, brief: str, snapshot: str, reference: str,
         *, historical: bool = False,
-    ) -> tuple[ViewerContext, bytes, dict, dict]:
+    ) -> tuple[ViewerContext, bytes, dict[str, Any], dict[str, Any]]:
         if store is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         # Current reads retain SQL freshness checks. Historical reads use a
@@ -138,7 +138,7 @@ def create_dossier_viewer_router(store: DossierStore | None) -> APIRouter:
         return historical_bytes(_token(authorization), case_id, brief_id, snapshot, reference_id)
 
     def raster_regions(token: str, case_id: str, brief_id: str, snapshot: str,
-                       reference_id: str, *, historical: bool = False) -> dict:
+                       reference_id: str, *, historical: bool = False) -> dict[str, Any]:
         # A region can be shown only if this same signed user can presently
         # reopen the exact bytes; a frozen crop is insufficient authorization.
         view, _, report, finding = source(token, case_id, brief_id, snapshot,
@@ -148,7 +148,7 @@ def create_dossier_viewer_router(store: DossierStore | None) -> APIRouter:
         rows = page.get("regions", []) if isinstance(page, dict) else []
         if not isinstance(rows, list) or len(rows) > 96:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        supported: list[dict] = []
+        supported: list[dict[str, Any]] = []
         unassessed = 0
         for row in rows:
             if not isinstance(row, dict):
@@ -186,7 +186,7 @@ def create_dossier_viewer_router(store: DossierStore | None) -> APIRouter:
 
     @router.get(base + "/regions")
     def regions(case_id: str, brief_id: str, snapshot: str, reference_id: str,
-                authorization: str | None = Header(default=None)) -> dict:
+                authorization: str | None = Header(default=None)) -> dict[str, Any]:
         return raster_regions(_token(authorization), case_id, brief_id, snapshot, reference_id)
 
     @router.get(history + "/regions")
