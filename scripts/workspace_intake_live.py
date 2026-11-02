@@ -17,7 +17,7 @@ from scripts.workspace_browser_live import ORIGIN, WorkspaceBrowserAcceptance
 from tests.fixtures.dossier_journey import dossier_bundle
 
 
-def main() -> None:
+def _exercise() -> None:
     if os.getenv('GITHUB_REF') not in {'refs/heads/feat/f3-complete-intake', 'refs/heads/main'}:
         raise RuntimeError('F3_PROTECTED_BRANCH_REQUIRED')
     key, run, org = (os.environ[n] for n in ('CASEPROOF_DEV_AUTH_ADMIN_KEY', 'CASEPROOF_P3_RUN_ID', 'CASEPROOF_P3_ORG_ID'))
@@ -150,3 +150,12 @@ def main() -> None:
     finally:
         acceptance.close()
         _server_stop(proc)
+
+
+def main() -> None:
+    try:
+        _exercise()
+    except Exception:
+        # Playwright errors can contain fill arguments. The outer fixture
+        # wrapper serializes exception text, so expose only a fixed category.
+        raise RuntimeError('F3_PROTECTED_BROWSER_ACCEPTANCE_FAILED') from None

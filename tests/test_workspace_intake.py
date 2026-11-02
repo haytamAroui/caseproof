@@ -202,3 +202,14 @@ def test_distinct_inventory_candidate_budget_checked_before_registration(count):
             assert '512 distinct' in rejected.value.detail
         service.register.assert_not_called()
         client.library.put_once.assert_not_called()
+
+
+def test_protected_browser_failure_never_exposes_fill_arguments(monkeypatch):
+    from scripts import workspace_intake_live
+    def fail():
+        raise RuntimeError('synthetic-private-fill-argument')
+    monkeypatch.setattr(workspace_intake_live, '_exercise', fail)
+    with pytest.raises(RuntimeError) as failure:
+        workspace_intake_live.main()
+    assert str(failure.value) == 'F3_PROTECTED_BROWSER_ACCEPTANCE_FAILED'
+    assert failure.value.__suppress_context__ is True
