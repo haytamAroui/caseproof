@@ -22,13 +22,16 @@ class Store:
         self.revoked = False
         self.page = 1
         self.mapping = "mapped"
-        self.client = SimpleNamespace(library=SimpleNamespace(read=self.read))
+        self.client = SimpleNamespace(library=SimpleNamespace(read=self.read, source=self.metadata))
+
+    def metadata(self, **kwargs):
+        return SimpleNamespace(sha256_hex=HASH), len(RAW)
 
     def read(self, **kwargs):
         assert kwargs == {"bearer": "owner", "case_id": "case", "document_id": "doc", "version_id": "source"}
         return RAW[:-1] + b"X" if self.changed else RAW
 
-    def reopen(self, bearer, case, brief, snapshot):
+    def reopen_originals(self, bearer, case, brief, snapshot):
         if (bearer, case, brief, snapshot) != ("owner", "case", "brief", SNAP) or self.revoked:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return {
@@ -50,7 +53,7 @@ class Store:
                     "page_mapping": self.mapping,
                 }
             ],
-        }, b"draft"
+        }, {"source": self.read(bearer=bearer, case_id=case, document_id="doc", version_id="source")}
 
 
 def rig():
