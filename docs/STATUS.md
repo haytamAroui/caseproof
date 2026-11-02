@@ -1,5 +1,9 @@
 # CaseProof — engineering state and dated evidence
 
+## 2 November 2026 — F1 workflow v3.1 retrofit candidate
+
+Branch `feat/f1-v31-session-recovery` closes confirmed F1 gaps from S0/S11–S13: cancelled-read late-status/body fencing, validated memory-only read-navigation recovery after fresh sign-in, and processing/access disclosure. Adds section 23 to the authoritative frontend blueprint, correcting the guide's dangling pointer. Existing contracts, auth/provider/grants and stored data are unchanged. [Audit and evidence](m3/F1_V3_1_AUDIT.md) distinguishes prior genuine signed acceptance from new exact-head checks. Required cloud/protected browser results are pending until recorded; independent review and production approval remain separate.
+
 ## 2 November 2026 — F2 merged; F3 intake engineering exits passed
 
 F2 [PR #166](https://github.com/haytamAroui/caseproof/pull/166) was owner-authorized and squash merged as `c673b0652c5ea5d10c90d1778413d5eea95e4ce6`. Its final head `73d25556ba8932823af4a8fd9990d8473a3ca2ab` passed all 18 checks, including a real-worker regression for browser device pixel ratios below one. This is PR-head evidence; independent security/manual visual/accessibility and production approval remain separate.

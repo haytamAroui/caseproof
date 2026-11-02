@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import time
 
-from playwright.sync_api import Page, Request, expect, sync_playwright
+from playwright.sync_api import Page, Request, Response, expect, sync_playwright
 
 ORIGIN = 'http://127.0.0.1:8765'
 
@@ -26,7 +26,7 @@ class WorkspaceBrowserAcceptance:
                 self.external.append(True)
         self.page.on('request', observe)
         # Only fixed stage names/status numbers; no URLs, bodies or credentials.
-        def inspect_response(response) -> None:
+        def inspect_response(response: Response) -> None:
             if response.url.endswith('/viewer'):
                 print(f'F2_VIEWER_CONTEXT_HTTP_{response.status}', flush=True)
             elif response.url.endswith('/viewer/original'):
@@ -105,10 +105,23 @@ class WorkspaceBrowserAcceptance:
                 self.login(expired)
             expires = response.value.json()['expires_at']
             expect(expired.get_by_role('heading', name='Your permitted matters')).to_be_visible()
+            expired.locator(f'a[href="/workspace/matters/{self.case}"]').click()
+            expect(expired.get_by_role('heading', name='Preserved reports')).to_be_visible()
             expired.clock.fast_forward(max(1000, int((expires - time.time()) * 1000 + 2000)))
             expect(expired.get_by_role('button', name='Sign in', exact=True)).to_be_visible()
             if expired.evaluate('() => localStorage.length + sessionStorage.length'):
                 raise RuntimeError('F1_EXPIRED_SESSION_RETAINED')
+            expect(expired.get_by_role('link', name='Open preserved report')).to_have_count(0)
+            # Restore wall time before a fresh provider login; no synthetic token.
+            expired.clock.set_system_time(int(time.time() * 1000))
+            self.login(expired)
+            expect(expired.get_by_role('heading', name='Your permitted matters')).to_be_visible()
+            expect(expired.get_by_role('heading', name='Preserved reports')).to_have_count(0)
+            expired.get_by_role('button', name='Reopen previous location', exact=True).click()
+            expect(expired.get_by_role('heading', name='Preserved reports')).to_be_visible()
+            expired.locator(f'a[href$="snapshot={self.snapshot}"]').click()
+            expect(expired.get_by_role('heading', name='Review the evidence')).to_be_visible()
+            print('F1_GENUINE_EXPIRED_HISTORY_EXPLICIT_RELOGIN_REOPEN_PASSED', flush=True)
         finally:
             expiry_context.close()
         if self.external:

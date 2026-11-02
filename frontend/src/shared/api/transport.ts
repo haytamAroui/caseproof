@@ -82,6 +82,7 @@ export class ApiClient {
         referrerPolicy: 'no-referrer',
       });
       this.session.assert(epoch);
+      combined.throwIfAborted();
       if (!response.ok) {
         if (
           response.status === 401 ||
@@ -105,6 +106,7 @@ export class ApiClient {
         while (true) {
           const part = await reader.read();
           this.session.assert(epoch);
+          combined.throwIfAborted();
           if (part.done) break;
           size += part.value.byteLength;
           if (size > (binding?.length ?? 2_000_000)) throw new ApiError(502);
@@ -117,6 +119,7 @@ export class ApiClient {
         reader.releaseLock();
       }
       this.session.assert(epoch);
+      combined.throwIfAborted();
       const bytes = new Uint8Array(size);
       let offset = 0;
       for (const chunk of chunks) {

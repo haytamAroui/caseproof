@@ -144,3 +144,50 @@ it('consequential POST is sent once with the session fence and never automatical
   ).rejects.toThrow('Lost acknowledgement');
   expect(calls).toBe(1);
 });
+
+describe('cancelled matter reads', () => {
+  it.each([200, 401, 403, 404])(
+    'discards a late HTTP %s after leaving a matter without ending the active session',
+    async (status) => {
+      const s = session();
+      const abort = new AbortController();
+      let finish!: (response: Response) => void;
+      const send = vi.fn<typeof fetch>(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const pending = new ApiClient(s, send).get('/v2/report', abort.signal);
+      await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+      abort.abort();
+      finish(Response.json({ private: 'previous matter' }, { status }));
+      await expect(pending).rejects.toThrow();
+      expect(s.getSnapshot().connected).toBe(true);
+      expect(send).toHaveBeenCalledOnce();
+    },
+  );
+  it('rejects a cancelled body stream even when the transport ignores abort', async () => {
+    const s = session();
+    const abort = new AbortController();
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        stream = controller;
+      },
+      cancel,
+    });
+    const send = vi.fn<typeof fetch>(
+      async () =>
+        new Response(body, { headers: { 'Content-Type': 'application/json' } }),
+    );
+    const pending = new ApiClient(s, send).get('/v2/report', abort.signal);
+    await vi.waitFor(() => expect(body.locked).toBe(true));
+    abort.abort();
+    stream.enqueue(new TextEncoder().encode('{"private":"old"}'));
+    await expect(pending).rejects.toThrow();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(s.getSnapshot().connected).toBe(true);
+  });
+});

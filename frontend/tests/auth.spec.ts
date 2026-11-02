@@ -102,3 +102,80 @@ test('bad credentials retain email, clear password and allow explicit retry', as
   await expect(page.getByLabel('Password', { exact: true })).toHaveValue('');
   expect(calls).toBe(1);
 });
+
+test('expiry clears private history and offers explicit freshly authorized recovery', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.caseproofSession = {
+      getBearer: async () => 'synthetic-recovery',
+      expiresAt: Date.now() + 60_000,
+    };
+  });
+  await page.clock.install();
+  let reads = 0;
+  let status = 200;
+  await page.route('**/v2/workspace/matters', (route) =>
+    route.fulfill({
+      json: { schema: 'caseproof-workspace-matters-v1', matters: [] },
+    }),
+  );
+  await page.route('**/v2/workspace/matters/*/reports', (route) => {
+    reads++;
+    return route.fulfill({
+      status,
+      json: {
+        schema: 'caseproof-workspace-reports-v1',
+        case_id: matter,
+        reports: [
+          {
+            brief_id: matter,
+            snapshot_hash: hash,
+            created_at: '2026-11-01T12:00:00Z',
+          },
+        ],
+        next_cursor: null,
+      },
+    });
+  });
+  await page.goto(`/workspace/matters/${matter}`);
+  await page
+    .getByRole('button', { name: 'Connect session', exact: true })
+    .click();
+  await expect(
+    page.getByRole('link', { name: /Open preserved report/ }),
+  ).toBeVisible();
+  await page.clock.fastForward(60_001);
+  await expect(
+    page.getByRole('heading', { name: 'Connect your workspace session' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /Open preserved report/ }),
+  ).toHaveCount(0);
+  await expect(page).toHaveURL(/\/workspace\/$/);
+  await page.evaluate(() => {
+    window.caseproofSession = {
+      getBearer: async () => 'synthetic-new-session',
+    };
+  });
+  await page
+    .getByRole('button', { name: 'Connect session', exact: true })
+    .click();
+  expect(reads).toBe(1);
+  await expect(
+    page.getByRole('button', { name: 'Reopen previous location' }),
+  ).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  status = 403;
+  await page.getByRole('button', { name: 'Reopen previous location' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Connect your workspace session' }),
+  ).toBeVisible();
+  expect(reads).toBe(2);
+  await expect(
+    page.getByRole('link', { name: /Open preserved report/ }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(() => [localStorage.length, sessionStorage.length]),
+  ).toEqual([0, 0]);
+});
