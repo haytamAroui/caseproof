@@ -1,7 +1,7 @@
 """F4 signed reviewer projections: no historical writes or guessed draft anchors."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
-from apps.api.access_control import AccessRejected
+from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.dossier_journey import VisualDecisionBody, create_dossier_router
 from tests.test_phase4_headless_api import docx
 
@@ -60,7 +60,7 @@ class Stub:
                     "request_id": str(request), "reference_id": data["reference_id"],
                     "decision": data["decision"], "rationale": data["rationale"],
                     "reviewer_id": "owner",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "reviewed_region_ids": data["reviewed_region_ids"],
                 })
             elif any(saved[k] != data[k] for k in ("reference_id", "decision", "rationale", "reviewed_region_ids")):
