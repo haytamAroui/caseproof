@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router';
-import { ApiClient, parseIntake, parseDossier } from '../../shared/api';
+import {
+  ApiClient,
+  ApiError,
+  parseIntake,
+  parseDossier,
+} from '../../shared/api';
 import type {
   IntakeView,
   IdentityConfirmation,
@@ -152,14 +157,23 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
       setMessage(
         'Inventory confirmation saved and freshly read back. Unbound exhibits and uncertain page mappings remain unresolved.',
       );
-    } catch {
+    } catch (error) {
       if (
         !abort.current.signal.aborted &&
         session.getSnapshot().epoch === epoch
-      )
-        setMessage(
-          'Confirmation was rejected, stale or has an unknown outcome. Reconcile the unchanged confirmation, or refresh inventory to inspect the current revision.',
-        );
+      ) {
+        if (error instanceof ApiError && error.status === 422) {
+          frozen.current = null;
+          setUncertain(false);
+          setMessage(
+            'The confirmation failed validation. Correct the entries or page mappings before saving again.',
+          );
+        } else {
+          setMessage(
+            'Confirmation was rejected, stale or has an unknown outcome. Reconcile the unchanged confirmation, or refresh inventory to inspect the current revision.',
+          );
+        }
+      }
     } finally {
       lock.current = false;
       if (

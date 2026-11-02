@@ -240,3 +240,52 @@ test('denied intake clears private forms and stale confirmation never shows save
   ).toBeVisible();
   await expect(page.getByLabel('Preserved exhibit')).toHaveCount(0);
 });
+
+test('definite validation rejection permits correction with a new operation', async ({
+  page,
+}) => {
+  let saved: {
+    request_id: string;
+    entries: unknown[];
+    inventory_complete: boolean;
+  } | null = null;
+  let attempts = 0;
+  await page.route(`**/intake/matters/${caseId}`, (route) =>
+    route.fulfill({
+      json: saved
+        ? {
+            ...intake(),
+            confirmation_id: saved.request_id,
+            entries: saved.entries,
+            inventory_complete: saved.inventory_complete,
+          }
+        : intake(),
+    }),
+  );
+  await page.route('**/dossier/confirmation', async (route) => {
+    attempts++;
+    if (attempts === 1)
+      await route.fulfill({ status: 422, json: { error: 'invalid_request' } });
+    else {
+      saved = route.request().postDataJSON() as typeof saved;
+      await route.fulfill({ json: { request_id: saved?.request_id } });
+    }
+  });
+  await connect(page, `/workspace/matters/${caseId}/inventory`);
+  await page
+    .getByRole('button', { name: 'Save inventory confirmation' })
+    .click();
+  await expect(
+    page.getByText('The confirmation failed validation.', { exact: false }),
+  ).toBeVisible();
+  await page.getByLabel('Preserved exhibit').selectOption(ids[2]!);
+  await page
+    .getByRole('button', { name: 'Save inventory confirmation' })
+    .click();
+  await expect(
+    page.getByText('Inventory confirmation saved and freshly read back.', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  expect(attempts).toBe(2);
+});
