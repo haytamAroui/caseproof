@@ -1,6 +1,4 @@
 """Contract strictness and compatibility regression tests for actual API models."""
-from uuid import uuid4
-
 import pytest
 from pydantic import ValidationError
 
