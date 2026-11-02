@@ -11,7 +11,11 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from apps.api.access_control import AccessRejected
-from apps.api.signed_supabase_originals import PrivateStorageOutcomeUnknown
+from apps.api.signed_supabase_originals import (
+    PrivateStorageDenied,
+    PrivateStorageExists,
+    PrivateStorageOutcomeUnknown,
+)
 from apps.api.workspace_intake import (
     IntakeCommand,
     WorkspaceIntake,
@@ -61,14 +65,15 @@ def test_duplicates_wrong_roles_size_and_hash_are_rejected():
         preflight(good)
 
 
-def test_unknown_upload_only_recovers_after_exact_fresh_readback_and_stable_registration():
+@pytest.mark.parametrize('write_failure', [PrivateStorageOutcomeUnknown, PrivateStorageDenied, PrivateStorageExists])
+def test_unknown_upload_only_recovers_after_exact_fresh_readback_and_stable_registration(write_failure):
     c = command()
     raw = preflight(c)
     rows = [dict(f.model_dump(exclude={'content_base64'}), document_id=str(uuid4()), version_id=str(uuid4())) for f in c.files]
     client = Mock()
     client.library.source.side_effect = [(SimpleNamespace(org_id='same', sha256_hex=r['sha256'], content_type=r['media_type']), r['byte_length']) for r in rows] * 2
-    client.library.put_once.side_effect = PrivateStorageOutcomeUnknown('synthetic interruption')
-    client.library.read.side_effect = raw + raw
+    client.library.put_once.side_effect = write_failure('synthetic write outcome')
+    client.library.read.side_effect = [item for value in raw for item in (PrivateStorageDenied("missing or masked"), value)] + raw
     service = WorkspaceIntake(client, Mock())
     service.register = Mock(return_value={'case_id': CASE, 'sources': rows})
     receipt = SimpleNamespace(readback_complete=True)
@@ -79,7 +84,7 @@ def test_unknown_upload_only_recovers_after_exact_fresh_readback_and_stable_regi
     c.request_id = str(uuid4())
     assert service.upload('synthetic', CASE, c) is receipt
     assert service.register.call_args.args[2] == first
-    assert client.library.read.call_count == 8
+    assert client.library.read.call_count == 12
     client.library.source.side_effect = [(SimpleNamespace(org_id='same', sha256_hex=r['sha256'], content_type=r['media_type']), r['byte_length']) for r in rows]
     client.library.read.side_effect = [b'tampered']
     service.context.reset_mock()
@@ -147,7 +152,11 @@ def test_complete_http_intake_projects_real_parser_manifest_and_confirmation_can
     client.library.source.side_effect = lambda **kw: next((OriginalRef(UUID('11111111-1111-4111-8111-111111111111'), UUID(CASE), UUID(r['document_id']), UUID(r['version_id']), r['sha256'], r['media_type']), r['byte_length']) for r in source_rows if r['version_id'] == kw['version_id'])
     content = {}
     client.library.put_once.side_effect = lambda **kw: content.__setitem__(kw['version_id'], kw['data'])
-    client.library.read.side_effect = lambda **kw: content[kw['version_id']]
+    def read(**kw):
+        if kw['version_id'] not in content:
+            raise PrivateStorageDenied('missing or masked')
+        return content[kw['version_id']]
+    client.library.read.side_effect = read
     store = DossierStore.__new__(DossierStore)
     store.client = client
     store.rpc = Mock(return_value={'bundle_signature': 'a' * 64, 'confirmation': None})

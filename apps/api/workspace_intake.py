@@ -25,6 +25,7 @@ from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_live_journey import HOST, JourneyClient, MatterCreate, safe_original_filename
 from apps.api.signed_document_parse import parse_verified_original
 from apps.api.signed_supabase_originals import (
+    PrivateStorageDenied,
     PrivateStorageExists,
     PrivateStorageFailure,
     PrivateStorageOutcomeUnknown,
@@ -193,8 +194,18 @@ class WorkspaceIntake:
             for row, raw in zip(registered['sources'], originals, strict=True):
                 params = dict(bearer=bearer, case_id=case, document_id=row['document_id'], version_id=row['version_id'])
                 try:
+                    existing = self.client.library.read(**params)
+                except PrivateStorageDenied:
+                    # Missing and masked are deliberately indistinguishable.
+                    # Only the signed write policy may authorize a new object.
+                    existing = None
+                if existing is not None:
+                    if existing != raw:
+                        raise ValueError('existing original differs')
+                    continue
+                try:
                     self.client.library.put_once(data=raw, **params)
-                except (PrivateStorageExists, PrivateStorageOutcomeUnknown):
+                except (PrivateStorageDenied, PrivateStorageExists, PrivateStorageOutcomeUnknown):
                     pass  # Only fresh signed readback below establishes completion.
                 readback = self.client.library.read(**params)
                 if readback != raw:
