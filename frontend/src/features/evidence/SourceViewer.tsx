@@ -244,7 +244,12 @@ function SourceInspection({
           <dl className="dimensions" aria-label="Reference page spaces">
             <div className="dimension">
               <dt>Reference PDF page</dt>
-              <dd>{mappedPage ?? 'Unmapped'}</dd>
+              <dd>
+                {mappedPage ??
+                  (mapping === 'conflicting'
+                    ? 'Conflicting mapping'
+                    : 'Unmapped')}
+              </dd>
             </div>
             <div className="dimension">
               <dt>Printed page</dt>
