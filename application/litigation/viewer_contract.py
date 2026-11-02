@@ -1,8 +1,8 @@
 """Read-only source inspection projection; never upgrades a finding."""
 
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ViewerContext(BaseModel):
@@ -19,3 +19,10 @@ class ViewerContext(BaseModel):
     pdf_page: int | None = Field(ge=1, le=200)
     legacy_region_count: int = Field(ge=0, le=96)
     geometry_policy: Literal["derived_pdf_text_only_legacy_raster_not_projected"]
+
+
+    @model_validator(mode="after")
+    def validate_page_mapping(self) -> Self:
+        if (self.page_mapping == "mapped") != (self.pdf_page is not None):
+            raise ValueError("mapped page requires exactly one physical PDF page")
+        return self

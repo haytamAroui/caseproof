@@ -212,3 +212,19 @@ def test_mixed_pdf_physical_reference_looks_up_its_actual_scanned_page():
         assert finding['pdf_page'] == 2 and finding['fidelity'] == 'ocr_unreliable'
         assert finding['ocr_uncertainty'] == ('requires_human_confirmation' if available else 'image_only_no_usable_ocr')
         assert bool(finding['ocr_crop']) == available
+
+
+
+def test_confirmed_printed_page_maps_to_physical_six_without_offset_guessing():
+    source = {'role': 'exhibit', 'version_id': 'v', 'document_id': 'd', 'sha256': 'a' * 64, 'page_count': 6}
+    entry = {'label': 'piece', 'number': '2', 'source_version_id': 'v', 'pages': [
+        {'space': 'printed', 'label': '4', 'pdf_page': 6, 'rationale': 'synthetic confirmation'}]}
+    context = {'payload': {'inventory_complete': True, 'entries': [entry]}}
+    finding = assess(docx('Pièce 2, printed p. 4.'), [source], context)['findings'][0]
+    assert finding['page_mapping'] == 'mapped'
+    assert finding['pdf_page'] == 6
+    assert finding['page_spaces']['printed'] == {'state': 'mapped', 'value': '4'}
+    assert finding['page_spaces']['bundle'] == {'state': 'unmapped', 'value': None}
+    entry['pages'].append({'space': 'printed', 'label': '4', 'pdf_page': 5, 'rationale': 'conflict'})
+    conflict = assess(docx('Pièce 2, printed p. 4.'), [source], context)['findings'][0]
+    assert conflict['page_mapping'] == 'conflicting' and conflict['pdf_page'] is None

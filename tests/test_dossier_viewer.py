@@ -121,3 +121,24 @@ def test_unmapped_source_is_explicitly_explorable_without_a_target_page():
     assert response.status_code == 200
     assert response.json()["page_mapping"] == "unmapped"
     assert response.json()["pdf_page"] is None
+
+
+@pytest.mark.parametrize("mapping,page,valid", [
+    ("mapped", 1, True), ("mapped", None, False),
+    ("unmapped", None, True), ("conflicting", None, True),
+    ("unmapped", 1, False), ("conflicting", 1, False),
+])
+def test_shared_viewer_model_enforces_page_mapping_invariant(mapping, page, valid):
+    from pydantic import ValidationError
+
+    from application.litigation.viewer_contract import ViewerContext
+    payload = {"schema": "caseproof-viewer-v1", "case_id": "case", "brief_id": "brief",
+               "snapshot_hash": SNAP, "reference_id": "ref", "version_id": "source",
+               "original_sha256": HASH, "byte_length": len(RAW), "page_mapping": mapping,
+               "pdf_page": page, "legacy_region_count": 0,
+               "geometry_policy": "derived_pdf_text_only_legacy_raster_not_projected"}
+    if valid:
+        assert ViewerContext.model_validate(payload).pdf_page == page
+    else:
+        with pytest.raises(ValidationError):
+            ViewerContext.model_validate(payload)
