@@ -13,7 +13,6 @@ export function ReportScreen({
   renderSource,
   renderDraft,
   renderReview,
-  onNext,
 }: {
   api: ApiClient;
   renderSource?: (
@@ -28,7 +27,6 @@ export function ReportScreen({
     inspected: boolean,
     onNext: () => void,
   ) => ReactNode;
-  onNext: () => void;
 }) {
   const { caseId = '', briefId = '' } = useParams();
   const [params, setParams] = useSearchParams();
@@ -261,6 +259,7 @@ function FindingInspection({
   renderSource,
   renderDraft,
   renderReview,
+  onNext,
 }: {
   finding: FindingView;
   historical: boolean;
@@ -276,6 +275,7 @@ function FindingInspection({
     inspected: boolean,
     onNext: () => void,
   ) => ReactNode;
+  onNext: () => void;
 }) {
   const [inspected, setInspected] = useState(false);
   return (

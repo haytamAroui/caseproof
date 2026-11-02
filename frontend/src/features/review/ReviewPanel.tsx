@@ -332,10 +332,10 @@ export function ReviewPanel({
         )}
       </div>
       {(outcome === 'saved' || saved) && (
-        <p role="status">
-          Saved. Your decision is confirmed from the durable ledger.
+        <div role="status">
+          <p>Saved. Your decision is confirmed from the durable ledger.</p>
           {onNext && <Button onClick={onNext}>Save &amp; Next finding</Button>}
-        </p>
+        </div>
       )}
     </section>
   );
