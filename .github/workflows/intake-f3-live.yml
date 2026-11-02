@@ -1,6 +1,9 @@
 name: F3 genuine signed browser intake acceptance
 on:
   workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
   push:
     branches: [feat/f3-complete-intake]
     paths-ignore: ['**/*.md']
