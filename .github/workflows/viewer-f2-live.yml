@@ -1,0 +1,43 @@
+name: F2 genuine signed frozen-source viewer acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/f2-live-acceptance]
+permissions:
+  contents: read
+jobs:
+  live:
+    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f2-live-acceptance' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 20
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+      CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+      CASEPROOF_PHASE3_LIVE: "YES"
+      CASEPROOF_WORKSPACE_ENABLED: "YES"
+      CASEPROOF_F1_BROWSER_LIVE: "YES"
+      CASEPROOF_F2_BROWSER_LIVE: "YES"
+      CASEPROOF_OCR_SANDBOX: docker
+      CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Build isolated OCR runtime
+        run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
+      - name: Install OCR system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-nld tesseract-ocr-fra poppler-utils fonts-dejavu-core
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - name: Build locked real workspace
+        run: npm ci && npm run contracts:check && npm run build
+        working-directory: frontend
+      - name: Install genuine browser runtime
+        run: uv run --locked python -m playwright install --with-deps chromium
+      - name: Execute genuine browser Auth, grants, expiry and cold reopen with scoped teardown
+        run: uv run --locked python -m scripts.dossier_live

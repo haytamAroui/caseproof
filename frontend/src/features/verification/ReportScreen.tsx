@@ -4,9 +4,16 @@ import type { ApiClient } from '../../shared/api';
 import { useSession } from '../../shared/session';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
+import type { ReactNode } from 'react';
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-export function ReportScreen({ api }: { api: ApiClient }) {
+export function ReportScreen({
+  api,
+  renderSource,
+}: {
+  api: ApiClient;
+  renderSource?: (referenceId: string) => ReactNode;
+}) {
   const { caseId = '', briefId = '' } = useParams();
   const [params, setParams] = useSearchParams();
   const snapshot = params.get('snapshot') ?? '';
@@ -63,8 +70,7 @@ export function ReportScreen({ api }: { api: ApiClient }) {
         </p>
       </header>
       <Notice>
-        Read-only foundation · Page viewing and review actions are not connected
-        yet.
+        Read-only inspection · Human review actions are not connected yet.
       </Notice>
       <div className="review-layout">
         <section className="queue" aria-label="References">
@@ -142,13 +148,17 @@ export function ReportScreen({ api }: { api: ApiClient }) {
                 <StateValue label="Fidelity" value={selected.fidelity} />
                 <StateValue label="Human support" value={selected.support} />
               </dl>
-              <div className="page-empty">
-                <h3>Original page not loaded</h3>
-                <p>
-                  Page images and coordinate overlays require the viewer
-                  acceptance spike.
-                </p>
-              </div>
+              {renderSource ? (
+                renderSource(selected.reference_id)
+              ) : (
+                <div className="page-empty">
+                  <h3>Original page not loaded</h3>
+                  <p>
+                    Page images and coordinate overlays require the viewer
+                    acceptance spike.
+                  </p>
+                </div>
+              )}
             </>
           ) : (
             <h2 id="finding-title">No reference selected</h2>

@@ -7,6 +7,7 @@ for (const [name, type, stem] of [
   ['matters', 'MatterCatalogView', 'matters-generated'],
   ['session', 'SessionView', 'session-generated'],
   ['reports', 'ReportCatalogView', 'reports-generated'],
+  ['viewer', 'ViewerContext', 'viewer-generated'],
 ]) {
   const source = new URL(
       `../src/shared/api/${name}.schema.json`,

@@ -16,6 +16,28 @@ export class ApiClient {
     private send: typeof fetch = (...args) => fetch(...args),
   ) {}
   async get(path: string, signal?: AbortSignal): Promise<unknown> {
+    return this.read(path, signal);
+  }
+  async pdf(
+    path: string,
+    binding: { sha256: string; snapshot: string; length: number },
+    signal: AbortSignal,
+  ): Promise<Uint8Array> {
+    if (
+      !/^[0-9a-f]{64}$/.test(binding.sha256) ||
+      !/^[0-9a-f]{64}$/.test(binding.snapshot) ||
+      !Number.isInteger(binding.length) ||
+      binding.length < 1 ||
+      binding.length > 20_000_000
+    )
+      throw new ApiError(502);
+    return (await this.read(path, signal, binding)) as Uint8Array;
+  }
+  private async read(
+    path: string,
+    signal?: AbortSignal,
+    binding?: { sha256: string; snapshot: string; length: number },
+  ): Promise<unknown> {
     if (
       !path.startsWith('/v2/') ||
       path.includes('://') ||
@@ -51,7 +73,11 @@ export class ApiClient {
           this.session.clear();
         throw new ApiError(response.status);
       }
-      if (!response.headers.get('content-type')?.includes('application/json'))
+      if (
+        !response.headers
+          .get('content-type')
+          ?.includes(binding ? 'application/pdf' : 'application/json')
+      )
         throw new ApiError(502);
       if (!response.body) throw new ApiError(502);
       const reader = response.body.getReader();
@@ -63,7 +89,7 @@ export class ApiClient {
           this.session.assert(epoch);
           if (part.done) break;
           size += part.value.byteLength;
-          if (size > 2_000_000) throw new ApiError(502);
+          if (size > (binding?.length ?? 2_000_000)) throw new ApiError(502);
           chunks.push(part.value);
         }
       } catch (error) {
@@ -78,6 +104,26 @@ export class ApiClient {
       for (const chunk of chunks) {
         bytes.set(chunk, offset);
         offset += chunk.byteLength;
+      }
+      if (binding) {
+        if (
+          size !== binding.length ||
+          response.headers.get('X-CaseProof-Snapshot') !== binding.snapshot ||
+          response.headers.get('X-CaseProof-Original-SHA256') !== binding.sha256
+        )
+          throw new ApiError(502);
+        const digest = new Uint8Array(
+          await crypto.subtle.digest('SHA-256', bytes),
+        );
+        this.session.assert(epoch);
+        if (
+          combined.aborted ||
+          Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join(
+            '',
+          ) !== binding.sha256
+        )
+          throw new ApiError(502);
+        return bytes;
       }
       return JSON.parse(
         new TextDecoder('utf-8', { fatal: true }).decode(bytes),

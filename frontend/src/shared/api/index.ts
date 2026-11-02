@@ -4,3 +4,4 @@ export type { DossierView, FindingView } from './contracts';
 export { parseMatters } from './matters';
 export { parseSession } from './session';
 export { parseReports } from './reports';
+export { parseViewer } from './viewer';

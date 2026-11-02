@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.dossier_journey import DossierStore, create_dossier_router
+from apps.api.dossier_viewer import create_dossier_viewer_router
 from apps.api.litigation_check_app import create_litigation_check_app
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
 from apps.api.litigation_evidence_app import EvidenceReader, _token, create_evidence_app
@@ -67,6 +68,7 @@ def create_litigation_development_app(
 
     dossier_store = DossierStore(publishable_key, trusted_ingest_key) if publishable_key else None
     app.include_router(create_dossier_router(dossier_store))
+    app.include_router(create_dossier_viewer_router(dossier_store))
     if dossier_store is not None and page_worker_secret is not None:
         from apps.api.signed_page_jobs import SignedPageJobs, create_page_job_router
         app.include_router(create_page_job_router(SignedPageJobs(dossier_store, page_worker_secret)))

@@ -22,9 +22,11 @@ jobs:
         with:
           python-version: '3.11'
       - run: uv run --locked python -m scripts.generate_frontend_contract --check
-      - run: uv run --locked pytest -q tests/test_frontend_contract.py tests/test_workspace_catalog.py tests/test_clearbrief_signed_matter_catalog.py tests/test_workspace_auth.py tests/test_workspace_reports.py
-      - run: uv run --locked ruff check apps/api/workspace_auth.py apps/api/workspace_reports.py scripts/workspace_browser_live.py scripts/verify_workspace_reports_disposable.py tests/test_workspace_auth.py tests/test_workspace_reports.py application/litigation/workspace_contract.py apps/api/workspace_catalog.py tests/test_workspace_catalog.py application/litigation/frontend_contract.py scripts/generate_frontend_contract.py tests/test_frontend_contract.py
-      - run: uv run --locked mypy --explicit-package-bases apps/api/workspace_auth.py apps/api/workspace_reports.py application/litigation/workspace_contract.py apps/api/workspace_catalog.py application/litigation/frontend_contract.py scripts/generate_frontend_contract.py
+      - run: uv run --locked pytest -q tests/test_frontend_contract.py tests/test_workspace_catalog.py tests/test_clearbrief_signed_matter_catalog.py tests/test_workspace_auth.py tests/test_workspace_reports.py tests/test_dossier_viewer.py
+      - run: uv run --locked ruff check apps/api/dossier_viewer.py application/litigation/viewer_contract.py scripts/generate_viewer_fixtures.py tests/test_dossier_viewer.py apps/api/workspace_auth.py apps/api/workspace_reports.py scripts/workspace_browser_live.py scripts/verify_workspace_reports_disposable.py tests/test_workspace_auth.py tests/test_workspace_reports.py application/litigation/workspace_contract.py apps/api/workspace_catalog.py tests/test_workspace_catalog.py application/litigation/frontend_contract.py scripts/generate_frontend_contract.py tests/test_frontend_contract.py
+      - run: uv run --locked mypy --explicit-package-bases apps/api/dossier_viewer.py application/litigation/viewer_contract.py apps/api/workspace_auth.py apps/api/workspace_reports.py application/litigation/workspace_contract.py apps/api/workspace_catalog.py application/litigation/frontend_contract.py scripts/generate_frontend_contract.py
+      - name: Generate deterministic viewer fixtures without a server renderer
+        run: uv run --locked python -m scripts.generate_viewer_fixtures --out frontend/tests/viewer-comparison/generated/fixtures
       - run: npm ci
         working-directory: frontend
       - name: Enforce M3 design, database and security policy

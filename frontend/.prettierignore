@@ -15,3 +15,9 @@ src/shared/api/session.schema.json
 
 src/shared/api/reports-generated*
 src/shared/api/reports.schema.json
+
+src/shared/api/viewer-generated*
+src/shared/api/viewer.schema.json
+
+viewer-dist
+tests/viewer-comparison/generated

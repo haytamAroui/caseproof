@@ -18,3 +18,4 @@ export interface PageImageReader {
     signal: AbortSignal,
   ): Promise<PageImage>;
 }
+export { SourceViewer } from './SourceViewer';
