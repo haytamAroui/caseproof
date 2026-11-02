@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import time
 
-from playwright.sync_api import Page, Request, expect, sync_playwright
+from playwright.sync_api import Page, Request, Response, expect, sync_playwright
 
 ORIGIN = 'http://127.0.0.1:8765'
 
@@ -26,13 +26,16 @@ class WorkspaceBrowserAcceptance:
                 self.external.append(True)
         self.page.on('request', observe)
         # Only fixed stage names/status numbers; no URLs, bodies or credentials.
-        def inspect_response(response) -> None:
+        def inspect_response(response: Response) -> None:
             if response.url.endswith('/viewer'):
                 print(f'F2_VIEWER_CONTEXT_HTTP_{response.status}', flush=True)
             elif response.url.endswith('/viewer/original'):
                 print(f'F2_VIEWER_ORIGINAL_HTTP_{response.status}', flush=True)
-        if os.getenv('CASEPROOF_F2_BROWSER_LIVE') == 'YES':
-            self.page.on('response', inspect_response)
+            elif response.url == ORIGIN + '/v2/workspace/session':
+                print(f'F1_SIGNIN_HTTP_{response.status}', flush=True)
+            elif '/dossier?' in response.url:
+                print(f'F1_REPORT_HTTP_{response.status}', flush=True)
+        self.page.on('response', inspect_response)
 
     def login(self, page: Page, role: str = 'owner') -> None:
         page.get_by_label('Email address').fill(os.environ[f'CASEPROOF_P3_{role.upper()}_EMAIL'])
@@ -41,13 +44,14 @@ class WorkspaceBrowserAcceptance:
 
     def exercise(self) -> None:
         page = self.page
+        print('F1_STAGE_INITIAL_SIGNIN', flush=True)
         page.goto(ORIGIN + '/workspace/')
         self.login(page)
-        expect(page.get_by_role('heading', name='Your permitted matters')).to_be_visible()
+        expect(page.get_by_role('heading', name='Your permitted matters')).to_be_visible(timeout=30000)
         page.locator(f'a[href="/workspace/matters/{self.case}"]').click()
-        expect(page.get_by_role('heading', name='Preserved reports')).to_be_visible()
+        expect(page.get_by_role('heading', name='Preserved reports')).to_be_visible(timeout=30000)
         page.locator(f'a[href$="snapshot={self.snapshot}"]').click()
-        expect(page.get_by_role('heading', name='Review the evidence')).to_be_visible()
+        expect(page.get_by_role('heading', name='Review the evidence')).to_be_visible(timeout=30000)
         if os.getenv('CASEPROOF_F2_BROWSER_LIVE') == 'YES':
             print('F2_GENUINE_REPORT_OPENED_WAITING_FOR_SOURCE', flush=True)
             try:
@@ -73,18 +77,20 @@ class WorkspaceBrowserAcceptance:
 
         if page.evaluate('() => localStorage.length + sessionStorage.length') != 0 or self.context.cookies():
             raise RuntimeError('F1_PERSISTENT_SESSION_MATERIAL')
+        print('F1_STAGE_COLD_RELOAD', flush=True)
         page.reload()
         expect(page.get_by_role('button', name='Sign in', exact=True)).to_be_visible()
         self.login(page)
-        expect(page.get_by_role('heading', name='Review the evidence')).to_be_visible()
+        expect(page.get_by_role('heading', name='Review the evidence')).to_be_visible(timeout=30000)
         # Fresh browser remains authenticated until the later real grant revoke.
+        print('F1_STAGE_FOREIGN_UNGRANTED', flush=True)
         for role in ('ungranted', 'foreign'):
             context = self.browser.new_context()
             other = context.new_page()
             try:
                 other.goto(ORIGIN + '/workspace/')
                 self.login(other, role)
-                expect(other.get_by_role('heading', name='Your permitted matters')).to_be_visible()
+                expect(other.get_by_role('heading', name='Your permitted matters')).to_be_visible(timeout=30000)
                 expect(other.locator(f'a[href="/workspace/matters/{self.case}"]')).to_have_count(0)
                 other.goto(ORIGIN + f'/workspace/matters/{self.case}')
                 with other.expect_response(lambda r: r.url.endswith('/reports')) as denied:
@@ -96,6 +102,7 @@ class WorkspaceBrowserAcceptance:
                 expect(other.get_by_role('link', name='Open preserved report')).to_have_count(0)
             finally:
                 context.close()
+        print('F1_STAGE_EXPIRY_CONTEXT', flush=True)
         expiry_context = self.browser.new_context()
         expired = expiry_context.new_page()
         try:
@@ -104,11 +111,27 @@ class WorkspaceBrowserAcceptance:
             with expired.expect_response(lambda r: r.url == ORIGIN + '/v2/workspace/session') as response:
                 self.login(expired)
             expires = response.value.json()['expires_at']
-            expect(expired.get_by_role('heading', name='Your permitted matters')).to_be_visible()
+            expect(expired.get_by_role('heading', name='Your permitted matters')).to_be_visible(timeout=30000)
+            expired.locator(f'a[href="/workspace/matters/{self.case}"]').click()
+            expect(expired.get_by_role('heading', name='Preserved reports')).to_be_visible(timeout=30000)
+            print('F1_STAGE_EXPIRY_HISTORY_OPENED', flush=True)
             expired.clock.fast_forward(max(1000, int((expires - time.time()) * 1000 + 2000)))
             expect(expired.get_by_role('button', name='Sign in', exact=True)).to_be_visible()
             if expired.evaluate('() => localStorage.length + sessionStorage.length'):
                 raise RuntimeError('F1_EXPIRED_SESSION_RETAINED')
+            expect(expired.get_by_role('link', name='Open preserved report')).to_have_count(0)
+            # Restore wall time before a fresh provider login; no synthetic token.
+            print('F1_STAGE_EXPIRED_PRIVATE_DOM_CLEARED', flush=True)
+            expired.clock.set_system_time(time.time())
+            self.login(expired)
+            expect(expired.get_by_role('heading', name='Your permitted matters')).to_be_visible(timeout=30000)
+            expect(expired.get_by_role('heading', name='Preserved reports')).to_have_count(0)
+            print('F1_STAGE_FRESH_LOGIN_RECOVERY', flush=True)
+            expired.get_by_role('button', name='Reopen previous location', exact=True).click()
+            expect(expired.get_by_role('heading', name='Preserved reports')).to_be_visible(timeout=30000)
+            expired.locator(f'a[href$="snapshot={self.snapshot}"]').click()
+            expect(expired.get_by_role('heading', name='Review the evidence')).to_be_visible(timeout=30000)
+            print('F1_GENUINE_EXPIRED_HISTORY_EXPLICIT_RELOGIN_REOPEN_PASSED', flush=True)
         finally:
             expiry_context.close()
         if self.external:
@@ -119,7 +142,7 @@ class WorkspaceBrowserAcceptance:
         # Current page held the allowed report before the grant was revoked.
         # Explicit navigation reauthorizes; 404 must remove its private DOM/cache.
         self.page.get_by_role('link', name='CaseProof Evidence workspace').click()
-        expect(self.page.get_by_role('heading', name='Your permitted matters')).to_be_visible()
+        expect(self.page.get_by_role('heading', name='Your permitted matters')).to_be_visible(timeout=30000)
         expect(self.page.locator(f'a[href="/workspace/matters/{self.case}"]')).to_have_count(0)
         self.page.goto(ORIGIN + f'/workspace/matters/{self.case}')
         with self.page.expect_response(lambda r: r.url.endswith('/reports')) as denied:

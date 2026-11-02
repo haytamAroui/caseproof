@@ -2,12 +2,12 @@ name: F1 genuine signed workspace browser acceptance
 on:
   workflow_dispatch:
   push:
-    branches: [feat/f1-live-acceptance]
+    branches: [feat/f1-live-acceptance, feat/f1-v31-session-recovery]
 permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f1-live-acceptance' || github.ref == 'refs/heads/main')
+    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f1-live-acceptance' || github.ref == 'refs/heads/feat/f1-v31-session-recovery' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 20

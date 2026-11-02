@@ -6,6 +6,7 @@ import {
   Route,
   Routes,
   useNavigate,
+  useLocation,
   useParams,
   useSearchParams,
 } from 'react-router';
@@ -28,6 +29,7 @@ import {
 import type { SessionHost } from '../shared/session';
 import { Button, Notice } from '../shared/ui';
 import { createQueryClient } from './query';
+import { recoveryDestination } from './recovery';
 declare global {
   interface Window {
     caseproofSession?: SessionHost;
@@ -43,8 +45,9 @@ function OpenReport() {
       <p className="eyebrow">Evidence workspace</p>
       <h1>Open a preserved report</h1>
       <p>
-        Open an existing authorized snapshot. Report history is not connected
-        yet; the brief version and frozen snapshot identifiers are required.
+        Open an existing snapshot by its identifiers. You can also select a
+        permitted matter to browse its preserved reports. Access is checked
+        again when a report opens.
       </p>
       <Link to="/">Back to permitted matters</Link>
       <form
@@ -128,12 +131,23 @@ function Workspace({ api }: { api: ApiClient }) {
   const controller = useSessionController();
   const navigate = useNavigate();
   const [logoutMessage, setLogoutMessage] = useState('');
+  const location = useLocation();
+  const [returnTo, setReturnTo] = useState<string | null>(null);
   useEffect(
     () =>
       controller.onClear(() => {
-        if (session.connected) void navigate('/', { replace: true });
+        if (session.connected) {
+          setReturnTo(recoveryDestination(location.pathname, location.search));
+          void navigate('/', { replace: true });
+        }
       }),
-    [controller, navigate, session.connected],
+    [
+      controller,
+      navigate,
+      session.connected,
+      location.pathname,
+      location.search,
+    ],
   );
   return (
     <>
@@ -149,6 +163,24 @@ function Workspace({ api }: { api: ApiClient }) {
         )}
       </header>
       <main id="main" tabIndex={-1}>
+        {session.connected && returnTo && (
+          <section aria-label="Session recovery">
+            <Notice>
+              Your previous session ended. Private views were cleared. You can
+              reopen the previous location with a fresh access check.
+            </Notice>
+            <Button
+              onClick={() => {
+                const target = returnTo;
+                setReturnTo(null);
+                void navigate(target);
+              }}
+            >
+              Reopen previous location
+            </Button>
+            <Button onClick={() => setReturnTo(null)}>Dismiss recovery</Button>
+          </section>
+        )}
         {session.connected ? (
           <Routes>
             <Route path="/" element={<MattersScreen api={api} />} />
@@ -188,6 +220,24 @@ function Workspace({ api }: { api: ApiClient }) {
               Sign in to your workspace. Your account must have access to each
               matter.
             </p>
+            <details>
+              <summary>Processing and access limits</summary>
+              <p>
+                Development workspace for synthetic acceptance. A local
+                interface does not establish where documents are processed.
+                Processing location, retention, backups and confidential use
+                require a separately approved deployment policy. Ending a
+                session clears this workspace; downloaded files cannot be
+                recalled.
+              </p>
+            </details>
+            {returnTo && (
+              <Notice>
+                Session ended. Sign in again to choose whether to reopen your
+                previous location. No form values or document bytes are
+                restored.
+              </Notice>
+            )}
             {logoutMessage && <Notice>{logoutMessage}</Notice>}
             <SignIn onLogoutFailure={setLogoutMessage} />
             <Connect />
