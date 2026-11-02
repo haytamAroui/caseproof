@@ -3,12 +3,10 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from scripts.verify_retention_disposable import main as install
 from scripts.verify_s2_002_database import _env, _run
 
 
 def main() -> None:
-    install()
     env = _env()
     proposal = Path('db/proposals/PIV-F1_historical_snapshot_read.sql')
     migration = Path('supabase/migrations/20261102150600_caseproof_historical_snapshot_read.sql')

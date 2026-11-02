@@ -6,9 +6,9 @@ import hashlib
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Header, HTTPException, Response
+from pydantic import ValidationError
 
 from application.litigation.viewer_contract import RasterOverlay, ViewerContext
-from pydantic import ValidationError
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.litigation_evidence_app import _token
 from apps.api.signed_supabase_originals import PrivateStorageFailure
