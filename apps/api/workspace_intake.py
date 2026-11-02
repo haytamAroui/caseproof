@@ -116,6 +116,10 @@ def preflight(command: IntakeCommand) -> list[bytes]:
             if source.role == 'inventory':
                 if len(raw) > 1_048_576 or '\x00' in raw.decode('utf-8'):
                     raise ValueError('invalid inventory')
+                candidates = detect_exhibit_references(raw.decode('utf-8'), region='inventory')
+                identities = {('stuk' if r.label.startswith('stuk') else 'piece', r.number) for r in candidates}
+                if len(identities) > 512:
+                    raise HTTPException(422, 'Inventory supports at most 512 distinct Stuk/Pièce identities; no files written.')
             else:
                 parse_verified_original(document_id='preflight', version_id='preflight', data=raw, media_type=expected)
         except (ValueError, UnicodeError, binascii.Error, ExtractionError):

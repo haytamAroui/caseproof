@@ -228,6 +228,7 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
             </label>
             <Button
               onClick={() => {
+                setDirty(true);
                 setSaved(false);
                 setEntries((current) => [
                   ...current,
@@ -243,6 +244,21 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
             >
               Add alternative source binding
             </Button>
+            {entries.filter(
+              (e) => e.label === entry.label && e.number === entry.number,
+            ).length > 1 && (
+              <Button
+                onClick={() => {
+                  setDirty(true);
+                  setSaved(false);
+                  setEntries((current) =>
+                    current.filter((_, i) => i !== index),
+                  );
+                }}
+              >
+                Remove alternative binding for {entry.label} {entry.number}
+              </Button>
+            )}
             <PageMappings
               pages={entry.pages ?? []}
               max={

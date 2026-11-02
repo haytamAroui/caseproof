@@ -169,6 +169,19 @@ test('create through returned organization, unknown upload recovery, inventory a
     .getByRole('link', { name: 'Review inventory and page mappings' })
     .click();
   await page.getByLabel('Preserved exhibit').selectOption(ids[2]!);
+  await page
+    .getByRole('button', { name: 'Add alternative source binding' })
+    .first()
+    .click();
+  await expect(page.getByLabel('Preserved exhibit')).toHaveCount(2);
+  await page
+    .getByRole('button', {
+      name: 'Remove alternative binding for stuk 1',
+      exact: true,
+    })
+    .last()
+    .click();
+  await expect(page.getByLabel('Preserved exhibit')).toHaveCount(1);
   await page.getByLabel('Page label', { exact: true }).fill('12');
   await page.getByLabel('Physical PDF page', { exact: true }).fill('1');
   await page
@@ -279,6 +292,19 @@ test('definite validation rejection permits correction with a new operation', as
     page.getByText('The confirmation failed validation.', { exact: false }),
   ).toBeVisible();
   await page.getByLabel('Preserved exhibit').selectOption(ids[2]!);
+  await page
+    .getByRole('button', { name: 'Add alternative source binding' })
+    .first()
+    .click();
+  await expect(page.getByLabel('Preserved exhibit')).toHaveCount(2);
+  await page
+    .getByRole('button', {
+      name: 'Remove alternative binding for stuk 1',
+      exact: true,
+    })
+    .last()
+    .click();
+  await expect(page.getByLabel('Preserved exhibit')).toHaveCount(1);
   await page
     .getByRole('button', { name: 'Save inventory confirmation' })
     .click();

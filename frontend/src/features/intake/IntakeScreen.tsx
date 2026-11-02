@@ -45,7 +45,8 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
       <Notice>
         Development intake accepts one DOCX draft, one UTF-8 text inventory and
         two PDF exhibits, including scans. Maximum 5 MiB per file, 12 MB
-        combined and 64 pages per PDF. All four files are checked before any
+        combined and 64 pages per PDF. The inventory is limited to 1 MiB and 512
+        distinct Stuk/Pièce identities. All four files are checked before any
         original is written. Preservation does not confirm inventory or verify
         claims.
       </Notice>

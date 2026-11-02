@@ -179,3 +179,26 @@ def test_complete_http_intake_projects_real_parser_manifest_and_confirmation_can
     assert result['sources'][3]['processing'] == 'partial'
     assert result['sources'][2]['page_count'] == 1
     assert result['inventory_complete'] is False
+
+
+@pytest.mark.parametrize('count', [512, 513])
+def test_distinct_inventory_candidate_budget_checked_before_registration(count):
+    c = command()
+    inventory = next(f for f in c.files if f.role == 'inventory')
+    content = '\n'.join(f'Stuk {i}' for i in range(1, count + 1)).encode()
+    inventory.content_base64 = base64.b64encode(content).decode()
+    inventory.byte_length = len(content)
+    inventory.sha256 = sha256(content).hexdigest()
+    client = Mock()
+    service = WorkspaceIntake(client, Mock())
+    service.register = Mock()
+    if count == 512:
+        assert len(preflight(c)) == 4
+    else:
+        for action in (service.reserve, service.upload):
+            with pytest.raises(HTTPException) as rejected:
+                action('synthetic', CASE, c)
+            assert rejected.value.status_code == 422
+            assert '512 distinct' in rejected.value.detail
+        service.register.assert_not_called()
+        client.library.put_once.assert_not_called()
