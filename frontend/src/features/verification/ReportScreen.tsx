@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { DraftContext, ReviewPanel } from '../review';
 import { useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
 import { useSession } from '../../shared/session';
@@ -12,7 +14,7 @@ export function ReportScreen({
   renderSource,
 }: {
   api: ApiClient;
-  renderSource?: (finding: FindingView, historical: boolean) => ReactNode;
+  renderSource?: (finding: FindingView, historical: boolean, onInspected: () => void) => ReactNode;
 }) {
   const { caseId = '', briefId = '' } = useParams();
   const [params, setParams] = useSearchParams();
@@ -39,21 +41,24 @@ export function ReportScreen({
   const selected =
     report.findings.find((f) => f.reference_id === params.get('finding')) ??
     report.findings[0];
+  const [filter, setFilter] = useState<'attention' | 'all'>('attention');
+  const needsAttention = (f: FindingView) => f.identity !== 'resolved' || f.page_mapping !== 'mapped' || f.fidelity !== 'exact_match' || f.support === 'not_assessed';
+  const filtered = filter === 'attention' ? report.findings.filter(needsAttention) : report.findings;
   const pageSize = 50;
   const rawPage = Number(params.get('page') ?? 0);
   const page =
     Number.isInteger(rawPage) && rawPage >= 0
       ? Math.min(
           rawPage,
-          Math.max(0, Math.ceil(report.findings.length / pageSize) - 1),
+          Math.max(0, Math.ceil(filtered.length / pageSize) - 1),
         )
       : 0;
-  const visible = report.findings.slice(page * pageSize, (page + 1) * pageSize);
+  const visible = filtered.slice(page * pageSize, (page + 1) * pageSize);
   function movePage(next: number) {
     setParams(
       (p) => {
         p.set('page', String(next));
-        const first = report.findings[next * pageSize];
+        const first = filtered[next * pageSize];
         if (first) p.set('finding', first.reference_id);
         return p;
       },
@@ -84,12 +89,17 @@ export function ReportScreen({
           <h2>
             References <span>{report.findings.length}</span>
           </h2>
+          <p role="status">{report.findings.filter(needsAttention).length} need attention out of {report.findings.length} detected references. Review coverage separately.</p>
+          <div className="catalog-actions">
+            <button className="button" aria-pressed={filter === 'attention'} onClick={() => { setFilter('attention'); movePage(0); }}>Needs attention</button>
+            <button className="button" aria-pressed={filter === 'all'} onClick={() => { setFilter('all'); movePage(0); }}>Show all</button>
+          </div>
           {report.findings.length === 0 ? (
             <p>
               No explicit references were detected. Inspect processing coverage
               before drawing conclusions.
             </p>
-          ) : (
+          ) : visible.length === 0 ? <p>No references in this filter. Choose Show all to inspect the full scope.</p> : (
             <ul>
               {visible.map((f) => (
                 <li key={f.reference_id}>
@@ -117,12 +127,12 @@ export function ReportScreen({
               ))}
             </ul>
           )}
-          {report.findings.length > pageSize && (
+          {filtered.length > pageSize && (
             <nav aria-label="Reference pages">
               <p>
                 {page * pageSize + 1}–
-                {Math.min((page + 1) * pageSize, report.findings.length)} of{' '}
-                {report.findings.length}
+                {Math.min((page + 1) * pageSize, filtered.length)} of{' '}
+                {filtered.length}
               </p>
               <button
                 className="button"
@@ -133,7 +143,7 @@ export function ReportScreen({
               </button>
               <button
                 className="button"
-                disabled={(page + 1) * pageSize >= report.findings.length}
+                disabled={(page + 1) * pageSize >= filtered.length}
                 onClick={() => movePage(page + 1)}
               >
                 Next references
@@ -155,17 +165,14 @@ export function ReportScreen({
                 <StateValue label="Fidelity" value={selected.fidelity} />
                 <StateValue label="Human support" value={selected.support} />
               </dl>
-              {renderSource ? (
-                renderSource(selected, historical)
-              ) : (
-                <div className="page-empty">
-                  <h3>Original page not loaded</h3>
-                  <p>
-                    Page images and coordinate overlays require the viewer
-                    acceptance spike.
-                  </p>
-                </div>
-              )}
+              <FindingInspection
+                key={selected.reference_id}
+                api={api}
+                scope={{ caseId, briefId, snapshot }}
+                finding={selected}
+                historical={historical}
+                renderSource={renderSource}
+              />
             </>
           ) : (
             <h2 id="finding-title">No reference selected</h2>
@@ -179,6 +186,26 @@ export function ReportScreen({
           </p>
         </section>
       </div>
+    </>
+  );
+}
+
+function FindingInspection({
+  api, scope, finding, historical, renderSource,
+}: {
+  api: ApiClient;
+  scope: { caseId: string; briefId: string; snapshot: string };
+  finding: FindingView;
+  historical: boolean;
+  renderSource?: (finding: FindingView, historical: boolean, onInspected: () => void) => ReactNode;
+}) {
+  const [inspected, setInspected] = useState(false);
+  return (
+    <>
+      {!historical && <DraftContext api={api} {...scope} referenceId={finding.reference_id} />}
+      {renderSource ? renderSource(finding, historical, () => setInspected(true)) :
+        <Notice error>Preserved source viewer unavailable. No human source inspection may be recorded.</Notice>}
+      {!historical && <ReviewPanel api={api} scope={scope} finding={finding} inspected={inspected} />}
     </>
   );
 }

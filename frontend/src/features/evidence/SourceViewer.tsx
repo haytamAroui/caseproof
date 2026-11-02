@@ -24,6 +24,7 @@ interface SourceViewerProps {
   api: ApiClient;
   scope: ViewerScope;
   finding: FindingView;
+  onInspected?: () => void;
 }
 export function SourceViewer(props: SourceViewerProps) {
   const [attempt, setAttempt] = useState(0);
@@ -44,6 +45,7 @@ function SourceInspection({
   scope,
   finding,
   onRetry,
+  onInspected,
 }: SourceViewerProps & { onRetry: () => void }) {
   const frame = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(600);
@@ -246,6 +248,11 @@ function SourceInspection({
       );
     }
   }, [result, search, showBoxes, rasterRegions, page, hash]);
+  useEffect(() => {
+    if (result && !rendering && mapping === 'mapped' && page === mappedPage && !historical) {
+      onInspected?.();
+    }
+  }, [result, rendering, mapping, page, mappedPage, historical, onInspected]);
   function clearPage() {
     if (canvas.current) canvas.current.width = 0;
     if (overlay.current) overlay.current.width = 0;

@@ -116,7 +116,7 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
   return (
     <ReportScreen
       api={api}
-      renderSource={(finding, historical) => (
+      renderSource={(finding, historical, onInspected) => (
         <SourceViewer
           key={`${caseId}:${briefId}:${snapshot}:${finding.reference_id}:${historical}`}
           api={api}
@@ -128,6 +128,7 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
             historical,
           }}
           finding={finding}
+          onInspected={onInspected}
         />
       )}
     />
