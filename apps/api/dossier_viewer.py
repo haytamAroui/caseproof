@@ -26,7 +26,7 @@ def create_dossier_viewer_router(store: DossierStore | None) -> APIRouter:
         if store is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         # Reopen verifies current grants, source set, snapshot SHA and server HMAC.
-        report, _ = store.reopen(token, case, brief, snapshot)
+        report, originals = store.reopen_originals(token, case, brief, snapshot)
         finding = next((f for f in report["findings"] if f["reference_id"] == reference), None)
         if finding is None:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
@@ -39,10 +39,13 @@ def create_dossier_viewer_router(store: DossierStore | None) -> APIRouter:
         if not 0 < recorded.get("byte_length", 0) <= 20_000_000:
             raise HTTPException(413, "Viewer source budget exceeded")
         try:
-            raw = store.client.library.read(
+            raw = originals[version]
+            current, current_length = store.client.library.source(
                 bearer=token, case_id=case, document_id=recorded["document_id"], version_id=version
             )
-        except PrivateStorageFailure:
+            if current.sha256_hex != recorded["sha256"] or current_length != len(raw):
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        except (PrivateStorageFailure, KeyError):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         if len(raw) != recorded["byte_length"] or hashlib.sha256(raw).hexdigest() != recorded["sha256"]:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
