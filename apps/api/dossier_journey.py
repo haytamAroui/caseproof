@@ -73,7 +73,21 @@ class InventoryReviewException(BaseModel):
 
 
 class InventoryConfirmation(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+    # Generated JSON Schema must reject the same unsafe complete+pending state
+    # as the Python model validator. Unique human citation pairs still need
+    # application validation; JSON Schema cannot express composite uniqueness.
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+        json_schema_extra={
+            "allOf": [
+                {
+                    "if": {"properties": {"inventory_complete": {"const": True}}},
+                    "then": {"properties": {"exceptions": {"maxItems": 0}}},
+                }
+            ]
+        },
+    )
     bundle_signature: str = Field(pattern=r"^[0-9a-f]{64}$")
     request_id: str
     inventory_complete: bool
