@@ -3,9 +3,9 @@
 import re
 from typing import Literal, Self
 
-from domains.disputes.page_labels import PAGE_LABEL_PATTERN
-
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from domains.disputes.page_labels import PAGE_LABEL_PATTERN
 
 
 class FindingView(BaseModel):
