@@ -1,0 +1,31 @@
+name: CaseProof agent skills
+on:
+  pull_request:
+    paths:
+      - 'skills/**'
+      - '.claude/skills/**'
+      - 'scripts/skills/**'
+      - '.github/workflows/skills-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'skills/**'
+      - '.claude/skills/**'
+      - 'scripts/skills/**'
+      - '.github/workflows/skills-validation.yml'
+jobs:
+  validate-skills:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate canonical skills
+        run: python3 scripts/skills/validate_caseproof_skills.py
+      - name: Verify agent discovery adapter
+        run: |
+          test -f AGENTS.md
+          test -f .claude/skills/caseproof-router/SKILL.md
+          grep -Fq '../../../skills/caseproof-router/SKILL.md' .claude/skills/caseproof-router/SKILL.md
+          test -f skills/workflows/product.md
+          test -f skills/workflows/landing.md
