@@ -191,7 +191,7 @@ def create_dossier_viewer_router(store: DossierStore | None) -> APIRouter:
 
     @router.get(history + "/regions")
     def historical_regions(case_id: str, brief_id: str, snapshot: str, reference_id: str,
-                           authorization: str | None = Header(default=None)) -> dict:
+                           authorization: str | None = Header(default=None)) -> dict[str, Any]:
         return raster_regions(_token(authorization), case_id, brief_id, snapshot,
                               reference_id, historical=True)
 
