@@ -41,6 +41,7 @@ class WorkspaceBrowserAcceptance:
 
     def exercise(self) -> None:
         page = self.page
+        print('F1_STAGE_INITIAL_SIGNIN', flush=True)
         page.goto(ORIGIN + '/workspace/')
         self.login(page)
         expect(page.get_by_role('heading', name='Your permitted matters')).to_be_visible()
@@ -73,11 +74,13 @@ class WorkspaceBrowserAcceptance:
 
         if page.evaluate('() => localStorage.length + sessionStorage.length') != 0 or self.context.cookies():
             raise RuntimeError('F1_PERSISTENT_SESSION_MATERIAL')
+        print('F1_STAGE_COLD_RELOAD', flush=True)
         page.reload()
         expect(page.get_by_role('button', name='Sign in', exact=True)).to_be_visible()
         self.login(page)
         expect(page.get_by_role('heading', name='Review the evidence')).to_be_visible()
         # Fresh browser remains authenticated until the later real grant revoke.
+        print('F1_STAGE_FOREIGN_UNGRANTED', flush=True)
         for role in ('ungranted', 'foreign'):
             context = self.browser.new_context()
             other = context.new_page()
@@ -96,6 +99,7 @@ class WorkspaceBrowserAcceptance:
                 expect(other.get_by_role('link', name='Open preserved report')).to_have_count(0)
             finally:
                 context.close()
+        print('F1_STAGE_EXPIRY_CONTEXT', flush=True)
         expiry_context = self.browser.new_context()
         expired = expiry_context.new_page()
         try:
@@ -107,16 +111,19 @@ class WorkspaceBrowserAcceptance:
             expect(expired.get_by_role('heading', name='Your permitted matters')).to_be_visible()
             expired.locator(f'a[href="/workspace/matters/{self.case}"]').click()
             expect(expired.get_by_role('heading', name='Preserved reports')).to_be_visible()
+            print('F1_STAGE_EXPIRY_HISTORY_OPENED', flush=True)
             expired.clock.fast_forward(max(1000, int((expires - time.time()) * 1000 + 2000)))
             expect(expired.get_by_role('button', name='Sign in', exact=True)).to_be_visible()
             if expired.evaluate('() => localStorage.length + sessionStorage.length'):
                 raise RuntimeError('F1_EXPIRED_SESSION_RETAINED')
             expect(expired.get_by_role('link', name='Open preserved report')).to_have_count(0)
             # Restore wall time before a fresh provider login; no synthetic token.
+            print('F1_STAGE_EXPIRED_PRIVATE_DOM_CLEARED', flush=True)
             expired.clock.set_system_time(int(time.time() * 1000))
             self.login(expired)
             expect(expired.get_by_role('heading', name='Your permitted matters')).to_be_visible()
             expect(expired.get_by_role('heading', name='Preserved reports')).to_have_count(0)
+            print('F1_STAGE_FRESH_LOGIN_RECOVERY', flush=True)
             expired.get_by_role('button', name='Reopen previous location', exact=True).click()
             expect(expired.get_by_role('heading', name='Preserved reports')).to_be_visible()
             expired.locator(f'a[href$="snapshot={self.snapshot}"]').click()
