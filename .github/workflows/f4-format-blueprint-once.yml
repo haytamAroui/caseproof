@@ -1,0 +1,30 @@
+name: F4 blueprint formatter one-shot
+on:
+  push:
+    branches: [feat/m3-f4-v31-reviewer-closure]
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.repository == 'haytamAroui/caseproof'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: true
+          ref: feat/m3-f4-v31-reviewer-closure
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npx prettier --write BLUEPRINT.md
+        working-directory: frontend
+      - name: Commit formatted guidance and remove one-shot
+        run: |
+          git config user.name 'caseproof-contract-bot'
+          git config user.email 'caseproof-contract-bot@users.noreply.github.com'
+          git add frontend/BLUEPRINT.md
+          git rm .github/workflows/f4-format-blueprint-once.yml
+          git commit -m 'F4: format frontend blueprint acceptance update'
+          git push origin HEAD:feat/m3-f4-v31-reviewer-closure
