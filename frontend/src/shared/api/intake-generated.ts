@@ -19,6 +19,15 @@ export type SourceVersionId = string | null;
  * @maxItems 512
  */
 export type Entries = IdentityConfirmation[];
+export type Citation = string;
+export type Kind = "detector_miss" | "unsupported_notation";
+export type Rationale1 = string;
+export type ReviewState = "review_needed";
+export type Version = 1;
+/**
+ * @maxItems 64
+ */
+export type Exceptions = InventoryReviewException[];
 export type InventoryComplete = boolean;
 export type ReadbackComplete = boolean;
 export type Schema = "caseproof-workspace-intake-v1";
@@ -28,6 +37,7 @@ export type Filename = string;
 export type MediaType = string;
 export type PageCount = number | null;
 export type Processing = "preserved" | "text_extracted" | "partial" | "unavailable";
+export type Readback = "verified" | "unknown" | "integrity_mismatch";
 export type Role = "draft" | "inventory" | "exhibit";
 export type Sha256 = string;
 export type VersionId = string;
@@ -42,6 +52,7 @@ export interface IntakeView {
   case_id: CaseId;
   confirmation_id?: ConfirmationId;
   entries: Entries;
+  exceptions?: Exceptions;
   inventory_complete: InventoryComplete;
   readback_complete: ReadbackComplete;
   schema: Schema;
@@ -59,6 +70,16 @@ export interface PageConfirmation {
   rationale: Rationale;
   space: Space;
 }
+/**
+ * Versioned, source-anchored human observation, not a verified identity.
+ */
+export interface InventoryReviewException {
+  citation: Citation;
+  kind: Kind;
+  rationale: Rationale1;
+  review_state?: ReviewState;
+  version?: Version;
+}
 export interface SourceView {
   byte_length: ByteLength;
   document_id: DocumentId;
@@ -66,6 +87,7 @@ export interface SourceView {
   media_type: MediaType;
   page_count?: PageCount;
   processing: Processing;
+  readback?: Readback;
   role: Role;
   sha256: Sha256;
   version_id: VersionId;

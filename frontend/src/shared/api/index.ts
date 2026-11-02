@@ -5,10 +5,16 @@ export { parseMatters } from './matters';
 export { parseSession } from './session';
 export { parseReports } from './reports';
 export { parseViewer } from './viewer';
-export { parseOrganizations, parseCreated, parseIntake } from './intake';
+export {
+  parseOrganizations,
+  parseCreated,
+  parseIntake,
+  assertConfirmationCommand,
+} from './intake';
 export type {
   IntakeView,
   IdentityConfirmation,
   PageConfirmation,
+  InventoryReviewException,
   InventoryConfirmation,
 } from './intake';

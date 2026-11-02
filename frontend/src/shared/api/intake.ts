@@ -1,12 +1,14 @@
 import organizationsValidator from './organizations-generated-validator';
 import createdValidator from './created-generated-validator';
 import intakeValidator from './intake-generated-validator';
+import confirmationValidator from './confirmation-generated-validator';
 import { ContractError } from './contracts';
 import type { IntakeView } from './intake-generated';
 export type {
   IntakeView,
   IdentityConfirmation,
   PageConfirmation,
+  InventoryReviewException,
 } from './intake-generated';
 export type { InventoryConfirmation } from './confirmation-generated';
 const uuid = (s: string) =>
@@ -69,5 +71,16 @@ export function parseIntake(value: unknown, caseId: string): IntakeView {
     )
   )
     throw new ContractError();
+  return value;
+}
+
+/** Outbound confirmation: schema and semantic composite uniqueness must agree. */
+export function assertConfirmationCommand(value: unknown) {
+  if (!confirmationValidator(value)) throw new ContractError();
+  const exceptions = value.exceptions ?? [];
+  const keys = exceptions.map((entry) =>
+    JSON.stringify([entry.kind, entry.citation]),
+  );
+  if (new Set(keys).size !== keys.length) throw new ContractError();
   return value;
 }

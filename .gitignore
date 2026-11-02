@@ -1,3 +1,10 @@
+# Source and generated artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
 
 frontend/viewer-dist/
 frontend/tests/viewer-comparison/generated/
