@@ -6,6 +6,7 @@ import {
   ApiError,
   parseIntake,
   parseDossier,
+  assertConfirmationCommand,
 } from '../../shared/api';
 import type {
   IntakeView,
@@ -143,13 +144,13 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
     try {
       await api.post(
         base + '/confirmation',
-        {
+        assertConfirmationCommand({
           request_id: request,
           bundle_signature: data.bundle_signature,
           inventory_complete: complete,
           entries,
           exceptions,
-        },
+        }),
         abort.current.signal,
       );
       const current = parseIntake(
