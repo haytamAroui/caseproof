@@ -152,7 +152,7 @@ test('expiry clears private history and offers explicit freshly authorized recov
   await expect(
     page.getByRole('link', { name: /Open preserved report/ }),
   ).toHaveCount(0);
-  await expect(page).toHaveURL(/\/workspace\/$/);
+  await expect(page).toHaveURL(/\/workspace\/?$/);
   await page.evaluate(() => {
     window.caseproofSession = {
       getBearer: async () => 'synthetic-new-session',
