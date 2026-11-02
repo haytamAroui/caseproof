@@ -22,7 +22,9 @@ jobs:
         with:
           python-version: '3.11'
       - run: uv run --locked python -m scripts.generate_frontend_contract --check
-      - run: uv run --locked pytest -q tests/test_workspace_intake.py tests/test_frontend_contract.py tests/test_workspace_catalog.py tests/test_clearbrief_signed_matter_catalog.py tests/test_workspace_auth.py tests/test_workspace_reports.py tests/test_dossier_viewer.py
+      - name: Check generated Python JSON Schema artifacts are committed
+        run: git diff --exit-code -- frontend/src/shared/api/*.schema.json
+      - run: uv run --locked pytest -q tests/test_contract_boundary_hardening.py tests/test_workspace_intake.py tests/test_frontend_contract.py tests/test_workspace_catalog.py tests/test_clearbrief_signed_matter_catalog.py tests/test_workspace_auth.py tests/test_workspace_reports.py tests/test_dossier_viewer.py
       - run: uv run --locked ruff check apps/api/workspace_intake.py tests/test_workspace_intake.py apps/api/dossier_viewer.py application/litigation/viewer_contract.py scripts/generate_viewer_fixtures.py tests/test_dossier_viewer.py apps/api/workspace_auth.py apps/api/workspace_reports.py scripts/workspace_browser_live.py scripts/verify_workspace_reports_disposable.py tests/test_workspace_auth.py tests/test_workspace_reports.py application/litigation/workspace_contract.py apps/api/workspace_catalog.py tests/test_workspace_catalog.py application/litigation/frontend_contract.py scripts/generate_frontend_contract.py tests/test_frontend_contract.py
       - run: uv run --locked mypy --explicit-package-bases apps/api/workspace_intake.py apps/api/dossier_viewer.py application/litigation/viewer_contract.py apps/api/workspace_auth.py apps/api/workspace_reports.py application/litigation/workspace_contract.py apps/api/workspace_catalog.py application/litigation/frontend_contract.py scripts/generate_frontend_contract.py
       - name: Generate deterministic viewer fixtures without a server renderer
@@ -34,6 +36,8 @@ jobs:
         working-directory: frontend
       - run: npm run contracts:check && npm run lint && npm test && npm run build
         working-directory: frontend
+      - name: Check generated TypeScript and AJV artifacts are committed
+        run: git diff --exit-code -- frontend/src/shared/api
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
       - run: npm run test:e2e
