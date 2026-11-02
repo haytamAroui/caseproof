@@ -176,7 +176,7 @@ it('enforces generated Roman page labels and versioned inventory exceptions at t
       entries: [
         {
           ...original.entries[0],
-          pages: [{ ...original.entries[0].pages[0], label: 'IC' }],
+          pages: [{ ...original.entries[0]!.pages[0]!, label: 'IC' }],
         },
       ],
     }),
