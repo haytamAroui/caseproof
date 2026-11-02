@@ -32,8 +32,8 @@ from apps.api.signed_supabase_originals import (
 )
 from domains.disputes.dossier_verification import build_findings
 from domains.disputes.exhibit_identity import InventoryStatus
-from domains.disputes.reference_detection import detect_exhibit_references
 from domains.disputes.page_labels import PAGE_LABEL_PATTERN
+from domains.disputes.reference_detection import detect_exhibit_references
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from infrastructure.parsers.dossier_docx_export import annotated_docx, corrected_docx_preview
