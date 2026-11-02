@@ -317,8 +317,9 @@ class WorkspaceIntake:
             pending = self.client.bundle_manifest(bearer, case)["sources"]
             # Each state is independently established through a fresh signed read.
             # Missing and masked Storage objects remain indistinguishable.
-            partial = []
+            partial_sources: list[SourceView] = []
             for row in pending:
+                readback: Literal["verified", "unknown", "integrity_mismatch"]
                 try:
                     raw = self.client.library.read(
                         bearer=bearer,
@@ -334,7 +335,7 @@ class WorkspaceIntake:
                         if len(raw) == row["byte_length"] and hashlib.sha256(raw).hexdigest() == row["sha256"]
                         else "integrity_mismatch"
                     )
-                partial.append(
+                partial_sources.append(
                     SourceView(
                         **{
                             k: row[k]
@@ -356,7 +357,7 @@ class WorkspaceIntake:
                 schema="caseproof-workspace-intake-v1",
                 case_id=case,
                 bundle_signature=context["bundle_signature"],
-                sources=partial,
+                sources=partial_sources,
                 entries=[],
                 inventory_complete=False,
                 readback_complete=False,
