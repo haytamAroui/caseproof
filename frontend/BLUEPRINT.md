@@ -546,21 +546,19 @@ Recovery preserves immutable source identity: reselect exact originals to replay
 
 The [CaseProof end-to-end workflow guide](../docs/CASEPROOF_WORKFLOW_BLUEPRINT_V3_1.md) is the **required journey and scenario checklist** for frontend changes. This frontend blueprint remains the authority for design, routes, contracts, security and acceptance; the workflow guide cannot silently override it. Before each F4–F6 PR, record the S-stage coverage, relevant source contract, browser evidence and explicitly deferred cases in the PR description. Do not introduce duplicate /api/v1 endpoints, a parallel state machine or new signing protocol.
 
-| Stage | Existing increment | Required guide checkpoint | Follow-up classification |
-| --- | --- | --- | --- |
-| S0 signed access, matter | F1 | Authorized organization/matter selection; no cross-tenant leakage; session expiry and revocation | Reuse tested F1; audit real journey in F4 |
-| S1 source preservation | F3 | Original hash, size, role, fresh authorized readback; interrupted/unknown outcome | Reuse tested F3; extend edge-case coverage if missing |
-| S2 OCR geometry | F2 + backend | Scanned source, crop and bounding box provenance; explicit OCR uncertainty | F2 viewer integration and F4 display, not a new OCR engine |
-| S3 inventory and page spaces | F3 | Complete/incomplete inventory, aliases, ambiguous/missing source, printed/piece/bundle page | Audit F3 confirmation and display in F4 |
-| S4 discovery/coverage | F4 + backend | DOCX supported/unsupported regions, language/translation flags, reference denominators | F4 presentation; backend gaps separately gated |
-| S5 canonical check | F4 + backend | Four independent dimensions and explicit abstention; frozen snapshot | F4 consumption, no invented aggregate verified score |
-| S6 model notes | Later | Optional, separately labelled, never overrides deterministic finding | Deferred |
-| S7–S8 review | F4 | Side-by-side navigation, rationale, durable authorized human decision receipt | F4 delivery |
-| S9 correction | F5 | Preview, immutable original, new draft and recheck, competing/stale rejection | F5 delivery |
-| S10 export | F6/M4 | Scoped reviewed bytes, provenance, supported output formats | F6 delivery |
-| S11 reopen | F4–F6 | Frozen report, historical/current distinction and durable review receipts | F4 start, F6 closure |
-| S12 recovery | F1–F6 | Revoke, restart, unknown write, retry without false success | Cross-cutting acceptance |
-| S13 privacy | F1–F6 | Local/perimeter network and retention truth, no secret persistence | Cross-cutting acceptance |
+- **S0 / F1:** Signed access and matter authorization, foreign-matter denial, session expiry and revocation.
+- **S1 / F3:** Original source identity, hashes, fresh authorized readback and interrupted/unknown uploads.
+- **S2 / F2 and backend:** OCR geometry, crop provenance and explicit uncertainty; never equate crop presence with page proof.
+- **S3 / F3:** Inventory completeness, aliases, ambiguity and printed/piece/bundle page confirmation.
+- **S4 / F4 and backend:** Draft discovery, supported regions, coverage denominator and unsupported references.
+- **S5 / F4 and backend:** Frozen canonical findings with four independent dimensions and explicit abstention.
+- **S6 / later:** Optional labelled model notes, never changing deterministic findings.
+- **S7–S8 / F4:** Side-by-side evidence review, signed human rationale and durable decision receipts.
+- **S9 / F5:** Correction preview, immutable originals, activation and canonical recheck.
+- **S10 / F6–M4:** Scoped reviewed export with provenance and supported formats.
+- **S11 / F4–F6:** Reopen frozen reports and distinguish historical from current evidence.
+- **S12 / F1–F6:** Restart, revocation, stale writes, unknown outcomes and safe recovery.
+- **S13 / F1–F6:** Privacy, retention and perimeter boundaries.
 
 ### F1–F3 retrofit rule
 
