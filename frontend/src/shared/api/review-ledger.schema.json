@@ -1,0 +1,111 @@
+{
+  "$defs": {
+    "ReviewDecisionView": {
+      "additionalProperties": false,
+      "description": "A persisted signed human disposition, never a machine finding.",
+      "properties": {
+        "decision": {
+          "enum": [
+            "CONFIRMED_SUPPORTED",
+            "CONFIRMED_QUALIFIED",
+            "CONFIRMED_CONTRADICTED"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "reference_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Reference Id",
+          "type": "string"
+        },
+        "request_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Request Id",
+          "type": "string"
+        },
+        "reviewed_region_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 96,
+          "title": "Reviewed Region Ids",
+          "type": "array"
+        },
+        "reviewer_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Reviewer Id",
+          "type": "string"
+        },
+        "timestamp": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference_id",
+        "decision",
+        "rationale",
+        "reviewer_id",
+        "request_id",
+        "timestamp",
+        "reviewed_region_ids"
+      ],
+      "title": "ReviewDecisionView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "brief_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Brief Id",
+      "type": "string"
+    },
+    "case_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Case Id",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/ReviewDecisionView"
+      },
+      "maxItems": 10000,
+      "title": "Decisions",
+      "type": "array"
+    },
+    "schema": {
+      "const": "caseproof-review-ledger-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "case_id",
+    "brief_id",
+    "snapshot_hash",
+    "decisions"
+  ],
+  "title": "ReviewLedgerView",
+  "type": "object"
+}

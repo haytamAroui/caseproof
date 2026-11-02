@@ -12,6 +12,9 @@ for (const [name, type, stem] of [
   ['created', 'CreatedMatter', 'created-generated'],
   ['intake', 'IntakeView', 'intake-generated'],
   ['confirmation', 'InventoryConfirmation', 'confirmation-generated'],
+  ['review-ledger', 'ReviewLedgerView', 'review-ledger-generated'],
+  ['draft-excerpt', 'DraftExcerptView', 'draft-excerpt-generated'],
+  ['review-command', 'VisualDecisionBody', 'review-command-generated'],
 ]) {
   const source = new URL(
       `../src/shared/api/${name}.schema.json`,

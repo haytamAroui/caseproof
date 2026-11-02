@@ -5,8 +5,13 @@ from pathlib import Path
 
 from application.litigation.frontend_contract import DossierView
 from application.litigation.viewer_contract import ViewerContext
-from application.litigation.workspace_contract import MatterCatalogView, ReportCatalogView
-from apps.api.dossier_journey import InventoryConfirmation
+from application.litigation.workspace_contract import (
+    DraftExcerptView,
+    MatterCatalogView,
+    ReportCatalogView,
+    ReviewLedgerView,
+)
+from apps.api.dossier_journey import InventoryConfirmation, VisualDecisionBody
 from apps.api.workspace_auth import SessionView
 from apps.api.workspace_intake import CreatedMatter, IntakeView, OrganizationView
 
@@ -23,7 +28,10 @@ def main() -> None:
                           (CreatedMatter, TARGET.with_name("created.schema.json")),
                           (IntakeView, TARGET.with_name("intake.schema.json")),
                           (InventoryConfirmation, TARGET.with_name("confirmation.schema.json")),
-                          (ViewerContext, TARGET.with_name("viewer.schema.json"))):
+                          (ViewerContext, TARGET.with_name("viewer.schema.json")),
+                          (ReviewLedgerView, TARGET.with_name("review-ledger.schema.json")),
+                          (DraftExcerptView, TARGET.with_name("draft-excerpt.schema.json")),
+                          (VisualDecisionBody, TARGET.with_name("review-command.schema.json"))):
         schema = model.model_json_schema()
         schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
         content = json.dumps(schema, indent=2, sort_keys=True) + "\n"

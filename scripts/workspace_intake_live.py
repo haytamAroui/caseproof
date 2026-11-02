@@ -25,6 +25,7 @@ def _exercise() -> None:
         "refs/heads/feat/f3-complete-intake",
         "refs/heads/main",
         "refs/pull/175/merge",
+        "refs/pull/176/merge",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
     key, run, org = (
@@ -177,6 +178,44 @@ def _exercise() -> None:
         expect(page.get_by_text("PDF page 6 of 6", exact=True)).to_be_visible(timeout=180000)
         expect(page.get_by_text("Source page rendered.", exact=True)).to_be_visible(timeout=180000)
         print("F3_SIGNED_UPLOAD_CONFIRMED_PRINTED_4_PDF_6_REPORT_VIEWER_PASSED", flush=True)
+        if os.getenv("CASEPROOF_F4_BROWSER_LIVE") == "YES":
+            reviewer = page.get_by_role("region", name="Human review")
+            expect(reviewer.get_by_role("heading", name="Human decision and durable receipt")).to_be_visible(timeout=60000)
+            expect(page.get_by_role("heading", name="Preserved DOCX reference context")).to_be_visible()
+            for checkbox in reviewer.get_by_role("checkbox").all():
+                checkbox.check()
+            reviewer.get_by_label("Rationale (required, visible to authorized reviewers)").fill(
+                "Reviewed original synthetic page and draft context"
+            )
+            requests = [0]
+            def lost_review_ack(route) -> None:
+                requests[0] += 1
+                response = route.fetch(timeout=90000)
+                if response.status != 200:
+                    raise RuntimeError("F4_REVIEW_WRITE_REJECTED")
+                route.abort("failed")
+            page.route("**/dossier/reviews", lost_review_ack)
+            reviewer.get_by_role("button", name="Save human decision").click()
+            expect(reviewer.get_by_role("button", name="Reconcile durable receipt")).to_be_visible(timeout=90000)
+            reviewer.get_by_role("button", name="Reconcile durable receipt").click()
+            expect(reviewer.get_by_text(
+                "The exact decision is persisted in the authorized review ledger."
+            )).to_be_visible(timeout=90000)
+            page.unroute("**/dossier/reviews", lost_review_ack)
+            if requests[0] != 1:
+                raise RuntimeError("F4_REVIEW_NOT_EXACTLY_ONCE")
+            print("F4_GENUINE_SIGNED_LOST_ACK_DURABLE_REVIEW_RECONCILED_PASSED", flush=True)
+            _server_stop(proc)
+            proc = _server_start()
+            page.reload()
+            acceptance.login(page)
+            expect(page.get_by_role("heading", name="Review the evidence")).to_be_visible(timeout=90000)
+            expect(page.get_by_role("list", name="Saved review history")).to_contain_text(
+                "Reviewed original synthetic page and draft context", timeout=90000
+            )
+            expect(page.get_by_text("PDF page 6 of 6", exact=True)).to_be_visible(timeout=90000)
+            print("F4_GENUINE_REVIEW_COLD_REOPEN_SOURCE_AND_RECEIPT_PASSED", flush=True)
+
         print("F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_EXPLICIT_CHECK_PASSED", flush=True)
         for role in ("ungranted", "foreign"):
             context = acceptance.browser.new_context()
