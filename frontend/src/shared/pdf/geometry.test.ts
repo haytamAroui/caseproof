@@ -15,3 +15,9 @@ it('rejects missing, nonfinite and singular coordinate transforms', () => {
   for (const transform of [[], [0, 0, 0, 0, 0, 0], [1, 0, 0, 1, NaN, 0]])
     expect(() => projectBox(transform, [1, 2, 3, 4])).toThrow();
 });
+
+it('preserves a valid zero-origin source box', () => {
+  expect(projectBox([1, 0, 0, -1, 0, 800], [0, 0, 120, 40])).toEqual([
+    0, 760, 120, 800,
+  ]);
+});

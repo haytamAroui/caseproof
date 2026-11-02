@@ -20,6 +20,8 @@ class Store:
     def __init__(self):
         self.changed = False
         self.revoked = False
+        self.page = 1
+        self.mapping = "mapped"
         self.client = SimpleNamespace(library=SimpleNamespace(read=self.read))
 
     def read(self, **kwargs):
@@ -44,8 +46,8 @@ class Store:
                     "reference_id": "ref",
                     "version_id": "source",
                     "source_sha256": HASH,
-                    "pdf_page": 1,
-                    "page_mapping": "mapped",
+                    "pdf_page": self.page,
+                    "page_mapping": self.mapping,
                 }
             ],
         }, b"draft"
@@ -102,3 +104,20 @@ def test_revocation_and_unauthenticated_reads_are_denied():
     assert client.get(BASE, headers={"Authorization": "Bearer foreign"}).status_code == 404
     store.revoked = True
     assert client.get(BASE + "/original", headers={"Authorization": "Bearer owner"}).status_code == 404
+
+
+@pytest.mark.parametrize("page", [None, True, 0, 201])
+def test_mapped_reference_never_falls_back_to_exploration_page(page):
+    store, client = rig()
+    store.page = page
+    for suffix in ("", "/original"):
+        assert client.get(BASE + suffix, headers={"Authorization": "Bearer owner"}).status_code == 422
+
+
+def test_unmapped_source_is_explicitly_explorable_without_a_target_page():
+    store, client = rig()
+    store.mapping = "unmapped"
+    response = client.get(BASE, headers={"Authorization": "Bearer owner"})
+    assert response.status_code == 200
+    assert response.json()["page_mapping"] == "unmapped"
+    assert response.json()["pdf_page"] is None

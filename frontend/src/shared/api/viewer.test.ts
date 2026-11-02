@@ -94,3 +94,36 @@ it('fences a late binary response after session end', async () => {
   await expect(pending).rejects.toThrow('Session ended');
   expect(send.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
 });
+
+it('rejects mapped-without-page and unmapped-with-page viewer contexts', async () => {
+  const { parseViewer } = await import('./viewer');
+  const scope = {
+    caseId: 'case',
+    briefId: 'brief',
+    snapshot: 'a'.repeat(64),
+    referenceId: 'ref',
+  };
+  const context = {
+    schema: 'caseproof-viewer-v1',
+    case_id: scope.caseId,
+    brief_id: scope.briefId,
+    snapshot_hash: scope.snapshot,
+    reference_id: scope.referenceId,
+    version_id: 'source',
+    original_sha256: 'b'.repeat(64),
+    byte_length: 5,
+    page_mapping: 'mapped',
+    pdf_page: 1,
+    legacy_region_count: 0,
+    geometry_policy: 'derived_pdf_text_only_legacy_raster_not_projected',
+  };
+  expect(parseViewer(context, scope).pdf_page).toBe(1);
+  expect(() => parseViewer({ ...context, pdf_page: null }, scope)).toThrow();
+  expect(() =>
+    parseViewer({ ...context, page_mapping: 'unmapped' }, scope),
+  ).toThrow();
+  expect(
+    parseViewer({ ...context, page_mapping: 'unmapped', pdf_page: null }, scope)
+      .pdf_page,
+  ).toBeNull();
+});

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useSearchParams } from 'react-router';
-import type { ApiClient } from '../../shared/api';
+import type { ApiClient, FindingView } from '../../shared/api';
 import { useSession } from '../../shared/session';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
@@ -12,7 +12,7 @@ export function ReportScreen({
   renderSource,
 }: {
   api: ApiClient;
-  renderSource?: (referenceId: string) => ReactNode;
+  renderSource?: (finding: FindingView) => ReactNode;
 }) {
   const { caseId = '', briefId = '' } = useParams();
   const [params, setParams] = useSearchParams();
@@ -149,7 +149,7 @@ export function ReportScreen({
                 <StateValue label="Human support" value={selected.support} />
               </dl>
               {renderSource ? (
-                renderSource(selected.reference_id)
+                renderSource(selected)
               ) : (
                 <div className="page-empty">
                   <h3>Original page not loaded</h3>

@@ -15,7 +15,7 @@ export function parseViewer(
     value.brief_id !== scope.briefId ||
     value.snapshot_hash !== scope.snapshot ||
     value.reference_id !== scope.referenceId ||
-    (value.page_mapping !== 'mapped' && value.pdf_page !== null)
+    (value.page_mapping === 'mapped') !== (value.pdf_page !== null)
   )
     throw new ContractError();
   return value;

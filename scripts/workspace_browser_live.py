@@ -66,6 +66,8 @@ class WorkspaceBrowserAcceptance:
                     if page.get_by_text(message, exact=False).count():
                         print(f'F2_VIEWER_FIXED_ERROR_CATEGORY_{index}', flush=True)
                 raise RuntimeError('F2_GENUINE_INITIAL_RENDER_FAILED') from None
+            dimensions = page.locator('.inspection > dl.dimensions')
+            original_dimensions = dimensions.text_content() or ''
             canvas = page.locator('canvas[aria-label="Preserved PDF page pixels"]')
             if int(canvas.get_attribute('width') or '0') <= 0:
                 raise RuntimeError('F2_GENUINE_PDF_PIXELS_MISSING')
@@ -73,6 +75,29 @@ class WorkspaceBrowserAcceptance:
             expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=20000)
             page.get_by_role('button', name='Rotate page', exact=True).click()
             expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=20000)
+            expect(page.locator('dl[aria-label="Reference page spaces"]')).to_be_visible()
+            page.get_by_role('button', name='Zoom in', exact=True).click()
+            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=20000)
+            expect(dimensions).to_have_text(original_dimensions)
+            labels = page.locator('dl[aria-label="Reference page spaces"] dd')
+            expect(labels.nth(0)).to_have_text('1')
+            expect(labels.nth(2)).to_have_text('12')
+            print('F2_STAGE_SWITCH_TO_SCAN', flush=True)
+            with page.expect_response(lambda r: r.url.endswith('/viewer/original'), timeout=45000) as switched:
+                page.locator('.queue .finding').nth(1).click()
+            if switched.value.status != 200:
+                raise RuntimeError('F2_SCAN_ORIGINAL_READ_DENIED')
+            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=45000)
+            expect(labels.nth(0)).to_have_text('1')
+            expect(labels.nth(1)).to_have_text('7')
+            print('F2_STAGE_RETURN_TO_TEXT_SOURCE', flush=True)
+            with page.expect_response(lambda r: r.url.endswith('/viewer/original'), timeout=45000) as restored:
+                page.locator('.queue .finding').first.click()
+            if restored.value.status != 200:
+                raise RuntimeError('F2_TEXT_ORIGINAL_READ_DENIED')
+            expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=45000)
+            expect(dimensions).to_have_text(original_dimensions)
+            print('F2_GENUINE_PAGE_SPACES_AND_UNCERTAINTY_PRESERVED_PASSED', flush=True)
             print('F2_GENUINE_FROZEN_SOURCE_HASH_BOUND_WORKER_RENDER_ZOOM_ROTATE_PASSED', flush=True)
 
         if page.evaluate('() => localStorage.length + sessionStorage.length') != 0 or self.context.cookies():

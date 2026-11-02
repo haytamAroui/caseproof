@@ -231,3 +231,255 @@ declare global {
     f2ActiveWorkers: number;
   }
 }
+
+test('printed p.4 targets PDF p.6, preserves uncertainty at 200% and returns from exploration', async ({
+  page,
+}) => {
+  const large = manifest.fixtures.find((f) => f.name === 'large200')!;
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        findings: [
+          {
+            ...report.findings[0],
+            fidelity: 'representation_conflict',
+            pdf_page: 6,
+            page_spaces: {
+              pdf: { state: 'mapped', value: 6 },
+              printed: { state: 'mapped', value: '4' },
+              bundle: { state: 'unmapped', value: null },
+            },
+          },
+        ],
+      },
+    }),
+  );
+  await page.route('**/viewer', (route) =>
+    route.fulfill({
+      json: {
+        ...view(),
+        pdf_page: 6,
+        original_sha256: large.sha256,
+        byte_length: large.bytes,
+      },
+    }),
+  );
+  await page.route('**/viewer/original', async (route) =>
+    route.fulfill({
+      body: await readFile(
+        'tests/viewer-comparison/generated/fixtures/large200.pdf',
+      ),
+      contentType: 'application/pdf',
+      headers: {
+        'X-CaseProof-Snapshot': snapshot,
+        'X-CaseProof-Original-SHA256': large.sha256,
+      },
+    }),
+  );
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  const labels = page.locator('dl[aria-label="Reference page spaces"]');
+  await expect(labels).toContainText(/Reference PDF page\s*6/);
+  await expect(labels).toContainText(/Printed page\s*4/);
+  await expect(labels).toContainText(/Bundle page\s*Unmapped/);
+  await expect(
+    page.getByText('PDF page 6 of 200', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('The source representations conflict.', { exact: false }),
+  ).toBeVisible();
+  await page
+    .getByText('Extracted text — derived, not an OCR or fidelity assessment', {
+      exact: true,
+    })
+    .click();
+  await expect(page.locator('.source-viewer pre').first()).toContainText(
+    'Synthetic physical page 6',
+  );
+  for (let i = 0; i < 4; i++) {
+    await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    await expect(
+      page.getByText('Source page rendered.', { exact: true }),
+    ).toBeVisible();
+  }
+  await expect(page.getByText('Zoom 200%', { exact: true })).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Next source page', exact: true })
+    .click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Browsing another PDF page.', { exact: false }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Return to reference page' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('PDF page 6 of 200', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('The source representations conflict.', { exact: false }),
+  ).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
+
+test('explicit reopen reauthorizes bytes and clears failed inspection state', async ({
+  page,
+}) => {
+  let corrupt = true,
+    contexts = 0,
+    originals = 0;
+  await page.route('**/viewer', (route) => {
+    contexts++;
+    return route.fulfill({ json: view() });
+  });
+  await page.route('**/viewer/original', async (route) => {
+    originals++;
+    return route.fulfill({
+      body: corrupt
+        ? '%PDF-tampered'
+        : await readFile(
+            'tests/viewer-comparison/generated/fixtures/mixed.pdf',
+          ),
+      contentType: 'application/pdf',
+      headers: {
+        'X-CaseProof-Snapshot': snapshot,
+        'X-CaseProof-Original-SHA256': fixture.sha256,
+      },
+    });
+  });
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByText('This source could not be opened.', { exact: false }),
+  ).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(0);
+  corrupt = false;
+  await page
+    .getByRole('button', { name: 'Reopen source', exact: true })
+    .click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  expect(contexts).toBe(2);
+  expect(originals).toBe(2);
+  await expect(
+    page.getByText('This source could not be opened.', { exact: false }),
+  ).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(1);
+  await page.getByRole('button', { name: 'End session', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(0);
+});
+
+test('scan has pixels and explicit text/OCR uncertainty; denied switch clears its worker', async ({
+  page,
+}) => {
+  const scan = manifest.fixtures.find((f) => f.name === 'scan')!;
+  await page.route('**/viewer', (route) =>
+    route.request().url().includes('/r2/')
+      ? route.fulfill({ status: 403 })
+      : route.fulfill({
+          json: {
+            ...view(),
+            original_sha256: scan.sha256,
+            byte_length: scan.bytes,
+          },
+        }),
+  );
+  await page.route('**/viewer/original', async (route) =>
+    route.fulfill({
+      body: await readFile(
+        'tests/viewer-comparison/generated/fixtures/scan.pdf',
+      ),
+      contentType: 'application/pdf',
+      headers: {
+        'X-CaseProof-Snapshot': snapshot,
+        'X-CaseProof-Original-SHA256': scan.sha256,
+      },
+    }),
+  );
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('OCR is unreliable for this reference.', { exact: false }),
+  ).toBeVisible();
+  await page
+    .getByText('Extracted text — derived, not an OCR or fidelity assessment', {
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText('No selectable text was extracted.', { exact: false }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Stuk 2' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Sign in', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('canvas')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(0);
+});
+
+test('late old-source bytes cannot replace the newly selected reference', async ({
+  page,
+}) => {
+  let release!: () => void;
+  let delivered!: () => void;
+  const finished = new Promise<void>((resolve) => {
+    delivered = resolve;
+  });
+  await page.route('**/references/r1/viewer/original', async (route) => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await route.fulfill({
+      body: await readFile(
+        'tests/viewer-comparison/generated/fixtures/mixed.pdf',
+      ),
+      contentType: 'application/pdf',
+      headers: {
+        'X-CaseProof-Snapshot': snapshot,
+        'X-CaseProof-Original-SHA256': fixture.sha256,
+      },
+    });
+    delivered();
+  });
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect.poll(() => typeof release).toBe('function');
+  await page.getByRole('button', { name: 'Stuk 2' }).click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  release();
+  await finished;
+  await expect(
+    page.getByText(
+      'Page 1 is an exploration starting point, not a mapped reference.',
+      { exact: false },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText('OCR is unreliable for this reference.', { exact: false }),
+  ).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(1);
+  await page.getByRole('button', { name: 'End session', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(0);
+});

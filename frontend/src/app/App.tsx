@@ -116,11 +116,17 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
   return (
     <ReportScreen
       api={api}
-      renderSource={(referenceId) => (
+      renderSource={(finding) => (
         <SourceViewer
-          key={`${caseId}:${briefId}:${snapshot}:${referenceId}`}
+          key={`${caseId}:${briefId}:${snapshot}:${finding.reference_id}`}
           api={api}
-          scope={{ caseId, briefId, snapshot, referenceId }}
+          scope={{
+            caseId,
+            briefId,
+            snapshot,
+            referenceId: finding.reference_id,
+          }}
+          finding={finding}
         />
       )}
     />
