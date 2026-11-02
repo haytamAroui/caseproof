@@ -34,3 +34,12 @@ not grant production release.
 **Separate open gates:** real-format NL/FR/EN representative independent
 legal review, manual keyboard/screen-reader assessment, customer data handling
 and processing-location/egress/retention signoff, and production hosting.
+
+## Executed code receipts and remaining acceptance
+
+- [Protected signed F4 developer journey 41503951112](https://github.com/haytamAroui/caseproof/actions/runs/41503951112) **success on earlier code head**: real signed intake, mapped original, persisted review intent, lost-ACK reconciliation, cold reopen and zero-residual teardown. This is not a release or independent approval.
+- [Locked F4 source validation 41504868464](https://github.com/haytamAroui/caseproof/actions/runs/41504868464) **success on its candidate head**: contract check, frontend lint, Vitest and production TypeScript/Vite build, including SHA-256 region-ID and exact persisted-region binding. Do not infer that the final document-only commit passed; inspect CI at the final SHA.
+- Canonical database regional attestation already persists `reviewed_region_ids` under existing migration `20261030235456_regional_review_attestation.sql`. F4 reads that same ledger, compares exact region IDs and refuses to mark a human review saved based on a partial receipt.
+- **Independent gates remain open:** representative lawyer-reviewed NL/FR/EN corpus, manual screen-reader/keyboard and narrow-width review, deployment privacy/professional-secrecy approval, approved OCR location/egress/retention, customer rights and production hosting. No functionality claim substitutes for those gates.
+
+Rollback: revert PR #176; no SQL migrations, new grants, service credentials or storage buckets introduced by F4. Historic signed review rows remain in the original append-only ledger, and source snapshots are not deleted or rewritten.
