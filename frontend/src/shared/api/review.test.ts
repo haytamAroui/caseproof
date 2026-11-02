@@ -13,7 +13,7 @@ const command = {
   request_id: '11111111-1111-4111-8111-111111111111',
   decision: 'CONFIRMED_QUALIFIED',
   rationale: 'Inspected preserved original and surrounding context',
-  reviewed_region_ids: ['region-one'],
+  reviewed_region_ids: ['c'.repeat(64)],
 };
 
 const row = {
@@ -32,7 +32,7 @@ describe('F4 generated Python to AJV/TypeScript reviewer contract parity', () =>
       { ...command, decision: 'VERIFIED' },
       { ...command, request_id: 'not-a-uuid' },
       { ...command, unexpected: true },
-      { ...command, reviewed_region_ids: ['region-one', 'region-one'] },
+      { ...command, reviewed_region_ids: ['c'.repeat(64), 'c'.repeat(64)] },
       { ...command, rationale: '' },
       { ...command, snapshot_hash: 'wrong' },
     ])

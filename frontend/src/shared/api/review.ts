@@ -40,10 +40,16 @@ export function parseDraftExcerpt(
     value.snapshot_hash !== expected.snapshot ||
     value.reference_id !== expected.referenceId ||
     (value.available &&
-      (value.selection_start >= value.selection_end ||
+      (typeof value.region !== 'string' ||
+        !value.region ||
+        value.reason !== null ||
+        value.selection_start >= value.selection_end ||
         value.selection_end > value.excerpt.length)) ||
     (!value.available &&
-      (value.excerpt !== '' ||
+      (value.region !== null ||
+        value.excerpt !== '' ||
+        value.selection_start !== 0 ||
+        value.selection_end !== 0 ||
         value.reason !== 'unsupported_or_ambiguous_anchor'))
   )
     throw new ContractError();
