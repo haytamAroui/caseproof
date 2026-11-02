@@ -46,3 +46,7 @@ After each task: implemented paths and commit, exact CI/test evidence, risk and 
 ## Real frontend foundation — single entry point
 
 For work in `frontend`, read [BLUEPRINT.md](frontend/BLUEPRINT.md). It is the single maintained UI foundation specification, covering architecture, contracts, security, design, interaction, build sequence and acceptance. Client README/DESIGN/UX files are pointers. Existing finance/ClearBrief documents remain scoped historical/regression references; no production or milestone permission follows from this blueprint.
+
+## Shared agent skills (in progress)
+
+For CaseProof skill-assisted work, begin with [`skills/caseproof-router/SKILL.md`](skills/caseproof-router/SKILL.md). It routes product engineering and landing-page work separately. `skills/` is the intended agent-neutral canonical library; `.claude/skills/` is a compatibility discovery location and must not be independently maintained as a conflicting source. This migration is incomplete until the v2.1 skill files and references are committed and validated. No skill overrides `CONSTITUTION.md`, the canonical backend contracts or `frontend/BLUEPRINT.md`.
