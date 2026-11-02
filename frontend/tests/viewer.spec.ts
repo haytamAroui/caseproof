@@ -183,6 +183,24 @@ test('real worker pixels, repeated search, zoom/rotate/resize, page navigation a
   await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(0);
   expect(external).toEqual([]);
 });
+test('fractional device pixel ratio renders and disposes the real worker', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'devicePixelRatio', { value: 0.8 });
+  });
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.getByRole('button', { name: 'End session', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.f2ActiveWorkers)).toBe(0);
+});
+
 test('wrong hash fails closed before PDF parsing', async ({ page }) => {
   await page.route('**/viewer/original', (route) =>
     route.fulfill({

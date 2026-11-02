@@ -139,7 +139,7 @@ export function SourceViewer({
         page,
         zoom,
         rotation,
-        Math.min(devicePixelRatio || 1, 3),
+        Math.max(1, Math.min(devicePixelRatio || 1, 3)),
         availableWidth,
       )
       .then((value) => {
