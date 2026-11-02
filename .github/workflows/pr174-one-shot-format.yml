@@ -1,0 +1,52 @@
+name: PR174 one-shot frontend formatter
+on:
+  push:
+    branches: [feat/f1-f2-backend-contract-hardening]
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.repository == 'haytamAroui/caseproof'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/f1-f2-backend-contract-hardening
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install locked formatter
+        run: npm ci
+        working-directory: frontend
+      - name: Format only PR174 touched source files
+        run: |
+          npx prettier --write \
+            src/features/evidence/SourceViewer.tsx \
+            src/features/verification/api.test.ts \
+            src/features/verification/api.ts \
+            src/features/verification/ReportScreen.tsx \
+            src/shared/api/contract-boundary.test.ts \
+            src/shared/api/contracts.ts \
+            src/shared/pdf/geometry.test.ts \
+            src/shared/pdf/geometry.ts \
+            tests/viewer.spec.ts
+        working-directory: frontend
+      - name: Commit deterministic formatting on the PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/features/evidence/SourceViewer.tsx \
+            frontend/src/features/verification/api.test.ts \
+            frontend/src/features/verification/api.ts \
+            frontend/src/features/verification/ReportScreen.tsx \
+            frontend/src/shared/api/contract-boundary.test.ts \
+            frontend/src/shared/api/contracts.ts \
+            frontend/src/shared/pdf/geometry.test.ts \
+            frontend/src/shared/pdf/geometry.ts \
+            frontend/tests/viewer.spec.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "style(pr174): apply locked Prettier formatting"
+            git push origin HEAD:feat/f1-f2-backend-contract-hardening
+          fi
