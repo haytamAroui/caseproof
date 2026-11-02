@@ -30,7 +30,8 @@ describe('Python-generated JSON Schema and AJV contract boundary', () => {
   });
 
   it('rejects missing required fields, invalid enum states and malformed references', () => {
-    const { snapshot_hash: _unused, ...missing } = dossier;
+    const missing: Record<string, unknown> = { ...dossier };
+    delete missing.snapshot_hash;
     expect(validateDossier(missing)).toBe(false);
     expect(validateDossier({ ...dossier, findings: [{ ...finding, identity: 'verified' }] })).toBe(false);
     expect(validateDossier({ ...dossier, findings: [{ ...finding, reference_id: '' }] })).toBe(false);
