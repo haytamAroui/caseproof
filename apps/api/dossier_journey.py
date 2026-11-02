@@ -12,7 +12,9 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
 from pypdf import PdfReader, PdfWriter
 
 from application.extraction.contracts import ExtractionError
@@ -742,6 +744,81 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             case_id,
             "confirm",
             {"bundle_signature": body.bundle_signature, "request_id": body.request_id, "payload": payload},
+        )
+
+    @router.get(base + "/reviews", response_model=ReviewLedgerView, response_model_by_alias=True)
+    def review_ledger(
+        case_id: str,
+        brief_id: str,
+        snapshot_hash: str,
+        authorization: str | None = Header(default=None),
+    ) -> ReviewLedgerView:
+        s, bearer = active(authorization)
+        # A current review is never authorized by a historical snapshot alone.
+        report, _ = s.reopen(bearer, case_id, brief_id, snapshot_hash)
+        rows = s.rpc(bearer, case_id, "decisions", {"snapshot_hash": snapshot_hash})
+        if not isinstance(rows.get("decisions"), list):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            result = ReviewLedgerView.model_validate({
+                "schema": "caseproof-review-ledger-v1",
+                "case_id": case_id,
+                "brief_id": brief_id,
+                "snapshot_hash": report["snapshot_hash"],
+                "decisions": rows["decisions"],
+            })
+            references = {f["reference_id"] for f in report["findings"]}
+            if any(decision.reference_id not in references for decision in result.decisions):
+                raise ValueError("Orphan review")
+        except (ValidationError, ValueError, KeyError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return result
+
+    @router.get(
+        base + "/snapshots/{snapshot_hash}/references/{reference_id}/draft-context",
+        response_model=DraftExcerptView,
+        response_model_by_alias=True,
+    )
+    def draft_context(
+        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> DraftExcerptView:
+        s, bearer = active(authorization)
+        report, original = s.reopen(bearer, case_id, brief_id, snapshot_hash)
+        finding = next((f for f in report["findings"] if f["reference_id"] == reference_id), None)
+        if finding is None:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        text_by_part = {r.part: r.text for r in extract_docx_text_regions(original).regions}
+        region = finding.get("region")
+        offsets = finding.get("offsets")
+        literal = finding.get("literal")
+        excerpt = ""
+        start = end = 0
+        available = False
+        if (
+            isinstance(region, str)
+            and region in text_by_part
+            and isinstance(offsets, dict)
+            and type(offsets.get("start")) is int
+            and type(offsets.get("end")) is int
+            and isinstance(literal, str)
+        ):
+            source_text = text_by_part[region]
+            a, b = offsets["start"], offsets["end"]
+            if 0 <= a < b <= len(source_text) and source_text[a:b] == literal:
+                left = max(0, a - 750)
+                right = min(len(source_text), b + 750)
+                if right - left <= 2400:
+                    excerpt = source_text[left:right]
+                    start, end = a - left, b - left
+                    available = True
+        return DraftExcerptView(
+            schema="caseproof-draft-excerpt-v1",
+            case_id=case_id, brief_id=brief_id, snapshot_hash=snapshot_hash,
+            reference_id=reference_id, original_sha256=hashlib.sha256(original).hexdigest(),
+            available=available, region=region if available else None,
+            excerpt=excerpt, selection_start=start, selection_end=end,
+            reason=None if available else "unsupported_or_ambiguous_anchor",
         )
 
     @router.post(base + "/reviews")

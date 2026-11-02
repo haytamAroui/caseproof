@@ -5,8 +5,10 @@ from pathlib import Path
 
 from application.litigation.frontend_contract import DossierView
 from application.litigation.viewer_contract import ViewerContext
-from application.litigation.workspace_contract import MatterCatalogView, ReportCatalogView
-from apps.api.dossier_journey import InventoryConfirmation
+from application.litigation.workspace_contract import (
+    DraftExcerptView, MatterCatalogView, ReportCatalogView, ReviewLedgerView,
+)
+from apps.api.dossier_journey import InventoryConfirmation, VisualDecisionBody
 from apps.api.workspace_auth import SessionView
 from apps.api.workspace_intake import CreatedMatter, IntakeView, OrganizationView
 
