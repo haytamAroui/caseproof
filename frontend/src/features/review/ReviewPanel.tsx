@@ -93,7 +93,8 @@ export function ReviewPanel({
         row.request_id === submitted?.request_id &&
         row.reference_id === submitted.reference_id &&
         row.decision === submitted.decision &&
-        row.rationale === submitted.rationale,
+        row.rationale === submitted.rationale &&
+        JSON.stringify(row.reviewed_region_ids) === JSON.stringify(submitted.reviewed_region_ids ?? []),
     );
   const dirty = Boolean(rationale.trim()) && outcome !== 'saved' && !saved;
 
@@ -110,7 +111,8 @@ export function ReviewPanel({
             row.request_id === current.request_id &&
             row.reference_id === current.reference_id &&
             row.decision === current.decision &&
-            row.rationale === current.rationale,
+            row.rationale === current.rationale &&
+        JSON.stringify(row.reviewed_region_ids) === JSON.stringify(current.reviewed_region_ids ?? []),
         )
       ) {
         setOutcome('saved');
@@ -148,7 +150,8 @@ export function ReviewPanel({
             row.request_id === command.request_id &&
             row.reference_id === command.reference_id &&
             row.decision === command.decision &&
-            row.rationale === command.rationale,
+            row.rationale === command.rationale &&
+        JSON.stringify(row.reviewed_region_ids) === JSON.stringify(command.reviewed_region_ids ?? []),
         )
       ) {
         setOutcome('unknown');
