@@ -132,7 +132,7 @@ def correction_acceptance(token, sessions, signin, credentials, case, base, curr
 
 
 def main():
-    if os.getenv('GITHUB_REF') not in {'refs/heads/fix/m1-multisource-live-acceptance', 'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main', 'refs/heads/feat/f1-live-acceptance', 'refs/heads/feat/f1-v31-session-recovery', 'refs/heads/feat/f2-live-acceptance', 'refs/heads/feat/f2-v31-evidence-inspection', 'refs/heads/feat/final-hardening-and-verification', 'refs/heads/feat/canonical-mcp-report-gate-20261031'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
+    if os.getenv('GITHUB_REF') not in {'refs/heads/fix/m1-multisource-live-acceptance', 'refs/heads/feat/complete-dossier-journey', 'refs/heads/fix/dossier-ranges-mixed', 'refs/heads/main', 'refs/heads/feat/f1-live-acceptance', 'refs/heads/feat/f1-v31-session-recovery', 'refs/heads/feat/f2-live-acceptance', 'refs/heads/feat/f2-v31-evidence-inspection', 'refs/heads/feat/final-hardening-and-verification', 'refs/heads/feat/canonical-mcp-report-gate-20261031', 'refs/heads/feat/f1-f2-backend-contract-hardening'} or os.getenv('GITHUB_REPOSITORY') != 'haytamAroui/caseproof':
         raise RuntimeError('protected dossier branch required')
     key = os.environ['CASEPROOF_DEV_PUBLISHABLE_KEY']
     signin = SupabasePasswordSignin(PROJECT_REF, key)
@@ -317,6 +317,36 @@ def main():
         if stale != 409 or current['human_decisions'] or current['snapshot_hash'] == review['snapshot_hash']:
             raise RuntimeError('DOSSIER_STALE_REVIEW_NOT_INVALIDATED')
         print('DOSSIER_CHANGED_CONFIRMATION_INVALIDATES_OLD_REVIEW_PASSED', flush=True)
+        if os.getenv('CASEPROOF_PR174_BROWSER_LIVE') == 'YES':
+            old = report['snapshot_hash']
+            historical = json_request(token, 'GET', base + '/history/' + old)
+            if (historical.get('mode') != 'historical_read_only'
+                    or historical.get('currentness') != 'not_asserted'
+                    or historical.get('report', {}).get('snapshot_hash') != old):
+                raise RuntimeError('PR174_HISTORICAL_REPORT_STATUS_UNTRUSTWORTHY')
+            for registered_source, original_source in zip(registered, bundle, strict=True):
+                status, raw = request(token, 'GET', base + '/history/' + old +
+                                      '/sources/' + registered_source['version_id'] + '/original')
+                if status != 200 or hashlib.sha256(raw).hexdigest() != original_source.sha256:
+                    raise RuntimeError('PR174_HISTORICAL_SOURCE_VERSION_OR_HASH_MISMATCH')
+            original_finding = report['findings'][0]
+            stale_command = {
+                'snapshot_hash': old,
+                'original_sha256': bundle[0].sha256,
+                'reference_id': original_finding['reference_id'],
+                'paragraph_index': 0,
+                'before': 'PDF p. 1',
+                'after': 'PDF p. 99',
+            }
+            stale_preview, _ = request(token, 'POST', base + '/corrections/preview', stale_command)
+            stale_commit, _ = request(token, 'POST', base + '/corrections/commit',
+                                      {**stale_command, 'request_id': str(uuid4())})
+            if stale_preview != 409 or stale_commit != 409:
+                raise RuntimeError('PR174_HISTORICAL_CORRECTION_WRITE_NOT_FENCED')
+            if browser_acceptance is None:
+                raise RuntimeError('PR174_GENUINE_BROWSER_REQUIRED')
+            browser_acceptance.historical(versions['draft'], bundle[2].sha256)
+            print('PR174_HISTORICAL_SOURCE_BYTES_ALL_REOPENED_STALE_WRITES_DENIED', flush=True)
         if os.getenv('CASEPROOF_DOSSIER_CORRECTION') == 'YES':
             correction_acceptance(token, sessions, signin, credentials, case, base, current, bundle, registered, proc)
             return

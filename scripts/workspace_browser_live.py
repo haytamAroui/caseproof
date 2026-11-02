@@ -163,6 +163,40 @@ class WorkspaceBrowserAcceptance:
             raise RuntimeError('F1_BROWSER_EXTERNAL_REQUEST')
         print('F1_GENUINE_SIGNIN_CATALOG_REPORT_COLD_RELOAD_FOREIGN_UNGRANTED_AND_BROWSER_CLOCK_EXPIRY_PASSED', flush=True)
 
+    def historical(self, brief: str, original_sha256: str) -> None:
+        """Actual signed browser: old A must reopen after current confirmation B."""
+        page = self.page
+        target = ORIGIN + f'/workspace/matters/{self.case}/briefs/{brief}?snapshot={self.snapshot}'
+        page.goto(target)
+        with page.expect_response(lambda r: '/dossier/history/' in r.url and r.url.endswith(self.snapshot), timeout=45000) as historical, page.expect_response(lambda r: '/dossier/history/' in r.url and r.url.endswith('/viewer/original'), timeout=45000) as original:
+            self.login(page)
+        if historical.value.status != 200:
+            raise RuntimeError('PR174_SIGNED_HISTORICAL_REPORT_DENIED')
+        expect(page.get_by_text('Historical report · read-only')).to_be_visible(timeout=45000)
+        expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=45000)
+        if original.value.status != 200 or original.value.headers.get('x-caseproof-original-sha256') != original_sha256:
+            raise RuntimeError('PR174_SIGNED_OLD_ORIGINAL_BINDING_FAILED')
+        expect(page.get_by_text('Historical original version · read-only.', exact=False)).to_be_visible()
+        for action in ('Confirm support', 'Commit correction', 'Export signed ledger'):
+            if page.get_by_role('button', name=action).count():
+                raise RuntimeError('PR174_STALE_WRITE_CONTROL_VISIBLE')
+        canvas = page.locator('canvas[aria-label="Preserved PDF page pixels"]')
+        if int(canvas.get_attribute('width') or '0') == 0:
+            raise RuntimeError('PR174_HISTORICAL_RASTER_NOT_RENDERED')
+        page.get_by_role('button', name='Rotate page', exact=True).click()
+        expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=25000)
+        page.get_by_role('button', name='Zoom in', exact=True).click()
+        expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=25000)
+        page.reload()  # Cold browser reconstruction must obtain fresh provider Auth.
+        self.login(page)
+        expect(page.get_by_text('Historical report · read-only')).to_be_visible(timeout=45000)
+        expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=45000)
+        if page.evaluate('() => localStorage.length + sessionStorage.length'):
+            raise RuntimeError('PR174_HISTORICAL_SESSION_PERSISTED')
+        if self.external:
+            raise RuntimeError('PR174_HISTORICAL_BROWSER_EXTERNAL_REQUEST')
+        print('PR174_SIGNED_HISTORY_OLD_SOURCE_READONLY_ROTATE_ZOOM_COLD_REOPEN_PASSED', flush=True)
+
     def revoked(self) -> None:
         # Current page held the allowed report before the grant was revoked.
         # Explicit navigation reauthorizes; 404 must remove its private DOM/cache.

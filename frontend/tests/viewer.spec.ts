@@ -289,6 +289,19 @@ test('printed p.4 targets PDF p.6, preserves uncertainty at 200% and returns fro
       },
     }),
   );
+  await page.route('**/viewer/regions', (route) =>
+    route.fulfill({
+      json: {
+        schema: 'caseproof-raster-overlays-v1',
+        snapshot_hash: snapshot,
+        original_sha256: large.sha256,
+        source_version_id: 'source',
+        regions: [],
+        unassessed_region_count: 2,
+        interpretation: 'navigation_only_never_a_verdict',
+      },
+    }),
+  );
   await page.goto(
     `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
   );
@@ -418,6 +431,19 @@ test('scan has pixels and explicit text/OCR uncertainty; denied switch clears it
       headers: {
         'X-CaseProof-Snapshot': snapshot,
         'X-CaseProof-Original-SHA256': scan.sha256,
+      },
+    }),
+  );
+  await page.route('**/viewer/regions', (route) =>
+    route.fulfill({
+      json: {
+        schema: 'caseproof-raster-overlays-v1',
+        snapshot_hash: snapshot,
+        original_sha256: scan.sha256,
+        source_version_id: 'source',
+        regions: [],
+        unassessed_region_count: 2,
+        interpretation: 'navigation_only_never_a_verdict',
       },
     }),
   );
