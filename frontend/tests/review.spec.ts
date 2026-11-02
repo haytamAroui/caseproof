@@ -131,7 +131,11 @@ test('review requires rendered original and explicit region inspection; lost ack
       reviewed_region_ids: string[];
     };
     ledger.decisions.push({
-      ...data,
+      reference_id: data.reference_id,
+      request_id: data.request_id,
+      decision: data.decision,
+      rationale: data.rationale,
+      reviewed_region_ids: data.reviewed_region_ids,
       reviewer_id: 'reviewer',
       timestamp: '2026-11-02T17:00:00Z',
     });
