@@ -51,6 +51,12 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
         claims.
       </Notice>
       {query.isPending && <Notice>Reading current source state…</Notice>}
+      {query.isError && receipt && (
+        <Notice error>
+          The previous receipt is historical. Current authorization and source
+          availability could not be refreshed; do not treat it as current proof.
+        </Notice>
+      )}
       {query.isError && (
         <Notice error>
           Current intake could not be read. Reconnect if needed, then refresh.
@@ -67,36 +73,45 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
       >
         Refresh source state
       </Button>
-      {data?.readback_complete ? (
-        <>
+      {data && data.sources.length > 0 && (
+        <section aria-label="Registered original status">
+          <h2>Registered originals and signed readback</h2>
           <Notice>
-            All originals passed fresh authorized hash readback. Processing and
-            inventory confirmation are separate.
+            Each original is registered, but registration alone does not prove
+            that its bytes are preserved. Unknown includes missing or masked
+            storage. A mismatch cannot be considered preserved. Processing is
+            separate from source identity and may need OCR review.
           </Notice>
           <ul className="matter-list">
             {data.sources.map((s) => (
               <li key={s.version_id}>
                 <strong>{s.filename}</strong>
                 <p>
-                  {s.role} · {s.byte_length} bytes ·{' '}
-                  {s.processing.replaceAll('_', ' ')}
+                  {s.role} · registered · readback{' '}
+                  {s.readback ?? (data.readback_complete ? 'verified' : 'unknown')}
+                  {' · '}processing {s.processing.replaceAll('_', ' ')}
                   {s.page_count != null ? ` · ${s.page_count} PDF pages` : ''}
                 </p>
+                {s.processing === 'partial' && (
+                  <p>Some pages still require OCR or processing review.</p>
+                )}
+                {s.processing === 'unavailable' && (
+                  <p>Processing has not been established. Do not assume OCR completed.</p>
+                )}
                 <details>
-                  <summary>Original provenance</summary>
-                  <p>
-                    Version <code>{s.version_id}</code>
-                  </p>
-                  <p>
-                    SHA-256 <code>{s.sha256}</code>
-                  </p>
+                  <summary>Registered original provenance</summary>
+                  <p>Version <code>{s.version_id}</code></p>
+                  <p>SHA-256 <code>{s.sha256}</code></p>
                 </details>
               </li>
             ))}
           </ul>
-          <Link to={`/matters/${caseId}/inventory`}>
-            Review inventory and page mappings
-          </Link>
+        </section>
+      )}
+      {data?.readback_complete && !query.isError ? (
+        <>
+          <Notice>All originals passed fresh authorized hash readback. Processing and inventory confirmation remain separate.</Notice>
+          <Link to={`/matters/${caseId}/inventory`}>Review inventory and page mappings</Link>
         </>
       ) : (
         <form
