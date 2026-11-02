@@ -109,7 +109,7 @@ export function ReportScreen({
       </Notice>
       <div className="review-layout">
         <section className="queue" aria-label="References" onKeyDown={(event) => {
-          if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.isComposing) return;
+          if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.nativeEvent.isComposing) return;
           if (event.key !== 'j' && event.key !== 'k') return;
           const index = filtered.findIndex((f) => f.reference_id === selected?.reference_id);
           const next = filtered[index + (event.key === 'j' ? 1 : -1)];
