@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from application.documents.file_boundary import DOCX, validate_original_container
 from application.extraction.contracts import ExtractionError
 from apps.api.access_control import AccessFailure, AccessRejected
-from apps.api.dossier_journey import DossierStore, IdentityConfirmation
+from apps.api.dossier_journey import DossierStore, IdentityConfirmation, InventoryReviewException
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_live_journey import HOST, JourneyClient, MatterCreate, safe_original_filename
 from apps.api.signed_document_parse import parse_verified_original
@@ -87,6 +87,7 @@ class SourceView(Contract):
     media_type: str = Field(max_length=100)
     page_count: int | None = Field(default=None, ge=0, le=200)
     processing: Literal['preserved', 'text_extracted', 'partial', 'unavailable']
+    readback: Literal['verified', 'unknown', 'integrity_mismatch'] = 'unknown'
 
 
 class IntakeView(Contract):
@@ -96,6 +97,7 @@ class IntakeView(Contract):
     brief_id: str | None = Field(default=None, pattern=r'^[0-9a-f-]{36}$')
     sources: list[SourceView] = Field(max_length=32)
     entries: list[IdentityConfirmation] = Field(max_length=512)
+    exceptions: list[InventoryReviewException] = Field(default_factory=list, max_length=64)
     confirmation_id: str | None = Field(default=None, max_length=128)
     inventory_complete: bool
     readback_complete: bool
@@ -252,10 +254,24 @@ class WorkspaceIntake:
             # Reauthorize the manifest after failure; this does not recover bytes.
             self.client.call(bearer, 'state', case_id=case)
             pending = self.client.bundle_manifest(bearer, case)['sources']
+            # Each state is independently established through a fresh signed read.
+            # Missing and masked Storage objects remain indistinguishable.
+            partial = []
+            for row in pending:
+                try:
+                    raw = self.client.library.read(bearer=bearer, case_id=case,
+                        document_id=row['document_id'], version_id=row['version_id'])
+                except PrivateStorageFailure:
+                    readback = 'unknown'
+                else:
+                    readback = ('verified' if len(raw) == row['byte_length']
+                                and hashlib.sha256(raw).hexdigest() == row['sha256']
+                                else 'integrity_mismatch')
+                partial.append(SourceView(**{k: row[k] for k in ('role', 'filename', 'document_id',
+                    'version_id', 'sha256', 'byte_length', 'media_type')},
+                    processing='unavailable', readback=readback))
             return IntakeView(schema='caseproof-workspace-intake-v1', case_id=case,
-                bundle_signature=context['bundle_signature'], sources=[SourceView(
-                    **{k: r[k] for k in ('role', 'filename', 'document_id', 'version_id',
-                       'sha256', 'byte_length', 'media_type')}, processing='unavailable') for r in pending],
+                bundle_signature=context['bundle_signature'], sources=partial,
                 entries=[], inventory_complete=False, readback_complete=False)
         inventory = next((s for s in sources if s['role'] == 'inventory'), None)
         confirmation = context.get('confirmation')
@@ -272,14 +288,17 @@ class WorkspaceIntake:
             partial = bool(row.get('image_only_pages') or row.get('parse_error'))
             projected.append(SourceView(**{k: row[k] for k in ('role', 'filename', 'document_id', 'version_id',
                 'sha256', 'byte_length', 'media_type')}, page_count=row.get('page_count'),
-                processing='unavailable' if row.get('parse_error') else 'partial' if partial else 'text_extracted' if row['role'] == 'exhibit' else 'preserved'))
+                processing='unavailable' if row.get('parse_error') else 'partial' if partial else 'text_extracted' if row['role'] == 'exhibit' else 'preserved',
+                readback='verified'))
         current = self.store.rpc(bearer, case, 'context')
         if current != context:
             raise HTTPException(409, 'Intake changed during readback; refresh sources.')
         return IntakeView(schema='caseproof-workspace-intake-v1', case_id=case, bundle_signature=context['bundle_signature'],
             brief_id=next((s['version_id'] for s in sources if s['role'] == 'draft'), None),
-            sources=projected, entries=entries, confirmation_id=confirmation['request_id'] if confirmation else None,
-            inventory_complete=bool(payload.get('inventory_complete')), readback_complete=True)
+            sources=projected, entries=entries, exceptions=payload.get('exceptions', []),
+            confirmation_id=confirmation['request_id'] if confirmation else None,
+            inventory_complete=bool(payload.get('inventory_complete') and not payload.get('exceptions')),
+            readback_complete=True)
 
 
 def create_workspace_intake_router(service: WorkspaceIntake | None) -> APIRouter:
