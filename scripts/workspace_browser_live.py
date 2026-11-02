@@ -82,11 +82,19 @@ class WorkspaceBrowserAcceptance:
             labels = page.locator('dl[aria-label="Reference page spaces"] dd')
             expect(labels.nth(0)).to_have_text('1')
             expect(labels.nth(2)).to_have_text('12')
-            page.locator('.queue .finding').nth(1).click()
+            print('F2_STAGE_SWITCH_TO_SCAN', flush=True)
+            with page.expect_response(lambda r: r.url.endswith('/viewer/original'), timeout=45000) as switched:
+                page.locator('.queue .finding').nth(1).click()
+            if switched.value.status != 200:
+                raise RuntimeError('F2_SCAN_ORIGINAL_READ_DENIED')
             expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=45000)
             expect(labels.nth(0)).to_have_text('1')
             expect(labels.nth(1)).to_have_text('7')
-            page.locator('.queue .finding').first.click()
+            print('F2_STAGE_RETURN_TO_TEXT_SOURCE', flush=True)
+            with page.expect_response(lambda r: r.url.endswith('/viewer/original'), timeout=45000) as restored:
+                page.locator('.queue .finding').first.click()
+            if restored.value.status != 200:
+                raise RuntimeError('F2_TEXT_ORIGINAL_READ_DENIED')
             expect(page.get_by_text('Source page rendered.', exact=True)).to_be_visible(timeout=45000)
             expect(dimensions).to_have_text(original_dimensions)
             print('F2_GENUINE_PAGE_SPACES_AND_UNCERTAINTY_PRESERVED_PASSED', flush=True)
