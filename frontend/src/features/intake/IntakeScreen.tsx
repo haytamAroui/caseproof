@@ -44,9 +44,10 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
       <h1>Preserve the source bundle</h1>
       <Notice>
         Development intake accepts one DOCX draft, one UTF-8 text inventory and
-        two PDF exhibits, including scans. Maximum 5 MiB per file and 12 MB
-        combined. All four files are checked before any original is written.
-        Preservation does not confirm inventory or verify claims.
+        two PDF exhibits, including scans. Maximum 5 MiB per file, 12 MB
+        combined and 64 pages per PDF. All four files are checked before any
+        original is written. Preservation does not confirm inventory or verify
+        claims.
       </Notice>
       {query.isPending && <Notice>Reading current source state…</Notice>}
       {query.isError && (

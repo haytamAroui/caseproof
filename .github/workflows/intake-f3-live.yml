@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [feat/f3-complete-intake]
+    paths-ignore: ['**/*.md']
 permissions:
   contents: read
 jobs:
@@ -38,5 +39,5 @@ jobs:
         working-directory: frontend
       - name: Install genuine browser runtime
         run: uv run --locked python -m playwright install --with-deps chromium
-      - name: Execute genuine browser Auth, grants, expiry and cold reopen with scoped teardown
+      - name: Execute genuine browser creation, transfer recovery, confirmation and cold reopen with scoped teardown
         run: uv run --locked python -m scripts.dossier_live
