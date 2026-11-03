@@ -299,3 +299,35 @@ def test_f6_release_manifest_links_exact_preserved_pdf_and_physical_page():
     )
     # No URL supplied by a finding was trusted as a release destination.
     assert all(x["viewer_path"].startswith("/matters/") for x in links)
+
+
+def test_release_manifest_rejects_malformed_frozen_report_fields():
+    import pytest
+
+    _, store = client()
+    valid = {**store.report, "human_decisions": store.decisions}
+    malformed = [
+        {**valid, "case_id": None},
+        {**valid, "coverage": []},
+        {**valid, "findings": [None]},
+        {**valid, "sources": [{"role": "draft", "version_id": [], "sha256": "a"}]},
+        {**valid, "sources": [{"role": "draft", "version_id": "x"}]},
+        {**valid, "sources": [{"role": "draft", "version_id": "x", "sha256": "invalid"}]},
+        {**valid, "sources": valid["sources"] * 2},
+        {**valid, "findings": [{"reference_id": "r", "version_id": []}]},
+    ]
+    for report in malformed:
+        with pytest.raises(AccessRejected):
+            release_manifest(report, {})
+
+
+def test_release_preview_and_commit_fail_closed_for_malformed_frozen_report():
+    api, store = client()
+    store.report["coverage"] = []
+    preview = api.get(base() + "/preview", headers=header(), params={"snapshot_hash": SNAPSHOT})
+    assert preview.status_code == 503
+    release = api.post(base(), headers=header(), json={
+        "release_id": str(uuid4()), "snapshot_hash": SNAPSHOT,
+    })
+    assert release.status_code == 503
+    assert not store.saved
