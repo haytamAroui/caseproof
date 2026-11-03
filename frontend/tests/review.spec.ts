@@ -278,6 +278,7 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
     route.fulfill({ json: { mode: 'historical_read_only', report } }),
   );
   await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
   const correction = page.getByRole('region', {
     name: 'Correction preview and recheck',
     exact: true,
