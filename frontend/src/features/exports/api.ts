@@ -161,9 +161,15 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
   )
     throw new Error('Release manifest failed validation.');
   const expectedSourcePath = (version: string) =>
-    '/v2/matters/' + encodeURIComponent(scope.caseId) + '/briefs/' +
-    encodeURIComponent(scope.briefId) + '/dossier/history/' + scope.snapshot +
-    '/sources/' + encodeURIComponent(version) + '/original';
+    '/v2/matters/' +
+    encodeURIComponent(scope.caseId) +
+    '/briefs/' +
+    encodeURIComponent(scope.briefId) +
+    '/dossier/history/' +
+    scope.snapshot +
+    '/sources/' +
+    encodeURIComponent(version) +
+    '/original';
   if (
     !Array.isArray(manifest.source_links) ||
     manifest.source_links.length !== manifest.sources.length ||
@@ -181,8 +187,13 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
     !Array.isArray(manifest.reference_links) ||
     manifest.reference_links.length > 10_000 ||
     !manifest.reference_links.every((link: unknown) => {
-      if (!plain(link) || typeof link.reference_id !== 'string' || !link.reference_id ||
-        link.reference_id.length > 256) return false;
+      if (
+        !plain(link) ||
+        typeof link.reference_id !== 'string' ||
+        !link.reference_id ||
+        link.reference_id.length > 256
+      )
+        return false;
       const source = (manifest.sources as ReleaseManifest['sources']).find(
         (s) => s.version_id === link.source_version_id,
       );
@@ -191,14 +202,23 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
         source !== undefined &&
         link.original_sha256 === source.sha256 &&
         (page === null || (number(page) && page > 0 && page <= 10000)) &&
-        link.page_space === (page === null ? 'unmapped' : 'physical_pdf_page') &&
+        link.page_space ===
+          (page === null ? 'unmapped' : 'physical_pdf_page') &&
         link.viewer_path ===
-          '/matters/' + encodeURIComponent(scope.caseId) + '/briefs/' +
-          encodeURIComponent(scope.briefId) + '?snapshot=' + scope.snapshot +
-          '&finding=' + encodeURIComponent(link.reference_id)
+          '/matters/' +
+            encodeURIComponent(scope.caseId) +
+            '/briefs/' +
+            encodeURIComponent(scope.briefId) +
+            '?snapshot=' +
+            scope.snapshot +
+            '&finding=' +
+            encodeURIComponent(link.reference_id)
       );
     })
-  ) throw new Error('Unrecognized source and physical-page navigation bindings.');
+  )
+    throw new Error(
+      'Unrecognized source and physical-page navigation bindings.',
+    );
   return raw as unknown as ReleaseRecord;
 }
 export function parseReleaseList(

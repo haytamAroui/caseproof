@@ -183,8 +183,13 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
     page.getByRole('link', { name: 'Inspect preserved reference ref-one' }),
   ).toHaveAttribute(
     'href',
-    '/workspace/matters/' + caseId + '/briefs/' + briefId +
-      '?snapshot=' + snapshot + '&finding=ref-one',
+    '/workspace/matters/' +
+      caseId +
+      '/briefs/' +
+      briefId +
+      '?snapshot=' +
+      snapshot +
+      '&finding=ref-one',
   );
   await page.getByLabel('Output format').selectOption('json');
   const started = page.waitForEvent('download');

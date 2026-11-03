@@ -276,7 +276,12 @@ def test_f6_release_manifest_links_exact_preserved_pdf_and_physical_page():
         "reference_id": "ref-0002", "version_id": exhibit,
         "page_mapping": "unmapped", "pdf_page": None,
     }]
-    manifest = release_manifest(report, _checked_artifacts(report, store.original))
+    # Derivative generation uses the complete canonical findings contract;
+    # link projection is separately tested with minimalist synthetic locators.
+    artifacts = _checked_artifacts(
+        {**store.report, "human_decisions": store.decisions}, store.original
+    )
+    manifest = release_manifest(report, artifacts)
     links = manifest["reference_links"]
     assert len(links) == 2
     assert links[0]["reference_id"] == "ref-0001"

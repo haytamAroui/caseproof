@@ -318,10 +318,11 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                   </Link>
                   <span className="small">
                     {' '}
-                    · {target.pdf_page === null
+                    ·{' '}
+                    {target.pdf_page === null
                       ? 'Physical PDF page not mapped'
-                      : 'Physical PDF page ' + target.pdf_page}
-                    {' '}· version <code>{target.source_version_id}</code>
+                      : 'Physical PDF page ' + target.pdf_page}{' '}
+                    · version <code>{target.source_version_id}</code>
                   </span>
                 </li>
               ))}

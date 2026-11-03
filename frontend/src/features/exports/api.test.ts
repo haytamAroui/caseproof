@@ -136,7 +136,10 @@ describe('F6 reviewed export contracts', () => {
           manifest: {
             ...manifest,
             source_links: [
-              { ...manifest.source_links[0], original_path: 'https://foreign.invalid' },
+              {
+                ...manifest.source_links[0],
+                original_path: 'https://foreign.invalid',
+              },
             ],
           },
         },
@@ -150,7 +153,11 @@ describe('F6 reviewed export contracts', () => {
           manifest: {
             ...manifest,
             reference_links: [
-              { ...manifest.reference_links[0], pdf_page: null, page_space: 'physical_pdf_page' },
+              {
+                ...manifest.reference_links[0],
+                pdf_page: null,
+                page_space: 'physical_pdf_page',
+              },
             ],
           },
         },
