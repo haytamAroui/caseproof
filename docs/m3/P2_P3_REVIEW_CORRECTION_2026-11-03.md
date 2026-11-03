@@ -1,0 +1,18 @@
+# P2/P3 — reviewer workspace, correction and recheck
+
+Base: `6551f3a19e0f59719b6dec3e9d100b6237c5ab42` (`main`, PR #182). Scope: P2/P3 in `AGENT_MASTER_TODO.md`. Export, historical-release changes and pilot approval remain in later bundles. The implementation reuses the canonical signed backend, frozen report and existing reviewer/correction feature boundaries.
+
+## Implemented changes
+
+- **P2 scope isolation:** bind inspection and form state to session epoch, matter, draft, snapshot, reference and historical mode. Changing snapshot or matter cannot carry an earlier inspection, checkbox, rationale or saved/pending state into the new scope. Playwright regression exercises a same-reference snapshot change.
+- **P3 correction mapping:** a supported plain-text target, including text split across simple formatted runs, in a direct body paragraph can be found when unrelated ordinary table paragraphs and unrelated multi-run formatting are present. The whole extracted main-body text must still agree exactly with document-order paragraph text. Table targets, fields/bookmarks/hyperlinks in target paragraphs, complex runs, nested paragraphs, hidden/structured content, tracked changes, repeated ambiguous occurrences and stale/cross-paragraph offsets remain refused. Replacement inherits the first affected run's formatting while untouched text retains its run formatting. Correction still binds source hash, current report and same-actor persisted review; originals and untouched ZIP members stay unchanged.
+- **P3 text safety:** replacement text containing XML 1.0-invalid code points, tabs or line breaks is refused before a derivative is emitted; no substitution or normalization is represented as the user's requested edit.
+- **P3 comparison:** show previous and rechecked report counts separately for identity, physical page, text fidelity and uncertainty. Counts do not match references, establish legal support or transfer review. The original two report lists remain available for manual comparison.
+
+## Evidence and boundaries
+
+Historical signed-browser validation of the pre-existing F4/F5 path is in [PR #182 run 41689330468](https://github.com/haytamAroui/caseproof/actions/runs/41689330468): saved review, lost-ack correction reconciliation, activated-version recheck, prior/new report reopening, revocation and zero-residual cleanup. This receipt is not proof for a later implementation head.
+
+Affected verification: `tests/test_f5_correction_anchor.py`, `tests/test_dossier_correction_preview.py`, `tests/test_f5_correction_routes.py`, `tests/test_f5_correction_status.py`, `tests/test_dossier_correction_commit.py`, `frontend/src/features/corrections/comparison.test.ts`, and `frontend/tests/review.spec.ts`. Full CI and a genuine signed-browser journey must be recorded at the actual PR head. A mocked browser test is not a substitute for signed acceptance.
+
+This work does not claim native Word tracked changes, edits across paragraphs or unsupported structures, a universal DOCX locator, automatic correspondence across snapshots, review-decision transfer, representative legal accuracy, or independent security/privacy/legal approval. The unresolved D03 revision-view decision and downstream T41–T49 capabilities remain governed by `docs/CASEPROOF_AGENT_MASTER_TODO.md`; the shipped implementation conservatively abstains on tracked changes and unsupported structures. No migration, new permission, source mutation or deployment is introduced. Revert the PR to roll back the code and UI; no stored data conversion is needed.

@@ -320,6 +320,15 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
   await expect(
     correction.getByRole('heading', { name: 'Rechecked report', exact: true }),
   ).toBeVisible();
+  const counts = correction.getByRole('region', {
+    name: 'Comparison of check counts',
+  });
+  await expect(
+    counts.getByRole('row', { name: 'OCR unreliable 1 1' }),
+  ).toBeVisible();
+  await expect(
+    counts.getByText('They do not match references', { exact: false }),
+  ).toBeVisible();
   expect(commits).toBe(1);
 });
 
@@ -386,4 +395,57 @@ test('correction commit is blocked without a durable actor-scoped review receipt
     }),
   ).toBeDisabled();
   expect(commits).toBe(0);
+});
+
+test('inspection and unsaved review never carry into another snapshot with the same reference', async ({
+  page,
+}) => {
+  const nextSnapshot = 'f'.repeat(64);
+  await page.route('**/dossier?*', (route) => {
+    const requested = new URL(route.request().url()).searchParams.get(
+      'snapshot_hash',
+    );
+    return route.fulfill({ json: { ...report, snapshot_hash: requested } });
+  });
+  await page.route('**/reviews?*', (route) => {
+    const requested = new URL(route.request().url()).searchParams.get(
+      'snapshot_hash',
+    );
+    return route.fulfill({
+      json: { ...ledger, snapshot_hash: requested, decisions: [] },
+    });
+  });
+  await page.route('**/viewer', (route) =>
+    route.request().url().includes(nextSnapshot)
+      ? route.fulfill({ status: 503, json: { error: 'unavailable' } })
+      : route.fallback(),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  const review = page.getByRole('region', { name: 'Human review' });
+  await review.getByRole('checkbox', { name: /Region 1/ }).check();
+  const rationale = review.getByLabel(
+    'Rationale (required, visible to authorized reviewers)',
+  );
+  await rationale.fill('Prior snapshot only');
+  await expect(
+    review.getByRole('button', { name: 'Save human decision' }),
+  ).toBeEnabled();
+  await page.evaluate((url) => {
+    history.pushState({}, '', url);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, `/workspace/matters/${caseId}/briefs/${brief}?snapshot=${nextSnapshot}`);
+  await expect(page.getByText(nextSnapshot, { exact: true })).toBeVisible();
+  await expect(rationale).toHaveValue('');
+  await expect(
+    review.getByRole('button', { name: 'Save human decision' }),
+  ).toBeDisabled();
+  await expect(
+    review.getByText('Open and inspect the preserved original', {
+      exact: false,
+    }),
+  ).toBeVisible();
 });

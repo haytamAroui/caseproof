@@ -281,7 +281,7 @@ export function ReportScreen({
                 <StateValue label="Human support" value={selected.support} />
               </dl>
               <FindingInspection
-                key={selected.reference_id}
+                key={`${session.epoch}:${caseId}:${briefId}:${snapshot}:${selected.reference_id}:${historical}`}
                 finding={selected}
                 historical={historical}
                 renderSource={renderSource}

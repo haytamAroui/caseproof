@@ -16,16 +16,20 @@ _NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
     """Return a paragraph index only when extraction and editable XML agree.
 
-    The existing editor accepts a single plain run in a direct body paragraph.
-    Refuse the entire anchor if other body content cannot be mapped exactly.
+    The editor accepts plain text runs in a direct body paragraph. Other
+    paragraphs and tables may coexist only when the extracted body is mapped
+    exactly; unsupported target structures and tracked changes still abstain.
     """
     literal, offsets = finding.get('literal'), finding.get('offsets')
     if (finding.get('region') != 'word/document.xml' or not isinstance(literal, str)
             or not literal or not isinstance(offsets, dict)
             or type(offsets.get('start')) is not int or type(offsets.get('end')) is not int):
         raise ValueError('unsupported reference anchor')
-    regions = extract_docx_text_regions(original).regions
-    region = next((r.text for r in regions if r.part == 'word/document.xml'), None)
+    extraction = extract_docx_text_regions(original)
+    region = next((r.text for r in extraction.regions if r.part == 'word/document.xml'), None)
+    if any(part in {'word/document.xml#hidden', 'word/document.xml#structured'}
+           for part in extraction.unscanned_parts):
+        raise ValueError('unmapped structured or hidden content')
     start, end = offsets['start'], offsets['end']
     if region is None or start < 0 or end <= start or region[start:end] != literal:
         raise ValueError('stale reference anchor')
@@ -42,39 +46,51 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
     if len(bodies) != 1:
         raise ValueError('unsupported body')
     body = elements(bodies[0])
-    if any(n.namespaceURI != _NS or n.localName not in {'p', 'sectPr'} for n in body):
+    if any(n.namespaceURI != _NS or n.localName not in {'p', 'tbl', 'sectPr'} for n in body):
         raise ValueError('unsupported body structure')
-    paragraphs = [n for n in body if n.localName == 'p']
+    direct = [n for n in body if n.namespaceURI == _NS and n.localName == 'p']
+    direct_indices = {id(node): index for index, node in enumerate(direct)}
     pieces: list[str] = []
-    spans: list[tuple[int, int, int]] = []
+    spans: list[tuple[Any, int | None, int, int]] = []
     cursor = 0
-    for index, paragraph in enumerate(paragraphs):
-        children = elements(paragraph)
-        runs = [n for n in children if n.namespaceURI == _NS and n.localName == 'r']
-        if any(n.namespaceURI != _NS or n.localName not in {'pPr', 'r'} for n in children):
-            raise ValueError('unsupported paragraph')
-        if not runs:
-            continue
-        if len(runs) != 1:
-            raise ValueError('unsupported run count')
-        run = elements(runs[0])
-        texts = [n for n in run if n.namespaceURI == _NS and n.localName == 't']
-        if len(texts) != 1 or any(n.namespaceURI != _NS or n.localName not in {'rPr', 't'} for n in run):
-            raise ValueError('unsupported run')
-        value = ''.join(n.data for n in texts[0].childNodes if n.nodeType == n.TEXT_NODE)
+    # Match the extractor's document order, including table paragraphs. Reject
+    # nested paragraphs, since a flattened offset cannot identify their parent.
+    for paragraph in bodies[0].getElementsByTagNameNS(_NS, 'p'):
+        ancestor = paragraph.parentNode
+        while ancestor is not None and ancestor is not bodies[0]:
+            if getattr(ancestor, 'namespaceURI', None) == _NS and getattr(ancestor, 'localName', None) == 'p':
+                raise ValueError('nested paragraph unsupported')
+            ancestor = ancestor.parentNode
+        value = ''.join(
+            child.data
+            for text in paragraph.getElementsByTagNameNS(_NS, 't')
+            for child in text.childNodes if child.nodeType == child.TEXT_NODE
+        )
         if not value:
             continue
         if pieces:
             cursor += 1
         pieces.append(value)
-        spans.append((index, cursor, cursor + len(value)))
+        spans.append((paragraph, direct_indices.get(id(paragraph)), cursor, cursor + len(value)))
         cursor += len(value)
     if '\n'.join(pieces) != region:
         raise ValueError('unmapped document text')
-    matches = [(index, left, right) for index, left, right in spans if left <= start < end <= right]
+    matches = [(paragraph, index, left, right) for paragraph, index, left, right in spans
+               if left <= start < end <= right]
     if len(matches) != 1:
         raise ValueError('reference crosses paragraph')
-    index, left, right = matches[0]
+    paragraph, index, left, right = matches[0]
+    if index is None:
+        raise ValueError('target is not a direct body paragraph')
+    children = elements(paragraph)
+    runs = [n for n in children if n.namespaceURI == _NS and n.localName == 'r']
+    if not runs or any(n.namespaceURI != _NS or n.localName not in {'pPr', 'r'} for n in children):
+        raise ValueError('unsupported target paragraph')
+    for target_run in runs:
+        run = elements(target_run)
+        texts = [n for n in run if n.namespaceURI == _NS and n.localName == 't']
+        if len(texts) != 1 or any(n.namespaceURI != _NS or n.localName not in {'rPr', 't'} for n in run):
+            raise ValueError('unsupported target run')
     if region[left:right].count(literal) != 1:
         raise ValueError('ambiguous reference in paragraph')
     return index

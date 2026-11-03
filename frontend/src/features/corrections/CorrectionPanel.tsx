@@ -6,6 +6,7 @@ import { ApiError, parseDossier } from '../../shared/api';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 import { useSession } from '../../shared/session';
 import { CorrectionRecovery } from './CorrectionRecovery';
+import { comparisonCounts } from './comparison';
 
 type Scope = { caseId: string; briefId: string; snapshot: string };
 type Preview = {
@@ -184,6 +185,7 @@ export function CorrectionPanel({
     before.length > 0 &&
     before.length <= 4000 &&
     after.length <= 4000 &&
+    !/[\t\r\n]/.test(after) &&
     before !== after;
   function invalidate() {
     setPreview(null);
@@ -345,7 +347,10 @@ export function CorrectionPanel({
       />
       <Notice>
         Only the exact reference in a supported DOCX paragraph can be replaced.
-        Commit requires your own saved human decision in the current snapshot.
+        Replacement text inherits the formatting of the first affected run;
+        surrounding text keeps its formatting. Tabs and line breaks are not
+        supported in a replacement. Commit requires your own saved human
+        decision in the current snapshot.
       </Notice>
       {!reviewReady && (
         <Notice error>
@@ -436,6 +441,10 @@ export function CorrectionPanel({
             Each report is shown independently. A changed reference may have a
             new identity; review both lists and coverage.
           </Notice>
+          <ComparisonSummary
+            old={comparison.old}
+            current={comparison.current}
+          />
           {(
             [
               ['Previous report', comparison.old],
@@ -477,6 +486,54 @@ export function CorrectionPanel({
       <p role="status">
         {busy ? 'Waiting for an authorized server response…' : message}
       </p>
+    </section>
+  );
+}
+
+function ComparisonSummary({
+  old,
+  current,
+}: {
+  old: DossierView;
+  current: DossierView;
+}) {
+  const previous = comparisonCounts(old);
+  const rechecked = comparisonCounts(current);
+  const rows: Array<[string, keyof typeof previous]> = [
+    ['Detected references', 'references'],
+    ['Identity resolved', 'identityResolved'],
+    ['Physical page mapped', 'pageMapped'],
+    ['Text exact match', 'exactText'],
+    ['Text not assessed', 'fidelityUnassessed'],
+    ['OCR unreliable', 'ocrUnreliable'],
+    ['Representation conflict', 'representationConflict'],
+    ['Support dimension not assessed', 'supportUnassessed'],
+  ];
+  return (
+    <section aria-label="Comparison of check counts">
+      <h4>Check counts by report</h4>
+      <p>
+        Counts describe each report separately. They do not match references or
+        transfer review decisions.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Check</th>
+            <th scope="col">Previous</th>
+            <th scope="col">Rechecked</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([label, field]) => (
+            <tr key={field}>
+              <th scope="row">{label}</th>
+              <td>{previous[field]}</td>
+              <td>{rechecked[field]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }

@@ -18,6 +18,17 @@ from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 
+def _valid_xml_text(value: str) -> bool:
+    """XML 1.0 character set; never silently alter a lawyer's text."""
+    return all(
+        ord(ch) in (0x09, 0x0A, 0x0D)
+        or 0x20 <= ord(ch) <= 0xD7FF
+        or 0xE000 <= ord(ch) <= 0xFFFD
+        or 0x10000 <= ord(ch) <= 0x10FFFF
+        for ch in value
+    )
+
+
 def _validate_derivative_package(original: bytes) -> None:
     # Preserve original evidence but refuse to emit an active derivative. Do not
     # silently remove links/macros and imply that edited bytes are the original.
@@ -126,10 +137,11 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
 
 def corrected_docx_preview(original: bytes, *, expected_sha256: str,
                            paragraph_index: int, before: str, after: str) -> bytes:
-    """Bounded single-run correction; preserve all other ZIP member bytes.
+    """Bounded plain-run correction; preserve all other ZIP member bytes.
 
-    Complex paragraphs abstain instead of flattening fields, tracked changes,
-    hyperlinks, bookmarks or multiple formatted runs. This creates a derivative,
+    Replacement inherits the first affected run's formatting; unaffected text
+    retains its run formatting. Fields, revisions, hyperlinks and bookmarks
+    within the target remain unsupported. This creates a derivative,
     never a new accepted source version or a persisted reviewer decision.
     """
     from hashlib import sha256
@@ -137,7 +149,7 @@ def corrected_docx_preview(original: bytes, *, expected_sha256: str,
     if (sha256(original).hexdigest() != expected_sha256
             or type(paragraph_index) is not int or paragraph_index < 0
             or not before or before == after or len(after) > 4000
-            or any(ord(c) < 32 and c not in '\t\n\r' for c in after)):
+            or not _valid_xml_text(after) or any(ch in after for ch in '\t\n\r')):
         raise ValueError('stale or invalid correction')
     _validate_derivative_package(original)
     with ZipFile(io.BytesIO(original)) as archive:
@@ -146,6 +158,9 @@ def corrected_docx_preview(original: bytes, *, expected_sha256: str,
         # Preserve namespace declarations, including prefixes referenced only by
         # mc:Ignorable. ElementTree would drop such declarations on serialization.
         document = minidom.parseString(xml_bytes)
+        revision_tags = {'ins', 'del', 'moveFrom', 'moveTo', 'rPrChange', 'pPrChange', 'sectPrChange'}
+        if any(document.getElementsByTagNameNS(NS, tag) for tag in revision_tags):
+            raise ValueError('unresolved tracked changes')
 
         def elements(node: Any) -> list[Any]:
             return [child for child in node.childNodes if child.nodeType == child.ELEMENT_NODE]
@@ -159,21 +174,41 @@ def corrected_docx_preview(original: bytes, *, expected_sha256: str,
         paragraph = paragraphs[paragraph_index]
         children = elements(paragraph)
         runs = [node for node in children if node.namespaceURI == NS and node.localName == 'r']
-        if (len(runs) != 1 or any(node.namespaceURI != NS or node.localName not in {'pPr', 'r'}
-                                  for node in children)):
+        if (not runs or any(node.namespaceURI != NS or node.localName not in {'pPr', 'r'}
+                            for node in children)):
             raise ValueError('complex paragraph requires manual correction')
-        children = elements(runs[0])
-        texts = [node for node in children if node.namespaceURI == NS and node.localName == 't']
-        if (len(texts) != 1 or any(node.namespaceURI != NS or node.localName not in {'rPr', 't'}
-                                   for node in children)):
-            raise ValueError('complex run requires manual correction')
-        text = ''.join(node.data for node in texts[0].childNodes if node.nodeType == node.TEXT_NODE)
+        text_nodes = []
+        pieces = []
+        for run in runs:
+            children = elements(run)
+            texts = [node for node in children if node.namespaceURI == NS and node.localName == 't']
+            if (len(texts) != 1 or any(node.namespaceURI != NS or node.localName not in {'rPr', 't'}
+                                       for node in children)):
+                raise ValueError('complex run requires manual correction')
+            text_nodes.append(texts[0])
+            pieces.append(''.join(node.data for node in texts[0].childNodes if node.nodeType == node.TEXT_NODE))
+        text = ''.join(pieces)
         if text.count(before) != 1:
             raise ValueError('ambiguous or stale correction range')
-        for child in list(texts[0].childNodes):
-            texts[0].removeChild(child)
-        texts[0].appendChild(document.createTextNode(text.replace(before, after, 1)))
-        texts[0].setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve')
+        start = text.index(before)
+        end = start + len(before)
+        cursor = 0
+        inserted = False
+        for node, value in zip(text_nodes, pieces, strict=True):
+            left, right = cursor, cursor + len(value)
+            cursor = right
+            if right <= start or left >= end:
+                continue
+            prefix = value[:max(0, start - left)]
+            suffix = value[max(0, end - left):]
+            replacement = after if not inserted else ''
+            inserted = True
+            for child in list(node.childNodes):
+                node.removeChild(child)
+            node.appendChild(document.createTextNode(prefix + replacement + suffix))
+            node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve')
+        if not inserted:
+            raise ValueError('correction range unavailable')
         output = io.BytesIO()
         with ZipFile(output, 'w', compression=ZIP_DEFLATED) as target:
             for entry in archive.infolist():
