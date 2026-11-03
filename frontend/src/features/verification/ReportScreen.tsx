@@ -105,7 +105,9 @@ export function ReportScreen({
             : 'Current preserved report'}
         </p>
         <h1>Review the evidence</h1>
-        <Link to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}>
+        <Link
+          to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}
+        >
           Reviewed exports and historical downloads
         </Link>
         <p>

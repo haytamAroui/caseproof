@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { SessionController } from '../../shared/session';
 import { ApiClient } from '../../shared/api';
 import {
-  parseRelease, parseReleaseList, parseReleasePreview, parseReleaseStatus,
+  parseRelease,
+  parseReleaseList,
+  parseReleasePreview,
+  parseReleaseStatus,
 } from './api';
 import type { ReleaseScope } from './api';
 
@@ -17,8 +20,11 @@ const media = {
   markdown: 'text/markdown; charset=utf-8',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 } as const;
-const artifact = (kind: keyof typeof media) =>
-  ({ sha256: 'b'.repeat(64), byte_length: 17, media_type: media[kind] });
+const artifact = (kind: keyof typeof media) => ({
+  sha256: 'b'.repeat(64),
+  byte_length: 17,
+  media_type: media[kind],
+});
 const manifest = {
   schema: 'caseproof-reviewed-release-v1',
   release_id: id,
@@ -28,53 +34,104 @@ const manifest = {
   review_count: 1,
   finding_count: 1,
   coverage: { reference_recall_measured: false },
-  sources: [{ role: 'draft', version_id: scope.briefId, sha256: 'c'.repeat(64) }],
+  sources: [
+    { role: 'draft', version_id: scope.briefId, sha256: 'c'.repeat(64) },
+  ],
   limitations: ['Not a legal certificate'],
-  artifacts: { json: artifact('json'), markdown: artifact('markdown'), docx: artifact('docx') },
+  artifacts: {
+    json: artifact('json'),
+    markdown: artifact('markdown'),
+    docx: artifact('docx'),
+  },
   manifest_sha256: 'd'.repeat(64),
   server_receipt: 'e'.repeat(64),
 };
 const record = {
-  state: 'released', release_id: id, brief_id: scope.briefId,
-  snapshot_hash: scope.snapshot, manifest,
+  state: 'released',
+  release_id: id,
+  brief_id: scope.briefId,
+  snapshot_hash: scope.snapshot,
+  manifest,
 };
 
 describe('F6 reviewed export contracts', () => {
   it('accepts only exact version-bound release manifest and supported formats', () => {
     expect(parseRelease(record, scope).manifest.review_count).toBe(1);
-    expect(() => parseRelease({ ...record, snapshot_hash: 'f'.repeat(64) }, scope)).toThrow();
-    expect(() => parseRelease({
-      ...record, manifest: { ...manifest, review_count: 0 },
-    }, scope)).toThrow();
-    expect(() => parseRelease({
-      ...record, manifest: { ...manifest, artifacts: {
-        ...manifest.artifacts, docx: { ...artifact('docx'), byte_length: 6_000_000 },
-      } },
-    }, scope)).toThrow();
-    expect(() => parseRelease({
-      ...record, manifest: { ...manifest, sources: [] },
-    }, scope)).toThrow();
+    expect(() =>
+      parseRelease({ ...record, snapshot_hash: 'f'.repeat(64) }, scope),
+    ).toThrow();
+    expect(() =>
+      parseRelease(
+        {
+          ...record,
+          manifest: { ...manifest, review_count: 0 },
+        },
+        scope,
+      ),
+    ).toThrow();
+    expect(() =>
+      parseRelease(
+        {
+          ...record,
+          manifest: {
+            ...manifest,
+            artifacts: {
+              ...manifest.artifacts,
+              docx: { ...artifact('docx'), byte_length: 6_000_000 },
+            },
+          },
+        },
+        scope,
+      ),
+    ).toThrow();
+    expect(() =>
+      parseRelease(
+        {
+          ...record,
+          manifest: { ...manifest, sources: [] },
+        },
+        scope,
+      ),
+    ).toThrow();
   });
   it('keeps a historical release bound to its own snapshot', () => {
     const old = 'f'.repeat(64);
     const historical = {
-      ...record, snapshot_hash: old,
+      ...record,
+      snapshot_hash: old,
       manifest: { ...manifest, snapshot_hash: old },
     };
-    expect(parseReleaseList({ releases: [historical] }, scope)[0]?.snapshot_hash).toBe(old);
-    expect(() => parseReleaseList({ releases: [{ ...historical, manifest }] }, scope)).toThrow();
+    expect(
+      parseReleaseList({ releases: [historical] }, scope)[0]?.snapshot_hash,
+    ).toBe(old);
+    expect(() =>
+      parseReleaseList({ releases: [{ ...historical, manifest }] }, scope),
+    ).toThrow();
     expect(parseReleaseStatus({ state: 'absent' }, scope)).toBeNull();
   });
   it('requires current signed readiness and an explicit human review', () => {
     const preview = {
       schema: 'caseproof-release-preview-v1',
-      case_id: scope.caseId, brief_id: scope.briefId, snapshot_hash: scope.snapshot,
-      finding_count: 1, review_count: 0, release_ready: false,
-      coverage: {}, formats: ['json','markdown','docx'], limitations: ['Not certified'],
+      case_id: scope.caseId,
+      brief_id: scope.briefId,
+      snapshot_hash: scope.snapshot,
+      finding_count: 1,
+      review_count: 0,
+      release_ready: false,
+      coverage: {},
+      formats: ['json', 'markdown', 'docx'],
+      limitations: ['Not certified'],
     };
     expect(parseReleasePreview(preview, scope).release_ready).toBe(false);
-    expect(() => parseReleasePreview({ ...preview, release_ready: true }, scope)).toThrow();
-    expect(() => parseReleasePreview({ ...preview, formats: ['json','markdown','pdf'] }, scope)).toThrow();
+    expect(() =>
+      parseReleasePreview({ ...preview, release_ready: true }, scope),
+    ).toThrow();
+    expect(() =>
+      parseReleasePreview(
+        { ...preview, formats: ['json', 'markdown', 'pdf'] },
+        scope,
+      ),
+    ).toThrow();
   });
 });
 
@@ -84,57 +141,95 @@ describe('F6 authenticated binary downloads', () => {
     s.connect({ getBearer: async () => 'signed' });
     return s;
   }
-  const path =
-    `/v2/matters/${scope.caseId}/briefs/${scope.briefId}/dossier/releases/${id}/artifacts/docx`;
+  const path = `/v2/matters/${scope.caseId}/briefs/${scope.briefId}/dossier/releases/${id}/artifacts/docx`;
   const mime = media.docx;
   async function fixture() {
     const bytes = new TextEncoder().encode('frozen binary output');
-    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
-      b => b.toString(16).padStart(2,'0')).join('');
-    return { bytes, digest, binding: {
-      export: true as const, media: mime as typeof media.docx,
-      sha256: digest, snapshot: scope.snapshot, length: bytes.length,
-    } };
+    const digest = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+      (b) => b.toString(16).padStart(2, '0'),
+    ).join('');
+    return {
+      bytes,
+      digest,
+      binding: {
+        export: true as const,
+        media: mime as typeof media.docx,
+        sha256: digest,
+        snapshot: scope.snapshot,
+        length: bytes.length,
+      },
+    };
   }
   it('offers bytes only after checking digest, scope, MIME and declared length', async () => {
     const { bytes, digest, binding } = await fixture();
-    const send = vi.fn<typeof fetch>(async () => new Response(bytes, { headers: {
-      'Content-Type': mime,
-      'X-CaseProof-Snapshot': scope.snapshot,
-      'X-CaseProof-Export-SHA256': digest,
-      'X-CaseProof-Export-Size': String(bytes.length),
-    } }));
-    const output = await new ApiClient(session(), send).artifact(path, binding, new AbortController().signal);
+    const send = vi.fn<typeof fetch>(
+      async () =>
+        new Response(bytes, {
+          headers: {
+            'Content-Type': mime,
+            'X-CaseProof-Snapshot': scope.snapshot,
+            'X-CaseProof-Export-SHA256': digest,
+            'X-CaseProof-Export-Size': String(bytes.length),
+          },
+        }),
+    );
+    const output = await new ApiClient(session(), send).artifact(
+      path,
+      binding,
+      new AbortController().signal,
+    );
     expect(Array.from(output)).toEqual(Array.from(bytes));
     expect(send.mock.calls[0]?.[1]).toMatchObject({
-      cache: 'no-store', credentials: 'omit', redirect: 'error', method: 'GET',
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'error',
+      method: 'GET',
     });
   });
   it('rejects modified bytes even if response headers claim the original digest', async () => {
     const { bytes, digest, binding } = await fixture();
     const altered = new Uint8Array(bytes);
     altered[0] ^= 1;
-    const send = vi.fn<typeof fetch>(async () => new Response(altered, { headers: {
-      'Content-Type': mime,
-      'X-CaseProof-Snapshot': scope.snapshot,
-      'X-CaseProof-Export-SHA256': digest,
-      'X-CaseProof-Export-Size': String(bytes.length),
-    } }));
-    await expect(new ApiClient(session(), send).artifact(path, binding,
-      new AbortController().signal)).rejects.toThrow();
+    const send = vi.fn<typeof fetch>(
+      async () =>
+        new Response(altered, {
+          headers: {
+            'Content-Type': mime,
+            'X-CaseProof-Snapshot': scope.snapshot,
+            'X-CaseProof-Export-SHA256': digest,
+            'X-CaseProof-Export-Size': String(bytes.length),
+          },
+        }),
+    );
+    await expect(
+      new ApiClient(session(), send).artifact(
+        path,
+        binding,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
   });
   it('does not sign out a valid report reader on an export-only grant denial', async () => {
     const s = session();
-    const send = vi.fn<typeof fetch>(async () => new Response(null, { status: 403 }));
-    await expect(new ApiClient(s, send).get(path)).rejects.toThrow('unavailable');
+    const send = vi.fn<typeof fetch>(
+      async () => new Response(null, { status: 403 }),
+    );
+    await expect(new ApiClient(s, send).get(path)).rejects.toThrow(
+      'unavailable',
+    );
     expect(s.getSnapshot().connected).toBe(true);
   });
   it('rejects external or malformed release destinations without disclosure', async () => {
     const { binding } = await fixture();
     const send = vi.fn<typeof fetch>();
-    await expect(new ApiClient(session(), send).artifact(
-      'https://outside.example/v2/matters/x', binding, new AbortController().signal
-    )).rejects.toThrow();
+    await expect(
+      new ApiClient(session(), send).artifact(
+        'https://outside.example/v2/matters/x',
+        binding,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
     expect(send).not.toHaveBeenCalled();
   });
 });

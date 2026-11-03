@@ -3,7 +3,10 @@ type BinaryBinding = {
   sha256: string;
   snapshot: string;
   length: number;
-  media?: 'application/json' | 'text/markdown' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  media?:
+    | 'application/json'
+    | 'text/markdown'
+    | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   export?: true;
 };
 export class ApiError extends Error {
@@ -59,11 +62,13 @@ export class ApiClient {
       !/^[0-9a-f]{64}$/.test(binding.snapshot) ||
       !Number.isInteger(binding.length) ||
       binding.length < 1 ||
-      binding.length > (binding.media.includes('wordprocessingml') ? 5_242_880 : 2_000_000) ||
+      binding.length >
+        (binding.media.includes('wordprocessingml') ? 5_242_880 : 2_000_000) ||
       !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/releases\/[0-9a-f-]{36}\/artifacts\/(json|markdown|docx)$/.test(
         new URL(path, 'https://caseproof.invalid').pathname,
       )
-    ) throw new ApiError(502);
+    )
+      throw new ApiError(502);
     return (await this.read(path, signal, binding)) as Uint8Array;
   }
   private async read(
@@ -85,7 +90,7 @@ export class ApiClient {
       controller.signal,
       AbortSignal.timeout(
         path.startsWith('/v2/workspace/intake/') ||
-        path.includes('/dossier/releases') ||
+          path.includes('/dossier/releases') ||
           /\/dossier\/(confirmation|checks|recheck|corrections\/(preview|commit))$/.test(
             path,
           )
@@ -130,7 +135,8 @@ export class ApiClient {
         if (
           response.status === 401 ||
           ((response.status === 403 || response.status === 404) &&
-            !recoveryRead && !exportGrantBoundary)
+            !recoveryRead &&
+            !exportGrantBoundary)
         )
           this.session.clear();
         throw new ApiError(response.status);
@@ -138,7 +144,9 @@ export class ApiClient {
       if (
         !response.headers
           .get('content-type')
-          ?.includes(binding ? (binding.media ?? 'application/pdf') : 'application/json')
+          ?.includes(
+            binding ? (binding.media ?? 'application/pdf') : 'application/json',
+          )
       )
         throw new ApiError(502);
       if (!response.body) throw new ApiError(502);
@@ -174,10 +182,13 @@ export class ApiClient {
           size !== binding.length ||
           response.headers.get('X-CaseProof-Snapshot') !== binding.snapshot ||
           response.headers.get(
-            binding.export ? 'X-CaseProof-Export-SHA256' : 'X-CaseProof-Original-SHA256',
+            binding.export
+              ? 'X-CaseProof-Export-SHA256'
+              : 'X-CaseProof-Original-SHA256',
           ) !== binding.sha256 ||
           (binding.export &&
-            response.headers.get('X-CaseProof-Export-Size') !== String(binding.length))
+            response.headers.get('X-CaseProof-Export-Size') !==
+              String(binding.length))
         )
           throw new ApiError(502);
         const digest = new Uint8Array(
