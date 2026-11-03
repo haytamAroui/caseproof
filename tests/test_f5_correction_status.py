@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 
 from apps.api.dossier_journey import CorrectionCommitBody, DossierStore
+from apps.api.access_control import AccessRejected
 
 
 class Revisions:
@@ -63,5 +64,5 @@ def test_status_rejects_mismatched_parent() -> None:
 def test_status_rejects_unknown_state() -> None:
     store = object.__new__(DossierStore)
     store.revisions = Revisions("unknown")
-    with pytest.raises(Exception):
+    with pytest.raises(AccessRejected):
         store.correction_status("signed-user", "matter-1", "draft-1", command())

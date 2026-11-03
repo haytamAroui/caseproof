@@ -1,3 +1,4 @@
+import { CorrectionPanel } from '../features/corrections';
 import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -125,7 +126,15 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
             briefId={briefId}
             snapshot={snapshot}
             referenceId={finding.reference_id}
-            finding={finding}
+            renderCorrection={(originalSha) => (
+              <CorrectionPanel
+                key={snapshot + finding.reference_id}
+                api={api}
+                scope={{ caseId, briefId, snapshot }}
+                finding={finding}
+                originalSha={originalSha}
+              />
+            )}
           />
         )
       }
