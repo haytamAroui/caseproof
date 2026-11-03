@@ -67,8 +67,7 @@ def scoped_base(case: str, brief: str) -> str:
 
 
 def reconfirm_corrected_bundle(
-    page: Page, acceptance: WorkspaceBrowserAcceptance, *,
-    case: str, registered: list[dict[str, Any]],
+    page: Page, *, case: str, registered: list[dict[str, Any]],
 ) -> None:
     """Explicit fresh inventory attestation after a changed draft signature.
 
@@ -76,10 +75,23 @@ def reconfirm_corrected_bundle(
     silently carried forward or treated as reviewer evidence for this draft.
     The physical page was previously verified from immutable original bytes.
     """
-    page.goto(f"{ORIGIN}/workspace/matters/{case}/inventory")
-    acceptance.login(page)
+    # Avoid a second cold browser reload: navigation to a protected form
+    # must preserve the already authenticated session, not reacquire a user
+    # or accidentally discard the newly checked review context.
+    def observe_intake(response: Any) -> None:
+        if response.url.split("?", 1)[0].endswith(
+            f"/v2/workspace/intake/matters/{case}"
+        ):
+            print(f"F6_CHANGED_INTAKE_READ_HTTP_{response.status}", flush=True)
+
+    page.on("response", observe_intake)
+    link = page.get_by_role(
+        "link", name="Reconfirm inventory and page mappings"
+    )
+    expect(link).to_be_visible(timeout=15000)
+    link.click()
     expect(page.get_by_role("heading", name="Confirm inventory")).to_be_visible(
-        timeout=90000
+        timeout=30000
     )
     bindings = page.get_by_label("Preserved exhibit", exact=True)
     expect(bindings).to_have_count(2, timeout=90000)

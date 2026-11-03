@@ -110,6 +110,11 @@ export function ReportScreen({
         >
           Reviewed exports and historical downloads
         </Link>
+        {!historical && (
+          <Link to={`/matters/${caseId}/inventory`}>
+            Reconfirm inventory and page mappings
+          </Link>
+        )
         <p>
           Each result describes a separate check. Human judgment remains
           separate.

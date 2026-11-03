@@ -359,7 +359,7 @@ def _exercise() -> None:
                 # review may be silently inherited by the new draft.
                 _stage("RECONFIRM_CORRECTED_BUNDLE")
                 reconfirm_corrected_bundle(
-                    page, acceptance, case=case, registered=registered
+                    page, case=case, registered=registered
                 )
                 # Rechecking under the newly confirmed bundle creates a
                 # new report; the reviewer must inspect the preserved source
