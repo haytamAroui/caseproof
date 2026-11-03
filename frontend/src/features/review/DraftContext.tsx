@@ -1,3 +1,5 @@
+import { CorrectionPanel } from '../corrections/CorrectionPanel';
+import type { FindingView } from '../../shared/api';
 import { useQuery } from '@tanstack/react-query';
 import type { ApiClient } from '../../shared/api';
 import { parseDraftExcerpt } from '../../shared/api/review';
@@ -10,12 +12,14 @@ export function DraftContext({
   briefId,
   snapshot,
   referenceId,
+  finding,
 }: {
   api: ApiClient;
   caseId: string;
   briefId: string;
   snapshot: string;
   referenceId: string;
+  finding: FindingView;
 }) {
   const session = useSession();
   const excerpt = useQuery({
@@ -72,6 +76,9 @@ export function DraftContext({
               </mark>
               {excerpt.data.excerpt.slice(excerpt.data.selection_end)}
             </p>
+            <CorrectionPanel key={snapshot + referenceId} api={api}
+              scope={{ caseId, briefId, snapshot }} finding={finding}
+              originalSha={excerpt.data.original_sha256} />
           </>
         ))}
     </section>
