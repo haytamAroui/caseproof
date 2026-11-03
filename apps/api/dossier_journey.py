@@ -667,6 +667,12 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             raise HTTPException(422, "unsupported or stale correction range") from None
         return {
             "schema": "caseproof-docx-correction-preview-v1",
+            "reference_id": body.reference_id,
+            "paragraph_index": body.paragraph_index,
+            "before": body.before,
+            "after": body.after,
+            "brief_version_id": brief_id,
+            "snapshot_hash": body.snapshot_hash,
             "committed": False,
             "requires_new_draft_version": True,
             "requires_recheck": True,
