@@ -86,8 +86,13 @@ def _validate_frozen_report(report: dict[str, Any]) -> None:
     if not all(isinstance(d, dict) and isinstance(d.get("request_id"), str) for d in decisions):
         raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
     for finding in findings:
-        if any(finding.get(key) is not None and not isinstance(finding[key], str)
-               for key in ("reference_id", "version_id")):
+        if not isinstance(finding.get("reference_id"), str) or not finding["reference_id"]:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if finding.get("version_id") is not None and not isinstance(finding["version_id"], str):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        visual = finding.get("visual_assessment", {})
+        if (not isinstance(visual, dict) or not isinstance(visual.get("regions", []), list)
+                or not all(isinstance(region, dict) for region in visual.get("regions", []))):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
 
 
