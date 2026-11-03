@@ -24,7 +24,43 @@ describe('API confidentiality and lifecycle', () => {
     await expect(pending).rejects.toThrow('Session ended');
     expect(send.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
   });
-  it('clears on revocation and does not retry', async () => {
+  it('clears on an invalid bearer (401), and does not retry', async () => {
+    const s = session();
+    const cleanup = vi.fn();
+    s.onClear(cleanup);
+    const send = vi.fn<typeof fetch>(
+      async () => new Response(null, { status: 401 }),
+    );
+    await expect(new ApiClient(s, send).get('/v2/report')).rejects.toThrow(
+      'unavailable',
+    );
+    expect(send).toHaveBeenCalledOnce();
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(s.getSnapshot().connected).toBe(false);
+  });
+  it.each([403, 404])(
+    'preserves a signed reader session on scoped denial %s',
+    async (status) => {
+      const s = session();
+      const cleanup = vi.fn();
+      s.onClear(cleanup);
+      const send = vi.fn<typeof fetch>(
+        async () => new Response(null, { status }),
+      );
+      const recoveryPath = [
+        '/v2/matters/case/briefs/brief/dossier/snapshots/',
+        'a'.repeat(64),
+        '/references/ref-1/correction-operations',
+      ].join('');
+      await expect(new ApiClient(s, send).get(recoveryPath)).rejects.toThrow(
+        'unavailable',
+      );
+      expect(send).toHaveBeenCalledOnce();
+      expect(cleanup).not.toHaveBeenCalled();
+      expect(s.getSnapshot().connected).toBe(true);
+    },
+  );
+  it('clears a revoked matter (403) without retrying', async () => {
     const s = session();
     const cleanup = vi.fn();
     s.onClear(cleanup);

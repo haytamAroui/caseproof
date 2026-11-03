@@ -14,6 +14,7 @@ type Preview = {
   requires_recheck: true;
   original_sha256: string;
   derivative_sha256: string;
+  derivative_byte_length: number;
   reference_id: string;
   paragraph_index: number;
   before: string;
@@ -60,7 +61,11 @@ function previewReceipt(
     r.brief_version_id !== briefId ||
     r.snapshot_hash !== expected.snapshot_hash ||
     typeof r.derivative_sha256 !== 'string' ||
-    !sha.test(r.derivative_sha256)
+    !sha.test(r.derivative_sha256) ||
+    !Number.isSafeInteger(r.derivative_byte_length) ||
+    (r.derivative_byte_length as number) < 1 ||
+    (r.derivative_byte_length as number) > 5_242_880 ||
+    'content_base64' in r
   )
     throw Error('Unverified correction preview');
   return r as Preview;
@@ -138,6 +143,39 @@ export function CorrectionPanel({
     retry: false,
     enabled: session.connected,
   });
+  const review = useQuery({
+    queryKey: [
+      'correction-review-receipt',
+      session.epoch,
+      scope.caseId,
+      scope.briefId,
+      scope.snapshot,
+      finding.reference_id,
+    ],
+    queryFn: async ({ signal }) => {
+      const result = record(
+        await api.get(
+          `${base}/corrections/review-receipt?snapshot_hash=${encodeURIComponent(scope.snapshot)}&reference_id=${encodeURIComponent(finding.reference_id)}`,
+          signal,
+        ),
+      );
+      if (
+        result.schema !== 'caseproof-correction-review-receipt-v1' ||
+        result.brief_version_id !== scope.briefId ||
+        result.snapshot_hash !== scope.snapshot ||
+        result.reference_id !== finding.reference_id ||
+        typeof result.reviewer_id !== 'string' ||
+        !uuid.test(result.reviewer_id) ||
+        typeof result.review_request_id !== 'string' ||
+        !uuid.test(result.review_request_id)
+      )
+        throw Error('Unverified persisted human review');
+      return result;
+    },
+    retry: false,
+    enabled: session.connected,
+  });
+  const reviewReady = review.isSuccess && Boolean(review.data);
   const valid =
     sha.test(originalSha) &&
     sha.test(scope.snapshot) &&
@@ -185,15 +223,23 @@ export function CorrectionPanel({
     }
   }
   async function commit() {
-    if (!preview || command || busy || !valid) return;
-    const submitted = {
-      ...payload(),
-      request_id: resumeId ?? crypto.randomUUID(),
-    };
-    setCommand(submitted);
+    if (!preview || command || busy || !valid || !reviewReady) return;
     setBusy(true);
     setUnknown(false);
     try {
+      // A fresh signed receipt is required even if the button was enabled.
+      const proof = await review.refetch();
+      if (!proof.isSuccess || !proof.data) {
+        setMessage(
+          'Human review receipt is not confirmed. No commit was sent.',
+        );
+        return;
+      }
+      const submitted = {
+        ...payload(),
+        request_id: resumeId ?? crypto.randomUUID(),
+      };
+      setCommand(submitted);
       const result = commitReceipt(
         await api.post(`${base}/corrections/commit`, submitted),
       );
@@ -299,7 +345,20 @@ export function CorrectionPanel({
       />
       <Notice>
         Only the exact reference in a supported DOCX paragraph can be replaced.
+        Commit requires your own saved human decision in the current snapshot.
       </Notice>
+      {!reviewReady && (
+        <Notice error>
+          Persisted signed human review for this reference and snapshot is
+          required. Save your decision in Human review first.
+        </Notice>
+      )}
+      <Button
+        disabled={busy || review.isFetching}
+        onClick={() => void review.refetch()}
+      >
+        Refresh saved human review receipt
+      </Button>
       {anchor.isPending && (
         <p>Locating the reference in the preserved draft…</p>
       )}
@@ -339,10 +398,15 @@ export function CorrectionPanel({
           </p>
           <p className="small">Original SHA-256: {preview.original_sha256}</p>
           <p className="small">
-            Derivative SHA-256: {preview.derivative_sha256}
+            Derivative SHA-256: {preview.derivative_sha256} ·{' '}
+            {preview.derivative_byte_length} bytes
           </p>
+          <Notice>
+            Verified bounded text diff and derivative digest only. The full DOCX
+            is never returned by the preview API.
+          </Notice>
           <Button
-            disabled={busy || Boolean(command)}
+            disabled={busy || Boolean(command) || !reviewReady}
             onClick={() => void commit()}
           >
             Explicitly commit and activate new draft

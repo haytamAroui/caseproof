@@ -226,7 +226,9 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
   let commits = 0;
   let operation = '';
   await page.route('**/correction-operations', (route) =>
-    route.fulfill({ json: { operations: [] } }),
+    route.fulfill({
+      json: { operations: [], current_draft_version_id: brief },
+    }),
   );
   await page.route('**/correction-anchor', (route) =>
     route.fulfill({
@@ -240,6 +242,18 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
       },
     }),
   );
+  await page.route('**/corrections/review-receipt?*', (route) =>
+    route.fulfill({
+      json: {
+        schema: 'caseproof-correction-review-receipt-v1',
+        brief_version_id: brief,
+        snapshot_hash: snapshot,
+        reference_id: finding.reference_id,
+        reviewer_id: '44444444-4444-4444-8444-444444444444',
+        review_request_id: '55555555-5555-4555-8555-555555555555',
+      },
+    }),
+  );
   await page.route('**/corrections/preview', (route) =>
     route.fulfill({
       json: {
@@ -249,6 +263,7 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
         requires_recheck: true,
         brief_version_id: brief,
         derivative_sha256: 'd'.repeat(64),
+        derivative_byte_length: 2000,
       },
     }),
   );
@@ -306,4 +321,69 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
     correction.getByRole('heading', { name: 'Rechecked report', exact: true }),
   ).toBeVisible();
   expect(commits).toBe(1);
+});
+
+test('correction commit is blocked without a durable actor-scoped review receipt', async ({
+  page,
+}) => {
+  let commits = 0;
+  await page.route('**/correction-operations', (route) =>
+    route.fulfill({
+      json: { operations: [], current_draft_version_id: brief },
+    }),
+  );
+  await page.route('**/correction-anchor', (route) =>
+    route.fulfill({
+      json: {
+        snapshot_hash: snapshot,
+        brief_version_id: brief,
+        reference_id: finding.reference_id,
+        original_sha256: 'b'.repeat(64),
+        paragraph_index: 0,
+        before: finding.literal,
+      },
+    }),
+  );
+  await page.route('**/corrections/review-receipt?*', (route) =>
+    route.fulfill({
+      status: 409,
+      json: { detail: 'persisted actor review required' },
+    }),
+  );
+  await page.route('**/corrections/preview', (route) =>
+    route.fulfill({
+      json: {
+        ...route.request().postDataJSON(),
+        schema: 'caseproof-docx-correction-preview-v1',
+        committed: false,
+        requires_recheck: true,
+        brief_version_id: brief,
+        derivative_sha256: 'd'.repeat(64),
+        derivative_byte_length: 2000,
+      },
+    }),
+  );
+  await page.route('**/corrections/commit', (route) => {
+    commits++;
+    return route.abort('failed');
+  });
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const correction = page.getByRole('region', {
+    name: 'Correction preview and recheck',
+    exact: true,
+  });
+  await correction.getByLabel('Replacement text').fill('Stuk 2');
+  await correction
+    .getByRole('button', { name: 'Validate exact preview' })
+    .click();
+  await expect(
+    correction.getByText('Proposed change (not committed)', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    correction.getByRole('button', {
+      name: 'Explicitly commit and activate new draft',
+    }),
+  ).toBeDisabled();
+  expect(commits).toBe(0);
 });

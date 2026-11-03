@@ -13,16 +13,22 @@ type Operation = {
   created_at: string;
 };
 const id = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function parseOperations(raw: unknown): Operation[] {
+function parseOperations(raw: unknown): {
+  operations: Operation[];
+  currentDraft: string;
+} {
   if (
     !raw ||
     typeof raw !== 'object' ||
     !('operations' in raw) ||
     !Array.isArray(raw.operations) ||
-    raw.operations.length > 20
+    raw.operations.length > 20 ||
+    !('current_draft_version_id' in raw) ||
+    typeof raw.current_draft_version_id !== 'string' ||
+    !id.test(raw.current_draft_version_id)
   )
     throw Error('Invalid recovery response');
-  return raw.operations.map((value: unknown) => {
+  const operations = raw.operations.map((value: unknown) => {
     if (!value || typeof value !== 'object') throw Error('Invalid operation');
     const row = value as Record<string, unknown>;
     if (
@@ -37,6 +43,7 @@ function parseOperations(raw: unknown): Operation[] {
       throw Error('Invalid operation');
     return row as Operation;
   });
+  return { operations, currentDraft: raw.current_draft_version_id };
 }
 export function CorrectionRecovery({
   api,
@@ -78,7 +85,7 @@ export function CorrectionRecovery({
   });
   useEffect(() => {
     const reserved =
-      query.data?.filter((item) => item.state === 'reserved') ?? [];
+      query.data?.operations.filter((item) => item.state === 'reserved') ?? [];
     onReady?.(
       query.isSuccess &&
         (reserved.length === 0 ||
@@ -89,6 +96,9 @@ export function CorrectionRecovery({
     setBusy(true);
     setError('');
     try {
+      const latest = await query.refetch();
+      if (!latest.isSuccess || latest.data?.currentDraft !== version)
+        throw Error('Superseded draft');
       const report = parseDossier(
         await api.post(
           `/v2/matters/${encodeURIComponent(scope.caseId)}/briefs/${encodeURIComponent(version)}/dossier/recheck`,
@@ -122,10 +132,10 @@ export function CorrectionRecovery({
           until it is checked.
         </Notice>
       )}
-      {query.data?.length === 0 && (
+      {query.data?.operations.length === 0 && (
         <p>No previous correction operation for this reference.</p>
       )}
-      {query.data?.map((operation) => (
+      {query.data?.operations.map((operation) => (
         <div key={operation.request_id}>
           <p>
             {operation.state === 'active' ? 'Activated' : 'Reserved'} ·{' '}
@@ -145,14 +155,21 @@ export function CorrectionRecovery({
               Resume this operation using the identical replacement text
             </label>
           )}
-          {operation.state === 'active' && operation.version_id && (
-            <Button
-              disabled={busy}
-              onClick={() => void recheck(operation.version_id!)}
-            >
-              Recheck activated draft
-            </Button>
-          )}
+          {operation.state === 'active' &&
+            operation.version_id !== query.data?.currentDraft && (
+              <p>
+                Superseded version · historical read only. Recheck unavailable.
+              </p>
+            )}
+          {operation.state === 'active' &&
+            operation.version_id === query.data?.currentDraft && (
+              <Button
+                disabled={busy}
+                onClick={() => void recheck(operation.version_id!)}
+              >
+                Recheck activated draft
+              </Button>
+            )}
         </div>
       ))}
       {error && <Notice error>{error}</Notice>}

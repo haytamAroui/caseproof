@@ -75,6 +75,7 @@ def store(mode='normal'):
     service.load = lambda *args: (report, raw)
     service.reopen = lambda *args: (report, raw)
     service.frozen_report = lambda *args: report
+    service.correction_review_receipt = lambda *args: {'review_request_id': 'persisted'}
     return service, command
 
 
@@ -139,3 +140,15 @@ def test_reserved_retry_revalidates_report_anchor():
         service.commit_correction('signed', 'case', 'old', command)
     assert error.value.status_code == 422
     assert service.revisions.activations == 0
+
+
+def test_commit_requires_persisted_actor_review_before_any_derivative_write():
+    service, command = store()
+    def no_review(*args):
+        raise HTTPException(409, 'persisted human review required')
+    service.correction_review_receipt = no_review
+    with pytest.raises(HTTPException) as denied:
+        service.commit_correction('signed', 'case', 'old', command)
+    assert denied.value.status_code == 409
+    assert service.client.library.writes == 0
+    assert service.revisions.row['state'] == 'absent'

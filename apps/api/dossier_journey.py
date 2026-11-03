@@ -20,7 +20,7 @@ from application.litigation.dossier_contracts import add_report_contract, assess
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
-from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
 from apps.api.dossier_draft_revisions import DraftRevisionClient
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
@@ -214,6 +214,43 @@ class DossierStore:
                     "committed": True, "requires_recheck": True}
         return {"state": state, "committed": False, "requires_recheck": state == "reserved"}
 
+    def correction_review_receipt(
+        self, bearer: str, case: str, brief: str, snapshot: str, reference: str
+    ) -> dict[str, Any]:
+        """Signed read of an actor-specific persisted review; never trust a browser claim."""
+        report = self.frozen_report(bearer, case, brief, snapshot)
+        if not any(f.get("reference_id") == reference for f in report.get("findings", [])):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        try:
+            actor = self.revisions.verifier.verify_bearer(bearer).subject_id
+        except InvalidBearer:
+            raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+        except IdentityServiceUnavailable:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        ledger = self.rpc(bearer, case, "decisions", {"snapshot_hash": snapshot})
+        rows = ledger.get("decisions")
+        if not isinstance(rows, list):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        matching = [
+            row for row in rows
+            if isinstance(row, dict)
+            and row.get("reference_id") == reference
+            and row.get("reviewer_id") == actor
+            and isinstance(row.get("request_id"), str)
+            and isinstance(row.get("timestamp"), str)
+        ]
+        if not matching:
+            raise HTTPException(409, "persisted actor review required before correction")
+        receipt = matching[-1]
+        return {
+            "schema": "caseproof-correction-review-receipt-v1",
+            "brief_version_id": brief,
+            "snapshot_hash": snapshot,
+            "reference_id": reference,
+            "reviewer_id": actor,
+            "review_request_id": receipt["request_id"],
+        }
+
     def commit_correction(
         self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
     ) -> dict[str, Any]:
@@ -232,6 +269,10 @@ class DossierStore:
         if existing.get("state") == "active":
             return {**existing, "committed": True, "requires_recheck": True}
         if existing.get("state") == "absent":
+            # The reserve RPC independently enforces the same actor/snapshot/reference
+            # predicate transactionally. This API gate prevents bypassing the review
+            # receipt even if the browser sends a direct commit.
+            self.correction_review_receipt(bearer, case, brief, command.snapshot_hash, command.reference_id)
             report, original = self.reopen(bearer, case, brief, command.snapshot_hash)
             if report["snapshot_hash"] != command.snapshot_hash:
                 raise HTTPException(409, "stale dossier correction")
@@ -301,6 +342,17 @@ class DossierStore:
         if activated.get("state") != "active" or activated.get("version_id") != reserved["version_id"]:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return {**activated, "committed": True, "requires_recheck": True}
+
+    def current_draft_version(self, bearer: str, case: str) -> str:
+        """Authoritative currently active draft from the signed, scoped manifest."""
+        manifest = self.client.bundle_manifest(bearer, case)
+        entries = manifest.get("sources") if isinstance(manifest, dict) else None
+        if not isinstance(entries, list):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        drafts = [row.get("version_id") for row in entries if isinstance(row, dict) and row.get("role") == "draft"]
+        if len(drafts) != 1 or not isinstance(drafts[0], str):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return drafts[0]
 
     def receipt(self, payload: dict[str, Any]) -> str:
         key = getattr(self, "receipt_key", None)
@@ -704,7 +756,19 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         result = s.revisions.recovery(bearer, case_id, brief_id, snapshot_hash, reference_id)
         if not isinstance(result.get("operations"), list) or len(result["operations"]) > 20:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        return result
+        return {**result, "current_draft_version_id": s.current_draft_version(bearer, case_id)}
+
+    @router.get(base + "/corrections/review-receipt")
+    def correction_review_receipt(
+        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        if len(snapshot_hash) != 64 or any(c not in "0123456789abcdef" for c in snapshot_hash):
+            raise HTTPException(422, "invalid snapshot")
+        if not 1 <= len(reference_id) <= 256:
+            raise HTTPException(422, "invalid reference")
+        return s.correction_review_receipt(bearer, case_id, brief_id, snapshot_hash, reference_id)
 
     @router.post(base + "/corrections/preview")
     def correction_preview(
@@ -746,7 +810,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             "invalidates_snapshot_hash": body.snapshot_hash,
             "original_sha256": body.original_sha256,
             "derivative_sha256": hashlib.sha256(derivative).hexdigest(),
-            "content_base64": base64.b64encode(derivative).decode("ascii"),
+            "derivative_byte_length": len(derivative),
         }
 
     @router.post(base + "/corrections/status")
@@ -774,9 +838,14 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         case_id: str, brief_id: str, authorization: str | None = Header(default=None)
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
-        # The same canonical loader resolves the active draft and creates a new
-        # frozen report. Old confirmation/decisions do not carry to a new bundle.
-        return s.load(bearer, case_id, brief_id)[0]
+        # The requested version must be current, not merely an accessible historical
+        # derivative. Check again after processing to fence concurrent activation.
+        if s.current_draft_version(bearer, case_id) != brief_id:
+            raise HTTPException(409, "superseded draft cannot be rechecked")
+        report = s.load(bearer, case_id, brief_id)[0]
+        if report.get("brief_id") != brief_id or s.current_draft_version(bearer, case_id) != brief_id:
+            raise HTTPException(409, "draft superseded during recheck")
+        return report
 
     @router.post(base + "/confirmation")
     def confirm(
