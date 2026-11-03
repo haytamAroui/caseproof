@@ -16,7 +16,7 @@ const media = {
   json: 'application/json',
   markdown: 'text/markdown; charset=utf-8',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-};
+} as const;
 const artifact = (kind: keyof typeof media) =>
   ({ sha256: 'b'.repeat(64), byte_length: 17, media_type: media[kind] });
 const manifest = {

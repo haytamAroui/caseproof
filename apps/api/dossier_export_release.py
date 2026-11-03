@@ -5,7 +5,7 @@ import base64
 import hashlib
 import hmac
 import io
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Response
@@ -30,7 +30,7 @@ MEDIA = {
 
 class ReleaseCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    release_id: UUID
+    release_id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     snapshot_hash: str = Field(pattern=HEX64)
 
 
@@ -156,7 +156,7 @@ def create_release_router(store: Any) -> APIRouter:
         if existing.get("state") == "released":
             if existing.get("snapshot_hash") != body.snapshot_hash or existing.get("brief_id") != brief_id:
                 raise HTTPException(409, "release request identity already belongs to another snapshot")
-            return existing
+            return cast(dict[str, Any], existing)
         if existing.get("state") != "absent":
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         if store.current_draft_version(bearer, case_id) != brief_id:
@@ -181,7 +181,7 @@ def create_release_router(store: Any) -> APIRouter:
         result = store.export_rpc(bearer, case_id, "release", str(body.release_id), payload)
         if result.get("state") != "released" or result.get("manifest") != manifest:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        return result
+        return cast(dict[str, Any], result)
 
     @router.get(base)
     def list_releases(case_id: str, brief_id: str,
@@ -190,7 +190,7 @@ def create_release_router(store: Any) -> APIRouter:
         result = store.export_rpc(bearer, case_id, "list", None, {"brief_id": brief_id})
         if not isinstance(result.get("releases"), list):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        return result
+        return cast(dict[str, Any], result)
 
     @router.get(base + "/{release_id}")
     def status(case_id: str, brief_id: str, release_id: str,
@@ -198,7 +198,7 @@ def create_release_router(store: Any) -> APIRouter:
         bearer = active(authorization)
         result = store.export_rpc(bearer, case_id, "status", check_id(release_id), {})
         if result.get("state") == "absent":
-            return result
+            return cast(dict[str, Any], result)
         if result.get("state") != "released" or result.get("brief_id") != brief_id:
             raise HTTPException(404, "release not found")
         manifest = result.get("manifest")
@@ -208,7 +208,7 @@ def create_release_router(store: Any) -> APIRouter:
         unsigned = {k: v for k, v in manifest.items() if k != "server_receipt"}
         if not isinstance(receipt, str) or not hmac.compare_digest(receipt, store.receipt(unsigned)):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        return result
+        return cast(dict[str, Any], result)
 
     @router.get(base + "/{release_id}/artifacts/{kind}")
     def artifact(case_id: str, brief_id: str, release_id: str, kind: str,

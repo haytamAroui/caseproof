@@ -46,8 +46,9 @@ grant select,insert on storage.objects to authenticated;
     revisions = next(p for p in paths if 'dossier_draft_revisions' in p.name)
     revision_indexes = next(p for p in paths if 'dossier_draft_revision_fk_indexes' in p.name)
     fixture_ownership = next(p for p in paths if 'f5_correction_fixture_ownership' in p.name)
+    f6_release = next(p for p in paths if 'f6_reviewed_release_ledger' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -60,6 +61,8 @@ grant select,insert on storage.objects to authenticated;
     _run(revisions.read_text(), env)
     _run(revision_indexes.read_text(), env)
     _run(fixture_ownership.read_text(), env)
+    # F6 depends on retention guards, reviewed snapshot RPC and draft revisions.
+    _run(f6_release.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""

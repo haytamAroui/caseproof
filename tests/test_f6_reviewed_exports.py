@@ -205,9 +205,6 @@ def test_f6_bounded_format_refuses_oversized_artifact(monkeypatch):
     api, store = client()
     import apps.api.dossier_export_release as service
 
-    def too_large(report, raw):
-        return {"json": b"x" * 2_000_001, "markdown": b"m", "docx": b"zip"}
-
     monkeypatch.setattr(service, "_checked_artifacts", lambda report, raw: (_ for _ in ()).throw(
         __import__("fastapi").HTTPException(422, "export exceeds supported size")))
     result = api.post(base(), headers=header(),
