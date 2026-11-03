@@ -125,6 +125,7 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
             briefId={briefId}
             snapshot={snapshot}
             referenceId={finding.reference_id}
+            finding={finding}
           />
         )
       }
