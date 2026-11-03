@@ -20,7 +20,7 @@ from application.litigation.dossier_contracts import add_report_contract, assess
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
-from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
 from apps.api.dossier_draft_revisions import DraftRevisionClient
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
@@ -35,6 +35,7 @@ from domains.disputes.dossier_verification import build_findings
 from domains.disputes.exhibit_identity import InventoryStatus
 from domains.disputes.page_labels import PAGE_LABEL_PATTERN
 from domains.disputes.reference_detection import detect_exhibit_references
+from infrastructure.parsers.docx_correction_anchor import correction_anchor
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from infrastructure.parsers.dossier_docx_export import annotated_docx, corrected_docx_preview
@@ -189,6 +190,67 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def correction_status(
+        self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
+    ) -> dict[str, Any]:
+        """Read durable operation status without repeating a consequential write."""
+        values = command.model_dump()
+        values.pop("request_id")
+        digest = hashlib.sha256(canonical({"case": case, "brief": brief, **values}).encode()).hexdigest()
+        status = self.revisions.reserve(
+            bearer, case, command.request_id, "status", {"command_sha256": digest}
+        )
+        state = status.get("state")
+        if state not in ("absent", "reserved", "active"):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if state in ("reserved", "active") and (
+            status.get("parent_snapshot_hash") != command.snapshot_hash
+            or status.get("reference_id") != command.reference_id
+            or status.get("parent_version_id") != brief
+        ):
+            raise HTTPException(409, "correction operation differs from command")
+        if state == "active":
+            return {"state": "active", "version_id": status["version_id"],
+                    "committed": True, "requires_recheck": True}
+        return {"state": state, "committed": False, "requires_recheck": state == "reserved"}
+
+    def correction_review_receipt(
+        self, bearer: str, case: str, brief: str, snapshot: str, reference: str
+    ) -> dict[str, Any]:
+        """Signed read of an actor-specific persisted review; never trust a browser claim."""
+        report = self.frozen_report(bearer, case, brief, snapshot)
+        if not any(f.get("reference_id") == reference for f in report.get("findings", [])):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        try:
+            actor = self.revisions.verifier.verify_bearer(bearer).subject_id
+        except InvalidBearer:
+            raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+        except IdentityServiceUnavailable:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        ledger = self.rpc(bearer, case, "decisions", {"snapshot_hash": snapshot})
+        rows = ledger.get("decisions")
+        if not isinstance(rows, list):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        matching = [
+            row for row in rows
+            if isinstance(row, dict)
+            and row.get("reference_id") == reference
+            and row.get("reviewer_id") == actor
+            and isinstance(row.get("request_id"), str)
+            and isinstance(row.get("timestamp"), str)
+        ]
+        if not matching:
+            raise HTTPException(409, "persisted actor review required before correction")
+        receipt = matching[-1]
+        return {
+            "schema": "caseproof-correction-review-receipt-v1",
+            "brief_version_id": brief,
+            "snapshot_hash": snapshot,
+            "reference_id": reference,
+            "reviewer_id": actor,
+            "review_request_id": receipt["request_id"],
+        }
+
     def commit_correction(
         self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
     ) -> dict[str, Any]:
@@ -207,18 +269,29 @@ class DossierStore:
         if existing.get("state") == "active":
             return {**existing, "committed": True, "requires_recheck": True}
         if existing.get("state") == "absent":
-            report, original = self.load(bearer, case, brief)
+            # The reserve RPC independently enforces the same actor/snapshot/reference
+            # predicate transactionally. This API gate prevents bypassing the review
+            # receipt even if the browser sends a direct commit.
+            self.correction_review_receipt(bearer, case, brief, command.snapshot_hash, command.reference_id)
+            report, original = self.reopen(bearer, case, brief, command.snapshot_hash)
             if report["snapshot_hash"] != command.snapshot_hash:
                 raise HTTPException(409, "stale dossier correction")
-            if not any(f["reference_id"] == command.reference_id for f in report["findings"]):
+            finding = next((f for f in report["findings"] if f["reference_id"] == command.reference_id), None)
+            if finding is None:
                 raise HTTPException(422, "unknown correction reference")
         elif existing.get("state") == "reserved":
+            report = self.frozen_report(bearer, case, brief, command.snapshot_hash)
+            finding = next((f for f in report["findings"] if f["reference_id"] == command.reference_id), None)
+            if finding is None:
+                raise HTTPException(422, "unknown correction reference")
             original = self.client.library.read(
                 bearer=bearer, case_id=case, document_id=existing["document_id"], version_id=brief
             )
         else:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
+            if command.before != finding.get("literal") or correction_anchor(original, finding) != command.paragraph_index:
+                raise ValueError("correction does not match reference anchor")
             derivative = corrected_docx_preview(
                 original,
                 expected_sha256=command.original_sha256,
@@ -269,6 +342,17 @@ class DossierStore:
         if activated.get("state") != "active" or activated.get("version_id") != reserved["version_id"]:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return {**activated, "committed": True, "requires_recheck": True}
+
+    def current_draft_version(self, bearer: str, case: str) -> str:
+        """Authoritative currently active draft from the signed, scoped manifest."""
+        manifest = self.client.bundle_manifest(bearer, case)
+        entries = manifest.get("sources") if isinstance(manifest, dict) else None
+        if not isinstance(entries, list):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        drafts = [row.get("version_id") for row in entries if isinstance(row, dict) and row.get("role") == "draft"]
+        if len(drafts) != 1 or not isinstance(drafts[0], str):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return drafts[0]
 
     def receipt(self, payload: dict[str, Any]) -> str:
         key = getattr(self, "receipt_key", None)
@@ -642,6 +726,50 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         s, bearer = active(authorization)
         return s.load(bearer, case_id, brief_id, language_context=body.model_dump())[0]
 
+    @router.get(base + "/snapshots/{snapshot_hash}/references/{reference_id}/correction-anchor")
+    def correction_anchor_route(
+        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        report, original = s.reopen(bearer, case_id, brief_id, snapshot_hash)
+        finding = next((f for f in report["findings"] if f["reference_id"] == reference_id), None)
+        if finding is None:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        try:
+            index = correction_anchor(original, finding)
+        except ValueError:
+            raise HTTPException(422, "unsupported or ambiguous correction anchor") from None
+        return {"snapshot_hash": snapshot_hash, "brief_version_id": brief_id,
+                "reference_id": reference_id, "original_sha256": hashlib.sha256(original).hexdigest(),
+                "paragraph_index": index, "before": finding["literal"]}
+
+    @router.get(base + "/snapshots/{snapshot_hash}/references/{reference_id}/correction-operations")
+    def correction_operations(
+        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        report = s.frozen_report(bearer, case_id, brief_id, snapshot_hash, historical=True)
+        if not any(f["reference_id"] == reference_id for f in report["findings"]):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        result = s.revisions.recovery(bearer, case_id, brief_id, snapshot_hash, reference_id)
+        if not isinstance(result.get("operations"), list) or len(result["operations"]) > 20:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return {**result, "current_draft_version_id": s.current_draft_version(bearer, case_id)}
+
+    @router.get(base + "/corrections/review-receipt")
+    def correction_review_receipt(
+        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        if len(snapshot_hash) != 64 or any(c not in "0123456789abcdef" for c in snapshot_hash):
+            raise HTTPException(422, "invalid snapshot")
+        if not 1 <= len(reference_id) <= 256:
+            raise HTTPException(422, "invalid reference")
+        return s.correction_review_receipt(bearer, case_id, brief_id, snapshot_hash, reference_id)
+
     @router.post(base + "/corrections/preview")
     def correction_preview(
         case_id: str,
@@ -650,12 +778,15 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         authorization: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
-        report, original = s.load(bearer, case_id, brief_id)
+        report, original = s.reopen(bearer, case_id, brief_id, body.snapshot_hash)
         if report["snapshot_hash"] != body.snapshot_hash:
             raise HTTPException(409, "stale dossier correction")
-        if not any(f["reference_id"] == body.reference_id for f in report["findings"]):
+        finding = next((f for f in report["findings"] if f["reference_id"] == body.reference_id), None)
+        if finding is None:
             raise HTTPException(422, "unknown correction reference")
         try:
+            if body.before != finding.get("literal") or correction_anchor(original, finding) != body.paragraph_index:
+                raise ValueError("correction does not match reference anchor")
             derivative = corrected_docx_preview(
                 original,
                 expected_sha256=body.original_sha256,
@@ -667,14 +798,30 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             raise HTTPException(422, "unsupported or stale correction range") from None
         return {
             "schema": "caseproof-docx-correction-preview-v1",
+            "reference_id": body.reference_id,
+            "paragraph_index": body.paragraph_index,
+            "before": body.before,
+            "after": body.after,
+            "brief_version_id": brief_id,
+            "snapshot_hash": body.snapshot_hash,
             "committed": False,
             "requires_new_draft_version": True,
             "requires_recheck": True,
             "invalidates_snapshot_hash": body.snapshot_hash,
             "original_sha256": body.original_sha256,
             "derivative_sha256": hashlib.sha256(derivative).hexdigest(),
-            "content_base64": base64.b64encode(derivative).decode("ascii"),
+            "derivative_byte_length": len(derivative),
         }
+
+    @router.post(base + "/corrections/status")
+    def correction_status(
+        case_id: str,
+        brief_id: str,
+        body: CorrectionCommitBody,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        return s.correction_status(bearer, case_id, brief_id, body)
 
     @router.post(base + "/corrections/commit")
     def correction_commit(
@@ -691,9 +838,14 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         case_id: str, brief_id: str, authorization: str | None = Header(default=None)
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
-        # The same canonical loader resolves the active draft and creates a new
-        # frozen report. Old confirmation/decisions do not carry to a new bundle.
-        return s.load(bearer, case_id, brief_id)[0]
+        # The requested version must be current, not merely an accessible historical
+        # derivative. Check again after processing to fence concurrent activation.
+        if s.current_draft_version(bearer, case_id) != brief_id:
+            raise HTTPException(409, "superseded draft cannot be rechecked")
+        report = s.load(bearer, case_id, brief_id)[0]
+        if report.get("brief_id") != brief_id or s.current_draft_version(bearer, case_id) != brief_id:
+            raise HTTPException(409, "draft superseded during recheck")
+        return report
 
     @router.post(base + "/confirmation")
     def confirm(

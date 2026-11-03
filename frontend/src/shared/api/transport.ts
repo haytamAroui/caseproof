@@ -59,7 +59,9 @@ export class ApiClient {
       controller.signal,
       AbortSignal.timeout(
         path.startsWith('/v2/workspace/intake/') ||
-          /\/dossier\/(confirmation|checks)$/.test(path)
+          /\/dossier\/(confirmation|checks|recheck|corrections\/(preview|commit))$/.test(
+            path,
+          )
           ? 180000
           : 30000,
       ),
@@ -84,10 +86,19 @@ export class ApiClient {
       this.session.assert(epoch);
       combined.throwIfAborted();
       if (!response.ok) {
+        // A correction-history reader may lack correction permissions while
+        // remaining authorized for their current matter. That denial must not
+        // destroy an otherwise valid reader session. Other resource denials
+        // retain the existing revocation-clears-session safety behavior.
+        const recoveryRead =
+          body === undefined &&
+          /^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/snapshots\/[0-9a-f]{64}\/references\/[^/]+\/correction-operations$/.test(
+            new URL(path, 'https://caseproof.invalid').pathname,
+          );
         if (
           response.status === 401 ||
-          response.status === 403 ||
-          response.status === 404
+          ((response.status === 403 || response.status === 404) &&
+            !recoveryRead)
         )
           this.session.clear();
         throw new ApiError(response.status);

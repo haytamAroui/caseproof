@@ -39,7 +39,7 @@ jobs:
       - name: Two-stage correction SQL adversarial acceptance
         run: uv run --locked python -m scripts.verify_dossier_draft_revisions
       - name: Correction coordinator interruption and replay tests
-        run: uv run --locked pytest -q tests/test_dossier_correction_commit.py tests/test_dossier_correction_preview.py
+        run: uv run --locked pytest -q tests/test_dossier_correction_commit.py tests/test_dossier_correction_preview.py tests/test_f5_correction_anchor.py tests/test_f5_correction_routes.py tests/test_f5_correction_status.py
       - name: Type and lint correction integration
         run: |
           uv run --locked ruff check .

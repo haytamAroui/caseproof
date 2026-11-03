@@ -1,0 +1,43 @@
+name: F5 genuine signed correction acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  live:
+    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f5-correction-recheck-workspace' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/f5-correction-recheck-workspace'))
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 20
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+      CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+      CASEPROOF_PHASE3_LIVE: "YES"
+      CASEPROOF_WORKSPACE_ENABLED: "YES"
+      CASEPROOF_F3_BROWSER_LIVE: "YES"
+      CASEPROOF_F4_BROWSER_LIVE: "YES"
+      CASEPROOF_F5_BROWSER_LIVE: "YES"
+      CASEPROOF_OCR_SANDBOX: docker
+      CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-nld tesseract-ocr-fra poppler-utils fonts-dejavu-core
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - run: npm ci && npm run contracts:check && npm run build
+        working-directory: frontend
+      - run: uv run --locked python -m playwright install --with-deps chromium
+      - name: Real signed correction, activation, recheck, comparison and cold reopen
+        run: uv run --locked python -m scripts.dossier_live

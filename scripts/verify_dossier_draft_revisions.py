@@ -18,6 +18,11 @@ def main():
     if proposal.read_bytes() != migration.read_bytes():
         raise RuntimeError('Deployed draft revision SQL differs from proposal')
     _run((ROOT / 'db/proposals/M1_M2_draft_revision_scoped_cleanup.sql').read_text(), env)
+    recovery = ROOT / 'db/proposals/F5_dossier_correction_recovery.sql'
+    if recovery.read_bytes() != (ROOT / 'supabase/migrations/20261103033846_f5_dossier_correction_recovery.sql').read_bytes():
+        raise RuntimeError('Recovery migration differs from tested proposal')
+    if (ROOT / "db/proposals/F5_correction_fixture_ownership.sql").read_bytes() != (ROOT / "supabase/migrations/20261103034132_f5_correction_fixture_ownership.sql").read_bytes():
+        raise RuntimeError("Fixture ownership migration differs from reviewed proposal")
     actor, other, org, case = [str(uuid4()) for _ in range(4)]
     docs, versions = [[str(uuid4()) for _ in range(4)] for _ in range(2)]
     _run(f"""
@@ -60,6 +65,10 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
     call('caseproof_dossier',[case,'snapshot',json.dumps(dict(snapshot_hash=snapshot,serialized=serial))])
     call('caseproof_dossier',[case,'review',json.dumps(dict(snapshot_hash=snapshot,reference_id='ref-0000',
          request_id=str(uuid4()),decision='CONFIRMED_SUPPORTED',rationale='Synthetic manual review'))])
+    fixture_run = str(uuid4())
+    _run(f"insert into caseproof.test_run_registry(run_id,resource_type,resource_id,state) values "
+         f"('{fixture_run}','run','{fixture_run}','CREATED'),"
+         f"('{fixture_run}','matter','{case}','CREATED');", env)
     request = str(uuid4())
     command = dict(command_sha256='b'*64,snapshot_hash=snapshot,parent_version_id=versions[0],
                    parent_sha256='a'*64,reference_id='ref-0000',sha256='c'*64,byte_length=40)
@@ -67,6 +76,18 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
     call('caseproof_dossier_draft_reserve',args,user=other,succeeds=False)
     reserved = json.loads(call('caseproof_dossier_draft_reserve',args))
     assert reserved['state']=='reserved'
+    owned_path = '/'.join([org, case, docs[0], reserved['version_id'], 'c'*64])
+    assert _run(f"select resource_id from caseproof.test_run_registry where run_id='{fixture_run}' "
+                f"and resource_type='storage_file';", env) == owned_path
+    recovered = json.loads(call('caseproof_dossier_draft_recovery', [case, versions[0], snapshot, 'ref-0000']))
+    assert len(recovered['operations']) == 1
+    assert recovered['operations'][0]['request_id'] == request
+    assert recovered['operations'][0]['state'] == 'reserved'
+    assert recovered['operations'][0]['version_id'] is None
+    assert json.loads(call('caseproof_dossier_draft_recovery',
+                           [case, versions[0], snapshot, 'different']))['operations'] == []
+    call('caseproof_dossier_draft_recovery', [case, versions[0], snapshot, 'ref-0000'],
+         user=other, succeeds=False)
     assert json.loads(call('caseproof_dossier_draft_reserve',args))['version_id']==reserved['version_id']
     pending = json.loads(call('caseproof_dossier',[case,'context','{}']))
     assert pending['bundle_signature'] == context['bundle_signature']
@@ -85,8 +106,10 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
          "for each row execute function caseproof.reject_revision_audit();",env)
     failed_request = str(uuid4())
     before_count = _run(f"select count(*) from caseproof.document_versions where org_id='{org}';",env)
+    before_registry = _run(f"select count(*) from caseproof.test_run_registry where run_id='{fixture_run}';", env)
     call('caseproof_dossier_draft_reserve',[case,failed_request,'reserve',json.dumps(command)],succeeds=False)
     assert _run(f"select count(*) from caseproof.document_versions where org_id='{org}';",env) == before_count
+    assert _run(f"select count(*) from caseproof.test_run_registry where run_id='{fixture_run}';", env) == before_registry
     call('caseproof_dossier_draft_activate',activation,service=True,succeeds=False)
     assert json.loads(call('caseproof_dossier_draft_reserve',[case,request,'status',json.dumps(command)]))['state']=='reserved'
     _run('drop trigger reject_revision_audit on caseproof.audit_events;',env)
@@ -95,6 +118,9 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
     assert sorted(result['replayed'] for result in activations) == [False, True]
     activated = activations[0]
     assert activated['state']=='active'
+    recovered = json.loads(call('caseproof_dossier_draft_recovery', [case, versions[0], snapshot, 'ref-0000']))
+    assert any(row['request_id'] == request and row['state'] == 'active'
+               and row['version_id'] == reserved['version_id'] for row in recovered['operations'])
     assert json.loads(call('caseproof_dossier_draft_activate',activation,service=True))['replayed'] is True
     manifest=json.loads(call('caseproof_dev_bundle_manifest',[case]))
     assert manifest['sources'][0]['version_id']==reserved['version_id']
@@ -110,12 +136,16 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
     call('caseproof_dossier',[case,'snapshot',json.dumps(dict(snapshot_hash=revised_hash,serialized=revised_serial))])
     assert json.loads(call('caseproof_dossier',[case,'decisions',json.dumps(dict(snapshot_hash=revised_hash))]))['decisions'] == []
     assert json.loads(call('caseproof_dossier_snapshot_read',[case,revised_hash]))['serialized'] == revised_serial
+    assert _run(f"select count(*) from caseproof._phase4_reference_decisions where org_id='{org}' "
+                f"and case_id='{case}' and snapshot_sha='{snapshot}' and actor_id='{actor}';", env) == '1'
     _run(f"update caseproof.organization_members set active=false where org_id='{org}' and user_id='{actor}';",env)
     call('caseproof_dossier_draft_activate',activation,service=True,succeeds=False)
+    call('caseproof_dossier_draft_recovery',[case,versions[0],snapshot,'ref-0000'],succeeds=False)
     _run(f"update caseproof.organization_members set active=true where org_id='{org}' and user_id='{actor}';",env)
     _run(f"update caseproof._m1_matter_grants set active=false where case_id='{case}';",env)
     call('caseproof_dossier_draft_activate',activation,service=True,succeeds=False)
     call('caseproof_dossier_draft_reserve',[case,request,'status',json.dumps(command)],succeeds=False)
+    call('caseproof_dossier_draft_recovery',[case,versions[0],snapshot,'ref-0000'],succeeds=False)
     run, foreign, foreign_org = [str(uuid4()) for _ in range(3)]
     _run(f"insert into auth.users(id,instance_id) values('{foreign}','{foreign_org}');"
          f"insert into caseproof.organizations(id,display_name) values('{foreign_org}','Synthetic foreign');"

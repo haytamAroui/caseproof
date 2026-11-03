@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ApiClient } from '../../shared/api';
 import { parseDraftExcerpt } from '../../shared/api/review';
@@ -10,12 +11,14 @@ export function DraftContext({
   briefId,
   snapshot,
   referenceId,
+  renderCorrection,
 }: {
   api: ApiClient;
   caseId: string;
   briefId: string;
   snapshot: string;
   referenceId: string;
+  renderCorrection: (originalSha: string) => ReactNode;
 }) {
   const session = useSession();
   const excerpt = useQuery({
@@ -72,6 +75,7 @@ export function DraftContext({
               </mark>
               {excerpt.data.excerpt.slice(excerpt.data.selection_end)}
             </p>
+            {renderCorrection(excerpt.data.original_sha256)}
           </>
         ))}
     </section>
