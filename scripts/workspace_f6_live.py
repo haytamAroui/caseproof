@@ -9,7 +9,6 @@ import hashlib
 import http.client
 import io
 import json
-import os
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID

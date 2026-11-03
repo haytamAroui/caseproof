@@ -331,7 +331,11 @@ def _exercise() -> None:
 
             if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES":
                 from scripts.workspace_f6_live import (
-                    binding, deny_after_revocation, export_one, fixture_export_grant, reopen_old,
+                    binding,
+                    deny_after_revocation,
+                    export_one,
+                    fixture_export_grant,
+                    reopen_old,
                 )
                 if not f6_old:
                     raise RuntimeError("F6_OLD_RELEASE_MISSING")
