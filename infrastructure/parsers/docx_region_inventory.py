@@ -4,6 +4,7 @@ Uses bounded ZIP metadata and defused XML; never executes embedded content.
 A discovered region is not marked scanned by this inventory adapter.
 """
 from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 from dataclasses import dataclass
 from enum import StrEnum
 from io import BytesIO
@@ -131,5 +132,5 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
                 } for node in root.iter()):
                     regions.append(DocxRegion(name + "#structured", "STRUCTURED_CONTENT", RegionStatus.UNSUPPORTED, "UNSUPPORTED_STRUCTURED_CONTENT"))
             return DocxCoverage(tuple(regions), False)
-    except (BadZipFile, ET.ParseError, OSError, RuntimeError, ValueError):
+    except (BadZipFile, ET.ParseError, DefusedXmlException, OSError, RuntimeError, ValueError):
         return DocxCoverage((), True, "UNREADABLE_PACKAGE")
