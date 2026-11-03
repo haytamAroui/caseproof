@@ -190,6 +190,46 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def export_rpc(
+        self, bearer: str, case: str, action: str, release_id: str | None,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Scoped signed-user RPC; large artifacts never pass the generic report cap."""
+        if action not in {"authorize", "release", "status", "list", "artifact"}:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        con = http.client.HTTPSConnection(HOST, timeout=60)
+        try:
+            con.request(
+                "POST", "/rest/v1/rpc/caseproof_dossier_export_release",
+                canonical({
+                    "p_case": case, "p_action": action,
+                    "p_export": release_id, "p_data": data,
+                }).encode(),
+                {
+                    "apikey": self.key, "Authorization": "Bearer " + bearer,
+                    "Content-Type": "application/json", "Cache-Control": "no-store",
+                },
+            )
+            response = con.getresponse()
+            status, raw = response.status, response.read(16_000_001)
+        except (OSError, TimeoutError, http.client.HTTPException):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        finally:
+            con.close()
+        if status in (400, 401, 403, 404):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        if status == 409:
+            raise HTTPException(409, "stale release or idempotency conflict")
+        if status != 200 or len(raw) > 16_000_000:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            result = json.loads(raw)
+        except (ValueError, UnicodeError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if not isinstance(result, dict):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return result
+
     def correction_status(
         self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
     ) -> dict[str, Any]:
@@ -1164,4 +1204,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             },
         )
 
+    from apps.api.dossier_export_release import create_release_router
+
+    router.include_router(create_release_router(store))
     return router

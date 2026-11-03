@@ -82,6 +82,11 @@ export function ReportsScreen({ api }: { api: ApiClient }) {
                     (Europe/Brussels)
                   </span>
                 </Link>
+                <Link
+                  to={`/matters/${caseId}/exports?brief=${report.brief_id}&snapshot=${report.snapshot_hash}`}
+                >
+                  Reviewed exports
+                </Link>
               </li>
             ))}
           </ul>

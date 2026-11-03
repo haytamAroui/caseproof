@@ -1,4 +1,11 @@
 import { SessionController, SessionEnded } from '../session';
+type BinaryBinding = {
+  sha256: string;
+  snapshot: string;
+  length: number;
+  media?: 'application/json' | 'text/markdown' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  export?: true;
+};
 export class ApiError extends Error {
   constructor(public readonly status: number) {
     super(
@@ -40,10 +47,29 @@ export class ApiClient {
       throw new ApiError(502);
     return (await this.read(path, signal, binding)) as Uint8Array;
   }
+  async artifact(
+    path: string,
+    binding: BinaryBinding,
+    signal: AbortSignal,
+  ): Promise<Uint8Array> {
+    if (
+      binding.export !== true ||
+      !binding.media ||
+      !/^[0-9a-f]{64}$/.test(binding.sha256) ||
+      !/^[0-9a-f]{64}$/.test(binding.snapshot) ||
+      !Number.isInteger(binding.length) ||
+      binding.length < 1 ||
+      binding.length > (binding.media.includes('wordprocessingml') ? 5_242_880 : 2_000_000) ||
+      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/releases\/[0-9a-f-]{36}\/artifacts\/(json|markdown|docx)$/.test(
+        new URL(path, 'https://caseproof.invalid').pathname,
+      )
+    ) throw new ApiError(502);
+    return (await this.read(path, signal, binding)) as Uint8Array;
+  }
   private async read(
     path: string,
     signal?: AbortSignal,
-    binding?: { sha256: string; snapshot: string; length: number },
+    binding?: BinaryBinding,
     body?: unknown,
   ): Promise<unknown> {
     if (
@@ -59,6 +85,7 @@ export class ApiClient {
       controller.signal,
       AbortSignal.timeout(
         path.startsWith('/v2/workspace/intake/') ||
+        path.includes('/dossier/releases') ||
           /\/dossier\/(confirmation|checks|recheck|corrections\/(preview|commit))$/.test(
             path,
           )
@@ -95,10 +122,15 @@ export class ApiClient {
           /^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/snapshots\/[0-9a-f]{64}\/references\/[^/]+\/correction-operations$/.test(
             new URL(path, 'https://caseproof.invalid').pathname,
           );
+        // Lacking the separate export grant is not session revocation. Do not
+        // sign out a valid report reader merely for asking about releases.
+        const exportGrantBoundary = /\/dossier\/releases(?:\/|$)/.test(
+          new URL(path, 'https://caseproof.invalid').pathname,
+        );
         if (
           response.status === 401 ||
           ((response.status === 403 || response.status === 404) &&
-            !recoveryRead)
+            !recoveryRead && !exportGrantBoundary)
         )
           this.session.clear();
         throw new ApiError(response.status);
@@ -106,7 +138,7 @@ export class ApiClient {
       if (
         !response.headers
           .get('content-type')
-          ?.includes(binding ? 'application/pdf' : 'application/json')
+          ?.includes(binding ? (binding.media ?? 'application/pdf') : 'application/json')
       )
         throw new ApiError(502);
       if (!response.body) throw new ApiError(502);
@@ -141,7 +173,11 @@ export class ApiClient {
         if (
           size !== binding.length ||
           response.headers.get('X-CaseProof-Snapshot') !== binding.snapshot ||
-          response.headers.get('X-CaseProof-Original-SHA256') !== binding.sha256
+          response.headers.get(
+            binding.export ? 'X-CaseProof-Export-SHA256' : 'X-CaseProof-Original-SHA256',
+          ) !== binding.sha256 ||
+          (binding.export &&
+            response.headers.get('X-CaseProof-Export-Size') !== String(binding.length))
         )
           throw new ApiError(502);
         const digest = new Uint8Array(
