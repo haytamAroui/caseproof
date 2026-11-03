@@ -64,3 +64,10 @@ For each task: **ID | owner (if assigned) | baseline SHA | state | scope | affec
 
 ## Definition of done
 Code merged into intended branch; generated contracts consistent; applicable tests and CI green with skips explained; negative authorization and lifecycle tests passing; real signed-browser journey where required; exact final SHA and evidence links recorded; independent gates explicitly approved. Otherwise remain OPEN or BLOCKED.
+
+## PR batching and CI efficiency policy
+- Prefer **large, cohesive milestone PRs** over small PRs: batch P0+P1, P2+P3, P4+P5, and P6 where dependencies and current repository state permit. Do not reopen already accepted functionality merely to fit a batch.
+- Complete related backend, frontend, generated contracts, tests, documentation and rollback notes together before pushing. Use local targeted checks first; consolidate fixes into a small number of commits and pushes.
+- Run expensive full CI after the coherent change set is ready; avoid repeated pushes solely to trigger CI. Never suppress mandatory branch protection, security, contract, or signed-browser acceptance checks to save time.
+- Keep each PR independently reviewable, revertible and bounded by one milestone outcome. Split only when security risk, dependency order or reviewability requires it.
+- Merge only after final-head CI and applicable independent acceptance gates; update docs/STATUS.md with the final SHA and run links.
