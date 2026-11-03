@@ -232,7 +232,7 @@ class DossierStore:
         if existing.get("state") == "active":
             return {**existing, "committed": True, "requires_recheck": True}
         if existing.get("state") == "absent":
-            report, original = self.load(bearer, case, brief)
+            report, original = self.reopen(bearer, case, brief, command.snapshot_hash)
             if report["snapshot_hash"] != command.snapshot_hash:
                 raise HTTPException(409, "stale dossier correction")
             finding = next((f for f in report["findings"] if f["reference_id"] == command.reference_id), None)
@@ -714,7 +714,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         authorization: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
-        report, original = s.load(bearer, case_id, brief_id)
+        report, original = s.reopen(bearer, case_id, brief_id, body.snapshot_hash)
         if report["snapshot_hash"] != body.snapshot_hash:
             raise HTTPException(409, "stale dossier correction")
         finding = next((f for f in report["findings"] if f["reference_id"] == body.reference_id), None)

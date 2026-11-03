@@ -73,6 +73,7 @@ def store(mode='normal'):
     report = {'snapshot_hash': 'a'*64, 'findings': [{'reference_id': 'ref-0000',
               'literal': 'p. 2', 'region': 'word/document.xml', 'offsets': {'start': 12, 'end': 16}}]}
     service.load = lambda *args: (report, raw)
+    service.reopen = lambda *args: (report, raw)
     service.frozen_report = lambda *args: report
     return service, command
 

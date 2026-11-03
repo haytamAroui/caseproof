@@ -501,3 +501,17 @@ No new migration, client documents or production deployment. Legacy raster boxes
 without full page geometry remain disclosed and unprojected. PR review,
 independent security/privacy/manual accessibility and deployment approval remain
 separate. F3–F6 and full M3 remain open. Earlier candidate entries are historical.
+
+
+## F5 correction lifecycle — signed development evidence (3 November 2026)
+
+The supported correction workspace is implemented in [PR #177](https://github.com/haytamAroui/caseproof/pull/177).
+[Signed run 41574806741](https://github.com/haytamAroui/caseproof/actions/runs/41574806741)
+passed at `526b8ef2`: exact preview, lost-ack commit/activation, durable recovery,
+recheck/comparison, unchanged original bytes, cold reopening, independent new
+review state, revoked access denial, and zero-residual cleanup. Recovery and
+fixture registration are installed in `caseproof-dev` with matching migration
+files. Final amended-head CI and current engineering readiness are recorded in
+the PR; security/legal/privacy approval and production release remain separate.
+See [F5 acceptance](m3/F5_IMPLEMENTATION_ACCEPTANCE.md) for scope, limitations and
+the earlier unexplained sign-in failure.

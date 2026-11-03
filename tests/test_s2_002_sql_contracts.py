@@ -129,6 +129,8 @@ def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> Non
         "20261101004423_dossier_draft_revision_scoped_cleanup.sql",
         "20261101205446_workspace_f1_report_catalog.sql",
             "20261102150600_caseproof_historical_snapshot_read.sql",
+            "20261103033846_f5_dossier_correction_recovery.sql",
+            "20261103034132_f5_correction_fixture_ownership.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",

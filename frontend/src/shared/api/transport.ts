@@ -59,7 +59,9 @@ export class ApiClient {
       controller.signal,
       AbortSignal.timeout(
         path.startsWith('/v2/workspace/intake/') ||
-          /\/dossier\/(confirmation|checks)$/.test(path)
+          /\/dossier\/(confirmation|checks|recheck|corrections\/(preview|commit))$/.test(
+            path,
+          )
           ? 180000
           : 30000,
       ),

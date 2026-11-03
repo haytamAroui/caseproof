@@ -286,6 +286,7 @@ export function CorrectionPanel({
     <section
       className="draft-context"
       aria-label="Correction preview and recheck"
+      aria-busy={busy}
     >
       <UnsavedChanges dirty={Boolean(preview && !command)} />
       <h3>Propose a bounded DOCX correction</h3>
@@ -409,7 +410,9 @@ export function CorrectionPanel({
           </Button>
         </section>
       )}
-      {message && <p role="status">{message}</p>}
+      <p role="status">
+        {busy ? 'Waiting for an authorized server response…' : message}
+      </p>
     </section>
   );
 }

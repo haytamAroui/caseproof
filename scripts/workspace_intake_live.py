@@ -9,8 +9,9 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import re
 
-from playwright.sync_api import expect
+from playwright.sync_api import Route, expect
 
 from scripts.m05_registry import record, rows
 from scripts.verify_dev_live_review_roundtrip import _server_start, _server_stop
@@ -19,6 +20,16 @@ from scripts.workspace_browser_live import ORIGIN, WorkspaceBrowserAcceptance
 from tests.fixtures.dossier_journey import dossier_bundle
 from tests.fixtures.factory import SyntheticSource
 
+_LIVE_STAGE = "START"
+
+
+def _stage(name: str) -> None:
+    global _LIVE_STAGE
+    if not re.fullmatch(r"[A-Z0-9_]+", name):
+        raise ValueError("invalid acceptance stage")
+    _LIVE_STAGE = name
+    print("F5_STAGE_" + name, flush=True)
+
 
 def _exercise() -> None:
     if os.getenv("GITHUB_REF") not in {
@@ -26,6 +37,7 @@ def _exercise() -> None:
         "refs/heads/main",
         "refs/pull/175/merge",
         "refs/pull/176/merge",
+        "refs/pull/177/merge", "refs/heads/feat/f5-correction-recheck-workspace",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
     key, run, org = (
@@ -59,18 +71,36 @@ def _exercise() -> None:
     registered: list[dict] = []
     case = ""
     try:
+        _stage("CREATE_MATTER_SIGNIN")
         page.goto(ORIGIN + "/workspace/matters/new")
         acceptance.login(page)
         expect(page.get_by_role("heading", name="Create a private matter")).to_be_visible()
+        _stage("SELECT_ORGANIZATION")
         page.get_by_label("Organization", exact=True).select_option(org)
         page.get_by_label("Matter title").fill("Owned synthetic F3 dossier")
+        def own_created_matter(route: Route) -> None:
+            nonlocal case
+            response = route.fetch(timeout=90000)
+            if response.status != 200:
+                route.fulfill(response=response)
+                return
+            _stage("CAPTURE_CREATED_MATTER")
+            payload = response.json()
+            if not isinstance(payload, dict) or not isinstance(payload.get("case_id"), str):
+                raise RuntimeError("F3_CREATE_RESPONSE_INVALID")
+            case = payload["case_id"]
+            _stage("REGISTER_CREATED_MATTER")
+            record(key, run, "matter", case, "CREATED")
+            route.fulfill(response=response)
+        page.route("**/v2/workspace/intake/matters", own_created_matter)
+        _stage("CREATE_MATTER_REQUEST")
         with page.expect_response(lambda r: r.url.endswith("/intake/matters")) as created:
             page.get_by_role("button", name="Create matter", exact=True).click()
-        if created.value.status != 200:
+        if created.value.status != 200 or not case:
             raise RuntimeError("F3_BROWSER_CREATE_FAILED")
-        case = created.value.json()["case_id"]
-        record(key, run, "matter", case, "CREATED")
+        page.unroute("**/v2/workspace/intake/matters", own_created_matter)
         expect(page.get_by_role("heading", name="Preserve the source bundle")).to_be_visible()
+        _stage("SELECT_ORIGINALS")
         labels = ("DOCX draft", "UTF-8 inventory", "First PDF exhibit", "Second PDF exhibit or scan")
         for label, source in zip(labels, bundle, strict=True):
             page.get_by_label(label, exact=True).set_input_files(
@@ -216,6 +246,61 @@ def _exercise() -> None:
             expect(page.get_by_text("PDF page 6 of 6", exact=True)).to_be_visible(timeout=90000)
             print("F4_GENUINE_REVIEW_COLD_REOPEN_SOURCE_AND_RECEIPT_PASSED", flush=True)
 
+        if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
+            previous_url = page.url
+            correction = page.get_by_role("region", name="Correction preview and recheck", exact=True)
+            expect(correction.get_by_label("Exact original text")).to_be_visible(timeout=90000)
+            before = correction.get_by_label("Exact original text").input_value()
+            if "1" not in before:
+                raise RuntimeError("F5_SYNTHETIC_REFERENCE_DIFFERS")
+            _stage("EXACT_REFERENCE_PREVIEW")
+            correction.get_by_label("Replacement text").fill(before.replace("1", "2", 1))
+            correction.get_by_role("button", name="Validate exact preview").click()
+            expect(correction.get_by_text("Proposed change (not committed)", exact=True)).to_be_visible(timeout=90000)
+            writes = [0]
+            correction_request = {}
+            correction_headers = {}
+            correction_base = [""]
+            def lose_correction_ack(route: Route) -> None:
+                writes[0] += 1
+                correction_request.update(route.request.post_data_json)
+                correction_headers['Authorization'] = route.request.headers['authorization']
+                correction_base[0] = route.request.url.removesuffix('/corrections/commit')
+                response = route.fetch(timeout=180000)
+                if response.status != 200:
+                    raise RuntimeError("F5_COMMIT_REJECTED")
+                route.abort("failed")
+            page.route("**/corrections/commit", lose_correction_ack)
+            _stage("COMMIT_ACTIVATE")
+            correction.get_by_role("button", name="Explicitly commit and activate new draft").click()
+            correction.get_by_role("button", name="Reconcile identical operation").click(timeout=180000)
+            _stage("RECHECK_COMPARE")
+            correction.get_by_role("button", name="Recheck activated draft", exact=True).click(timeout=90000)
+            expect(correction.get_by_role("heading", name="Previous report", exact=True)).to_be_visible(timeout=180000)
+            expect(correction.get_by_role("heading", name="Rechecked report", exact=True)).to_be_visible(timeout=180000)
+            if writes[0] != 1:
+                raise RuntimeError("F5_DUPLICATE_COMMIT")
+            old_original = page.request.get(
+                correction_base[0] + '/history/' + correction_request['snapshot_hash'] +
+                '/sources/' + registered[0]['version_id'] + '/original', headers=correction_headers,
+            )
+            if old_original.status != 200 or hashlib.sha256(old_original.body()).hexdigest() != hashlib.sha256(bundle[0].content).hexdigest():
+                raise RuntimeError("F5_ORIGINAL_CHANGED_OR_UNAVAILABLE")
+            print("F5_SIGNED_ORIGINAL_SHA256_UNCHANGED_PASSED", flush=True)
+            page.unroute("**/corrections/commit", lose_correction_ack)
+            print("F5_SIGNED_PREVIEW_LOST_ACK_COMMIT_RECONCILE_RECHECK_COMPARE_PASSED", flush=True)
+            _server_stop(proc)
+            proc = _server_start()
+            _stage("COLD_REOPEN")
+            page.goto(previous_url)
+            acceptance.login(page)
+            expect(page.get_by_text("Historical report · read-only", exact=True)).to_be_visible(timeout=90000)
+            recovery = page.get_by_role("region", name="Correction operation recovery", exact=True)
+            recovery.get_by_role("button", name="Recheck activated draft", exact=True).click(timeout=90000)
+            expect(page.get_by_role("heading", name="Review the evidence")).to_be_visible(timeout=180000)
+            expect(page.get_by_text("No recorded human decision for this reference.", exact=True)).to_be_visible(timeout=90000)
+            print("F5_SIGNED_COLD_REOPEN_ACTIVATED_DRAFT_INDEPENDENT_REVIEW_PASSED", flush=True)
+
         print("F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_EXPLICIT_CHECK_PASSED", flush=True)
         for role in ("ungranted", "foreign"):
             context = acceptance.browser.new_context()
@@ -239,6 +324,15 @@ def _exercise() -> None:
             and "@" not in r["resource_id"]
         )
         admin_rpc(key, "revoke", {"p_run": run, "p_owner": owner, "p_case": case})
+        if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
+            denied_recovery = page.request.get(
+                correction_base[0] + '/snapshots/' + correction_request['snapshot_hash'] +
+                '/references/' + correction_request['reference_id'] + '/correction-operations',
+                headers=correction_headers,
+            )
+            if denied_recovery.status not in (403, 404):
+                raise RuntimeError("F5_REVOKED_RECOVERY_NOT_DENIED")
+            print("F5_GENUINE_SIGNED_REVOKED_RECOVERY_DENIED_PASSED", flush=True)
         page.goto(ORIGIN + f"/workspace/matters/{case}/sources")
         acceptance.login(page)
         expect(page.get_by_role("button", name="Sign in", exact=True)).to_be_visible(timeout=120000)
@@ -252,7 +346,11 @@ def _exercise() -> None:
 def main() -> None:
     try:
         _exercise()
-    except Exception:
+    except Exception as error:
+        category = str(error) if isinstance(error, RuntimeError) else ""
+        print("F5_FAILURE_STAGE_" + _LIVE_STAGE + "_TYPE_" + type(error).__name__, flush=True)
+        if len(category) <= 128 and re.fullmatch(r"F[345]_[A-Z0-9_]+", category):
+            print("F5_FAILURE_CATEGORY_" + category, flush=True)
         # Playwright errors can contain fill arguments. The outer fixture
         # wrapper serializes exception text, so expose only a fixed category.
         raise RuntimeError("F3_PROTECTED_BROWSER_ACCEPTANCE_FAILED") from None
