@@ -1,4 +1,4 @@
-# CaseProof — Agent Master Implementation TODO v1.0
+# CaseProof — Agent Master Implementation TODO v1.1
 
 **Date:** 3 November 2026, Europe/Brussels.  
 **Repository baseline:** `2a5420db21c010c39a27fc3d49fd05b2585d0f88` (`main`, plan merged by PR #179).  
@@ -105,13 +105,15 @@ SQL/security-sensitive changes require exact grant/RLS/revocation and independen
 
 | Order | Bundle | Tasks | Required outcome |
 |---|---|---|---|
-| 1 | Factual records and hardening | T01–T06, T10–T17 | Accurate evidence; controlled parser/service failures |
+| 1 | Factual records and hardening | T01–T09, T10–T17 | Accurate evidence; controlled parser/service failures |
 | 2 | Capacity through the full journey | T20–T29 | Measured, approved envelope; signed end-to-end recovery |
 | 3 | Release preflight and navigation | T30–T35 | Eligibility/completeness/coverage explained and enforced |
 | 4 | Correction, comparison and coverage | T40–T49, T50–T57 | Safe supported editing, contextual preview and explained recheck |
 | 5 | Useful DOCX and optional engine capability | T60–T66 | Readable validated output; experiments have explicit decisions |
 | Alongside | Operational / practitioner acceptance | T70–T79 | Evidence, real owners and pilot gates |
 | Conditional | Word/MCP/model/redaction extensions | T80–T85 | Decisions made; features implemented only if activated |
+
+The order above is recommended delivery sequencing, not a dependency between every bundle. Task-level dependencies govern execution: T20 measurements precede D01/T21; release work follows D02/T30; correction behavior follows D03/T40; readable output follows T15/D06. Preserve downstream implementation/test dependencies. Candidate capacity profiles may be benchmarked while D01 is pending, but unmeasured provisional numbers must not become the supported production policy.
 
 Do not impose an eighteen-PR sequence. Implement coherent backend/frontend bundles with meaningful review boundaries. Begin security inspection, measurements, corpus gathering and practitioner discovery immediately. They do not wait for all UI work.
 
@@ -232,6 +234,33 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 **Done when:** Lockfiles and applicable notices match delivered bytes; no unreviewed git+ssh package.  
 **Touch points:** pyproject.toml; uv.lock; frontend/package-lock.json; third-party notices. **Trace:** StetDoc S12; Vaquill V9/V15; plan §20.5.
 
+
+#### T07 — Verify historical schema compatibility
+
+- [ ] Complete T07 and record its acceptance evidence.
+
+**Status:** VERIFY_EXISTING. **Depends on:** None; informs T32 and T35 before manifest changes ship.  
+**Build:** Inventory installed snapshot, report, manifest and receipt schema identifiers and reader dispatch. Document existing compatibility rules before proposing versions or migrations. Add preserved old-format fixtures where missing; unknown versions must fail explicitly without rewriting historical artifacts.  
+**Done when:** Supported historical formats reopen with unchanged bytes and valid receipts; unsupported versions have a controlled outcome. Record actual schema paths and tests. No new registry is required unless an observed gap warrants it.  
+**Touch points:** Existing projection, snapshot and release readers/writers; generated contracts. **Trace:** Historical reopening; T32/T35.
+
+#### T08 — Inventory service errors and recovery behavior
+
+- [ ] Complete T08 and record its acceptance evidence.
+
+**Status:** VERIFY_EXISTING. **Depends on:** None; informs T12–T13, T33, T45 and T55.  
+**Build:** Trace actual backend error codes, HTTP statuses and frontend states for authentication expiry, action denial, stale state, malformed upstream data, capacity refusal and unknown mutation outcomes. Record endpoint-specific differences and regression coverage. Preserve installed contracts unless a deliberate compatible change is documented.  
+**Done when:** One mapping links existing code to UI behavior and tests. Action-specific denial does not automatically invalidate a valid reader session. Unknown outcomes reconcile through the existing operation contract; HTTP status alone does not prove success or authorize automatic mutation retries.  
+**Touch points:** API error mapping, shared transport/session and feature recovery. **Trace:** V8; S12.
+
+#### T09 — Map acceptance requirements to executable evidence
+
+- [ ] Complete T09 and record its acceptance evidence.
+
+**Status:** TODO. **Depends on:** None; complete the affected mapping before T17 closure.  
+**Build:** Maintain the acceptance-to-layer table in section 8 with actual test paths, commands and CI run links at the implementation head. Add missing regressions in the appropriate implementation tasks. Distinguish unit, integration, browser, signed backend and manual host evidence.  
+**Done when:** Every affected Done-when requirement names its proving layer and observed result or explicit open gate. No invented test file, arbitrary coverage percentage or mocked replacement for signed acceptance.  
+**Touch points:** Section 8 and existing test/workflow configuration. **Trace:** Bundle closure and evidence rules.
 
 ### 5.2 Bundle 1 — parser and service hardening
 
@@ -425,7 +454,7 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T32 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T31.  
+**Status:** TODO. **Depends on:** T31; T07 compatibility verification before schema changes ship.  
 **Build:** Record counts/completeness/limitations under compatible or explicitly versioned schema. Preserve old manifest/HMAC validation and exact old artifact bytes; never mutate historical signed records.  
 **Done when:** Old and new releases reopen under correct schemas with unchanged historical bytes.  
 **Touch points:** Manifest/receipt reader and writer; migration only if required. **Trace:** C3/C6.
@@ -1005,6 +1034,21 @@ Existing viewer comparison scripts are `npm run viewer:build`, `viewer:preview` 
 
 Discover the actual protected workflow inputs and fixture-cleanup contract before triggering signed acceptance. No admin DSN, service key in browser, new human messages, production deployment or client files follows from this task list.
 
+### Acceptance-to-layer evidence map
+
+Paths below exist in the inspected workspace; confirm them against the implementation head. These are execution targets, not claims that the proposed regressions already exist or pass. Run commands from repository root unless stated otherwise.
+
+| Acceptance requirement | Proving layer | Existing entry point / command | Evidence limit |
+|---|---|---|---|
+| Encoded hostile XML refusal and controlled extraction coverage | Python parser unit/regression | `uv run --locked pytest -q tests/test_docx_region_inventory.py tests/test_docx_text_regions_coverage.py` | Add encoding/security cases as needed; prove both extraction paths |
+| Malformed RPC JSON and manifest guards | Python transport/application regression | `uv run --locked pytest -q tests/test_dossier_journey.py tests/test_f6_reviewed_exports.py tests/test_f6_trusted_release_transport.py` | Locate/add exact negative cases; file existence is not coverage |
+| Historical schema and receipt compatibility | Python integration plus signed cold reopen | T07 identifies existing reader tests; release regressions above; existing protected signed journey | Offline tests cannot prove live authorization or restart behavior |
+| XML characters, whitespace and package integrity | Python OOXML regression plus actual document host | `uv run --locked pytest -q tests/test_f6_docx_format_integrity.py`; T61 host receipt | Playwright does not establish desktop Word rendering |
+| Error-to-UI state, expiry and unknown outcomes | Frontend unit plus production-host browser integration | In `frontend`: `npm test`, `npm run test:e2e`; T08 selects cases | Genuine signed acceptance remains separate from mocked transport |
+| Changed consumed contracts | Generator, AJV and TypeScript | Root generator check and frontend contract/type checks below | Add old-format fixtures where T07 identifies compatibility gaps |
+
+For each selected row record exact final-head command, test names, result and CI link. Determine timeouts from existing workflows and measured workload rather than inventing universal budgets. This documentation update does not execute or close these implementation checks.
+
 ### Required PR evidence
 
 - Exact problem and resulting behavior, task IDs, implemented paths and contract/policy versions.
@@ -1065,3 +1109,5 @@ Constitution/ADRs and applicable AGENTS retain authority. Actual versioned imple
 ### Change log
 
 - v1.0 — 3 November 2026: Initial agent task consolidation. 71 task cards, complete S0–S13/P01–P10/W01–W08/FX and 28-pattern mapping. Baseline is merged plan commit; local hardening remains IN_PROGRESS. No implementation or acceptance status is newly claimed by generating this file.
+
+- v1.1 — 3 November 2026: Added T07–T09 for historical-schema, error-contract and test-evidence verification (74 task cards total). Clarified independent bundle dependencies and measurement-first capacity selection. Existing local-work statuses and downstream task dependencies remain intact; no new runtime contract or acceptance is claimed.
