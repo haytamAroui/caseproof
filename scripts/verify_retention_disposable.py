@@ -84,6 +84,46 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     def actor(user, sql):
         return f"begin; set local role authenticated; set local request.jwt.claim.sub='{user}'; set local request.jwt.claims='{{\"role\":\"authenticated\"}}'; {sql}; commit;"
 
+    # F6 release grants are independent of ordinary report/review access.
+    export_call = f"select (public.caseproof_dossier_export_release('{case}','authorize')->>'authorized')"
+    status_call = (
+        f"select (public.caseproof_dossier_export_release('{case}','status',"
+        f"'{uuid4()}')->>'state')"
+    )
+    _run(actor(owner, export_call), env, should_pass=False)
+    _run(actor(guest, export_call), env, should_pass=False)
+    _run(f"""
+update caseproof.organization_members set actions=array_append(actions,'export:request')
+ where org_id='{org}' and user_id='{owner}';
+update caseproof._m1_matter_grants set permissions=array_append(permissions,'export:request')
+ where org_id='{org}' and case_id='{case}' and user_id='{owner}';
+""", env)
+    if _run(actor(owner, export_call), env) != "true":
+        raise AssertionError('explicit signed export grant not recognized')
+    if _run(actor(owner, status_call), env) != "absent":
+        raise AssertionError('unknown release not reported as absent')
+    _run(actor(guest, export_call), env, should_pass=False)
+    _run(actor(owner,
+               f"select public.caseproof_dossier_export_release('{other}','authorize')"),
+         env, should_pass=False)
+    _run(actor(owner, "select count(*) from caseproof.dossier_releases"),
+         env, should_pass=False)
+    _run(f"update caseproof._m1_matter_grants set active=false where org_id='{org}' and case_id='{case}' and user_id='{owner}'", env)
+    _run(actor(owner, export_call), env, should_pass=False)
+    _run(f"update caseproof._m1_matter_grants set active=true where org_id='{org}' and case_id='{case}' and user_id='{owner}'", env)
+    release_id = str(uuid4())
+    _run(f"""
+insert into caseproof.dossier_releases(
+ org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts
+) values (
+ '{org}','{case}','{release_id}','{owner}','{version}',repeat('a',64),
+ '{{"scope":"synthetic-retention-only"}}'::jsonb,
+ '{{"json":"eA=="}}'::jsonb
+);
+""", env)
+    if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != "1":
+        raise AssertionError('fixture release not persisted')
+    print('F6_SEPARATE_EXPORT_GRANT_RLS_REVOKE_AND_RELEASE_RETENTION_FIXTURE_PASSED', flush=True)
     service = "set request.jwt.claims='{\"role\":\"service_role\"}'; "
     soft = f"select public.caseproof_soft_delete_matter('{case}')"
     _run(actor(guest, soft), env, should_pass=False)
@@ -147,6 +187,8 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
         raise AssertionError('other matter deleted')
     if _run(f"select count(*) from caseproof.document_versions where id='{version}'", env) != '0':
         raise AssertionError('version remains')
+    if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != '0':
+        raise AssertionError('release bytes remain after matter purge')
     if _run("select erased_audit_events from caseproof.erasure_receipts", env) != '1':
         raise AssertionError('minimal erasure audit missing')
     print('RETENTION_SQL_DENIAL_HOLD_STORAGE_RETRY_SCOPE_AND_RECEIPT_PASSED')
