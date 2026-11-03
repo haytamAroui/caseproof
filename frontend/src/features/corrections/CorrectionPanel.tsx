@@ -93,7 +93,7 @@ export function CorrectionPanel({ api, scope, finding, originalSha }: {
     if (!receipt || busy) return;
     setBusy(true);
     try {
-      const raw = record(await api.post(`${base}/recheck`, {}));
+      const raw = record(await api.post(`/v2/matters/${encodeURIComponent(scope.caseId)}/briefs/${encodeURIComponent(receipt.version_id)}/dossier/recheck`, {}));
       if (typeof raw.snapshot_hash !== 'string' || !sha.test(raw.snapshot_hash) ||
         raw.brief_id !== receipt.version_id) throw Error('Recheck binding mismatch');
       setPreviousSnapshot(scope.snapshot);
