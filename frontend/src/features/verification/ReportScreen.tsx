@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
 import { useSession } from '../../shared/session';
 import { Notice, StateValue } from '../../shared/ui';
@@ -105,6 +105,16 @@ export function ReportScreen({
             : 'Current preserved report'}
         </p>
         <h1>Review the evidence</h1>
+        <Link
+          to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}
+        >
+          Reviewed exports and historical downloads
+        </Link>
+        {!historical && (
+          <Link to={`/matters/${caseId}/inventory`}>
+            Reconfirm inventory and page mappings
+          </Link>
+        )}
         <p>
           Each result describes a separate check. Human judgment remains
           separate.

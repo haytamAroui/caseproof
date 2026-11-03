@@ -232,6 +232,7 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
             <label>
               Preserved exhibit
               <select
+                aria-label="Preserved exhibit"
                 value={entry.source_version_id ?? ''}
                 onChange={(e) =>
                   update(index, {

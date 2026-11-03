@@ -46,8 +46,10 @@ grant select,insert on storage.objects to authenticated;
     revisions = next(p for p in paths if 'dossier_draft_revisions' in p.name)
     revision_indexes = next(p for p in paths if 'dossier_draft_revision_fk_indexes' in p.name)
     fixture_ownership = next(p for p in paths if 'f5_correction_fixture_ownership' in p.name)
+    f6_release = next(p for p in paths if 'f6_reviewed_release_ledger' in p.name)
+    f6_action_guard = next(p for p in paths if 'f6_reject_null_release_action' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -60,6 +62,9 @@ grant select,insert on storage.objects to authenticated;
     _run(revisions.read_text(), env)
     _run(revision_indexes.read_text(), env)
     _run(fixture_ownership.read_text(), env)
+    # F6 depends on retention guards, reviewed snapshot RPC and draft revisions.
+    _run(f6_release.read_text(), env)
+    _run(f6_action_guard.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -81,6 +86,106 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     def actor(user, sql):
         return f"begin; set local role authenticated; set local request.jwt.claim.sub='{user}'; set local request.jwt.claims='{{\"role\":\"authenticated\"}}'; {sql}; commit;"
 
+    # F6 release grants are independent of ordinary report/review access.
+    export_call = f"select (public.caseproof_dossier_export_release('{case}','authorize')->>'authorized')"
+    status_call = (
+        f"select (public.caseproof_dossier_export_release('{case}','status',"
+        f"'{uuid4()}')->>'state')"
+    )
+    _run(actor(owner, export_call), env, should_pass=False)
+    _run(actor(guest, export_call), env, should_pass=False)
+    _run(f"""
+update caseproof.organization_members set actions=array_append(actions,'export:request')
+ where org_id='{org}' and user_id='{owner}';
+update caseproof._m1_matter_grants set permissions=array_append(permissions,'export:request')
+ where org_id='{org}' and case_id='{case}' and user_id='{owner}';
+""", env)
+    if _run(actor(owner, export_call), env) != "true":
+        raise AssertionError('explicit signed export grant not recognized')
+    if _run(actor(owner, status_call), env) != "absent":
+        raise AssertionError('unknown release not reported as absent')
+    _run(actor(guest, export_call), env, should_pass=False)
+    # NULL must be rejected at dispatch, before manifest or snapshot validation.
+    # A generic failure alone would let the old vulnerable fall-through pass.
+    _run(actor(owner, f"""do $test$
+    begin
+      begin
+        perform public.caseproof_dossier_export_release('{case}', NULL, '{uuid4()}', '{{}}'::jsonb);
+        raise exception 'NULL action accepted';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'release unavailable' then raise; end if;
+      end;
+    end $test$"""), env)
+    print('F6_NULL_ACTION_REJECTED_AT_DISPATCH_42501_PASSED', flush=True)
+    _run(actor(owner,
+               f"select public.caseproof_dossier_export_release('{other}','authorize')"),
+         env, should_pass=False)
+    _run(actor(owner, "select count(*) from caseproof.dossier_releases"),
+         env, should_pass=False)
+    _run(f"update caseproof._m1_matter_grants set active=false where org_id='{org}' and case_id='{case}' and user_id='{owner}'", env)
+    _run(actor(owner, export_call), env, should_pass=False)
+    _run(f"update caseproof._m1_matter_grants set active=true where org_id='{org}' and case_id='{case}' and user_id='{owner}'", env)
+    release_id = str(uuid4())
+    _run(f"""
+insert into caseproof.dossier_releases(
+ org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts
+) values (
+ '{org}','{case}','{release_id}','{owner}','{version}',repeat('a',64),
+ '{{"scope":"synthetic-retention-only"}}'::jsonb,
+ '{{"json":"eA=="}}'::jsonb
+);
+""", env)
+    if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != "1":
+        raise AssertionError('fixture release not persisted')
+    # Fill the bounded per-matter release ledger using synthetic fixture rows.
+    # A distinct signed release request must reject capacity before snapshot
+    # parsing; a replay of an existing release remains a separate read action.
+    _run(f"""
+insert into caseproof.dossier_releases(
+ org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts
+)
+select '{org}','{case}',gen_random_uuid(),'{owner}','{version}',repeat('a',64),
+ '{{"scope":"synthetic-retention-only"}}'::jsonb,
+ '{{"json":"eA=="}}'::jsonb
+from generate_series(1,49);
+""", env)
+    if _run(f"select count(*) from caseproof.dossier_releases where case_id='{case}'", env) != "50":
+        raise AssertionError('release capacity fixture incomplete')
+    new_release = str(uuid4())
+    release_attempt = f"""
+select public.caseproof_dossier_export_release(
+  '{case}','release','{new_release}',
+  jsonb_build_object(
+    'manifest', jsonb_build_object(
+      'schema','caseproof-reviewed-release-v1',
+      'case_id','{case}', 'release_id','{new_release}',
+      'snapshot_hash',repeat('a',64),
+      'server_receipt',repeat('b',64),
+      'manifest_sha256',repeat('c',64),
+      'artifacts','{{}}'::jsonb
+    ),
+    'contents',jsonb_build_object('json','eA==','markdown','eA==','docx','eA=='),
+    'human_decisions','[]'::jsonb
+  ),'{owner}'
+);
+"""
+    # A browser JWT with export permissions must still be unable to write
+    # signed release bytes directly via the published PostgreSQL function.
+    _run(actor(owner, release_attempt), env, should_pass=False)
+    trusted_release = (
+        "begin; set local role service_role;"
+        " set local request.jwt.claims='{\"role\":\"service_role\"}';"
+        + release_attempt + " commit;"
+    )
+    try:
+        _run(trusted_release, env)
+    except AssertionError as error:
+        if "release capacity reached" not in str(error):
+            raise
+    else:
+        raise AssertionError('release capacity did not fail closed')
+    print('F6_DIRECT_SIGNED_WRITE_DENIED_AND_CAPACITY_FENCED_PASSED', flush=True)
+    print('F6_SEPARATE_EXPORT_GRANT_RLS_REVOKE_AND_RELEASE_RETENTION_FIXTURE_PASSED', flush=True)
     service = "set request.jwt.claims='{\"role\":\"service_role\"}'; "
     soft = f"select public.caseproof_soft_delete_matter('{case}')"
     _run(actor(guest, soft), env, should_pass=False)
@@ -144,6 +249,8 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
         raise AssertionError('other matter deleted')
     if _run(f"select count(*) from caseproof.document_versions where id='{version}'", env) != '0':
         raise AssertionError('version remains')
+    if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != '0':
+        raise AssertionError('release bytes remain after matter purge')
     if _run("select erased_audit_events from caseproof.erasure_receipts", env) != '1':
         raise AssertionError('minimal erasure audit missing')
     print('RETENTION_SQL_DENIAL_HOLD_STORAGE_RETRY_SCOPE_AND_RECEIPT_PASSED')

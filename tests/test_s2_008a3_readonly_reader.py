@@ -175,6 +175,9 @@ def test_all_new_code_is_unwired_and_migration_unchanged() -> None:
             "20261102150600_caseproof_historical_snapshot_read.sql",
             "20261103033846_f5_dossier_correction_recovery.sql",
             "20261103034132_f5_correction_fixture_ownership.sql",
+        # F6 reviewed export is now a separately authorized, retention-scoped migration.
+        "20261103080000_f6_reviewed_release_ledger.sql",
+        "20261103105420_f6_reject_null_release_action.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",

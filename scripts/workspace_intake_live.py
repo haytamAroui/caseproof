@@ -38,6 +38,7 @@ def _exercise() -> None:
         "refs/pull/175/merge",
         "refs/pull/176/merge",
         "refs/pull/177/merge", "refs/heads/feat/f5-correction-recheck-workspace",
+        "refs/pull/178/merge", "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
     key, run, org = (
@@ -246,6 +247,33 @@ def _exercise() -> None:
             expect(page.get_by_text("PDF page 6 of 6", exact=True)).to_be_visible(timeout=90000)
             print("F4_GENUINE_REVIEW_COLD_REOPEN_SOURCE_AND_RECEIPT_PASSED", flush=True)
 
+        f6_old = None
+        f6_new = None
+        if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES":
+            if (os.getenv("CASEPROOF_F4_BROWSER_LIVE") != "YES"
+                    or os.getenv("CASEPROOF_F5_BROWSER_LIVE") != "YES"):
+                raise RuntimeError("F6_REQUIRES_REAL_F4_F5")
+            from scripts.workspace_f6_live import binding, export_one, fixture_export_grant
+            owner = next(
+                r["resource_id"].split(":", 1)[1]
+                for r in rows(key, run)
+                if r["resource_type"] == "auth_user"
+                and r["resource_id"].startswith("owner:")
+                and "@" not in r["resource_id"]
+            )
+            fixture_export_grant(key, run, owner, case, True)
+            report_url = page.url
+            old_brief, old_snapshot = binding(page)
+            _stage("OLD_REVIEWED_RELEASE")
+            f6_old = export_one(
+                page, acceptance, case=case, brief=old_brief,
+                snapshot=old_snapshot, pdf_version=registered[2]["version_id"],
+                pdf_original=bundle[2].content, expect_reference="Stuk 1",
+            )
+            page.goto(report_url)
+            acceptance.login(page)
+            expect(page.get_by_role("heading", name="Review the evidence")).to_be_visible(timeout=90000)
+
         if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
             previous_url = page.url
             correction = page.get_by_role("region", name="Correction preview and recheck", exact=True)
@@ -254,7 +282,20 @@ def _exercise() -> None:
             if "1" not in before:
                 raise RuntimeError("F5_SYNTHETIC_REFERENCE_DIFFERS")
             _stage("EXACT_REFERENCE_PREVIEW")
-            correction.get_by_label("Replacement text").fill(before.replace("1", "2", 1))
+            # F6's second release needs a newly checked *mapped* reference:
+            # an edit to the reference's presentation preserves exhibit 1
+            # while creating a genuinely new immutable draft version.
+            # Renumbering to Stuk 2 would deliberately make its identity
+            # unconfirmed, and the reviewer must abstain rather than fabricate
+            # visual inspection of a non-existent source page.
+            replacement = (
+                before.replace("1", "1 ", 1)
+                if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"
+                else before.replace("1", "2", 1)
+            )
+            if replacement == before:
+                raise RuntimeError("F6_CORRECTION_NOT_CHANGED")
+            correction.get_by_label("Replacement text").fill(replacement)
             correction.get_by_role("button", name="Validate exact preview").click()
             expect(correction.get_by_text("Proposed change (not committed)", exact=True)).to_be_visible(timeout=90000)
             writes = [0]
@@ -301,6 +342,67 @@ def _exercise() -> None:
             expect(page.get_by_text("No recorded human decision for this reference.", exact=True)).to_be_visible(timeout=90000)
             print("F5_SIGNED_COLD_REOPEN_ACTIVATED_DRAFT_INDEPENDENT_REVIEW_PASSED", flush=True)
 
+            if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES":
+                from scripts.workspace_f6_live import (
+                    binding,
+                    deny_after_revocation,
+                    export_one,
+                    fixture_export_grant,
+                    reconfirm_corrected_bundle,
+                    reopen_old,
+                )
+                if not f6_old:
+                    raise RuntimeError("F6_OLD_RELEASE_MISSING")
+                # Correction changed the bundle signature. Under the
+                # evidence-first contract, its previous inventory/page
+                # confirmation is stale: neither prior mapping nor human
+                # review may be silently inherited by the new draft.
+                _stage("RECONFIRM_CORRECTED_BUNDLE")
+                reconfirm_corrected_bundle(
+                    page, case=case, registered=registered
+                )
+                # Rechecking under the newly confirmed bundle creates a
+                # new report; the reviewer must inspect the preserved source
+                # and save an independent disposition before another release.
+                _stage("NEW_DRAFT_INDEPENDENT_REVIEW")
+                reviewer = page.get_by_role("region", name="Human review")
+                expect(reviewer.get_by_role("button", name="Save human decision")).to_be_visible(timeout=120000)
+                for checkbox in reviewer.get_by_role("checkbox").all():
+                    checkbox.check()
+                reviewer.get_by_label(
+                    "Rationale (required, visible to authorized reviewers)"
+                ).fill("Independent review of new synthetic draft after correction")
+                reviewer.get_by_role("button", name="Save human decision").click()
+                expect(page.get_by_role("list", name="Saved review history")).to_contain_text(
+                    "Independent review of new synthetic draft after correction", timeout=90000
+                )
+                new_brief, new_snapshot = binding(page)
+                _stage("NEW_RECHECKED_RELEASE")
+                f6_new = export_one(
+                    page, acceptance, case=case, brief=new_brief,
+                    snapshot=new_snapshot, pdf_version=registered[2]["version_id"],
+                    pdf_original=bundle[2].content, expect_reference="Stuk 1",
+                )
+                _server_stop(proc)
+                proc = _server_start()
+                _stage("HISTORICAL_RELEASE_COLD_REOPEN")
+                reopen_old(page, acceptance, case=case, old=f6_old, new=f6_new)
+                # Separate export grant can be revoked while matter reader
+                # remains signed in; no old release may bypass live grants.
+                fixture_export_grant(key, run, owner, case, False)
+                deny_after_revocation(page, case=case, old=f6_old)
+                page.goto(f6_old["page"])
+                acceptance.login(page)
+                expect(page.get_by_text("Release history is unavailable or access was revoked.")).to_be_visible(
+                    timeout=90000
+                )
+                expect(page.get_by_role("button", name="End session")).to_be_visible()
+                print("F6_SIGNED_EXPORT_ONLY_REVOKE_READER_SESSION_PRESERVED_PASSED", flush=True)
+                # Restore the ephemeral export grant for the later whole-matter
+                # revoke test; the outer fixture teardown always destroys it.
+                fixture_export_grant(key, run, owner, case, True)
+                print("F6_REAL_SIGNED_OLD_NEW_RELEASE_COLD_REOPEN_PASSED", flush=True)
+
         print("F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_EXPLICIT_CHECK_PASSED", flush=True)
         for role in ("ungranted", "foreign"):
             context = acceptance.browser.new_context()
@@ -324,6 +426,9 @@ def _exercise() -> None:
             and "@" not in r["resource_id"]
         )
         admin_rpc(key, "revoke", {"p_run": run, "p_owner": owner, "p_case": case})
+        if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES" and f6_old:
+            from scripts.workspace_f6_live import deny_after_revocation
+            deny_after_revocation(page, case=case, old=f6_old)
         if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
             denied_recovery = page.request.get(
                 correction_base[0] + '/snapshots/' + correction_request['snapshot_hash'] +
@@ -349,7 +454,7 @@ def main() -> None:
     except Exception as error:
         category = str(error) if isinstance(error, RuntimeError) else ""
         print("F5_FAILURE_STAGE_" + _LIVE_STAGE + "_TYPE_" + type(error).__name__, flush=True)
-        if len(category) <= 128 and re.fullmatch(r"F[345]_[A-Z0-9_]+", category):
+        if len(category) <= 128 and re.fullmatch(r"F[3456]_[A-Z0-9_]+", category):
             print("F5_FAILURE_CATEGORY_" + category, flush=True)
         # Playwright errors can contain fill arguments. The outer fixture
         # wrapper serializes exception text, so expose only a fixed category.

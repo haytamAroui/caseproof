@@ -1,4 +1,5 @@
 import { CorrectionPanel, CorrectionRecovery } from '../features/corrections';
+import { ExportsScreen } from '../features/exports';
 import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -250,6 +251,10 @@ function Workspace({ api }: { api: ApiClient }) {
             <Route
               path="/matters/:caseId"
               element={<ReportsScreen api={api} />}
+            />
+            <Route
+              path="/matters/:caseId/exports"
+              element={<ExportsScreen api={api} />}
             />
             <Route
               path="/matters/:caseId/briefs/:briefId"

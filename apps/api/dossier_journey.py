@@ -190,6 +190,68 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def export_rpc(
+        self, bearer: str, case: str, action: str, release_id: str | None,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Signed reads; only trusted backend may persist a signed release."""
+        if action not in {"authorize", "release", "status", "list", "artifact"}:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        payload: dict[str, Any] = {
+            "p_case": case, "p_action": action,
+            "p_export": release_id, "p_data": data,
+        }
+        if action == "release":
+            # The API has already checked the signed report. A separate fresh
+            # Auth /user lookup pins the actor before trusted PostgreSQL write.
+            # No browser may invoke release RPC as service_role.
+            key = self.revisions.trusted_key
+            if not key:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+            try:
+                actor = self.revisions.verifier.verify_bearer(bearer)
+            except InvalidBearer:
+                raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+            except IdentityServiceUnavailable:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+            payload["p_actor"] = actor.subject_id
+            headers = {
+                "apikey": key, "Content-Type": "application/json",
+                "Cache-Control": "no-store",
+            }
+            if key.startswith("eyJ"):
+                headers["Authorization"] = "Bearer " + key
+        else:
+            headers = {
+                "apikey": self.key, "Authorization": "Bearer " + bearer,
+                "Content-Type": "application/json", "Cache-Control": "no-store",
+            }
+        con = http.client.HTTPSConnection(HOST, timeout=60)
+        try:
+            con.request(
+                "POST", "/rest/v1/rpc/caseproof_dossier_export_release",
+                canonical(payload).encode(), headers,
+            )
+            response = con.getresponse()
+            status, raw = response.status, response.read(16_000_001)
+        except (OSError, TimeoutError, http.client.HTTPException):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        finally:
+            con.close()
+        if status in (400, 401, 403, 404):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        if status == 409:
+            raise HTTPException(409, "stale release or idempotency conflict")
+        if status != 200 or len(raw) > 16_000_000:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            result = json.loads(raw)
+        except (ValueError, UnicodeError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if not isinstance(result, dict):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return result
+
     def correction_status(
         self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
     ) -> dict[str, Any]:
@@ -1164,4 +1226,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             },
         )
 
+    from apps.api.dossier_export_release import create_release_router
+
+    router.include_router(create_release_router(store))
     return router
