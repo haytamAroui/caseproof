@@ -8,9 +8,9 @@ import io
 from typing import Any, cast
 from uuid import UUID
 
+from docx import Document
 from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
-from docx import Document
 
 from application.litigation.report_projection import canonical as canonical_report
 

@@ -175,7 +175,7 @@ begin
    begin v_raw:=decode(v_encoded,'base64');
    exception when others then raise exception 'invalid release bytes' using errcode='42501'; end;
    if octet_length(v_raw)<1
-    or octet_length(v_raw)>case when v_format='docx' then 5242880 else 2000000 end
+    or octet_length(v_raw) > (case when v_format='docx' then 5242880 else 2000000 end)
     or (v_info->>'byte_length')::integer is distinct from octet_length(v_raw)
     or (v_info->>'sha256') is distinct from encode(extensions.digest(v_raw,'sha256'),'hex')
    then raise exception 'artifact integrity failure' using errcode='42501'; end if;

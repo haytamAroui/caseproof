@@ -7,7 +7,6 @@ import hmac
 import io
 from uuid import uuid4
 
-import pytest
 from docx import Document
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
