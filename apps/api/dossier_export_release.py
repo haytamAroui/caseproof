@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import io
 from typing import Any, cast
+from urllib.parse import quote
 from uuid import UUID
 
 from docx import Document
@@ -75,6 +76,45 @@ def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dic
         })
     if not all(isinstance(d, dict) and isinstance(d.get("request_id"), str) for d in decisions):
         raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+    # Link destination paths are derived exclusively from frozen source IDs and
+    # the selected finding, not from external URL fields or caller input.
+    source_by_id = {
+        row["version_id"]: row for row in selected
+        if row["role"] in {"exhibit", "draft", "inventory"}
+    }
+    case_path = quote(str(report["case_id"]), safe="")
+    brief_path = quote(str(report["brief_id"]), safe="")
+    snapshot_path = quote(str(report["snapshot_hash"]), safe="")
+    original_base = (
+        f"/v2/matters/{case_path}/briefs/{brief_path}/dossier"
+        f"/history/{snapshot_path}/sources"
+    )
+    source_links = [{
+        "version_id": row["version_id"],
+        "role": row["role"],
+        "sha256": row["sha256"],
+        "original_path": f"{original_base}/{quote(str(row['version_id']), safe='')}/original",
+    } for row in selected]
+    reference_links = []
+    for finding in report["findings"]:
+        reference = finding.get("reference_id")
+        version = finding.get("version_id")
+        if not isinstance(reference, str) or not reference or version not in source_by_id:
+            continue
+        page = finding.get("pdf_page")
+        mapped = finding.get("page_mapping") == "mapped"
+        physical = page if mapped and type(page) is int and page > 0 else None
+        reference_links.append({
+            "reference_id": reference,
+            "source_version_id": version,
+            "original_sha256": source_by_id[version]["sha256"],
+            "pdf_page": physical,
+            "viewer_path": (
+                f"/matters/{case_path}/briefs/{brief_path}"
+                f"?snapshot={snapshot_path}&finding={quote(reference, safe='')}"
+            ),
+            "page_space": "physical_pdf_page" if physical is not None else "unmapped",
+        })
     return {
         "schema": "caseproof-reviewed-release-v1",
         "case_id": report["case_id"],
@@ -83,6 +123,8 @@ def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dic
         "bundle_signature": report["bundle_signature"],
         "confirmation_id": report.get("confirmation_id"),
         "sources": selected,
+        "source_links": source_links,
+        "reference_links": reference_links,
         "coverage": report["coverage"],
         "finding_count": len(report["findings"]),
         "review_count": len(decisions),

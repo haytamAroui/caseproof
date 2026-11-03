@@ -303,6 +303,30 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
               </li>
             ))}
           </ul>
+          <h3>Frozen reference destinations</h3>
+          {selected.manifest.reference_links.length === 0 ? (
+            <Notice>
+              No mapped source destinations were recorded for this release.
+              Unknown page locations remain unassessed.
+            </Notice>
+          ) : (
+            <ul aria-label="Frozen reference destinations">
+              {selected.manifest.reference_links.map((target) => (
+                <li key={target.reference_id}>
+                  <Link to={target.viewer_path}>
+                    Inspect preserved reference {target.reference_id}
+                  </Link>
+                  <span className="small">
+                    {' '}
+                    · {target.pdf_page === null
+                      ? 'Physical PDF page not mapped'
+                      : 'Physical PDF page ' + target.pdf_page}
+                    {' '}· version <code>{target.source_version_id}</code>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
           {selected.manifest.limitations.map((text) => (
             <p className="small" key={text}>
               {text}

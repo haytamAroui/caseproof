@@ -37,6 +37,40 @@ const manifest = {
   sources: [
     { role: 'draft', version_id: scope.briefId, sha256: 'c'.repeat(64) },
   ],
+  source_links: [
+    {
+      role: 'draft',
+      version_id: scope.briefId,
+      sha256: 'c'.repeat(64),
+      original_path:
+        '/v2/matters/' +
+        scope.caseId +
+        '/briefs/' +
+        scope.briefId +
+        '/dossier/history/' +
+        scope.snapshot +
+        '/sources/' +
+        scope.briefId +
+        '/original',
+    },
+  ],
+  reference_links: [
+    {
+      reference_id: 'ref-one',
+      source_version_id: scope.briefId,
+      original_sha256: 'c'.repeat(64),
+      pdf_page: 6,
+      page_space: 'physical_pdf_page',
+      viewer_path:
+        '/matters/' +
+        scope.caseId +
+        '/briefs/' +
+        scope.briefId +
+        '?snapshot=' +
+        scope.snapshot +
+        '&finding=ref-one',
+    },
+  ],
   limitations: ['Not a legal certificate'],
   artifacts: {
     json: artifact('json'),
@@ -94,12 +128,53 @@ describe('F6 reviewed export contracts', () => {
       ),
     ).toThrow();
   });
+  it('rejects unsafe source links and incorrect physical page bindings', () => {
+    expect(() =>
+      parseRelease(
+        {
+          ...record,
+          manifest: {
+            ...manifest,
+            source_links: [
+              { ...manifest.source_links[0], original_path: 'https://foreign.invalid' },
+            ],
+          },
+        },
+        scope,
+      ),
+    ).toThrow();
+    expect(() =>
+      parseRelease(
+        {
+          ...record,
+          manifest: {
+            ...manifest,
+            reference_links: [
+              { ...manifest.reference_links[0], pdf_page: null, page_space: 'physical_pdf_page' },
+            ],
+          },
+        },
+        scope,
+      ),
+    ).toThrow();
+  });
   it('keeps a historical release bound to its own snapshot', () => {
     const old = 'f'.repeat(64);
     const historical = {
       ...record,
       snapshot_hash: old,
-      manifest: { ...manifest, snapshot_hash: old },
+      manifest: {
+        ...manifest,
+        snapshot_hash: old,
+        source_links: manifest.source_links.map((link) => ({
+          ...link,
+          original_path: link.original_path.replace(scope.snapshot, old),
+        })),
+        reference_links: manifest.reference_links.map((link) => ({
+          ...link,
+          viewer_path: link.viewer_path.replace(scope.snapshot, old),
+        })),
+      },
     };
     expect(
       parseReleaseList({ releases: [historical] }, scope)[0]?.snapshot_hash,

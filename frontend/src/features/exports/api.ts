@@ -21,6 +21,20 @@ export interface ReleaseManifest {
   finding_count: number;
   coverage: Record<string, unknown>;
   sources: { role: string; version_id: string; sha256: string }[];
+  source_links: {
+    role: string;
+    version_id: string;
+    sha256: string;
+    original_path: string;
+  }[];
+  reference_links: {
+    reference_id: string;
+    source_version_id: string;
+    original_sha256: string;
+    pdf_page: number | null;
+    viewer_path: string;
+    page_space: 'physical_pdf_page' | 'unmapped';
+  }[];
   limitations: string[];
   artifacts: Record<ExportFormat, ArtifactInfo>;
   server_receipt: string;
@@ -146,6 +160,45 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
     })
   )
     throw new Error('Release manifest failed validation.');
+  const expectedSourcePath = (version: string) =>
+    '/v2/matters/' + encodeURIComponent(scope.caseId) + '/briefs/' +
+    encodeURIComponent(scope.briefId) + '/dossier/history/' + scope.snapshot +
+    '/sources/' + encodeURIComponent(version) + '/original';
+  if (
+    !Array.isArray(manifest.source_links) ||
+    manifest.source_links.length !== manifest.sources.length ||
+    !manifest.source_links.every((link: unknown, i: number) => {
+      if (!plain(link)) return false;
+      const source = (manifest.sources as ReleaseManifest['sources'])[i];
+      return (
+        source !== undefined &&
+        link.version_id === source.version_id &&
+        link.role === source.role &&
+        link.sha256 === source.sha256 &&
+        link.original_path === expectedSourcePath(source.version_id)
+      );
+    }) ||
+    !Array.isArray(manifest.reference_links) ||
+    manifest.reference_links.length > 10_000 ||
+    !manifest.reference_links.every((link: unknown) => {
+      if (!plain(link) || typeof link.reference_id !== 'string' || !link.reference_id ||
+        link.reference_id.length > 256) return false;
+      const source = (manifest.sources as ReleaseManifest['sources']).find(
+        (s) => s.version_id === link.source_version_id,
+      );
+      const page = link.pdf_page;
+      return (
+        source !== undefined &&
+        link.original_sha256 === source.sha256 &&
+        (page === null || (number(page) && page > 0 && page <= 10000)) &&
+        link.page_space === (page === null ? 'unmapped' : 'physical_pdf_page') &&
+        link.viewer_path ===
+          '/matters/' + encodeURIComponent(scope.caseId) + '/briefs/' +
+          encodeURIComponent(scope.briefId) + '?snapshot=' + scope.snapshot +
+          '&finding=' + encodeURIComponent(link.reference_id)
+      );
+    })
+  ) throw new Error('Unrecognized source and physical-page navigation bindings.');
   return raw as unknown as ReleaseRecord;
 }
 export function parseReleaseList(

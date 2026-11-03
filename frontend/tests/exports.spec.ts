@@ -56,6 +56,53 @@ function record(releaseId: string, frozen = snapshot) {
           sha256: 'd'.repeat(64),
         },
       ],
+      source_links: [
+        {
+          role: 'draft',
+          version_id: briefId,
+          sha256: 'c'.repeat(64),
+          original_path:
+            '/v2/matters/' +
+            caseId +
+            '/briefs/' +
+            briefId +
+            '/dossier/history/' +
+            frozen +
+            '/sources/' +
+            briefId +
+            '/original',
+        },
+        {
+          role: 'exhibit',
+          version_id: '33333333-3333-4333-8333-333333333333',
+          sha256: 'd'.repeat(64),
+          original_path:
+            '/v2/matters/' +
+            caseId +
+            '/briefs/' +
+            briefId +
+            '/dossier/history/' +
+            frozen +
+            '/sources/33333333-3333-4333-8333-333333333333/original',
+        },
+      ],
+      reference_links: [
+        {
+          reference_id: 'ref-one',
+          source_version_id: '33333333-3333-4333-8333-333333333333',
+          original_sha256: 'd'.repeat(64),
+          pdf_page: 6,
+          page_space: 'physical_pdf_page',
+          viewer_path:
+            '/matters/' +
+            caseId +
+            '/briefs/' +
+            briefId +
+            '?snapshot=' +
+            frozen +
+            '&finding=ref-one',
+        },
+      ],
       limitations: preview.limitations,
       manifest_sha256: 'e'.repeat(64),
       server_receipt: 'f'.repeat(64),
@@ -132,6 +179,13 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
   await expect(
     page.getByRole('heading', { name: 'Selected frozen release' }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Inspect preserved reference ref-one' }),
+  ).toHaveAttribute(
+    'href',
+    '/workspace/matters/' + caseId + '/briefs/' + briefId +
+      '?snapshot=' + snapshot + '&finding=ref-one',
+  );
   await page.getByLabel('Output format').selectOption('json');
   const started = page.waitForEvent('download');
   await page

@@ -83,6 +83,9 @@ def export_one(
     captured: dict[str, Any] = {}
 
     def lost_release_ack(route: Route) -> None:
+        if route.request.method != "POST":
+            route.continue_()
+            return
         writes[0] += 1
         captured["authorization"] = route.request.headers["authorization"]
         response = route.fetch(timeout=180000)
@@ -108,6 +111,40 @@ def export_one(
             or manifest.get("review_count", 0) < 1 or len(manifest.get("server_receipt", "")) != 64
             or manifest.get("sources") is None):
         raise RuntimeError("F6_MANIFEST_SCOPE_OR_REVIEW_INVALID")
+    source_links = manifest.get("source_links", [])
+    original_destination = (
+        f"/v2/matters/{case}/briefs/{brief}/dossier/history/{snapshot}"
+        f"/sources/{pdf_version}/original"
+    )
+    if not any(
+        row.get("version_id") == pdf_version and row.get("original_path") == original_destination
+        and row.get("sha256") == hashlib.sha256(pdf_original).hexdigest()
+        for row in source_links
+    ):
+        raise RuntimeError("F6_FROZEN_SOURCE_LINK_WRONG_VERSION")
+    reference_links = manifest.get("reference_links", [])
+    if expect_reference == "Stuk 1":
+        mapped = [
+            row for row in reference_links
+            if row.get("source_version_id") == pdf_version
+            and row.get("pdf_page") == 6
+            and row.get("page_space") == "physical_pdf_page"
+        ]
+        if not mapped:
+            raise RuntimeError("F6_PRINTED_PAGE_LINK_NOT_PHYSICAL_SIX")
+        reference_id = mapped[0]["reference_id"]
+        link = page.get_by_role(
+            "link", name="Inspect preserved reference " + reference_id
+        )
+        expect(link).to_be_visible(timeout=90000)
+        link.click()
+        expect(page.get_by_text("PDF page 6 of 6", exact=True)).to_be_visible(timeout=90000)
+        print("F6_REAL_BROWSER_LINK_TO_PDF_PHYSICAL_PAGE_SIX_PASSED", flush=True)
+        page.goto(previous)
+        acceptance.login(page)
+        expect(page.get_by_role("heading", name="Reviewed exports and history")).to_be_visible(timeout=90000)
+        # Re-open the same exact stored release, never create a second one.
+        page.get_by_role("button", name="Select release " + receipt["release_id"][:8]).click()
     print("F6_SIGNED_LOST_ACK_RELEASE_RECONCILED_ONCE_PASSED", flush=True)
 
     # Only exact downloaded bytes are accepted: digest/length and real

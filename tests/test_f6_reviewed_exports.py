@@ -258,3 +258,39 @@ def test_f6_manifest_digest_is_independently_verified_on_read():
     manifest["server_receipt"] = store.receipt(unsigned)
     response = api.get(base() + "/" + operation, headers=header())
     assert response.status_code in (403, 404, 503)
+
+
+def test_f6_release_manifest_links_exact_preserved_pdf_and_physical_page():
+    _, store = client()
+    exhibit = str(uuid4())
+    source_hash = "d" * 64
+    report = {**store.report, "human_decisions": store.decisions}
+    report["sources"] = [
+        *store.report["sources"],
+        {"role": "exhibit", "version_id": exhibit, "sha256": source_hash},
+    ]
+    report["findings"] = [{
+        "reference_id": "ref-0001", "version_id": exhibit,
+        "page_mapping": "mapped", "pdf_page": 6,
+    }, {
+        "reference_id": "ref-0002", "version_id": exhibit,
+        "page_mapping": "unmapped", "pdf_page": None,
+    }]
+    manifest = release_manifest(report, _checked_artifacts(report, store.original))
+    links = manifest["reference_links"]
+    assert len(links) == 2
+    assert links[0]["reference_id"] == "ref-0001"
+    assert links[0]["source_version_id"] == exhibit
+    assert links[0]["original_sha256"] == source_hash
+    assert links[0]["pdf_page"] == 6
+    assert links[0]["page_space"] == "physical_pdf_page"
+    assert links[0]["viewer_path"] == f"/matters/{CASE}/briefs/{BRIEF}?snapshot={SNAPSHOT}&finding=ref-0001"
+    assert links[1]["pdf_page"] is None
+    assert links[1]["page_space"] == "unmapped"
+    source_links = manifest["source_links"]
+    assert source_links[1]["original_path"] == (
+        f"/v2/matters/{CASE}/briefs/{BRIEF}/dossier/history/{SNAPSHOT}"
+        f"/sources/{exhibit}/original"
+    )
+    # No URL supplied by a finding was trusted as a release destination.
+    assert all(x["viewer_path"].startswith("/matters/") for x in links)
