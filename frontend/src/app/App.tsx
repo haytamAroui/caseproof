@@ -1,4 +1,4 @@
-import { CorrectionPanel } from '../features/corrections';
+import { CorrectionPanel, CorrectionRecovery } from '../features/corrections';
 import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -119,7 +119,13 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
     <ReportScreen
       api={api}
       renderDraft={(finding, historical) =>
-        historical ? null : (
+        historical ? (
+          <CorrectionRecovery
+            api={api}
+            scope={{ caseId, briefId, snapshot }}
+            referenceId={finding.reference_id}
+          />
+        ) : (
           <DraftContext
             api={api}
             caseId={caseId}

@@ -35,6 +35,7 @@ from domains.disputes.dossier_verification import build_findings
 from domains.disputes.exhibit_identity import InventoryStatus
 from domains.disputes.page_labels import PAGE_LABEL_PATTERN
 from domains.disputes.reference_detection import detect_exhibit_references
+from infrastructure.parsers.docx_correction_anchor import correction_anchor
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from infrastructure.parsers.dossier_docx_export import annotated_docx, corrected_docx_preview
@@ -234,15 +235,22 @@ class DossierStore:
             report, original = self.load(bearer, case, brief)
             if report["snapshot_hash"] != command.snapshot_hash:
                 raise HTTPException(409, "stale dossier correction")
-            if not any(f["reference_id"] == command.reference_id for f in report["findings"]):
+            finding = next((f for f in report["findings"] if f["reference_id"] == command.reference_id), None)
+            if finding is None:
                 raise HTTPException(422, "unknown correction reference")
         elif existing.get("state") == "reserved":
+            report = self.frozen_report(bearer, case, brief, command.snapshot_hash)
+            finding = next((f for f in report["findings"] if f["reference_id"] == command.reference_id), None)
+            if finding is None:
+                raise HTTPException(422, "unknown correction reference")
             original = self.client.library.read(
                 bearer=bearer, case_id=case, document_id=existing["document_id"], version_id=brief
             )
         else:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
+            if command.before != finding.get("literal") or correction_anchor(original, finding) != command.paragraph_index:
+                raise ValueError("correction does not match reference anchor")
             derivative = corrected_docx_preview(
                 original,
                 expected_sha256=command.original_sha256,
@@ -666,6 +674,38 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         s, bearer = active(authorization)
         return s.load(bearer, case_id, brief_id, language_context=body.model_dump())[0]
 
+    @router.get(base + "/snapshots/{snapshot_hash}/references/{reference_id}/correction-anchor")
+    def correction_anchor_route(
+        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        report, original = s.reopen(bearer, case_id, brief_id, snapshot_hash)
+        finding = next((f for f in report["findings"] if f["reference_id"] == reference_id), None)
+        if finding is None:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        try:
+            index = correction_anchor(original, finding)
+        except ValueError:
+            raise HTTPException(422, "unsupported or ambiguous correction anchor") from None
+        return {"snapshot_hash": snapshot_hash, "brief_version_id": brief_id,
+                "reference_id": reference_id, "original_sha256": hashlib.sha256(original).hexdigest(),
+                "paragraph_index": index, "before": finding["literal"]}
+
+    @router.get(base + "/snapshots/{snapshot_hash}/references/{reference_id}/correction-operations")
+    def correction_operations(
+        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        report = s.frozen_report(bearer, case_id, brief_id, snapshot_hash, historical=True)
+        if not any(f["reference_id"] == reference_id for f in report["findings"]):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        result = s.revisions.recovery(bearer, case_id, brief_id, snapshot_hash, reference_id)
+        if not isinstance(result.get("operations"), list) or len(result["operations"]) > 20:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return result
+
     @router.post(base + "/corrections/preview")
     def correction_preview(
         case_id: str,
@@ -677,9 +717,12 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         report, original = s.load(bearer, case_id, brief_id)
         if report["snapshot_hash"] != body.snapshot_hash:
             raise HTTPException(409, "stale dossier correction")
-        if not any(f["reference_id"] == body.reference_id for f in report["findings"]):
+        finding = next((f for f in report["findings"] if f["reference_id"] == body.reference_id), None)
+        if finding is None:
             raise HTTPException(422, "unknown correction reference")
         try:
+            if body.before != finding.get("literal") or correction_anchor(original, finding) != body.paragraph_index:
+                raise ValueError("correction does not match reference anchor")
             derivative = corrected_docx_preview(
                 original,
                 expected_sha256=body.original_sha256,

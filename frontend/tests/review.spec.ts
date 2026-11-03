@@ -218,3 +218,91 @@ test('historical read-only snapshot never renders reviewer save controls', async
     page.getByRole('button', { name: 'Save human decision' }),
   ).toHaveCount(0);
 });
+
+test('correction preview, lost commit acknowledgement, durable reconciliation and independent report comparison', async ({
+  page,
+}) => {
+  const nextBrief = '33333333-3333-4333-8333-333333333333';
+  let commits = 0;
+  let operation = '';
+  await page.route('**/correction-operations', (route) =>
+    route.fulfill({ json: { operations: [] } }),
+  );
+  await page.route('**/correction-anchor', (route) =>
+    route.fulfill({
+      json: {
+        snapshot_hash: snapshot,
+        brief_version_id: brief,
+        reference_id: finding.reference_id,
+        original_sha256: 'b'.repeat(64),
+        paragraph_index: 0,
+        before: finding.literal,
+      },
+    }),
+  );
+  await page.route('**/corrections/preview', (route) =>
+    route.fulfill({
+      json: {
+        ...route.request().postDataJSON(),
+        schema: 'caseproof-docx-correction-preview-v1',
+        committed: false,
+        requires_recheck: true,
+        brief_version_id: brief,
+        derivative_sha256: 'd'.repeat(64),
+      },
+    }),
+  );
+  await page.route('**/corrections/commit', (route) => {
+    commits++;
+    operation = route.request().postDataJSON().request_id;
+    return route.abort('failed');
+  });
+  await page.route('**/corrections/status', (route) => {
+    expect(route.request().postDataJSON().request_id).toBe(operation);
+    return route.fulfill({
+      json: {
+        state: 'active',
+        committed: true,
+        requires_recheck: true,
+        version_id: nextBrief,
+      },
+    });
+  });
+  await page.route('**/dossier/recheck', (route) => {
+    expect(route.request().url()).toContain(`/briefs/${nextBrief}/`);
+    return route.fulfill({
+      json: { ...report, brief_id: nextBrief, snapshot_hash: 'e'.repeat(64) },
+    });
+  });
+  await page.route('**/dossier/history/*', (route) =>
+    route.fulfill({ json: { mode: 'historical_read_only', report } }),
+  );
+  await page.goto(scope);
+  const correction = page.getByRole('region', {
+    name: 'Correction preview and recheck',
+    exact: true,
+  });
+  await correction.getByLabel('Replacement text').fill('Stuk 2');
+  await correction
+    .getByRole('button', { name: 'Validate exact preview' })
+    .click();
+  await expect(
+    correction.getByText('Proposed change (not committed)', { exact: true }),
+  ).toBeVisible();
+  await correction
+    .getByRole('button', { name: 'Explicitly commit and activate new draft' })
+    .click();
+  await correction
+    .getByRole('button', { name: 'Reconcile identical operation' })
+    .click();
+  await correction
+    .getByRole('button', { name: 'Recheck activated draft', exact: true })
+    .click();
+  await expect(
+    correction.getByRole('heading', { name: 'Previous report', exact: true }),
+  ).toBeVisible();
+  await expect(
+    correction.getByRole('heading', { name: 'Rechecked report', exact: true }),
+  ).toBeVisible();
+  expect(commits).toBe(1);
+});

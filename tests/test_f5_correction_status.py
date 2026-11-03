@@ -6,8 +6,8 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from apps.api.dossier_journey import CorrectionCommitBody, DossierStore
 from apps.api.access_control import AccessRejected
+from apps.api.dossier_journey import CorrectionCommitBody, DossierStore
 
 
 class Revisions:

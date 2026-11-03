@@ -34,3 +34,26 @@ Authority: `frontend/BLUEPRINT.md` governs UI architecture; `docs/PRODUCT_WORKFL
 2. Add missing contract/negative tests and backend transition/reconciliation behavior.
 3. Implement W06 and W07 within `frontend/src/features/corrections` and compose with the existing workspace.
 4. Run targeted tests, signed-browser acceptance and full CI; fix failures before ready-for-review.
+
+## Pending implementation review
+
+The working changes add server-resolved main-body reference anchors, fail-closed
+preview and commit checks, actor-scoped recovery metadata, and independent
+previous/rechecked report views. These are implementation candidates, not an F5
+completion claim. The recovery RPC proposal requires disposable PostgreSQL
+adversarial tests and independent security review before any development
+migration. Signed-browser acceptance must register and clean up derivative
+objects even if the commit response is lost. Recheck/version binding, cold
+reopening, revocation, competing operations, and actual final-head cloud CI
+remain acceptance gates.
+
+## Local verification before combined commit
+
+Full local Python suite: 2,031 passed, 4 skipped, 0 failed. Frontend lint,
+typecheck, 78 existing unit tests and production build passed. The added
+Playwright correction journey has not executed: both Chromium downloads returned
+invalid archives. Disposable PostgreSQL recovery tests are wired into CI but
+have not executed locally; the runner cannot run PostgreSQL under a non-root UID.
+Recovery SQL remains a proposal in `db/proposals/F5_dossier_correction_recovery.sql`,
+not an installed migration. Genuine signed-browser acceptance and final-head CI
+remain open. No production deployment or live database change was performed.

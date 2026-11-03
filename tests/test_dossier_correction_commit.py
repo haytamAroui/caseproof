@@ -70,8 +70,10 @@ def store(mode='normal'):
     service = object.__new__(DossierStore)
     service.revisions = Revisions()
     service.client = SimpleNamespace(library=Library(raw, mode))
-    service.load = lambda *args: ({'snapshot_hash': 'a'*64,
-                                  'findings': [{'reference_id': 'ref-0000'}]}, raw)
+    report = {'snapshot_hash': 'a'*64, 'findings': [{'reference_id': 'ref-0000',
+              'literal': 'p. 2', 'region': 'word/document.xml', 'offsets': {'start': 12, 'end': 16}}]}
+    service.load = lambda *args: (report, raw)
+    service.frozen_report = lambda *args: report
     return service, command
 
 
@@ -115,3 +117,24 @@ def test_signed_reservation_cannot_substitute_another_snapshot_or_reference():
     with pytest.raises(HTTPException) as conflict:
         service.commit_correction('signed', 'case', 'old', command)
     assert conflict.value.status_code == 409 and service.revisions.activations == 0
+
+
+def test_commit_refuses_a_different_span_even_when_reference_exists():
+    service, command = store()
+    altered = command.model_copy(update={'before': 'Stuk 1', 'after': 'Stuk 2'})
+    with pytest.raises(HTTPException) as error:
+        service.commit_correction('signed', 'case', 'old', altered)
+    assert error.value.status_code == 422
+    assert service.client.library.writes == 0
+    assert service.revisions.row['state'] == 'absent'
+
+
+def test_reserved_retry_revalidates_report_anchor():
+    service, command = store('corrupt')
+    with pytest.raises(AccessRejected):
+        service.commit_correction('signed', 'case', 'old', command)
+    service.frozen_report = lambda *args: {'findings': [{'reference_id': 'ref-0000', 'literal': 'another'}]}
+    with pytest.raises(HTTPException) as error:
+        service.commit_correction('signed', 'case', 'old', command)
+    assert error.value.status_code == 422
+    assert service.revisions.activations == 0

@@ -18,6 +18,7 @@ def main():
     if proposal.read_bytes() != migration.read_bytes():
         raise RuntimeError('Deployed draft revision SQL differs from proposal')
     _run((ROOT / 'db/proposals/M1_M2_draft_revision_scoped_cleanup.sql').read_text(), env)
+    _run((ROOT / 'db/proposals/F5_dossier_correction_recovery.sql').read_text(), env)
     actor, other, org, case = [str(uuid4()) for _ in range(4)]
     docs, versions = [[str(uuid4()) for _ in range(4)] for _ in range(2)]
     _run(f"""
@@ -67,6 +68,15 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
     call('caseproof_dossier_draft_reserve',args,user=other,succeeds=False)
     reserved = json.loads(call('caseproof_dossier_draft_reserve',args))
     assert reserved['state']=='reserved'
+    recovered = json.loads(call('caseproof_dossier_draft_recovery', [case, versions[0], snapshot, 'ref-0000']))
+    assert len(recovered['operations']) == 1
+    assert recovered['operations'][0]['request_id'] == request
+    assert recovered['operations'][0]['state'] == 'reserved'
+    assert recovered['operations'][0]['version_id'] is None
+    assert json.loads(call('caseproof_dossier_draft_recovery',
+                           [case, versions[0], snapshot, 'different']))['operations'] == []
+    call('caseproof_dossier_draft_recovery', [case, versions[0], snapshot, 'ref-0000'],
+         user=other, succeeds=False)
     assert json.loads(call('caseproof_dossier_draft_reserve',args))['version_id']==reserved['version_id']
     pending = json.loads(call('caseproof_dossier',[case,'context','{}']))
     assert pending['bundle_signature'] == context['bundle_signature']
@@ -95,6 +105,9 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
     assert sorted(result['replayed'] for result in activations) == [False, True]
     activated = activations[0]
     assert activated['state']=='active'
+    recovered = json.loads(call('caseproof_dossier_draft_recovery', [case, versions[0], snapshot, 'ref-0000']))
+    assert any(row['request_id'] == request and row['state'] == 'active'
+               and row['version_id'] == reserved['version_id'] for row in recovered['operations'])
     assert json.loads(call('caseproof_dossier_draft_activate',activation,service=True))['replayed'] is True
     manifest=json.loads(call('caseproof_dev_bundle_manifest',[case]))
     assert manifest['sources'][0]['version_id']==reserved['version_id']
@@ -112,10 +125,12 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
     assert json.loads(call('caseproof_dossier_snapshot_read',[case,revised_hash]))['serialized'] == revised_serial
     _run(f"update caseproof.organization_members set active=false where org_id='{org}' and user_id='{actor}';",env)
     call('caseproof_dossier_draft_activate',activation,service=True,succeeds=False)
+    call('caseproof_dossier_draft_recovery',[case,versions[0],snapshot,'ref-0000'],succeeds=False)
     _run(f"update caseproof.organization_members set active=true where org_id='{org}' and user_id='{actor}';",env)
     _run(f"update caseproof._m1_matter_grants set active=false where case_id='{case}';",env)
     call('caseproof_dossier_draft_activate',activation,service=True,succeeds=False)
     call('caseproof_dossier_draft_reserve',[case,request,'status',json.dumps(command)],succeeds=False)
+    call('caseproof_dossier_draft_recovery',[case,versions[0],snapshot,'ref-0000'],succeeds=False)
     run, foreign, foreign_org = [str(uuid4()) for _ in range(3)]
     _run(f"insert into auth.users(id,instance_id) values('{foreign}','{foreign_org}');"
          f"insert into caseproof.organizations(id,display_name) values('{foreign_org}','Synthetic foreign');"

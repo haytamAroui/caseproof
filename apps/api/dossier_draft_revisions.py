@@ -56,6 +56,11 @@ class DraftRevisionClient:
                          {'p_case': case, 'p_request': request, 'p_action': action, 'p_data': values},
                          key=self.key, bearer=bearer)
 
+    def recovery(self, bearer: str, case: str, parent: str, snapshot: str, reference: str) -> dict[str, Any]:
+        return self._rpc('caseproof_dossier_draft_recovery',
+                         {'p_case': case, 'p_parent': parent, 'p_snapshot': snapshot, 'p_reference': reference},
+                         key=self.key, bearer=bearer)
+
     def activate(self, bearer: str, case: str, request: str, digest: str, size: int) -> dict[str, Any]:
         key = self.trusted_key
         if not key:
