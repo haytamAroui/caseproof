@@ -2,7 +2,8 @@
 
 Not a malware sandbox. Does not claim full document-wide reference recall.
 """
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 from dataclasses import dataclass, field
 from io import BytesIO
 from zipfile import ZipFile
@@ -61,8 +62,8 @@ def extract_docx_text_regions(payload: bytes) -> DocxTextExtraction:
                 unscanned.append(region.part)
                 continue
             try:
-                root = ET.fromstring(xml)
-            except ET.ParseError:
+                root = ET.fromstring(xml, forbid_dtd=True, forbid_entities=True, forbid_external=True)
+            except (ET.ParseError, DefusedXmlException):
                 unscanned.append(region.part)
                 continue
             # Only plain paragraph text. Nested tables are traversed by paragraph order.
