@@ -282,7 +282,20 @@ def _exercise() -> None:
             if "1" not in before:
                 raise RuntimeError("F5_SYNTHETIC_REFERENCE_DIFFERS")
             _stage("EXACT_REFERENCE_PREVIEW")
-            correction.get_by_label("Replacement text").fill(before.replace("1", "2", 1))
+            # F6's second release needs a newly checked *mapped* reference:
+            # an edit to the reference's presentation preserves exhibit 1
+            # while creating a genuinely new immutable draft version.
+            # Renumbering to Stuk 2 would deliberately make its identity
+            # unconfirmed, and the reviewer must abstain rather than fabricate
+            # visual inspection of a non-existent source page.
+            replacement = (
+                before.replace("1", "1 ", 1)
+                if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"
+                else before.replace("1", "2", 1)
+            )
+            if replacement == before:
+                raise RuntimeError("F6_CORRECTION_NOT_CHANGED")
+            correction.get_by_label("Replacement text").fill(replacement)
             correction.get_by_role("button", name="Validate exact preview").click()
             expect(correction.get_by_text("Proposed change (not committed)", exact=True)).to_be_visible(timeout=90000)
             writes = [0]
@@ -358,7 +371,7 @@ def _exercise() -> None:
                 f6_new = export_one(
                     page, acceptance, case=case, brief=new_brief,
                     snapshot=new_snapshot, pdf_version=registered[2]["version_id"],
-                    pdf_original=bundle[2].content, expect_reference="Stuk 2",
+                    pdf_original=bundle[2].content, expect_reference="Stuk 1",
                 )
                 _server_stop(proc)
                 proc = _server_start()
