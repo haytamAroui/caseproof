@@ -5,7 +5,7 @@ import { ApiError } from '../../shared/api';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 
 type Scope = { caseId: string; briefId: string; snapshot: string };
-type Preview = { schema: string; committed: false; requires_recheck: true; original_sha256: string; derivative_sha256: string };
+type Preview = { schema: string; committed: false; requires_recheck: true; original_sha256: string; derivative_sha256: string; reference_id: string; paragraph_index: number; before: string; after: string; brief_version_id: string; snapshot_hash: string };
 type Commit = { state: string; version_id: string; committed: true; requires_recheck: true };
 const sha = /^[0-9a-f]{64}$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -13,10 +13,13 @@ function record(x: unknown): Record<string, unknown> {
   if (!x || typeof x !== 'object' || Array.isArray(x)) throw Error('Invalid server response');
   return x as Record<string, unknown>;
 }
-function previewReceipt(x: unknown, original: string): Preview {
+function previewReceipt(x: unknown, expected: {snapshot_hash: string; original_sha256: string; reference_id: string; paragraph_index: number; before: string; after: string}, briefId: string): Preview {
   const r = record(x);
   if (r.schema !== 'caseproof-docx-correction-preview-v1' || r.committed !== false ||
-    r.requires_recheck !== true || r.original_sha256 !== original ||
+    r.requires_recheck !== true || r.original_sha256 !== expected.original_sha256 ||
+    r.reference_id !== expected.reference_id || r.paragraph_index !== expected.paragraph_index ||
+    r.before !== expected.before || r.after !== expected.after ||
+    r.brief_version_id !== briefId || r.snapshot_hash !== expected.snapshot_hash ||
     typeof r.derivative_sha256 !== 'string' || !sha.test(r.derivative_sha256))
     throw Error('Unverified correction preview');
   return r as Preview;
@@ -56,7 +59,7 @@ export function CorrectionPanel({ api, scope, finding, originalSha }: {
     if (!valid || busy) return;
     setBusy(true); invalidate();
     try {
-      const result = previewReceipt(await api.post(`${base}/corrections/preview`, payload()), originalSha);
+      const result = previewReceipt(await api.post(`${base}/corrections/preview`, payload()), payload(), scope.briefId);
       setPreview(result); setMessage('Read-only preview validated. No change was committed.');
     } catch (e) { setMessage(e instanceof ApiError && e.status === 409 ? 'Stale draft. Reopen the current report.' : 'Preview unavailable or unsupported. No commit allowed.'); }
     finally { setBusy(false); }
