@@ -57,3 +57,24 @@ def test_unrecognized_word_part_is_reported() -> None:
 def test_doctype_is_rejected() -> None:
     payload = package({"word/document.xml": '<!DOCTYPE x [<!ENTITY x "a">]><x/>'})
     assert inventory_docx_regions(payload).reason == "DTD_FORBIDDEN"
+
+
+def test_external_dtd_is_rejected_without_network_or_file_access() -> None:
+    payload = package({"word/document.xml": '<!DOCTYPE x SYSTEM "file:///etc/passwd"><x/>'})
+    result = inventory_docx_regions(payload)
+    assert result.coverage_unknown is True
+    assert result.reason == "DTD_FORBIDDEN"
+
+
+def test_internal_entity_is_rejected_without_expansion() -> None:
+    payload = package({"word/document.xml": '<!DOCTYPE x [<!ENTITY secret "value">]><x>&secret;</x>'})
+    result = inventory_docx_regions(payload)
+    assert result.coverage_unknown is True
+    assert result.reason == "DTD_FORBIDDEN"
+
+
+def test_mixed_case_doctype_is_rejected() -> None:
+    payload = package({"word/document.xml": '<!DoCtYpE x><x/>'})
+    result = inventory_docx_regions(payload)
+    assert result.coverage_unknown is True
+    assert result.reason == "DTD_FORBIDDEN"
