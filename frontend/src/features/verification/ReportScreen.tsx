@@ -114,7 +114,7 @@ export function ReportScreen({
           <Link to={`/matters/${caseId}/inventory`}>
             Reconfirm inventory and page mappings
           </Link>
-        )
+        )}
         <p>
           Each result describes a separate check. Human judgment remains
           separate.
