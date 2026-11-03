@@ -47,8 +47,9 @@ grant select,insert on storage.objects to authenticated;
     revision_indexes = next(p for p in paths if 'dossier_draft_revision_fk_indexes' in p.name)
     fixture_ownership = next(p for p in paths if 'f5_correction_fixture_ownership' in p.name)
     f6_release = next(p for p in paths if 'f6_reviewed_release_ledger' in p.name)
+    f6_action_guard = next(p for p in paths if 'f6_reject_null_release_action' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -63,6 +64,7 @@ grant select,insert on storage.objects to authenticated;
     _run(fixture_ownership.read_text(), env)
     # F6 depends on retention guards, reviewed snapshot RPC and draft revisions.
     _run(f6_release.read_text(), env)
+    _run(f6_action_guard.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -103,6 +105,18 @@ update caseproof._m1_matter_grants set permissions=array_append(permissions,'exp
     if _run(actor(owner, status_call), env) != "absent":
         raise AssertionError('unknown release not reported as absent')
     _run(actor(guest, export_call), env, should_pass=False)
+    # NULL must be rejected at dispatch, before manifest or snapshot validation.
+    # A generic failure alone would let the old vulnerable fall-through pass.
+    _run(actor(owner, f"""do $test$
+    begin
+      begin
+        perform public.caseproof_dossier_export_release('{case}', NULL, '{uuid4()}', '{{}}'::jsonb);
+        raise exception 'NULL action accepted';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'release unavailable' then raise; end if;
+      end;
+    end $test$"""), env)
+    print('F6_NULL_ACTION_REJECTED_AT_DISPATCH_42501_PASSED', flush=True)
     _run(actor(owner,
                f"select public.caseproof_dossier_export_release('{other}','authorize')"),
          env, should_pass=False)

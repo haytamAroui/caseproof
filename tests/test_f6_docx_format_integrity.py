@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import xml.etree.ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
@@ -63,23 +64,53 @@ def test_f6_annotated_docx_preserves_existing_styles_runs_tables_and_members():
     assert hashlib.sha256(original).hexdigest() != hashlib.sha256(result).hexdigest()
 
 
-def test_f6_docx_footnote_member_is_not_silently_rewritten():
+@pytest.mark.parametrize("note", ["Stuk 1 — bronnoot", "Pièce 1 — note préservée"])
+def test_f6_docx_footnote_member_is_not_silently_rewritten(note):
     original = fixture()
     footnotes = (
         b'<?xml version="1.0" encoding="UTF-8"?>'
         b'<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-        b'<w:footnote w:id="5"><w:p><w:r><w:t>Source note</w:t></w:r></w:p></w:footnote>'
-        b'</w:footnotes>'
+        + ('<w:footnote w:id="5"><w:p><w:r><w:t>' + note +
+         '</w:t></w:r></w:p></w:footnote>').encode("utf-8")
+        + b'</w:footnotes>'
     )
     target = io.BytesIO()
     with ZipFile(io.BytesIO(original)) as source, ZipFile(target, "w", ZIP_DEFLATED) as output:
         for item in source.infolist():
-            output.writestr(item, source.read(item.filename))
+            value = source.read(item.filename)
+            if item.filename == "word/document.xml":
+                value = value.replace(b"</w:r>", b'<w:footnoteReference w:id="5"/></w:r>', 1)
+            elif item.filename == "word/_rels/document.xml.rels":
+                value = value.replace(
+                    b"</Relationships>",
+                    b'<Relationship Id="rIdFootnote" Type="http://schemas.openxmlformats.org/'
+                    b'officeDocument/2006/relationships/footnotes" Target="footnotes.xml"/></Relationships>',
+                )
+            elif item.filename == "[Content_Types].xml":
+                value = value.replace(
+                    b"</Types>", b'<Override PartName="/word/footnotes.xml" ContentType="application/'
+                    b'vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>',
+                )
+            output.writestr(item, value)
         output.writestr("word/footnotes.xml", footnotes)
     amended = target.getvalue()
     result = annotated_docx(amended, report())
     with ZipFile(io.BytesIO(result)) as archive:
         assert archive.read("word/footnotes.xml") == footnotes
+        ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        assert ET.fromstring(archive.read("word/document.xml")).find(
+            ".//w:footnoteReference", ns
+        ).get("{" + ns["w"] + "}id") == "5"
+        with ZipFile(io.BytesIO(amended)) as source:
+            for name in source.namelist():
+                if name != "word/document.xml":
+                    assert archive.read(name) == source.read(name), name
+            before = ET.fromstring(source.read("word/document.xml")).find("w:body", ns)
+            after = ET.fromstring(archive.read("word/document.xml")).find("w:body", ns)
+            # Annotations precede sectPr; every original content element survives.
+            assert [ET.tostring(node) for node in before[:-1]] == [
+                ET.tostring(node) for node in after[:len(before) - 1]
+            ]
 
 
 def test_f6_unsupported_external_docx_link_never_creates_export():
