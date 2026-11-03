@@ -548,3 +548,40 @@ an OS sandbox or demonstrate a production egress boundary.
 Final-head cloud checks, protected signed-browser acceptance, independent
 security/privacy/legal review, representative evidence and production approval
 remain separate gates. Historical acceptance does not replace those gates.
+
+### P0/P1 final-head engineering evidence
+
+PR [#182](https://github.com/haytamAroui/caseproof/pull/182) code head
+`eafd389e325839c06390e74f32c2890f6b128195` passed 18 workflows; four
+branch-specific historical workflows were skipped. The [genuine signed F6
+run](https://github.com/haytamAroui/caseproof/actions/runs/41666612121)
+covered the changed-intake and F3–F6 lifecycle, printed 4 → physical PDF 6,
+revocation, and `M05_STORAGE_EMPTY_VERIFIED` / `ZERO_RESIDUAL_VERIFIED`.
+The [same-fixture viewer comparison](https://github.com/haytamAroui/caseproof/actions/runs/41666612697)
+and [frontend CI](https://github.com/haytamAroui/caseproof/actions/runs/41666612052)
+also passed. These receipts do not establish correctness at any later code head.
+
+The S0–S13 [code/evidence matrix](audits/P0_P1_TRACEABILITY_2026-11-03.md)
+identifies stage paths, tests and limits; the [lockfile license inventory](audits/P0_DEPENDENCY_LICENSE_INVENTORY_2026-11-03.md)
+records declared licenses for development and conditional dependencies. It is
+not independent legal clearance or a complete third-party-notices review.
+
+The [OCR namespace packet capture](https://github.com/haytamAroui/caseproof/actions/runs/41666612265)
+is not a whole-deployment egress measurement. The `/workspace` browser CSP is
+same-origin, but that does not stop server-side Auth/Storage traffic; the
+installed signed development journey uses remote services. No offline or
+zero-egress deployment is certified. A whole-perimeter test needs an actual
+specified deployment configuration, runtime and operator/security/privacy
+owners. Existing deployment assessment profiles remain incomplete. No
+independent security/evidence or legal/privacy approval is recorded.
+
+For completeness, the signed-navigation F1 retrofit merged in
+[PR #172](https://github.com/haytamAroui/caseproof/pull/172), merge commit
+`b46b30fe0b84708d396b33263de9c493b06b96aa`, with historical [signed run
+41438132346](https://github.com/haytamAroui/caseproof/actions/runs/41438132346)
+at head `a66348e76c3881bc53e079595b465622fd6b604e`. F2 inspection merged in
+[PR #173](https://github.com/haytamAroui/caseproof/pull/173), merge commit
+`fc44fdca16829b213137fbb7ceb717b1cefee270`, with historical [signed run
+41443170522](https://github.com/haytamAroui/caseproof/actions/runs/41443170522)
+at head `41072716621c9bbd676d4bceb91062f5344bf33b`. These historical run
+links are not new-head acceptance.
