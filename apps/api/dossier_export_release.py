@@ -122,6 +122,39 @@ def create_release_router(store: Any) -> APIRouter:
             raise HTTPException(422, "invalid release identity")
         return value
 
+    def checked_manifest(
+        raw: Any, case: str, brief: str, release_id: str
+    ) -> dict[str, Any]:
+        """All replay, list, status and binary reads recheck the server receipt."""
+        if not isinstance(raw, dict):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if (
+            raw.get("schema") != "caseproof-reviewed-release-v1"
+            or raw.get("case_id") != case
+            or raw.get("brief_id") != brief
+            or raw.get("release_id") != release_id
+            or not isinstance(raw.get("snapshot_hash"), str)
+            or len(raw["snapshot_hash"]) != 64
+        ):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        receipt = raw.get("server_receipt")
+        unsigned = {key: value for key, value in raw.items() if key != "server_receipt"}
+        claimed_hash = unsigned.get("manifest_sha256")
+        unsigned_without_hash = {
+            key: value for key, value in unsigned.items()
+            if key != "manifest_sha256"
+        }
+        if (
+            not isinstance(receipt, str)
+            or not isinstance(claimed_hash, str)
+            or len(receipt) != 64
+            or len(claimed_hash) != 64
+            or not hmac.compare_digest(claimed_hash, _hash(canonical(unsigned_without_hash).encode()))
+            or not hmac.compare_digest(receipt, store.receipt(unsigned))
+        ):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return raw
+
     @router.get(base + "/preview")
     def preview(case_id: str, brief_id: str, snapshot_hash: str,
                 authorization: str | None = Header(default=None)) -> dict[str, Any]:
@@ -155,6 +188,11 @@ def create_release_router(store: Any) -> APIRouter:
         if existing.get("state") == "released":
             if existing.get("snapshot_hash") != body.snapshot_hash or existing.get("brief_id") != brief_id:
                 raise HTTPException(409, "release request identity already belongs to another snapshot")
+            validated = checked_manifest(
+                existing.get("manifest"), case_id, brief_id, str(body.release_id)
+            )
+            if validated["snapshot_hash"] != body.snapshot_hash:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
             return cast(dict[str, Any], existing)
         if existing.get("state") != "absent":
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -189,6 +227,17 @@ def create_release_router(store: Any) -> APIRouter:
         result = store.export_rpc(bearer, case_id, "list", None, {"brief_id": brief_id})
         if not isinstance(result.get("releases"), list):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        for entry in result["releases"]:
+            if not isinstance(entry, dict) or entry.get("state") != "released":
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+            if entry.get("brief_id") != brief_id:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+            identity = entry.get("release_id")
+            if not isinstance(identity, str):
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+            validated = checked_manifest(entry.get("manifest"), case_id, brief_id, identity)
+            if entry.get("snapshot_hash") != validated["snapshot_hash"]:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return cast(dict[str, Any], result)
 
     @router.get(base + "/{release_id}")
@@ -200,12 +249,8 @@ def create_release_router(store: Any) -> APIRouter:
             return cast(dict[str, Any], result)
         if result.get("state") != "released" or result.get("brief_id") != brief_id:
             raise HTTPException(404, "release not found")
-        manifest = result.get("manifest")
-        if not isinstance(manifest, dict):
-            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        receipt = manifest.get("server_receipt")
-        unsigned = {k: v for k, v in manifest.items() if k != "server_receipt"}
-        if not isinstance(receipt, str) or not hmac.compare_digest(receipt, store.receipt(unsigned)):
+        validated = checked_manifest(result.get("manifest"), case_id, brief_id, release_id)
+        if result.get("snapshot_hash") != validated["snapshot_hash"]:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return cast(dict[str, Any], result)
 
@@ -216,13 +261,7 @@ def create_release_router(store: Any) -> APIRouter:
             raise HTTPException(404, "unsupported release format")
         bearer = active(authorization)
         record = store.export_rpc(bearer, case_id, "artifact", check_id(release_id), {"format": kind})
-        manifest = record.get("manifest")
-        if not isinstance(manifest, dict) or manifest.get("brief_id") != brief_id:
-            raise HTTPException(404, "release not found")
-        receipt = manifest.get("server_receipt")
-        unsigned = {k: v for k, v in manifest.items() if k != "server_receipt"}
-        if not isinstance(receipt, str) or not hmac.compare_digest(receipt, store.receipt(unsigned)):
-            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        manifest = checked_manifest(record.get("manifest"), case_id, brief_id, release_id)
         info = manifest.get("artifacts", {}).get(kind, {})
         try:
             raw = base64.b64decode(record["content_base64"], validate=True)

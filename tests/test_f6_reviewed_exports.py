@@ -220,3 +220,41 @@ def test_f6_release_manifest_is_explicitly_not_a_certificate():
     assert m["review_count"] == 1
     assert m["artifacts"]["docx"]["byte_length"] > 100
     assert any("not" in text.lower() for text in m["limitations"])
+
+
+def test_f6_replay_and_history_verify_receipt_not_just_new_writes():
+    api, store = client()
+    operation = str(uuid4())
+    request = {"release_id": operation, "snapshot_hash": SNAPSHOT}
+    assert api.post(base(), headers=header(), json=request).status_code == 200
+    assert api.get(base(), headers=header()).status_code == 200
+    manifest = store.saved[operation]["status"]["manifest"]
+    manifest["review_count"] = 900
+    # An untrusted direct RPC caller can write a forged manifest to a private
+    # table in a broken installation. No API path may present it as released.
+    for method, path in (
+        ("POST", base()),
+        ("GET", base()),
+        ("GET", base() + "/" + operation),
+        ("GET", base() + "/" + operation + "/artifacts/json"),
+    ):
+        response = (
+            api.post(path, headers=header(), json=request)
+            if method == "POST" else api.get(path, headers=header())
+        )
+        assert response.status_code in (403, 404, 503), (method, path, response.text)
+
+
+def test_f6_manifest_digest_is_independently_verified_on_read():
+    api, store = client()
+    operation = str(uuid4())
+    request = {"release_id": operation, "snapshot_hash": SNAPSHOT}
+    assert api.post(base(), headers=header(), json=request).status_code == 200
+    manifest = store.saved[operation]["status"]["manifest"]
+    manifest["finding_count"] = 700
+    # Even a receipt recalculated over mutated values cannot make the original
+    # frozen content hash agree with the changed manifest.
+    unsigned = {k: v for k, v in manifest.items() if k != "server_receipt"}
+    manifest["server_receipt"] = store.receipt(unsigned)
+    response = api.get(base() + "/" + operation, headers=header())
+    assert response.status_code in (403, 404, 503)
