@@ -83,6 +83,26 @@ def reconfirm_corrected_bundle(
             f"/v2/workspace/intake/matters/{case}"
         ):
             print(f"F6_CHANGED_INTAKE_READ_HTTP_{response.status}", flush=True)
+            if response.status == 200:
+                try:
+                    payload = response.json()
+                    if not isinstance(payload, dict):
+                        raise ValueError("unexpected intake shape")
+                    # Fixed metadata only: never log case IDs, source IDs,
+                    # inventory text, document bytes or user credentials.
+                    print("F6_CHANGED_INTAKE_CONTRACT_" + json.dumps({
+                        "sources": len(payload.get("sources", [])),
+                        "entries": len(payload.get("entries", [])),
+                        "readback_complete": payload.get("readback_complete"),
+                        "confirmed": payload.get("confirmation_id") is not None,
+                        "draft_count": sum(
+                            row.get("role") == "draft"
+                            for row in payload.get("sources", [])
+                            if isinstance(row, dict)
+                        ),
+                    }, sort_keys=True), flush=True)
+                except (ValueError, TypeError):
+                    print("F6_CHANGED_INTAKE_CONTRACT_UNREADABLE", flush=True)
 
     page.on("response", observe_intake)
     link = page.get_by_role(
@@ -90,16 +110,41 @@ def reconfirm_corrected_bundle(
     )
     expect(link).to_be_visible(timeout=15000)
     link.click()
-    expect(page.get_by_role("heading", name="Confirm inventory")).to_be_visible(
-        timeout=30000
-    )
+    print("F6_INVENTORY_NAVIGATION_STARTED", flush=True)
+    heading = page.get_by_role("heading", name="Confirm inventory")
+    print("F6_INVENTORY_HEADING_PRESENT_" + str(heading.is_visible()).upper(), flush=True)
+    expect(heading).to_be_visible(timeout=30000)
+    print("F6_INVENTORY_HEADING_CONFIRMED", flush=True)
     bindings = page.get_by_label("Preserved exhibit", exact=True)
+    print("F6_INVENTORY_RENDERED_" + json.dumps({
+        "selectors": bindings.count(),
+        "entry_legends": page.locator("fieldset > legend").count(),
+        "unavailable": page.get_by_text(
+            "Inventory is unavailable. No cached confirmation can be submitted.",
+            exact=True,
+        ).is_visible(),
+        "incomplete": page.get_by_text(
+            "Preserve all originals before confirming inventory.",
+            exact=True,
+        ).is_visible(),
+    }, sort_keys=True), flush=True)
     # Rights-cleared inventory intentionally has four identities: Stuk 1,
     # Pièce 2, missing Stuk 3 and ambiguous Stuk 4. The final two must not
     # gain invented source identities just to make an export pass.
     expect(bindings).to_have_count(4, timeout=15000)
-    bindings.nth(0).select_option(registered[2]["version_id"])
-    bindings.nth(1).select_option(registered[3]["version_id"])
+    print("F6_INVENTORY_FOUR_SELECTOR_COUNT_CONFIRMED", flush=True)
+    for index, expected in ((0, registered[2]["version_id"]),
+                            (1, registered[3]["version_id"])):
+        # Presence is checked without logging potentially sensitive source IDs.
+        available = bindings.nth(index).locator("option").evaluate_all(
+            "(options, id) => options.some(option => option.value === id)",
+            expected,
+        )
+        print(f"F6_INVENTORY_OPTION_{index}_PRESENT_{str(available).upper()}", flush=True)
+        if not available:
+            raise RuntimeError("F6_CONFIRMED_EXHIBIT_OPTION_MISSING")
+        bindings.nth(index).select_option(expected)
+        print(f"F6_INVENTORY_OPTION_{index}_SELECTED", flush=True)
     print("F6_INVENTORY_FOUR_IDENTITIES_WITH_UNRESOLVED_SOURCES_PASSED", flush=True)
     # Source PDF page 6 was independently rendered, downloaded and SHA-256
     # checked earlier in this same signed journey. Do not infer a page offset.
