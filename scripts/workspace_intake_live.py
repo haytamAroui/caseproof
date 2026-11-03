@@ -348,12 +348,22 @@ def _exercise() -> None:
                     deny_after_revocation,
                     export_one,
                     fixture_export_grant,
+                    reconfirm_corrected_bundle,
                     reopen_old,
                 )
                 if not f6_old:
                     raise RuntimeError("F6_OLD_RELEASE_MISSING")
-                # The new checked draft has no inherited decision: require
-                # a genuinely new human review before a second release.
+                # Correction changed the bundle signature. Under the
+                # evidence-first contract, its previous inventory/page
+                # confirmation is stale: neither prior mapping nor human
+                # review may be silently inherited by the new draft.
+                _stage("RECONFIRM_CORRECTED_BUNDLE")
+                reconfirm_corrected_bundle(
+                    page, acceptance, case=case, registered=registered
+                )
+                # Rechecking under the newly confirmed bundle creates a
+                # new report; the reviewer must inspect the preserved source
+                # and save an independent disposition before another release.
                 _stage("NEW_DRAFT_INDEPENDENT_REVIEW")
                 reviewer = page.get_by_role("region", name="Human review")
                 expect(reviewer.get_by_role("button", name="Save human decision")).to_be_visible(timeout=120000)

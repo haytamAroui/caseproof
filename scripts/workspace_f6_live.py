@@ -66,6 +66,54 @@ def scoped_base(case: str, brief: str) -> str:
     return f"{ORIGIN}/v2/matters/{case}/briefs/{brief}/dossier"
 
 
+def reconfirm_corrected_bundle(
+    page: Page, acceptance: WorkspaceBrowserAcceptance, *,
+    case: str, registered: list[dict[str, Any]],
+) -> None:
+    """Explicit fresh inventory attestation after a changed draft signature.
+
+    The former confirmation was valid for an older bundle; it is never
+    silently carried forward or treated as reviewer evidence for this draft.
+    The physical page was previously verified from immutable original bytes.
+    """
+    page.goto(f"{ORIGIN}/workspace/matters/{case}/inventory")
+    acceptance.login(page)
+    expect(page.get_by_role("heading", name="Confirm inventory")).to_be_visible(
+        timeout=90000
+    )
+    bindings = page.get_by_label("Preserved exhibit", exact=True)
+    expect(bindings).to_have_count(2, timeout=90000)
+    bindings.nth(0).select_option(registered[2]["version_id"])
+    bindings.nth(1).select_option(registered[3]["version_id"])
+    # Source PDF page 6 was independently rendered, downloaded and SHA-256
+    # checked earlier in this same signed journey. Do not infer a page offset.
+    page.get_by_label("Page label", exact=True).first.fill("4")
+    page.get_by_label("Physical PDF page", exact=True).first.fill("6")
+    page.get_by_label("Mapping rationale").first.fill(
+        "Inspected unchanged synthetic original: printed 4 on physical PDF page 6"
+    )
+    page.get_by_role("button", name="Add inspected mapping").first.click()
+    page.get_by_role("checkbox").check()
+    page.get_by_role("button", name="Save inventory confirmation").click()
+    expect(
+        page.get_by_text(
+            "Inventory confirmation saved and freshly read back.", exact=False
+        )
+    ).to_be_visible(timeout=120000)
+    print("F6_CHANGED_BUNDLE_FRESH_INVENTORY_CONFIRMATION_PASSED", flush=True)
+    page.get_by_role("button", name="Run explicit check").click()
+    expect(page.get_by_role("heading", name="Review the evidence")).to_be_visible(
+        timeout=180000
+    )
+    expect(page.get_by_text("PDF page 6 of 6", exact=True)).to_be_visible(
+        timeout=180000
+    )
+    expect(page.get_by_text("Source page rendered.", exact=True)).to_be_visible(
+        timeout=180000
+    )
+    print("F6_FRESH_CHECK_RESTORED_VERIFIED_PHYSICAL_MAPPING_PASSED", flush=True)
+
+
 def export_one(
     page: Page, acceptance: WorkspaceBrowserAcceptance,
     *, case: str, brief: str, snapshot: str, pdf_version: str, pdf_original: bytes,
