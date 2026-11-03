@@ -85,7 +85,7 @@ export function parseReleasePreview(
     !plain(raw.coverage) ||
     !Array.isArray(raw.formats) ||
     raw.formats.length !== 3 ||
-    !formats.every((x) => raw.formats.includes(x)) ||
+    !formats.every((x) => (raw.formats as unknown[]).includes(x)) ||
     !Array.isArray(raw.limitations) ||
     !raw.limitations.every((v) => typeof v === 'string')
   ) {

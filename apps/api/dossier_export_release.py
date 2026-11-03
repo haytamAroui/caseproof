@@ -13,7 +13,6 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.litigation.report_projection import canonical as canonical_report
-
 from application.litigation.report_projection import render_dossier_export
 from apps.api.access_control import AccessFailure, AccessRejected
 from infrastructure.parsers.dossier_docx_export import annotated_docx

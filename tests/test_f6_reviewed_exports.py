@@ -16,7 +16,6 @@ from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.dossier_export_release import _checked_artifacts, release_manifest
 from apps.api.dossier_journey import canonical, create_dossier_router
 
-
 SNAPSHOT = "a" * 64
 CASE, BRIEF = str(uuid4()), str(uuid4())
 

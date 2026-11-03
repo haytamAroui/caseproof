@@ -190,7 +190,7 @@ describe('F6 authenticated binary downloads', () => {
   it('rejects modified bytes even if response headers claim the original digest', async () => {
     const { bytes, digest, binding } = await fixture();
     const altered = new Uint8Array(bytes);
-    altered[0] ^= 1;
+    altered[0] = altered[0]! ^ 1;
     const send = vi.fn<typeof fetch>(
       async () =>
         new Response(altered, {
