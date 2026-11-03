@@ -94,9 +94,13 @@ def reconfirm_corrected_bundle(
         timeout=30000
     )
     bindings = page.get_by_label("Preserved exhibit", exact=True)
-    expect(bindings).to_have_count(2, timeout=90000)
+    # Rights-cleared inventory intentionally has four identities: Stuk 1,
+    # Pièce 2, missing Stuk 3 and ambiguous Stuk 4. The final two must not
+    # gain invented source identities just to make an export pass.
+    expect(bindings).to_have_count(4, timeout=15000)
     bindings.nth(0).select_option(registered[2]["version_id"])
     bindings.nth(1).select_option(registered[3]["version_id"])
+    print("F6_INVENTORY_FOUR_IDENTITIES_WITH_UNRESOLVED_SOURCES_PASSED", flush=True)
     # Source PDF page 6 was independently rendered, downloaded and SHA-256
     # checked earlier in this same signed journey. Do not infer a page offset.
     page.get_by_label("Page label", exact=True).first.fill("4")
