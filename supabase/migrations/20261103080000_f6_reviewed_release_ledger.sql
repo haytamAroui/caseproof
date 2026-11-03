@@ -254,7 +254,7 @@ end $$;
 -- unrelated service-role case ID cannot acquire another actor's export grant.
 create function public.caseproof_f6_fixture_export_grant(
  p_run uuid,p_owner uuid,p_case uuid,p_enable boolean
-) returns boolean language plpgsql security definer set search_path='' as $
+) returns boolean language plpgsql security definer set search_path='' as $$
 declare o uuid;
 begin
  if coalesce(auth.jwt()->>'role','') <> 'service_role'
@@ -286,7 +286,7 @@ begin
    else array_remove(g.permissions,'export:request') end
  where g.org_id=o and g.case_id=p_case and g.user_id=p_owner;
  return true;
-end $;
+end $$;
 revoke all on function public.caseproof_f6_fixture_export_grant(uuid,uuid,uuid,boolean)
  from public,anon,authenticated,service_role;
 grant execute on function public.caseproof_f6_fixture_export_grant(uuid,uuid,uuid,boolean)
