@@ -123,6 +123,46 @@ insert into caseproof.dossier_releases(
 """, env)
     if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != "1":
         raise AssertionError('fixture release not persisted')
+    # Fill the bounded per-matter release ledger using synthetic fixture rows.
+    # A distinct signed release request must reject capacity before snapshot
+    # parsing; a replay of an existing release remains a separate read action.
+    _run(f"""
+insert into caseproof.dossier_releases(
+ org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts
+)
+select '{org}','{case}',gen_random_uuid(),'{owner}','{version}',repeat('a',64),
+ '{{"scope":"synthetic-retention-only"}}'::jsonb,
+ '{{"json":"eA=="}}'::jsonb
+from generate_series(1,49);
+""", env)
+    if _run(f"select count(*) from caseproof.dossier_releases where case_id='{case}'", env) != "50":
+        raise AssertionError('release capacity fixture incomplete')
+    new_release = str(uuid4())
+    release_attempt = f"""
+select public.caseproof_dossier_export_release(
+  '{case}','release','{new_release}',
+  jsonb_build_object(
+    'manifest', jsonb_build_object(
+      'schema','caseproof-reviewed-release-v1',
+      'case_id','{case}', 'release_id','{new_release}',
+      'snapshot_hash',repeat('a',64),
+      'server_receipt',repeat('b',64),
+      'manifest_sha256',repeat('c',64),
+      'artifacts','{{}}'::jsonb
+    ),
+    'contents',jsonb_build_object('json','eA==','markdown','eA==','docx','eA=='),
+    'human_decisions','[]'::jsonb
+  )
+);
+"""
+    try:
+        _run(actor(owner, release_attempt), env)
+    except AssertionError as error:
+        if "release capacity reached" not in str(error):
+            raise
+    else:
+        raise AssertionError('release capacity did not fail closed')
+    print('F6_RELEASE_CAPACITY_DENIED_BEFORE_SNAPSHOT_PARSE_PASSED', flush=True)
     print('F6_SEPARATE_EXPORT_GRANT_RLS_REVOKE_AND_RELEASE_RETENTION_FIXTURE_PASSED', flush=True)
     service = "set request.jwt.claims='{\"role\":\"service_role\"}'; "
     soft = f"select public.caseproof_soft_delete_matter('{case}')"

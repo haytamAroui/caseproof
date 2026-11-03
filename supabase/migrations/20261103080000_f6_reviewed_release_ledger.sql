@@ -76,7 +76,10 @@ begin
  and m.active and m.actions @> array['case:read','evidence:read','export:request']::text[]
  join caseproof._m1_matter_grants g on g.org_id=c.org_id and g.case_id=c.id and g.user_id=a
  and g.active and g.permissions @> array['case:read','evidence:read','export:request']::text[]
- where c.id=p_case and c.deleted_at is null for share of c,m,g;
+ -- Acquire the case write lock BEFORE invoking the snapshot helper (which
+ -- also locks the same case). Two simultaneous releases must not each hold
+ -- SHARE then deadlock while upgrading to UPDATE.
+ where c.id=p_case and c.deleted_at is null for update of c for share of m,g;
  if o is null then raise exception 'release unavailable' using errcode='42501'; end if;
 
  if p_action='authorize' then return jsonb_build_object('authorized',true); end if;
@@ -135,6 +138,14 @@ begin
    return jsonb_build_object('state','released','release_id',p_export,
        'brief_id',row_record.brief_id,'snapshot_hash',row_record.snapshot_hash,
        'manifest',row_record.manifest,'created_at',row_record.created_at);
+ end if;
+
+ -- Bounded per-matter private release storage. Already-released operation IDs
+ -- have been reconciled above, so they do not consume quota on retries.
+ -- The case row is locked before this check, fencing competing inserts.
+ if (select count(*) from caseproof.dossier_releases
+     where org_id=o and case_id=p_case) >= 50 then
+   raise exception 'release capacity reached' using errcode='23505';
  end if;
 
  -- Reauthorize under the current case lock and re-read the signed frozen
