@@ -54,3 +54,19 @@ def test_embedded_drawing_and_fields_block_full_coverage() -> None:
         result = extract_docx_text_regions(payload)
         assert not result.coverage_complete
         assert "word/document.xml#structured" in result.unscanned_parts
+
+
+def test_external_dtd_in_main_story_never_yields_text_or_full_coverage() -> None:
+    payload = _docx(body='<!DOCTYPE x SYSTEM "file:///etc/passwd"><x/>')
+    result = extract_docx_text_regions(payload)
+    assert result.regions == ()
+    assert not result.coverage_complete
+    assert result.manifest["coverage_unknown"] is True
+
+
+def test_internal_entity_in_main_story_never_yields_text_or_full_coverage() -> None:
+    payload = _docx(body='<!DOCTYPE x [<!ENTITY secret "Stuk 99">]><x>&secret;</x>')
+    result = extract_docx_text_regions(payload)
+    assert result.regions == ()
+    assert not result.coverage_complete
+    assert result.manifest["coverage_unknown"] is True

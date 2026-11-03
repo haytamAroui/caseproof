@@ -39,3 +39,12 @@ def test_historical_read_rejects_wrong_brief_and_tampering():
     store.rpc.return_value = {'serialized': '{}'}
     with pytest.raises(AccessRejected):
         store.frozen_report('signed', 'case', 'brief', digest, historical=True)
+
+
+def test_hash_consistent_malformed_frozen_json_fails_closed():
+    store, _ = fixture()
+    serialized = '{invalid json'
+    store.rpc.return_value = {'serialized': serialized}
+    digest = hashlib.sha256(serialized.encode()).hexdigest()
+    with pytest.raises(AccessRejected):
+        store.frozen_report('signed', 'case', 'brief', digest, historical=True)

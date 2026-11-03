@@ -1,13 +1,17 @@
 """Fail-closed DOCX story-region inventory. Discovery is not text extraction.
 
-Uses bounded ZIP metadata and stdlib XML; never executes embedded content.
+Uses bounded ZIP metadata and defused XML; never executes embedded content.
 A discovered region is not marked scanned by this inventory adapter.
 """
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from enum import StrEnum
 from io import BytesIO
+from xml.etree.ElementTree import Element, ParseError
 from zipfile import BadZipFile, ZipFile
+
+from defusedxml.common import DefusedXmlException  # type: ignore[import-untyped]
+
+from infrastructure.parsers.safe_docx_xml import parse_docx_xml
 
 WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
@@ -17,7 +21,7 @@ MAX_TOTAL_UNCOMPRESSED = 80_000_000
 MAX_PARTS = 1000
 
 
-def word_on_off_enabled(node: ET.Element | None) -> bool:
+def word_on_off_enabled(node: Element | None) -> bool:
     """OOXML on/off: presence defaults on; explicit 0/false/off disables it.
 
     Unknown values conservatively retain the exclusion; never hide a visible
@@ -113,7 +117,7 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
                 xml = archive.read(info)
                 if b"<!DOCTYPE" in xml.upper() or b"<!ENTITY" in xml.upper():
                     return DocxCoverage(tuple(regions), True, "DTD_FORBIDDEN")
-                root = ET.fromstring(xml)
+                root = parse_docx_xml(xml)
                 revisions = any(node.tag in {
                     WORD_NS + "ins", WORD_NS + "del", WORD_NS + "moveFrom", WORD_NS + "moveTo"
                 } for node in root.iter())
@@ -131,5 +135,5 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
                 } for node in root.iter()):
                     regions.append(DocxRegion(name + "#structured", "STRUCTURED_CONTENT", RegionStatus.UNSUPPORTED, "UNSUPPORTED_STRUCTURED_CONTENT"))
             return DocxCoverage(tuple(regions), False)
-    except (BadZipFile, ET.ParseError, OSError, RuntimeError, ValueError):
+    except (BadZipFile, ParseError, DefusedXmlException, OSError, RuntimeError, ValueError):
         return DocxCoverage((), True, "UNREADABLE_PACKAGE")

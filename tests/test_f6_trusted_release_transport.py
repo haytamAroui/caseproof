@@ -67,3 +67,16 @@ def test_f6_denies_trusted_write_when_server_key_or_user_verification_missing():
     store.revisions.verifier.verify_bearer.side_effect = InvalidBearer("untrusted")
     with pytest.raises(AccessRejected):
         store.export_rpc("not-a-valid-jwt", str(uuid4()), "release", str(uuid4()), {})
+
+
+@pytest.mark.parametrize("payload", [b'{', b'\xff', b'[]', b'null', b'"text"'])
+def test_dossier_rpc_rejects_malformed_success_response_without_retry(payload):
+    response = Mock(status=200)
+    response.read.return_value = payload
+    connection = Mock()
+    connection.getresponse.return_value = response
+    with patch("apps.api.dossier_journey.http.client.HTTPSConnection", return_value=connection):
+        with pytest.raises(AccessRejected):
+            DossierStore(PUBLISHABLE).rpc("signed-user-jwt", str(uuid4()), "read")
+    connection.request.assert_called_once()
+    connection.close.assert_called_once()

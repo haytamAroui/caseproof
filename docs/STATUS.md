@@ -515,3 +515,73 @@ files. Final amended-head CI and current engineering readiness are recorded in
 the PR; security/legal/privacy approval and production release remain separate.
 See [F5 acceptance](m3/F5_IMPLEMENTATION_ACCEPTANCE.md) for scope, limitations and
 the earlier unexplained sign-in failure.
+
+## P0/P1 reconciliation — 3 November 2026
+
+The branch `feat/p0-p1-security-intake-evidence` builds on main merge
+`b7f25332616de55d9c12371faa0f83c0da8de921`. The entries below preserve
+historical PR-head evidence; they are not evidence that the P0/P1 branch has
+passed its own final-head CI or independent review.
+
+| Stage | Merged PR / merge commit | Historical signed acceptance |
+| --- | --- | --- |
+| F3 intake | [#175](https://github.com/haytamAroui/caseproof/pull/175), `6c4f3c3aace7e0583904168b8d4b37743a2c6c79` | [run 41479540389](https://github.com/haytamAroui/caseproof/actions/runs/41479540389), head `2c480bd4e4c837e3bc145d898012903690e2bf0d` |
+| F4 review | [#176](https://github.com/haytamAroui/caseproof/pull/176), `fa16f0ceff2a42a23264f439d98fa9c461d3432a` | [run 41509411466](https://github.com/haytamAroui/caseproof/actions/runs/41509411466), head `eb3e2b96c04307d61921c590444a5be74520a851` |
+| F5 correction | [#177](https://github.com/haytamAroui/caseproof/pull/177), `84bd2e1e98551a7e60137a61f8b2c6cd79805a14` | [run 41585147215](https://github.com/haytamAroui/caseproof/actions/runs/41585147215), head `fcde19a668e0b09dbd3f91b985ff37283775e6d3` |
+| F6 release | [#178](https://github.com/haytamAroui/caseproof/pull/178), `43550e971ad194d1515296962430ad997a4155bb` | [run 41623751514](https://github.com/haytamAroui/caseproof/actions/runs/41623751514), head `c0e7d44b42b137c80b568e44ccbce28acad3ee97` |
+
+The F5 PR description includes an earlier blocker report; the final merged
+head contains subsequent changes. Current regression entry points include
+`tests/test_f5_correction_routes.py` for bounded previews and actor-bound review,
+`frontend/src/shared/api/transport.ts` for action-scoped recovery denial, and
+`frontend/src/features/corrections/CorrectionRecovery.tsx` plus the recheck
+route for superseded drafts. Changed-intake controls are exercised by
+`frontend/tests/intake.spec.ts` and `scripts/workspace_f6_live.py`.
+
+Workflow-to-route and acceptance mappings remain in `frontend/BLUEPRINT.md`
+(section 23) and `docs/CASEPROOF_AGENT_MASTER_TODO.md` (sections 4 and 8).
+Current lockfiles control installed versions; no additional runtime or frontend
+package was introduced by this hardening. The package/encoding limits in
+`infrastructure/parsers/safe_docx_xml.py` constrain discovery but do not create
+an OS sandbox or demonstrate a production egress boundary.
+
+Final-head cloud checks, protected signed-browser acceptance, independent
+security/privacy/legal review, representative evidence and production approval
+remain separate gates. Historical acceptance does not replace those gates.
+
+### P0/P1 final-head engineering evidence
+
+PR [#182](https://github.com/haytamAroui/caseproof/pull/182) code head
+`eafd389e325839c06390e74f32c2890f6b128195` passed 18 workflows; four
+branch-specific historical workflows were skipped. The [genuine signed F6
+run](https://github.com/haytamAroui/caseproof/actions/runs/41666612121)
+covered the changed-intake and F3–F6 lifecycle, printed 4 → physical PDF 6,
+revocation, and `M05_STORAGE_EMPTY_VERIFIED` / `ZERO_RESIDUAL_VERIFIED`.
+The [same-fixture viewer comparison](https://github.com/haytamAroui/caseproof/actions/runs/41666612697)
+and [frontend CI](https://github.com/haytamAroui/caseproof/actions/runs/41666612052)
+also passed. These receipts do not establish correctness at any later code head.
+
+The S0–S13 [code/evidence matrix](audits/P0_P1_TRACEABILITY_2026-11-03.md)
+identifies stage paths, tests and limits; the [lockfile license inventory](audits/P0_DEPENDENCY_LICENSE_INVENTORY_2026-11-03.md)
+records declared licenses for development and conditional dependencies. It is
+not independent legal clearance or a complete third-party-notices review.
+
+The [OCR namespace packet capture](https://github.com/haytamAroui/caseproof/actions/runs/41666612265)
+is not a whole-deployment egress measurement. The `/workspace` browser CSP is
+same-origin, but that does not stop server-side Auth/Storage traffic; the
+installed signed development journey uses remote services. No offline or
+zero-egress deployment is certified. A whole-perimeter test needs an actual
+specified deployment configuration, runtime and operator/security/privacy
+owners. Existing deployment assessment profiles remain incomplete. No
+independent security/evidence or legal/privacy approval is recorded.
+
+For completeness, the signed-navigation F1 retrofit merged in
+[PR #172](https://github.com/haytamAroui/caseproof/pull/172), merge commit
+`b46b30fe0b84708d396b33263de9c493b06b96aa`, with historical [signed run
+41438132346](https://github.com/haytamAroui/caseproof/actions/runs/41438132346)
+at head `a66348e76c3881bc53e079595b465622fd6b604e`. F2 inspection merged in
+[PR #173](https://github.com/haytamAroui/caseproof/pull/173), merge commit
+`fc44fdca16829b213137fbb7ceb717b1cefee270`, with historical [signed run
+41443170522](https://github.com/haytamAroui/caseproof/actions/runs/41443170522)
+at head `41072716621c9bbd676d4bceb91062f5344bf33b`. These historical run
+links are not new-head acceptance.

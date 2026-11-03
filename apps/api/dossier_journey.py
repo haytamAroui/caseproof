@@ -185,7 +185,10 @@ class DossierStore:
             raise HTTPException(409, "stale dossier or idempotency conflict")
         if status != 200 or len(raw) > 4_000_000:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        result = json.loads(raw)
+        try:
+            result = json.loads(raw)
+        except (ValueError, UnicodeError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         if not isinstance(result, dict):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
@@ -431,7 +434,10 @@ class DossierStore:
         serialized = stored.get("serialized")
         if not isinstance(serialized, str) or hashlib.sha256(serialized.encode()).hexdigest() != snapshot:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        report = json.loads(serialized)
+        try:
+            report = json.loads(serialized)
+        except (ValueError, UnicodeError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         if not isinstance(report, dict):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         attestation = report.pop("server_receipt", None)

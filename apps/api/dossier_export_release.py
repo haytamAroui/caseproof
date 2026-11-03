@@ -5,6 +5,7 @@ import base64
 import hashlib
 import hmac
 import io
+import re
 from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID
@@ -59,23 +60,54 @@ def _checked_artifacts(report: dict[str, Any], original: bytes) -> dict[str, byt
     return artifacts
 
 
-def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dict[str, Any]:
-    """No general VERIFIED flag: scopes, abstentions and decisions remain separate."""
+def _validate_frozen_report(report: dict[str, Any]) -> None:
+    """Reject invalid backend data before preview or artifact creation."""
     sources = report.get("sources")
     decisions = report.get("human_decisions")
-    if not isinstance(sources, list) or not sources or not isinstance(decisions, list):
+    findings = report.get("findings")
+    if (
+        not all(isinstance(report.get(key), str) and report[key] for key in
+                ("case_id", "brief_id", "snapshot_hash", "bundle_signature"))
+        or not isinstance(report.get("coverage"), dict)
+        or not isinstance(sources, list) or not sources
+        or not isinstance(decisions, list) or not isinstance(findings, list)
+        or not all(isinstance(finding, dict) for finding in findings)
+    ):
         raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+    for row in sources:
+        if not isinstance(row, dict) or not all(
+            isinstance(row.get(key), str) and row[key] for key in ("version_id", "sha256", "role")
+        ):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+    if any(re.fullmatch(HEX64, row["sha256"]) is None for row in sources):
+        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+    if len({row["version_id"] for row in sources}) != len(sources):
+        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+    if not all(isinstance(d, dict) and isinstance(d.get("request_id"), str) for d in decisions):
+        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+    for finding in findings:
+        if not isinstance(finding.get("reference_id"), str) or not finding["reference_id"]:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if finding.get("version_id") is not None and not isinstance(finding["version_id"], str):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        visual = finding.get("visual_assessment", {})
+        if (not isinstance(visual, dict) or not isinstance(visual.get("regions", []), list)
+                or not all(isinstance(region, dict) for region in visual.get("regions", []))):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+
+
+def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dict[str, Any]:
+    """No general VERIFIED flag: scopes, abstentions and decisions remain separate."""
+    _validate_frozen_report(report)
+    sources = report["sources"]
+    decisions = report["human_decisions"]
     selected = []
     for row in sources:
-        if not isinstance(row, dict):
-            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         selected.append({
             "version_id": row["version_id"],
             "sha256": row["sha256"],
             "role": row["role"],
         })
-    if not all(isinstance(d, dict) and isinstance(d.get("request_id"), str) for d in decisions):
-        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
     # Link destination paths are derived exclusively from frozen source IDs and
     # the selected finding, not from external URL fields or caller input.
     source_by_id = {
@@ -99,7 +131,7 @@ def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dic
     for finding in report["findings"]:
         reference = finding.get("reference_id")
         version = finding.get("version_id")
-        if not isinstance(reference, str) or not reference or version not in source_by_id:
+        if not reference or not version or version not in source_by_id:
             continue
         page = finding.get("pdf_page")
         mapped = finding.get("page_mapping") == "mapped"
@@ -206,6 +238,7 @@ def create_release_router(store: Any) -> APIRouter:
         if store.current_draft_version(bearer, case_id) != brief_id:
             raise HTTPException(409, "historical draft cannot be released as current")
         report, _ = read_dossier_report(store, bearer, case_id, brief_id, snapshot_hash, decisions=True)
+        _validate_frozen_report(report)
         status = store.export_rpc(bearer, case_id, "authorize", None, {})
         if not status.get("authorized"):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
@@ -243,6 +276,7 @@ def create_release_router(store: Any) -> APIRouter:
         report, original = read_dossier_report(
             store, bearer, case_id, brief_id, body.snapshot_hash, decisions=True
         )
+        _validate_frozen_report(report)
         if not report["human_decisions"]:
             raise HTTPException(409, "persisted human review required for reviewed release")
         artifacts = _checked_artifacts(report, original)
