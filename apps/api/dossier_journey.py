@@ -194,21 +194,43 @@ class DossierStore:
         self, bearer: str, case: str, action: str, release_id: str | None,
         data: dict[str, Any],
     ) -> dict[str, Any]:
-        """Scoped signed-user RPC; large artifacts never pass the generic report cap."""
+        """Signed reads; only trusted backend may persist a signed release."""
         if action not in {"authorize", "release", "status", "list", "artifact"}:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        payload: dict[str, Any] = {
+            "p_case": case, "p_action": action,
+            "p_export": release_id, "p_data": data,
+        }
+        if action == "release":
+            # The API has already checked the signed report. A separate fresh
+            # Auth /user lookup pins the actor before trusted PostgreSQL write.
+            # No browser may invoke release RPC as service_role.
+            key = self.revisions.trusted_key
+            if not key:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+            try:
+                actor = self.revisions.verifier.verify_bearer(bearer)
+            except InvalidBearer:
+                raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+            except IdentityServiceUnavailable:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+            payload["p_actor"] = actor.subject_id
+            headers = {
+                "apikey": key, "Content-Type": "application/json",
+                "Cache-Control": "no-store",
+            }
+            if key.startswith("eyJ"):
+                headers["Authorization"] = "Bearer " + key
+        else:
+            headers = {
+                "apikey": self.key, "Authorization": "Bearer " + bearer,
+                "Content-Type": "application/json", "Cache-Control": "no-store",
+            }
         con = http.client.HTTPSConnection(HOST, timeout=60)
         try:
             con.request(
                 "POST", "/rest/v1/rpc/caseproof_dossier_export_release",
-                canonical({
-                    "p_case": case, "p_action": action,
-                    "p_export": release_id, "p_data": data,
-                }).encode(),
-                {
-                    "apikey": self.key, "Authorization": "Bearer " + bearer,
-                    "Content-Type": "application/json", "Cache-Control": "no-store",
-                },
+                canonical(payload).encode(), headers,
             )
             response = con.getresponse()
             status, raw = response.status, response.read(16_000_001)

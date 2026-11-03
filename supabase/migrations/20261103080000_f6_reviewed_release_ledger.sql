@@ -45,10 +45,11 @@ create trigger retention_write_guard before insert or update on caseproof.dossie
 
 create function public.caseproof_dossier_export_release(
   p_case uuid, p_action text, p_export uuid default null,
-  p_data jsonb default '{}'::jsonb
+  p_data jsonb default '{}'::jsonb, p_actor uuid default null
 ) returns jsonb language plpgsql security definer set search_path='' as $$
 declare
  a uuid := auth.uid();
+ v_role text := coalesce(auth.jwt()->>'role','');
  o uuid;
  row_record caseproof.dossier_releases%rowtype;
  v_manifest jsonb;
@@ -63,12 +64,28 @@ declare
  v_digest text;
  v_info jsonb;
  v_brief uuid;
+ v_current_draft_count integer;
+ v_requested_draft_count integer;
+ v_signature text;
+ v_latest_confirmation uuid;
 begin
- if a is null or coalesce(auth.jwt()->>'role','') <> 'authenticated'
- or coalesce(auth.jwt()->>'is_anonymous','false')='true'
- or p_case is null or p_action not in ('authorize','status','list','artifact','release')
- or p_data is null or jsonb_typeof(p_data)<>'object'
- then raise exception 'release unavailable' using errcode='42501'; end if;
+ -- Release writes require a server-verified signed actor plus the trusted
+ -- backend service key. Browser JWTs cannot forge release bytes or HMACs.
+ if p_action='release' then
+   if v_role <> 'service_role' or p_actor is null then
+     raise exception 'trusted release service required' using errcode='42501';
+   end if;
+   a := p_actor;
+ elsif v_role <> 'authenticated'
+       or coalesce(auth.jwt()->>'is_anonymous','false')='true'
+       or p_actor is not null then
+   raise exception 'release unavailable' using errcode='42501';
+ end if;
+ if a is null or p_case is null
+    or p_action not in ('authorize','status','list','artifact','release')
+    or p_data is null or jsonb_typeof(p_data)<>'object' then
+   raise exception 'release unavailable' using errcode='42501';
+ end if;
 
  -- Export has its OWN permission, separate from read/review and draft write.
  select c.org_id into o from caseproof.cases c
@@ -103,7 +120,11 @@ begin
  select * into row_record from caseproof.dossier_releases
  where org_id=o and case_id=p_case and release_id=p_export;
  if p_action='status' then
-   if not found then return jsonb_build_object('state','absent'); end if;
+   -- Recovery status is actor-specific. Historical list and binary retrieval
+   -- are intentionally available to any currently authorized exporter.
+   if not found or row_record.actor_id is distinct from a then
+     return jsonb_build_object('state','absent');
+   end if;
    return jsonb_build_object('state','released','release_id',p_export,
       'brief_id',row_record.brief_id,'snapshot_hash',row_record.snapshot_hash,
       'manifest',row_record.manifest,'created_at',row_record.created_at);
@@ -148,9 +169,24 @@ begin
    raise exception 'release capacity reached' using errcode='23505';
  end if;
 
- -- Reauthorize under the current case lock and re-read the signed frozen
- -- snapshot AFTER the app has rendered. Any changed bundle/confirmation fails.
- v_snapshot:=public.caseproof_dossier_snapshot_read(p_case,v_manifest->>'snapshot_hash');
+ -- Release runs as a trusted server role, so do not call the user-only
+ -- snapshot RPC. Instead reproduce its current bundle + confirmation fence
+ -- against the preserved snapshot under this transaction's case row lock.
+ select jsonb_build_object('serialized',s.serialized),s.bundle_signature
+   into v_snapshot,v_signature
+ from caseproof.dossier_snapshots s
+ where s.org_id=o and s.case_id=p_case
+   and s.snapshot_hash=v_manifest->>'snapshot_hash';
+ if not found then raise exception 'snapshot unavailable' using errcode='23505'; end if;
+ select request_id into v_latest_confirmation
+ from caseproof.dossier_confirmations c
+ where c.org_id=o and c.case_id=p_case and c.bundle_signature=v_signature
+ order by c.created_at desc,c.request_id desc limit 1;
+ if v_signature is distinct from caseproof.dossier_current_signature(o,p_case)
+   or v_latest_confirmation::text is distinct from v_manifest->>'confirmation_id'
+   or v_latest_confirmation is null then
+   raise exception 'stale confirmation or source bundle' using errcode='23505';
+ end if;
  v_report:=(v_snapshot->>'serialized')::jsonb;
  begin v_brief:=(v_manifest->>'brief_id')::uuid;
  exception when others then raise exception 'invalid draft' using errcode='42501'; end;
@@ -158,13 +194,28 @@ begin
  or v_report->>'brief_id' is distinct from v_brief::text
  or v_report->>'bundle_signature' is distinct from v_manifest->>'bundle_signature'
  or v_report->>'confirmation_id' is distinct from v_manifest->>'confirmation_id'
- or (select count(*) from caseproof.documents d
-      join caseproof.document_versions dv on dv.document_id=d.id and dv.org_id=d.org_id
-      where d.org_id=o and d.case_id=p_case and dv.bundle_role='draft' and dv.id=v_brief) <> 1
  then raise exception 'stale reviewed draft release' using errcode='23505'; end if;
+ -- Only the exactly active draft is releasable. An old draft row can exist
+ -- indefinitely after activation; existence alone must not authorize it.
+ select count(*),count(*) filter(where dv.id=v_brief)
+ into v_current_draft_count,v_requested_draft_count
+ from caseproof.documents d
+ join caseproof.document_versions dv
+   on dv.document_id=d.id and dv.org_id=d.org_id
+ where d.org_id=o and d.case_id=p_case and dv.bundle_role='draft'
+   and not exists (
+     select 1 from caseproof.dossier_draft_revisions dr
+     where dr.org_id=o and dr.case_id=p_case
+       and ((dr.version_id=dv.id and dr.state='reserved')
+         or (dr.parent_version_id=dv.id and dr.state='active'))
+   );
+ if v_current_draft_count <> 1 or v_requested_draft_count <> 1 then
+   raise exception 'superseded draft cannot be released' using errcode='23505';
+ end if;
  select coalesce(jsonb_agg(jsonb_build_object(
    'reference_id',reference_id,'decision',decision,'rationale',rationale,
-   'reviewer_id',actor_id,'request_id',request_id,'timestamp',created_at
+   'reviewer_id',actor_id,'request_id',request_id,'timestamp',created_at,
+   'reviewed_region_ids',reviewed_region_ids
  ) order by created_at,request_id),'[]'::jsonb) into v_reviews
  from caseproof._phase4_reference_decisions
  where org_id=o and case_id=p_case and snapshot_sha=v_manifest->>'snapshot_hash';
@@ -197,8 +248,52 @@ begin
  return jsonb_build_object('state','released','release_id',p_export,
    'brief_id',v_brief,'snapshot_hash',v_manifest->>'snapshot_hash','manifest',v_manifest);
 end $$;
-revoke all on function public.caseproof_dossier_export_release(uuid,text,uuid,jsonb)
- from public,anon,authenticated;
-grant execute on function public.caseproof_dossier_export_release(uuid,text,uuid,jsonb)
- to authenticated;
+
+-- Development-only fixture setup. Only the service-role wrapper may toggle
+-- the exact owner/case registered by the ephemeral run. A regular user or an
+-- unrelated service-role case ID cannot acquire another actor's export grant.
+create function public.caseproof_f6_fixture_export_grant(
+ p_run uuid,p_owner uuid,p_case uuid,p_enable boolean
+) returns boolean language plpgsql security definer set search_path='' as $
+declare o uuid;
+begin
+ if coalesce(auth.jwt()->>'role','') <> 'service_role'
+   or p_run is null or p_owner is null or p_case is null or p_enable is null then
+   raise exception 'test grant unavailable' using errcode='42501';
+ end if;
+ select c.org_id into o
+ from caseproof._dev_journey_fixtures f
+ join caseproof.cases c on c.org_id=f.org_id and c.id=p_case
+ where f.run_id=p_run and f.owner_id=p_owner
+   and c.created_by_user=p_owner and c.deleted_at is null
+ for update of c;
+ if o is null then raise exception 'test grant unavailable' using errcode='42501'; end if;
+ if not exists (
+   select 1 from caseproof.organization_members m
+   where m.org_id=o and m.user_id=p_owner and m.active
+ ) or not exists (
+   select 1 from caseproof._m1_matter_grants g
+   where g.org_id=o and g.case_id=p_case and g.user_id=p_owner and g.active
+ ) then raise exception 'test owner grant unavailable' using errcode='42501'; end if;
+ update caseproof.organization_members m
+ set actions=case when p_enable
+   then array(select distinct v from unnest(m.actions||array['export:request']::text[]) v order by v)
+   else array_remove(m.actions,'export:request') end
+ where m.org_id=o and m.user_id=p_owner;
+ update caseproof._m1_matter_grants g
+ set permissions=case when p_enable
+   then array(select distinct v from unnest(g.permissions||array['export:request']::text[]) v order by v)
+   else array_remove(g.permissions,'export:request') end
+ where g.org_id=o and g.case_id=p_case and g.user_id=p_owner;
+ return true;
+end $;
+revoke all on function public.caseproof_f6_fixture_export_grant(uuid,uuid,uuid,boolean)
+ from public,anon,authenticated,service_role;
+grant execute on function public.caseproof_f6_fixture_export_grant(uuid,uuid,uuid,boolean)
+ to service_role;
+
+revoke all on function public.caseproof_dossier_export_release(uuid,text,uuid,jsonb,uuid)
+ from public,anon,authenticated,service_role;
+grant execute on function public.caseproof_dossier_export_release(uuid,text,uuid,jsonb,uuid)
+ to authenticated,service_role;
 commit;

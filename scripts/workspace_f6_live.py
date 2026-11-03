@@ -1,0 +1,202 @@
+"""F6 genuine signed export acceptance, synthetic owned fixtures only.
+
+Integrated after the real F3/F4 review and F5 correction. Never logs bearer,
+credentials, raw text, document bytes or provider response bodies.
+"""
+from __future__ import annotations
+
+import hashlib
+import http.client
+import io
+import json
+import os
+from typing import Any
+from urllib.parse import parse_qs, urlsplit
+from uuid import UUID
+from zipfile import ZipFile
+
+from docx import Document
+from playwright.sync_api import Page, Route, expect
+from pypdf import PdfReader
+
+from scripts.workspace_browser_live import ORIGIN, WorkspaceBrowserAcceptance
+
+DEV_HOST = "ldwmocpxwskvhoojndrd.supabase.co"
+
+
+def fixture_export_grant(key: str, run: str, owner: str, case: str, enabled: bool) -> None:
+    """Only admin for the exact registered ephemeral owner+case may toggle."""
+    if not (key.startswith("sb_secret_") or key.startswith("eyJ")):
+        raise RuntimeError("F6_ADMIN_KEY_TYPE")
+    payload = {
+        "p_run": str(UUID(run)), "p_owner": str(UUID(owner)),
+        "p_case": str(UUID(case)), "p_enable": enabled,
+    }
+    conn = http.client.HTTPSConnection(DEV_HOST, timeout=20)
+    headers = {"apikey": key, "Content-Type": "application/json"}
+    if key.startswith("eyJ"):
+        headers["Authorization"] = "Bearer " + key
+    try:
+        conn.request(
+            "POST", "/rest/v1/rpc/caseproof_f6_fixture_export_grant",
+            json.dumps(payload).encode(), headers,
+        )
+        res = conn.getresponse()
+        status, raw = res.status, res.read(1025)
+    except (OSError, http.client.HTTPException):
+        raise RuntimeError("F6_ADMIN_GRANT_UNAVAILABLE") from None
+    finally:
+        conn.close()
+    if status != 200 or len(raw) > 1024 or raw.strip() != b"true":
+        raise RuntimeError("F6_ADMIN_GRANT_FAILED")
+
+
+def binding(page: Page) -> tuple[str, str]:
+    """Read only the current synthetically generated address; no page guessing."""
+    url = urlsplit(page.url)
+    brief = url.path.rsplit("/briefs/", 1)[-1].split("/", 1)[0]
+    snapshot = parse_qs(url.query).get("snapshot", [""])[0]
+    if not 0 < len(brief) <= 64 or not (
+        len(snapshot) == 64 and all(x in "0123456789abcdef" for x in snapshot)
+    ):
+        raise RuntimeError("F6_BROWSER_BINDING_UNAVAILABLE")
+    return brief, snapshot
+
+
+def scoped_base(case: str, brief: str) -> str:
+    return f"{ORIGIN}/v2/matters/{case}/briefs/{brief}/dossier"
+
+
+def export_one(
+    page: Page, acceptance: WorkspaceBrowserAcceptance,
+    *, case: str, brief: str, snapshot: str, pdf_version: str, pdf_original: bytes,
+    expect_reference: str,
+) -> dict[str, Any]:
+    """A real browser issues the POST and receives the exact downloaded DOCX."""
+    url = f"{ORIGIN}/workspace/matters/{case}/exports?brief={brief}&snapshot={snapshot}"
+    page.goto(url)
+    acceptance.login(page)
+    expect(page.get_by_role("heading", name="Reviewed exports and history")).to_be_visible(timeout=90000)
+    expect(page.get_by_role("heading", name="Preview release scope")).to_be_visible(timeout=90000)
+    expect(page.get_by_role("button", name="Create frozen reviewed release")).to_be_enabled(timeout=90000)
+    previous = page.url
+    writes = [0]
+    captured: dict[str, Any] = {}
+
+    def lost_release_ack(route: Route) -> None:
+        writes[0] += 1
+        captured["authorization"] = route.request.headers["authorization"]
+        response = route.fetch(timeout=180000)
+        if response.status != 200:
+            raise RuntimeError("F6_SIGNED_RELEASE_REJECTED")
+        receipt = response.json()
+        if receipt.get("state") != "released":
+            raise RuntimeError("F6_RELEASE_RECEIPT_MISSING")
+        captured["record"] = receipt
+        route.abort("failed")
+
+    page.route("**/dossier/releases", lost_release_ack)
+    page.get_by_role("button", name="Create frozen reviewed release").click()
+    expect(page.get_by_role("button", name="Reconcile previous release")).to_be_visible(timeout=90000)
+    page.get_by_role("button", name="Reconcile previous release").click()
+    expect(page.get_by_text("The previously submitted release was found and recovered.")).to_be_visible(timeout=90000)
+    page.unroute("**/dossier/releases", lost_release_ack)
+    if writes != [1] or "record" not in captured or "authorization" not in captured:
+        raise RuntimeError("F6_DUPLICATE_RELEASE_OR_MISSING_RECEIPT")
+    receipt = captured["record"]
+    manifest = receipt.get("manifest", {})
+    if (manifest.get("snapshot_hash") != snapshot or manifest.get("brief_id") != brief
+            or manifest.get("review_count", 0) < 1 or len(manifest.get("server_receipt", "")) != 64
+            or manifest.get("sources") is None):
+        raise RuntimeError("F6_MANIFEST_SCOPE_OR_REVIEW_INVALID")
+    print("F6_SIGNED_LOST_ACK_RELEASE_RECONCILED_ONCE_PASSED", flush=True)
+
+    # Only exact downloaded bytes are accepted: digest/length and real
+    # DOCX package reopening, not an API JSON success or a ZIP signature.
+    with page.expect_download(timeout=120000) as started:
+        page.get_by_role("button", name="Verify SHA-256 and download DOCX").click()
+    download = started.value
+    out = io.BytesIO()
+    with open(download.path(), "rb") as fp:
+        while (chunk := fp.read(65536)):
+            out.write(chunk)
+            if out.tell() > 5_242_880:
+                raise RuntimeError("F6_DOWNLOADED_DOCX_OVERSIZED")
+    output = out.getvalue()
+    info = manifest["artifacts"]["docx"]
+    if len(output) != info["byte_length"] or hashlib.sha256(output).hexdigest() != info["sha256"]:
+        raise RuntimeError("F6_DOCX_SHA_MISMATCH")
+    document = Document(io.BytesIO(output))
+    paragraphs = [paragraph.text for paragraph in document.paragraphs]
+    if not any(expect_reference in line for line in paragraphs):
+        raise RuntimeError("F6_DRAFT_REFERENCE_LOST")
+    if not any("scoped review annotations" in line for line in paragraphs):
+        raise RuntimeError("F6_ANNOTATION_MISSING")
+    with ZipFile(io.BytesIO(output)) as archive:
+        if archive.testzip() is not None:
+            raise RuntimeError("F6_BROKEN_DOCX_MEMBER")
+        if any(name.startswith("word/embeddings/") for name in archive.namelist()):
+            raise RuntimeError("F6_UNSAFE_EMBEDDED_OUTPUT")
+    print("F6_GENUINE_SIGNED_DOCX_BYTES_FORMAT_AND_SHA256_REOPEN_PASSED", flush=True)
+
+    # Exact historical source URL. Both source bytes and their physical page
+    # are checked; a printed page '4' must not be confused with PDF page 4.
+    original_url = (scoped_base(case, brief)
+                    + f"/history/{snapshot}/sources/{pdf_version}/original")
+    source = page.request.get(
+        original_url, headers={"Authorization": captured["authorization"]},
+        timeout=90000,
+    )
+    if source.status != 200 or source.body() != pdf_original:
+        raise RuntimeError("F6_HISTORICAL_ORIGINAL_LINK_BYTES_MISMATCH")
+    pages = PdfReader(io.BytesIO(source.body())).pages
+    if len(pages) < 6 or "PRINTED PAGE 4" not in (pages[5].extract_text() or ""):
+        raise RuntimeError("F6_PHYSICAL_PAGE_6_PRINTED_4_MISMATCH")
+    if source.headers.get("x-caseproof-original-sha256") != hashlib.sha256(pdf_original).hexdigest():
+        raise RuntimeError("F6_HISTORICAL_SOURCE_HASH_UNBOUND")
+    print("F6_HISTORICAL_SOURCE_LINK_PRINTED4_PDF6_PASSED", flush=True)
+
+    return {
+        "release_id": receipt["release_id"],
+        "brief": brief, "snapshot": snapshot, "sha256": info["sha256"],
+        "bytes": output, "authorization": captured["authorization"],
+        "page": previous,
+    }
+
+
+def reopen_old(
+    page: Page, acceptance: WorkspaceBrowserAcceptance, *,
+    case: str, old: dict[str, Any], new: dict[str, Any],
+) -> None:
+    """Cold process and signed-browser readback of both immutable outputs."""
+    if old["release_id"] == new["release_id"] or old["snapshot"] == new["snapshot"] or old["brief"] == new["brief"]:
+        raise RuntimeError("F6_OLD_NEW_RELEASE_NOT_INDEPENDENT")
+    page.goto(old["page"])
+    acceptance.login(page)
+    expect(page.get_by_role("heading", name="Reviewed exports and history")).to_be_visible(timeout=90000)
+    expect(page.get_by_text("Frozen release history")).to_be_visible(timeout=90000)
+    selector = page.get_by_role("button", name="Select release " + old["release_id"][:8])
+    expect(selector).to_be_visible(timeout=90000)
+    selector.click()
+    with page.expect_download(timeout=120000) as download_info:
+        page.get_by_role("button", name="Verify SHA-256 and download DOCX").click()
+    with open(download_info.value.path(), "rb") as fd:
+        reopened = fd.read(5_242_881)
+    if reopened != old["bytes"] or hashlib.sha256(reopened).hexdigest() != old["sha256"]:
+        raise RuntimeError("F6_COLD_HISTORICAL_RELEASE_MUTATED")
+    print("F6_SIGNED_COLD_REOPEN_EXACT_OLD_EXPORT_BYTES_PASSED", flush=True)
+
+
+def deny_after_revocation(
+    page: Page, *, case: str, old: dict[str, Any]
+) -> None:
+    artifact = (
+        scoped_base(case, old["brief"])
+        + f"/releases/{old['release_id']}/artifacts/docx"
+    )
+    denied = page.request.get(
+        artifact, headers={"Authorization": old["authorization"]}, timeout=30000
+    )
+    if denied.status not in (403, 404):
+        raise RuntimeError("F6_REVOKED_EXPORT_REMAINED_READABLE")
+    print("F6_GENUINE_SIGNED_REVOKED_EXPORT_DENIED_PASSED", flush=True)

@@ -152,17 +152,25 @@ select public.caseproof_dossier_export_release(
     ),
     'contents',jsonb_build_object('json','eA==','markdown','eA==','docx','eA=='),
     'human_decisions','[]'::jsonb
-  )
+  ),'{owner}'
 );
 """
+    # A browser JWT with export permissions must still be unable to write
+    # signed release bytes directly via the published PostgreSQL function.
+    _run(actor(owner, release_attempt), env, should_pass=False)
+    trusted_release = (
+        "begin; set local role service_role;"
+        " set local request.jwt.claims='{\"role\":\"service_role\"}';"
+        + release_attempt + " commit;"
+    )
     try:
-        _run(actor(owner, release_attempt), env)
+        _run(trusted_release, env)
     except AssertionError as error:
         if "release capacity reached" not in str(error):
             raise
     else:
         raise AssertionError('release capacity did not fail closed')
-    print('F6_RELEASE_CAPACITY_DENIED_BEFORE_SNAPSHOT_PARSE_PASSED', flush=True)
+    print('F6_DIRECT_SIGNED_WRITE_DENIED_AND_CAPACITY_FENCED_PASSED', flush=True)
     print('F6_SEPARATE_EXPORT_GRANT_RLS_REVOKE_AND_RELEASE_RETENTION_FIXTURE_PASSED', flush=True)
     service = "set request.jwt.claims='{\"role\":\"service_role\"}'; "
     soft = f"select public.caseproof_soft_delete_matter('{case}')"
