@@ -42,6 +42,7 @@ export function CorrectionPanel({ api, scope, finding, originalSha }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [unknown, setUnknown] = useState(false);
+  const [previousSnapshot, setPreviousSnapshot] = useState<string | null>(null);
   const base = `/v2/matters/${encodeURIComponent(scope.caseId)}/briefs/${encodeURIComponent(scope.briefId)}/dossier`;
   const valid = sha.test(originalSha) && sha.test(scope.snapshot) &&
     /^\\d{1,6}$/.test(paragraph) && Number(paragraph) <= 100000 &&
@@ -74,6 +75,20 @@ export function CorrectionPanel({ api, scope, finding, originalSha }: {
         'Commit outcome unknown. Do not submit another correction. Reconcile with the authorized draft history.');
     } finally { setBusy(false); }
   }
+  async function reconcile() {
+    if (!command || busy) return;
+    setBusy(true);
+    try {
+      // Identical request ID and payload; backend first checks its durable reservation.
+      const result = commitReceipt(await api.post(`${base}/corrections/commit`, command));
+      setReceipt(result);
+      setUnknown(false);
+      setMessage('Exact correction reconciled against the durable activation receipt.');
+    } catch {
+      setUnknown(true);
+      setMessage('Durable outcome still unresolved. Do not create another correction.');
+    } finally { setBusy(false); }
+  }
   async function recheck() {
     if (!receipt || busy) return;
     setBusy(true);
@@ -81,6 +96,7 @@ export function CorrectionPanel({ api, scope, finding, originalSha }: {
       const raw = record(await api.post(`${base}/recheck`, {}));
       if (typeof raw.snapshot_hash !== 'string' || !sha.test(raw.snapshot_hash) ||
         raw.brief_id !== receipt.version_id) throw Error('Recheck binding mismatch');
+      setPreviousSnapshot(scope.snapshot);
       navigate(`/matters/${encodeURIComponent(scope.caseId)}/briefs/${encodeURIComponent(receipt.version_id)}?snapshot=${raw.snapshot_hash}`);
     } catch { setMessage('Recheck could not be confirmed. Reopen the activated draft from authorized history.'); }
     finally { setBusy(false); }
@@ -102,8 +118,9 @@ export function CorrectionPanel({ api, scope, finding, originalSha }: {
       <p className="small">Derivative SHA-256: {preview.derivative_sha256}</p>
       <Button disabled={busy || Boolean(command)} onClick={() => void commit()}>Explicitly commit and activate new draft</Button>
     </div>}
-    {unknown && <Notice error>Unknown write outcome. Automatic retry is disabled. Check durable history before further action.</Notice>}
+    {unknown && <><Notice error>Unknown write outcome. Automatic retry is disabled. Reconcile only the identical request.</Notice><Button disabled={busy} onClick={() => void reconcile()}>Reconcile identical operation</Button></>}
     {receipt && <Button disabled={busy} onClick={() => void recheck()}>Recheck activated draft</Button>}
+    {previousSnapshot && <p>Previous preserved report: {previousSnapshot}</p>}
     {message && <p role="status">{message}</p>}
   </section>;
 }
