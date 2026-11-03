@@ -1,9 +1,9 @@
 """Fail-closed DOCX story-region inventory. Discovery is not text extraction.
 
-Uses bounded ZIP metadata and stdlib XML; never executes embedded content.
+Uses bounded ZIP metadata and defused XML; never executes embedded content.
 A discovered region is not marked scanned by this inventory adapter.
 """
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
 from dataclasses import dataclass
 from enum import StrEnum
 from io import BytesIO
@@ -113,7 +113,7 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
                 xml = archive.read(info)
                 if b"<!DOCTYPE" in xml.upper() or b"<!ENTITY" in xml.upper():
                     return DocxCoverage(tuple(regions), True, "DTD_FORBIDDEN")
-                root = ET.fromstring(xml)
+                root = ET.fromstring(xml, forbid_dtd=True, forbid_entities=True, forbid_external=True)
                 revisions = any(node.tag in {
                     WORD_NS + "ins", WORD_NS + "del", WORD_NS + "moveFrom", WORD_NS + "moveTo"
                 } for node in root.iter())
