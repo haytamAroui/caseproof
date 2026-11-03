@@ -189,6 +189,30 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def correction_status(
+        self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
+    ) -> dict[str, Any]:
+        """Read durable operation status without repeating a consequential write."""
+        values = command.model_dump()
+        values.pop("request_id")
+        digest = hashlib.sha256(canonical({"case": case, "brief": brief, **values}).encode()).hexdigest()
+        status = self.revisions.reserve(
+            bearer, case, command.request_id, "status", {"command_sha256": digest}
+        )
+        state = status.get("state")
+        if state not in ("absent", "reserved", "active"):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if state in ("reserved", "active") and (
+            status.get("parent_snapshot_hash") != command.snapshot_hash
+            or status.get("reference_id") != command.reference_id
+            or status.get("parent_version_id") != brief
+        ):
+            raise HTTPException(409, "correction operation differs from command")
+        if state == "active":
+            return {"state": "active", "version_id": status["version_id"],
+                    "committed": True, "requires_recheck": True}
+        return {"state": state, "committed": False, "requires_recheck": state == "reserved"}
+
     def commit_correction(
         self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
     ) -> dict[str, Any]:
@@ -681,6 +705,16 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             "derivative_sha256": hashlib.sha256(derivative).hexdigest(),
             "content_base64": base64.b64encode(derivative).decode("ascii"),
         }
+
+    @router.post(base + "/corrections/status")
+    def correction_status(
+        case_id: str,
+        brief_id: str,
+        body: CorrectionCommitBody,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        s, bearer = active(authorization)
+        return s.correction_status(bearer, case_id, brief_id, body)
 
     @router.post(base + "/corrections/commit")
     def correction_commit(
