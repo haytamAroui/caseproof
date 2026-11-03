@@ -100,6 +100,18 @@ def reconfirm_corrected_bundle(
                             for row in payload.get("sources", [])
                             if isinstance(row, dict)
                         ),
+                        "unique_source_versions": len({
+                            row.get("version_id") for row in payload.get("sources", [])
+                            if isinstance(row, dict)
+                        }),
+                        "unique_source_names": len({
+                            row.get("filename") for row in payload.get("sources", [])
+                            if isinstance(row, dict)
+                        }),
+                        "all_entries_unbound": all(
+                            isinstance(row, dict) and row.get("source_version_id") is None
+                            for row in payload.get("entries", [])
+                        ),
                     }, sort_keys=True), flush=True)
                 except (ValueError, TypeError):
                     print("F6_CHANGED_INTAKE_CONTRACT_UNREADABLE", flush=True)
@@ -131,7 +143,32 @@ def reconfirm_corrected_bundle(
     # Rights-cleared inventory intentionally has four identities: Stuk 1,
     # Pièce 2, missing Stuk 3 and ambiguous Stuk 4. The final two must not
     # gain invented source identities just to make an export pass.
-    expect(bindings).to_have_count(4, timeout=15000)
+    try:
+        expect(bindings).to_have_count(4, timeout=15000)
+    except AssertionError:
+        # Report fixed UI-state categories after the request completes, not
+        # just the empty form state observed while React Query is loading.
+        # Never print browser HTML, inventory text, IDs or error bodies.
+        print("F6_INVENTORY_POST_READ_UI_" + json.dumps({
+            "selectors": bindings.count(),
+            "heading": heading.is_visible(),
+            "entry_count_4": page.get_by_text(
+                "Inventory entries (4)", exact=True,
+            ).is_visible(),
+            "loading": page.get_by_text(
+                "Reading inventory and current revision…", exact=True,
+            ).is_visible(),
+            "unavailable": page.get_by_text(
+                "Inventory is unavailable. No cached confirmation can be submitted.",
+                exact=True,
+            ).is_visible(),
+            "incomplete": page.get_by_text(
+                "Preserve all originals before confirming inventory.",
+                exact=True,
+            ).is_visible(),
+            "comboboxes": page.get_by_role("combobox").count(),
+        }, sort_keys=True), flush=True)
+        raise
     print("F6_INVENTORY_FOUR_SELECTOR_COUNT_CONFIRMED", flush=True)
     for index, expected in ((0, registered[2]["version_id"]),
                             (1, registered[3]["version_id"])):
