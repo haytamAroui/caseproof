@@ -82,8 +82,14 @@ export function CorrectionPanel({ api, scope, finding, originalSha }: {
     if (!command || busy) return;
     setBusy(true);
     try {
-      // Identical request ID and payload; backend first checks its durable reservation.
-      const result = commitReceipt(await api.post(`${base}/corrections/commit`, command));
+      // Read-only durable lookup: never replay an uncertain consequential write.
+      const status = record(await api.post(`${base}/corrections/status`, command));
+      if (status.state !== "active") {
+        setUnknown(true);
+        setMessage(status.state === "reserved" ? "Correction reserved but activation is not confirmed. Contact the workspace administrator for recovery." : "No durable activation found. Do not create another correction until the outcome is investigated.");
+        return;
+      }
+      const result = commitReceipt(status);
       setReceipt(result);
       setUnknown(false);
       setMessage('Exact correction reconciled against the durable activation receipt.');
