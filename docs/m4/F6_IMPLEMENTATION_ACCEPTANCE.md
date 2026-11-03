@@ -2,7 +2,7 @@
 
 **Engineering state:** F6 implementation candidate in [PR #178](https://github.com/haytamAroui/caseproof/pull/178). **Not customer-accepted, not authorized for confidential files, not approved for production.**
 
-**Authority:** [ROADMAP M4](../ROADMAP.md), [M4 delivery contract](DELIVERY_ACCEPTANCE.md), [frontend/BLUEPRINT.md §13/§23](../../frontend/BLUEPRINT.md), [workflow v3.1 S10–S11](../CASEPROOF_WORKFLOW_BLUEPRINT_V3_1.md). This document records evidence and does not create another roadmap, legal certification, new finding state, or mandatory Word channel.
+**Design decision:** [ADR 0032 — scoped reviewed release](../adr/0032-reviewed-release-and-historical-artifact-boundary.md).\n\n**Authority:** [ROADMAP M4](../ROADMAP.md), [M4 delivery contract](DELIVERY_ACCEPTANCE.md), [frontend/BLUEPRINT.md §13/§23](../../frontend/BLUEPRINT.md), [workflow v3.1 S10–S11](../CASEPROOF_WORKFLOW_BLUEPRINT_V3_1.md). This document records evidence and does not create another roadmap, legal certification, new finding state, or mandatory Word channel.
 
 ## Implementation boundary
 
