@@ -48,7 +48,7 @@ export function CorrectionPanel({ api, scope, finding, originalSha }: {
   const [previousSnapshot, setPreviousSnapshot] = useState<string | null>(null);
   const base = `/v2/matters/${encodeURIComponent(scope.caseId)}/briefs/${encodeURIComponent(scope.briefId)}/dossier`;
   const valid = sha.test(originalSha) && sha.test(scope.snapshot) &&
-    /^\\d{1,6}$/.test(paragraph) && Number(paragraph) <= 100000 &&
+    /^[0-9]{1,6}$/.test(paragraph) && Number(paragraph) <= 100000 &&
     before.length > 0 && before.length <= 4000 && after.length <= 4000 && before !== after;
   function invalidate() { setPreview(null); setCommand(null); setReceipt(null); setUnknown(false); setMessage(''); }
   const payload = () => ({
