@@ -5,7 +5,6 @@ const caseId = '11111111-1111-4111-8111-111111111111';
 const briefId = '22222222-2222-4222-8222-222222222222';
 const snapshot = 'a'.repeat(64);
 const digest = '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824';
-const releaseBase = '/v2/matters/' + caseId + '/briefs/' + briefId + '/dossier/releases';
 const workspace = '/workspace/matters/' + caseId + '/exports?brief=' + briefId + '&snapshot=' + snapshot;
 const preview = {
   schema: 'caseproof-release-preview-v1',
