@@ -13,6 +13,7 @@ from infrastructure.parsers.docx_structured_editing import (
     decide_document_revisions,
     edit_document_text,
     list_document_blocks,
+    list_document_revisions,
 )
 
 STAMP = "2026-11-04T20:00:00+00:00"
@@ -175,3 +176,62 @@ def test_revisions_must_have_exact_id_and_supported_markup():
             decisions=[DocumentRevisionDecision("word/document.xml", 1, "accept"),
                        DocumentRevisionDecision("word/document.xml", 1, "reject")],
         )
+
+
+def test_revision_inventory_exposes_hash_without_raw_confidential_text():
+    source = _draft()
+    target = next(b for b in list_document_blocks(source) if b.text == "Textbox evidence")
+    suggested = _apply(source, [_edit(target, "Confidential suggestion")])
+    rows = list_document_revisions(suggested)
+    assert len(rows) == 2
+    assert {r.kind for r in rows} == {"deleted", "inserted"}
+    assert [r.revision_id for r in rows] == [1, 2]
+    assert all(r.author == "Synthetic reviewer" and r.timestamp == STAMP for r in rows)
+    assert rows[1].text_sha256 == hashlib.sha256(b"Confidential suggestion").hexdigest()
+    assert "Confidential" not in repr(rows)
+
+
+def test_local_cli_never_overwrites_and_inspection_omits_text(tmp_path, capsys):
+    import json
+
+    from scripts.docx_local_editor import main
+    import sys
+
+    source = tmp_path / "original.docx"
+    source.write_bytes(_draft())
+    original_argv = sys.argv
+    try:
+        sys.argv = ["docx-editor", "inspect", "--input", str(source), "--list-targets"]
+        assert main() == 0
+        view = json.loads(capsys.readouterr().out)
+        assert view["schema"] == "caseproof-docx-local-inspection-v1"
+        assert view["targets"]
+        assert all("before" not in block for block in view["targets"])
+        block = next(b for b in view["targets"] if b["editable"] and b["kind"] == "body")
+        plan = tmp_path / "plan.json"
+        plan.write_text(json.dumps({
+            "schema": "caseproof-docx-local-edit-plan-v1",
+            "source_sha256": view["source_sha256"],
+            "author": "Local reviewer",
+            "timestamp": STAMP,
+            "edits": [{**{
+                "part": block["part"],
+                "paragraph_index": block["paragraph_index"],
+                "expected_text_sha256": block["expected_text_sha256"],
+                "before": "A plain paragraph",
+                "after": "A changed paragraph",
+                "track_changes": False,
+            }}],
+        }), encoding="utf-8")
+        derivative = tmp_path / "derivative.docx"
+        sys.argv = ["docx-editor", "edit", "--input", str(source),
+                    "--output", str(derivative), "--plan", str(plan)]
+        assert main() == 0
+        receipt = json.loads(capsys.readouterr().out)
+        assert receipt["activated"] is False
+        assert Document(io.BytesIO(derivative.read_bytes())).paragraphs[0].text == "A changed paragraph"
+        with pytest.raises(ValueError, match="never overwrite"):
+            main()
+        assert source.read_bytes() == _draft()
+    finally:
+        sys.argv = original_argv
