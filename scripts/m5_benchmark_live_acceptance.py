@@ -80,7 +80,11 @@ def crop(token, case, doc, version, box):
 def main(*, retention_check=None):
     if (
         os.getenv("CASEPROOF_PHASE3_LIVE") != "YES"
-        or os.getenv("GITHUB_REF") not in {"refs/heads/feat/final-hardening-and-verification", "refs/heads/feat/production-hardening"}
+        or os.getenv("GITHUB_REF") not in {
+            "refs/heads/feat/final-hardening-and-verification",
+            "refs/heads/feat/production-hardening",
+            "refs/heads/feat/p1-parser-acceptance",
+        }
         or os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof"
     ):
         raise RuntimeError("protected Phase 3 branch required")
