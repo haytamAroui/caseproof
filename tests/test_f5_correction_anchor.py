@@ -126,3 +126,42 @@ def test_anchor_accepts_reference_split_across_plain_formatted_runs():
     output = io.BytesIO()
     document.save(output)
     assert correction_anchor(output.getvalue(), finding(4, 10)) == 0
+
+
+def test_locator_identity_accepts_exact_paragraph_context():
+    from hashlib import sha256
+
+    original = docx('Before Stuk 1 after')
+    target = finding(7, 13)
+    target['locator_identity'] = {
+        'content_hash': sha256('Before Stuk 1 after'.encode()).hexdigest(),
+        'paragraph_id': None,
+        'prefix': 'Before ',
+        'suffix': ' after',
+        'occurrence_index': 0,
+    }
+    assert correction_anchor(original, target) == 0
+
+
+@pytest.mark.parametrize('change', [
+    {'content_hash': '0' * 64},
+    {'paragraph_id': 'DEADBEEF'},
+    {'prefix': 'Wrong '},
+    {'suffix': ' wrong'},
+    {'occurrence_index': 1},
+])
+def test_locator_identity_fails_closed_when_stale(change):
+    from hashlib import sha256
+
+    original = docx('Before Stuk 1 after')
+    target = finding(7, 13)
+    target['locator_identity'] = {
+        'content_hash': sha256('Before Stuk 1 after'.encode()).hexdigest(),
+        'paragraph_id': None,
+        'prefix': 'Before ',
+        'suffix': ' after',
+        'occurrence_index': 0,
+        **change,
+    }
+    with pytest.raises(ValueError):
+        correction_anchor(original, target)
