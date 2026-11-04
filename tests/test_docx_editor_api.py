@@ -208,3 +208,174 @@ def test_revocation_denies_read_and_preview_without_leaking_bytes():
     }, headers=HEADERS)
     assert candidate.status_code in (403, 404)
     assert b"Original paragraph" not in candidate.content
+
+
+REVIEW_ID = "11223344-1122-4122-8122-112233445566"
+COMMIT_ID = "55667788-5566-4566-8566-556677889900"
+
+
+def test_document_wide_review_commit_replay_and_integrity_with_disposable_adapter():
+    """Synthetic API integration, not genuine Supabase signed SQL acceptance."""
+    from fastapi import HTTPException
+
+    from apps.api.docx_editor_api import editor_command_sha256
+
+    api, store = client()
+    blocks = api.get(
+        f"{BASE}/blocks?snapshot_hash={SNAPSHOT}", headers=HEADERS
+    ).json()["blocks"]
+    original = store.original
+    selected = next(row for row in blocks if row["text"] == "Original table cell")
+    draft = command(original, selected, after="Reviewed table revision", track=False)
+    digest = editor_command_sha256(
+        "matter", "current",
+        __import__("apps.api.docx_editor_api", fromlist=["EditorCandidateBody"]).EditorCandidateBody(
+            **draft
+        ),
+    )
+
+    class Library:
+        files = {}
+        writes = 0
+
+        def put_once(self, *, data, bearer, case_id, document_id, version_id):
+            assert bearer == "signed" and case_id == "matter"
+            assert document_id == "document"
+            assert version_id == "derived"
+            assert version_id not in self.files
+            self.files[version_id] = data
+            self.writes += 1
+
+        def read(self, *, bearer, case_id, document_id, version_id):
+            assert bearer == "signed" and case_id == "matter"
+            assert document_id == "document"
+            if version_id == "current":
+                return original
+            return self.files[version_id]
+
+    class Client:
+        library = Library()
+
+    class Ledger:
+        verifier = Verifier()
+        approved = None
+        reserved = None
+        active = False
+
+        def editor_review(self, bearer, case, parent, snapshot, request, values):
+            assert bearer == "signed" and case == "matter" and parent == "current"
+            assert snapshot == SNAPSHOT and request == REVIEW_ID
+            assert values["command_sha256"] == digest
+            if self.approved is None:
+                self.approved = dict(values)
+            elif self.approved != values:
+                raise HTTPException(409, "review replay conflict")
+            return {
+                "state": "reviewed", "review_request_id": request,
+                "command_sha256": digest,
+                "candidate_sha256": values["candidate_sha256"],
+            }
+
+        def reserve(self, bearer, case, request, action, values):
+            assert bearer == "signed" and case == "matter"
+            assert action == "status" and request == COMMIT_ID
+            assert values["command_sha256"] == digest
+            if self.reserved is None:
+                return {"state": "absent"}
+            return {
+                **self.reserved,
+                "state": "active" if self.active else "reserved",
+            }
+
+        def editor_reserve(self, bearer, case, parent, snapshot, request, review, values):
+            assert bearer == "signed" and case == "matter"
+            assert parent == "current" and snapshot == SNAPSHOT
+            assert request == COMMIT_ID and review == REVIEW_ID
+            if self.approved is None:
+                raise HTTPException(409, "explicit document review required")
+            if values["command_sha256"] != digest:
+                raise HTTPException(409, "document command differs")
+            if values["candidate_sha256"] != self.approved["candidate_sha256"]:
+                raise HTTPException(409, "candidate content differs")
+            if self.reserved is None:
+                self.reserved = {
+                    "parent_version_id": "current",
+                    "parent_snapshot_hash": SNAPSHOT,
+                    "reference_id": "doc-edit:" + REVIEW_ID,
+                    "command_sha256": digest,
+                    "original_sha256": values["candidate_sha256"],
+                    "byte_length": values["byte_length"],
+                    "document_id": "document",
+                    "version_id": "derived",
+                }
+            return dict(self.reserved)
+
+        def activate(self, bearer, case, request, digest_value, size):
+            assert self.reserved is not None
+            assert digest_value == self.reserved["original_sha256"]
+            assert size == self.reserved["byte_length"]
+            self.active = True
+            store.active_version = "derived"
+            return {"state": "active", "version_id": "derived"}
+
+    store.revisions = Ledger()
+    store.client = Client()
+    review = {**draft, "review_request_id": REVIEW_ID,
+              "rationale": "I reviewed the whole synthetic draft change."}
+    commit = {**draft, "review_request_id": REVIEW_ID,
+              "request_id": COMMIT_ID}
+    missing = api.post(
+        f"{BASE}/commit", json=commit,
+        headers={**HEADERS, "Idempotency-Key": COMMIT_ID},
+    )
+    assert missing.status_code == 409
+    assert store.client.library.writes == 0
+    bad_review = api.post(
+        f"{BASE}/review", json=review,
+        headers={**HEADERS, "Idempotency-Key": COMMIT_ID},
+    )
+    assert bad_review.status_code == 422
+    saved = api.post(
+        f"{BASE}/review", json=review,
+        headers={**HEADERS, "Idempotency-Key": REVIEW_ID},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["persisted"] is True
+    assert saved.json()["activated"] is False
+    assert saved.json()["command_sha256"] == digest
+    assert store.client.library.writes == 0
+    again = api.post(
+        f"{BASE}/review", json=review,
+        headers={**HEADERS, "Idempotency-Key": REVIEW_ID},
+    )
+    assert again.status_code == 200
+    status = api.post(f"{BASE}/status", json=commit, headers=HEADERS)
+    assert status.status_code == 200 and status.json()["state"] == "absent"
+    committed = api.post(
+        f"{BASE}/commit", json=commit,
+        headers={**HEADERS, "Idempotency-Key": COMMIT_ID},
+    )
+    assert committed.status_code == 200
+    assert committed.json()["version_id"] == "derived"
+    assert committed.json()["requires_recheck"] is True
+    assert store.client.library.writes == 1
+    rewritten = Document(io.BytesIO(store.client.library.files["derived"]))
+    assert rewritten.tables[0].cell(0, 0).text == "Reviewed table revision"
+    assert Document(io.BytesIO(original)).tables[0].cell(0, 0).text == "Original table cell"
+    replay = api.post(
+        f"{BASE}/commit", json=commit,
+        headers={**HEADERS, "Idempotency-Key": COMMIT_ID},
+    )
+    assert replay.status_code == 200
+    assert replay.json()["reconciled"] is True
+    assert store.client.library.writes == 1
+    changed_command = {
+        **commit,
+        "edits": [{**commit["edits"][0], "after": "Unapproved variation"}],
+    }
+    conflict = api.post(
+        f"{BASE}/commit", json=changed_command,
+        headers={**HEADERS, "Idempotency-Key": COMMIT_ID},
+    )
+    assert conflict.status_code == 409
+    assert store.client.library.writes == 1
