@@ -11,7 +11,7 @@ import io
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from xml.dom import minidom
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -218,7 +218,7 @@ def list_document_revisions(original: bytes) -> tuple[DocumentRevision, ...]:
                     for child in txt.childNodes if child.nodeType == child.TEXT_NODE
                 )
                 output.append(DocumentRevision(
-                    part, int(raw_id), kind,
+                    part, int(raw_id), cast(Literal["inserted", "deleted"], kind),
                     node.getAttributeNS(W, "author")[:MAX_AUTHOR],
                     node.getAttributeNS(W, "date")[:64],
                     hashlib.sha256(value.encode()).hexdigest(),
