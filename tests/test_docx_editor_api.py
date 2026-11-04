@@ -4,12 +4,15 @@ from __future__ import annotations
 import hashlib
 import io
 from dataclasses import dataclass
+from zipfile import ZipFile
 
 from docx import Document
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from fastapi.responses import JSONResponse
 
 from apps.api.docx_editor_api import create_document_editor_router
+
 SNAPSHOT = "a" * 64
 DATE = "2026-11-04T20:00:00+00:00"
 BASE = "/v2/matters/matter/briefs/current/dossier/editor"
@@ -66,6 +69,14 @@ def client() -> tuple[TestClient, Store]:
     store = Store()
     app = FastAPI()
     app.include_router(create_document_editor_router(store))
+    from apps.api.access_control import AccessRejected
+
+    app.add_exception_handler(
+        AccessRejected,
+        lambda _request, _error: JSONResponse(
+            status_code=404, content={"detail": "unavailable"}
+        ),
+    )
     return TestClient(app), store
 
 
@@ -124,8 +135,10 @@ def test_tracking_preview_and_explicit_revision_decisions():
     proposed = command(store.original, paragraph, after="Proposed paragraph", track=True)
     response = api.post(f"{BASE}/candidate", json=proposed, headers=HEADERS)
     assert response.status_code == 200
-    assert b"w:delText" in response.content
-    assert b"w:ins" in response.content
+    with ZipFile(io.BytesIO(response.content)) as package:
+        xml = package.read("word/document.xml")
+    assert b"w:delText" in xml
+    assert b"w:ins" in xml
     # Fake storage swap just for a synthetic already-versioned draft.
     store.original = response.content
     revisions = api.get(f"{BASE}/revisions?snapshot_hash={SNAPSHOT}", headers=HEADERS)
