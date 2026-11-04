@@ -347,8 +347,6 @@ def _exercise() -> None:
             previous_url = page.url
             correction = page.get_by_role("region", name="Correction preview and recheck", exact=True)
             expect(correction.get_by_label("Exact original text")).to_be_visible(timeout=90000)
-            if table_correction:
-                expect(correction.get_by_text("Source-bound table-cell reference")).to_be_visible(timeout=90000)
             before = correction.get_by_label("Exact original text").input_value()
             if "1" not in before:
                 raise RuntimeError("F5_SYNTHETIC_REFERENCE_DIFFERS")
@@ -378,6 +376,8 @@ def _exercise() -> None:
             def lose_correction_ack(route: Route) -> None:
                 writes[0] += 1
                 correction_request.update(route.request.post_data_json)
+                if table_correction and correction_request.get("paragraph_index") != 50_000:
+                    raise RuntimeError("F5_SIGNED_TABLE_TARGET_NOT_BOUND")
                 for name in ('authorization', 'if-match', 'idempotency-key'):
                     correction_headers[name] = route.request.headers[name]
                 correction_base[0] = route.request.url.removesuffix('/corrections/commit')
