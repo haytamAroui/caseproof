@@ -560,7 +560,7 @@ test('a stale snapshot opens its preserved PDF in explicitly historical read-onl
 test('source-bound raster outlines align with pixels on mixed-size nonzero CropBoxes', async ({
   page,
 }) => {
-  const cropped = manifest.fixtures.find((item) => item.name === 'mixed_crop')!;
+  const cropped = manifest.fixtures.find((item) => item.name === 'mixedcrop')!;
   const crops = [
     [100, 150, 500, 700],
     [50, 100, 750, 550],
@@ -620,7 +620,7 @@ test('source-bound raster outlines align with pixels on mixed-size nonzero CropB
   await page.route('**/viewer/original', async (route) =>
     route.fulfill({
       body: await readFile(
-        'tests/viewer-comparison/generated/fixtures/mixed_crop.pdf',
+        'tests/viewer-comparison/generated/fixtures/mixedcrop.pdf',
       ),
       contentType: 'application/pdf',
       headers: {
