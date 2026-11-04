@@ -222,6 +222,53 @@ def _exercise() -> None:
         expect(page.get_by_text("Source page rendered.", exact=True)).to_be_visible(timeout=180000)
         print("F3_SIGNED_UPLOAD_CONFIRMED_PRINTED_4_PDF_6_REPORT_VIEWER_PASSED", flush=True)
         if os.getenv("CASEPROOF_F4_BROWSER_LIVE") == "YES":
+            # Verify newly exposed coverage sources against real signed access,
+            # not Playwright route mocks. All bytes belong to this run's owned
+            # synthetic dossier and must match the uploaded source exactly.
+            coverage = page.get_by_role("region", name="Verification and processing coverage")
+            coverage.get_by_text("DOCX region coverage", exact=True).click()
+            with page.expect_download(timeout=90000) as original_draft:
+                coverage.get_by_role(
+                    "button", name="Download preserved original DOCX"
+                ).click()
+            received = original_draft.value
+            if (received.suggested_filename != "caseproof-preserved-original.docx"
+                    or received.failure() is not None):
+                raise RuntimeError("P2_SIGNED_DOCX_DOWNLOAD_FAILED")
+            from pathlib import Path
+            if Path(received.path()).read_bytes() != bundle[0].content:
+                raise RuntimeError("P2_SIGNED_DOCX_DOWNLOAD_HASH_MISMATCH")
+
+            coverage.get_by_text("Source-page processing", exact=True).click()
+            unmatched = coverage.get_by_role(
+                "list", name="Source-page processing ledger"
+            ).locator("li").filter(
+                has_text="No mapped reference is available for this source page."
+            )
+            open_page = unmatched.first.get_by_role(
+                "button", name=re.compile(r"^Open preserved PDF page [0-9]+$")
+            )
+            expect(open_page).to_be_visible(timeout=90000)
+            label = open_page.inner_text()
+            page_match = re.fullmatch(r"Open preserved PDF page ([0-9]+)", label)
+            if not page_match:
+                raise RuntimeError("P2_SIGNED_UNMATCHED_PAGE_MISSING")
+            physical_page = int(page_match.group(1))
+            open_page.click()
+            preserved = coverage.get_by_role("region", name="Coverage original source")
+            expect(
+                preserved.get_by_text(
+                    f"Original PDF page {physical_page} rendered.", exact=False
+                )
+            ).to_be_visible(timeout=90000)
+            expect(
+                preserved.get_by_role(
+                    "img", name=f"Preserved original PDF page {physical_page}"
+                )
+            ).to_be_visible()
+            preserved.get_by_role("button", name="Close coverage original").click()
+            print("P2_GENUINE_SIGNED_UNMATCHED_COVERAGE_PDF_AND_DOCX_PASSED", flush=True)
+
             reviewer = page.get_by_role("region", name="Human review")
             expect(reviewer.get_by_role("heading", name="Human decision and durable receipt")).to_be_visible(timeout=60000)
             expect(page.get_by_role("heading", name="Preserved DOCX reference context")).to_be_visible()
