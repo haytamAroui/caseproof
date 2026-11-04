@@ -72,3 +72,27 @@ routing, data access, digest validation and fail-closed behavior. A real Word
 host installation, OAuth dialog, document save/reopen, coauthoring and
 cross-host compatibility have **not yet been verified**. This is not customer
 processing or a filing/release workflow. Do not use confidential files.
+
+## Local edited DOCX handoff (experimental, 4 November 2026)
+
+The development Word task pane now has a **Download edited DOCX candidate**
+action. The user may work in the actual Word editor with native paragraphs,
+tables, textboxes, styles and tracked changes, then explicitly request a local
+compressed DOCX copy via Office's sliced read API. The helper refuses files
+outside the 5 MiB intake envelope, calculates SHA-256 in browser memory, and
+downloads the bytes directly from the user's Word host. It makes **no network
+upload** and does not activate a version or grant any human/legal approval.
+
+The action is deliberately independent of CaseProof's evidence search and does
+not claim the edited document matches the preserved source or its current
+snapshot. The user must manually compare and arrange a separate authorized
+import, new-version activation, human review, and recheck. A locally downloaded
+file cannot be recalled by ending the web session. The existing Word test suite
+uses simulated Office APIs; a real desktop Word signed-host and round-trip
+acceptance remains open.
+
+This gives a **native Microsoft Word editing surface**, not a newly
+implemented Word-like web editor inside CaseProof. The experimental OOXML
+editing kernel is specified in
+[ADR 0033](../../docs/adr/0033-optional-word-editor-and-review-boundaries.md).
+No automatic import or privilege change is authorized.
