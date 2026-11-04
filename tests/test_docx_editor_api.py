@@ -10,11 +10,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.docx_editor_api import create_document_editor_router
-from infrastructure.parsers.docx_structured_editing import (
-    DocumentTextEdit,
-    edit_document_text,
-)
-
 SNAPSHOT = "a" * 64
 DATE = "2026-11-04T20:00:00+00:00"
 BASE = "/v2/matters/matter/briefs/current/dossier/editor"
