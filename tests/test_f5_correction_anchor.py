@@ -43,8 +43,9 @@ def test_table_content_is_not_guessed():
     document.add_table(rows=1, cols=1).cell(0, 0).text = 'Other'
     output = io.BytesIO()
     document.save(output)
-    with pytest.raises(ValueError):
-        correction_anchor(output.getvalue(), finding(0, 6))
+    assert correction_anchor(output.getvalue(), finding(0, 6)) == 0
+    with pytest.raises(ValueError, match='direct body'):
+        correction_anchor(output.getvalue(), finding(7, 12, 'Other'))
 
 
 def test_tracked_format_change_abstains():
@@ -57,3 +58,71 @@ def test_tracked_format_change_abstains():
     document.save(output)
     with pytest.raises(ValueError, match='tracked changes'):
         correction_anchor(output.getvalue(), finding(0, 6))
+
+
+def test_anchor_handles_unrelated_table_and_multiple_formatted_runs():
+    from hashlib import sha256
+
+    from infrastructure.parsers.dossier_docx_export import corrected_docx_preview
+
+    document = Document()
+    document.add_table(rows=1, cols=1).cell(0, 0).text = 'Table evidence'
+    unrelated = document.add_paragraph('Unrelated ')
+    unrelated.add_run('formatted').bold = True
+    document.add_paragraph('See Stuk 1 here')
+    output = io.BytesIO()
+    document.save(output)
+    raw = output.getvalue()
+    body = 'Table evidence\nUnrelated formatted\nSee Stuk 1 here'
+    start = body.index('Stuk 1')
+    index = correction_anchor(raw, finding(start, start + 6))
+    assert index == 1  # table paragraphs are not direct body paragraphs
+    corrected = corrected_docx_preview(raw, expected_sha256=sha256(raw).hexdigest(),
+                                      paragraph_index=index, before='Stuk 1', after='Stuk 2')
+    reopened = Document(io.BytesIO(corrected))
+    assert reopened.tables[0].cell(0, 0).text == 'Table evidence'
+    assert reopened.paragraphs[0].runs[1].bold is True
+    assert reopened.paragraphs[1].text == 'See Stuk 2 here'
+    assert Document(io.BytesIO(raw)).paragraphs[1].text == 'See Stuk 1 here'
+    from zipfile import ZipFile
+
+    with ZipFile(io.BytesIO(raw)) as source, ZipFile(io.BytesIO(corrected)) as derivative:
+        assert source.namelist() == derivative.namelist()
+        for member in source.namelist():
+            if member != 'word/document.xml':
+                assert source.read(member) == derivative.read(member)
+
+
+def test_table_target_is_not_confused_with_identical_direct_paragraph():
+    document = Document()
+    document.add_table(rows=1, cols=1).cell(0, 0).text = 'Stuk 1'
+    document.add_paragraph('Stuk 1')
+    output = io.BytesIO()
+    document.save(output)
+    original = output.getvalue()
+    with pytest.raises(ValueError, match='direct body'):
+        correction_anchor(original, finding(0, 6))
+    assert correction_anchor(original, finding(7, 13)) == 0
+
+
+def test_complex_target_stays_blocked_even_when_unrelated_content_is_supported():
+    document = Document()
+    document.add_table(rows=1, cols=1).cell(0, 0).text = 'Table'
+    target = document.add_paragraph('Stuk ')
+    target.add_run('1').bold = True
+    from docx.oxml import OxmlElement
+
+    target._p.append(OxmlElement('w:bookmarkStart'))
+    output = io.BytesIO()
+    document.save(output)
+    with pytest.raises(ValueError, match='unsupported target'):
+        correction_anchor(output.getvalue(), finding(6, 12))
+
+
+def test_anchor_accepts_reference_split_across_plain_formatted_runs():
+    document = Document()
+    paragraph = document.add_paragraph('See Stu')
+    paragraph.add_run('k 1').italic = True
+    output = io.BytesIO()
+    document.save(output)
+    assert correction_anchor(output.getvalue(), finding(4, 10)) == 0

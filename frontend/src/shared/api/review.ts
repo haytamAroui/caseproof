@@ -30,6 +30,7 @@ export function parseDraftExcerpt(
     briefId: string;
     snapshot: string;
     referenceId: string;
+    literal: string;
   },
 ): DraftExcerptView {
   if (!excerptValidator(value)) throw new ContractError();
@@ -44,7 +45,10 @@ export function parseDraftExcerpt(
         !value.region ||
         value.reason !== null ||
         value.selection_start >= value.selection_end ||
-        value.selection_end > value.excerpt.length)) ||
+        value.selection_end > Array.from(value.excerpt).length ||
+        Array.from(value.excerpt)
+          .slice(value.selection_start, value.selection_end)
+          .join('') !== expected.literal)) ||
     (!value.available &&
       (value.region !== null ||
         value.excerpt !== '' ||

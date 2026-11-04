@@ -92,12 +92,29 @@ describe('F4 generated Python to AJV/TypeScript reviewer contract parity', () =>
       selection_end: 13,
       reason: null,
     };
-    const expected = { ...scope, referenceId: command.reference_id };
+    const expected = {
+      ...scope,
+      referenceId: command.reference_id,
+      literal: 'Stuk 1',
+    };
     expect(parseDraftExcerpt(excerpt, expected).excerpt.slice(7, 13)).toBe(
       'Stuk 1',
     );
     expect(() =>
       parseDraftExcerpt({ ...excerpt, selection_end: 9999 }, expected),
+    ).toThrow();
+    const withAstral = {
+      ...excerpt,
+      excerpt: '😀 Stuk 1 after',
+      selection_start: 2,
+      selection_end: 8,
+    };
+    expect(parseDraftExcerpt(withAstral, expected).selection_start).toBe(2);
+    expect(() =>
+      parseDraftExcerpt({ ...withAstral, selection_start: 3 }, expected),
+    ).toThrow();
+    expect(() =>
+      parseDraftExcerpt({ ...withAstral, selection_end: 14 }, expected),
     ).toThrow();
     expect(() =>
       parseDraftExcerpt({ ...excerpt, reference_id: 'foreign' }, expected),

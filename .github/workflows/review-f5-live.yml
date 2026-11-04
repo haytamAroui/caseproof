@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f5-correction-recheck-workspace' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/f5-correction-recheck-workspace'))
+    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f5-correction-recheck-workspace' || (github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/f5-correction-recheck-workspace' || github.head_ref == 'feat/p2-p3-review-correction')))
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 20

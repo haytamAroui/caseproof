@@ -11,6 +11,7 @@ export function DraftContext({
   briefId,
   snapshot,
   referenceId,
+  literal,
   renderCorrection,
 }: {
   api: ApiClient;
@@ -18,6 +19,7 @@ export function DraftContext({
   briefId: string;
   snapshot: string;
   referenceId: string;
+  literal: string;
   renderCorrection: (originalSha: string) => ReactNode;
 }) {
   const session = useSession();
@@ -36,7 +38,7 @@ export function DraftContext({
           `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(briefId)}/dossier/snapshots/${snapshot}/references/${encodeURIComponent(referenceId)}/draft-context`,
           signal,
         ),
-        { caseId, briefId, snapshot, referenceId },
+        { caseId, briefId, snapshot, referenceId, literal },
       ),
     enabled: session.connected,
   });
@@ -66,14 +68,20 @@ export function DraftContext({
               {excerpt.data.original_sha256}
             </p>
             <p className="draft-quote">
-              {excerpt.data.excerpt.slice(0, excerpt.data.selection_start)}
+              {Array.from(excerpt.data.excerpt)
+                .slice(0, excerpt.data.selection_start)
+                .join('')}
               <mark>
-                {excerpt.data.excerpt.slice(
-                  excerpt.data.selection_start,
-                  excerpt.data.selection_end,
-                )}
+                {Array.from(excerpt.data.excerpt)
+                  .slice(
+                    excerpt.data.selection_start,
+                    excerpt.data.selection_end,
+                  )
+                  .join('')}
               </mark>
-              {excerpt.data.excerpt.slice(excerpt.data.selection_end)}
+              {Array.from(excerpt.data.excerpt)
+                .slice(excerpt.data.selection_end)
+                .join('')}
             </p>
             {renderCorrection(excerpt.data.original_sha256)}
           </>

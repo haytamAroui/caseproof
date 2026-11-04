@@ -38,7 +38,8 @@ def _exercise() -> None:
         "refs/pull/175/merge",
         "refs/pull/176/merge",
         "refs/pull/177/merge", "refs/heads/feat/f5-correction-recheck-workspace",
-        "refs/pull/178/merge", "refs/pull/182/merge", "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
+        "refs/pull/178/merge", "refs/pull/182/merge", "refs/pull/183/merge",
+        "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
     key, run, org = (
@@ -51,8 +52,18 @@ def _exercise() -> None:
     from reportlab.pdfgen import canvas
 
     document = Document()
-    document.add_paragraph("Zie Stuk 1, printed p. 4.")
+    if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
+        target = document.add_paragraph("😀 Zie Stu")
+        target.add_run("k 1, printed p. 4.").italic = True
+    else:
+        document.add_paragraph("Zie Stuk 1, printed p. 4.")
     document.add_paragraph("Voir Pièce 2, printed p. 7.")
+    if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
+        # Unrelated structures must not prevent a simple exact target. Keep the
+        # table free of references so existing source mappings stay unchanged.
+        document.add_table(rows=1, cols=1).cell(0, 0).text = "Synthetic background table"
+        background = document.add_paragraph("Unrelated ")
+        background.add_run("formatted text").bold = True
     draft = io.BytesIO()
     document.save(draft)
     bundle[0] = SyntheticSource(bundle[0].filename, bundle[0].role, bundle[0].media_type, draft.getvalue())
@@ -281,6 +292,8 @@ def _exercise() -> None:
             before = correction.get_by_label("Exact original text").input_value()
             if "1" not in before:
                 raise RuntimeError("F5_SYNTHETIC_REFERENCE_DIFFERS")
+            expect(page.get_by_role("region", name="Read-only draft reference").locator("mark")).to_have_text(before)
+            print("F5_UNICODE_EXCERPT_REFERENCE_MATCHED_PASSED", flush=True)
             _stage("EXACT_REFERENCE_PREVIEW")
             # F6's second release needs a newly checked *mapped* reference:
             # an edit to the reference's presentation preserves exhibit 1
@@ -328,6 +341,7 @@ def _exercise() -> None:
             if old_original.status != 200 or hashlib.sha256(old_original.body()).hexdigest() != hashlib.sha256(bundle[0].content).hexdigest():
                 raise RuntimeError("F5_ORIGINAL_CHANGED_OR_UNAVAILABLE")
             print("F5_SIGNED_ORIGINAL_SHA256_UNCHANGED_PASSED", flush=True)
+            print("F5_SPLIT_FORMATTED_REFERENCE_AND_UNRELATED_TABLE_CORRECTION_PASSED", flush=True)
             page.unroute("**/corrections/commit", lose_correction_ack)
             print("F5_SIGNED_PREVIEW_LOST_ACK_COMMIT_RECONCILE_RECHECK_COMPARE_PASSED", flush=True)
             _server_stop(proc)

@@ -286,7 +286,21 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
   await page.route('**/dossier/recheck', (route) => {
     expect(route.request().url()).toContain(`/briefs/${nextBrief}/`);
     return route.fulfill({
-      json: { ...report, brief_id: nextBrief, snapshot_hash: 'e'.repeat(64) },
+      json: {
+        ...report,
+        brief_id: nextBrief,
+        snapshot_hash: 'e'.repeat(64),
+        findings: [
+          {
+            ...finding,
+            identity_reason: 'SOURCE_CONFIRMED',
+            visual_assessment: {
+              ...finding.visual_assessment,
+              reason: 'source_scan_ocr_unavailable',
+            },
+          },
+        ],
+      },
     });
   });
   await page.route('**/dossier/history/*', (route) =>
@@ -319,6 +333,26 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
   ).toBeVisible();
   await expect(
     correction.getByRole('heading', { name: 'Rechecked report', exact: true }),
+  ).toBeVisible();
+  const counts = correction.getByRole('region', {
+    name: 'Comparison of check counts',
+  });
+  await expect(
+    counts.getByRole('row', { name: 'OCR unreliable 1 1' }),
+  ).toBeVisible();
+  await expect(
+    counts.getByText('They do not match references', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    correction.getByText('Visual assessment: source_scan_ocr_unavailable'),
+  ).toBeVisible();
+  await expect(
+    correction.getByRole('button', { name: 'Open ref-one in previous report' }),
+  ).toBeVisible();
+  await expect(
+    correction.getByRole('button', {
+      name: 'Open ref-one in rechecked report',
+    }),
   ).toBeVisible();
   expect(commits).toBe(1);
 });
@@ -386,4 +420,233 @@ test('correction commit is blocked without a durable actor-scoped review receipt
     }),
   ).toBeDisabled();
   expect(commits).toBe(0);
+});
+
+test('inspection and unsaved review never carry into another snapshot with the same reference', async ({
+  page,
+}) => {
+  const nextSnapshot = 'f'.repeat(64);
+  await page.route('**/dossier?*', (route) => {
+    const requested = new URL(route.request().url()).searchParams.get(
+      'snapshot_hash',
+    );
+    return route.fulfill({ json: { ...report, snapshot_hash: requested } });
+  });
+  await page.route('**/reviews?*', (route) => {
+    const requested = new URL(route.request().url()).searchParams.get(
+      'snapshot_hash',
+    );
+    return route.fulfill({
+      json: { ...ledger, snapshot_hash: requested, decisions: [] },
+    });
+  });
+  await page.route('**/viewer', (route) =>
+    route.request().url().includes(nextSnapshot)
+      ? route.fulfill({ status: 503, json: { error: 'unavailable' } })
+      : route.fallback(),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  const review = page.getByRole('region', { name: 'Human review' });
+  await review.getByRole('checkbox', { name: /Region 1/ }).check();
+  const rationale = review.getByLabel(
+    'Rationale (required, visible to authorized reviewers)',
+  );
+  await rationale.fill('Prior snapshot only');
+  await expect(
+    review.getByRole('button', { name: 'Save human decision' }),
+  ).toBeEnabled();
+  await page.evaluate((url) => {
+    history.pushState({}, '', url);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, `/workspace/matters/${caseId}/briefs/${brief}?snapshot=${nextSnapshot}`);
+  await expect(page.getByText(nextSnapshot, { exact: true })).toBeVisible();
+  await expect(rationale).toHaveValue('');
+  await expect(
+    review.getByRole('button', { name: 'Save human decision' }),
+  ).toBeDisabled();
+  await expect(
+    review.getByText('Open and inspect the preserved original', {
+      exact: false,
+    }),
+  ).toBeVisible();
+});
+
+test('draft excerpt highlights the exact reference after an astral Unicode character', async ({
+  page,
+}) => {
+  await page.route('**/draft-context', (route) =>
+    route.fulfill({
+      json: {
+        schema: 'caseproof-draft-excerpt-v1',
+        case_id: caseId,
+        brief_id: brief,
+        snapshot_hash: snapshot,
+        reference_id: 'ref-one',
+        original_sha256: 'b'.repeat(64),
+        available: true,
+        region: 'word/document.xml',
+        excerpt: '😀 Before Stuk 1 after',
+        selection_start: 9,
+        selection_end: 15,
+        reason: null,
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const context = page.getByRole('region', {
+    name: 'Read-only draft reference',
+  });
+  await expect(context.locator('mark')).toHaveText('Stuk 1');
+  await expect(context.getByText('😀 Before', { exact: false })).toBeVisible();
+});
+
+test('draft excerpt refuses a server selection that does not match the finding', async ({
+  page,
+}) => {
+  await page.route('**/draft-context', (route) =>
+    route.fulfill({
+      json: {
+        schema: 'caseproof-draft-excerpt-v1',
+        case_id: caseId,
+        brief_id: brief,
+        snapshot_hash: snapshot,
+        reference_id: 'ref-one',
+        original_sha256: 'b'.repeat(64),
+        available: true,
+        region: 'word/document.xml',
+        excerpt: 'Before Stuk 2 after',
+        selection_start: 7,
+        selection_end: 13,
+        reason: null,
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const context = page.getByRole('region', {
+    name: 'Read-only draft reference',
+  });
+  await expect(
+    context.getByText('Draft context unavailable', { exact: false }),
+  ).toBeVisible();
+  await expect(context.locator('mark')).toHaveCount(0);
+  await expect(
+    page.getByRole('region', { name: 'Correction preview and recheck' }),
+  ).toHaveCount(0);
+});
+
+test('coverage details distinguish regions and only navigate to an existing exact region', async ({
+  page,
+}) => {
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        findings: [
+          {
+            ...finding,
+            region: 'word/document.xml',
+            version_id: 'source',
+            source_sha256: 'a'.repeat(64),
+            pdf_page: 1,
+          },
+        ],
+        coverage: {
+          ...report.coverage,
+          source_pages_total: 2,
+          source_pages: [
+            {
+              version_id: 'source',
+              original_sha256: 'a'.repeat(64),
+              pdf_page: 1,
+              method: 'FAILED',
+              reason: 'ocr_unavailable',
+            },
+            {
+              version_id: 'source',
+              original_sha256: 'b'.repeat(64),
+              pdf_page: 1,
+              method: 'NOT_PROCESSED',
+              reason: 'outside_assessed_reference_scope',
+            },
+          ],
+          docx_regions: {
+            coverage_unknown: false,
+            regions: [
+              {
+                part: 'word/document.xml',
+                kind: 'MAIN_BODY',
+                status: 'SCANNED',
+                reason: 'TEXT_SCANNED_RECALL_UNMEASURED',
+              },
+              {
+                part: 'word/document.xml#structured',
+                kind: 'STRUCTURED_CONTENT',
+                status: 'UNSUPPORTED_REGION',
+                reason: 'UNSUPPORTED_STRUCTURED_CONTENT',
+              },
+            ],
+          },
+        },
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const coverage = page.getByRole('region', {
+    name: 'Verification and processing coverage',
+  });
+  await coverage.getByText('DOCX region coverage', { exact: true }).click();
+  await expect(
+    coverage.locator('p').filter({ hasText: 'UNSUPPORTED_STRUCTURED_CONTENT' }),
+  ).toBeVisible();
+  await expect(
+    coverage.getByRole('button', {
+      name: 'Open detected reference in this region',
+    }),
+  ).toHaveCount(1);
+  await expect(
+    coverage.getByText('No detected reference is available', { exact: false }),
+  ).toBeVisible();
+  await coverage.getByText('Source-page processing', { exact: true }).click();
+  await expect(
+    coverage.locator('p').filter({ hasText: 'ocr_unavailable' }),
+  ).toBeVisible();
+  await expect(
+    coverage.getByRole('button', {
+      name: 'Open reference on this source page',
+    }),
+  ).toHaveCount(1);
+  await expect(
+    coverage.getByText('No mapped reference is available', { exact: false }),
+  ).toBeVisible();
+});
+
+test('J and K move focus and selection across reference pages', async ({
+  page,
+}) => {
+  const findings = Array.from({ length: 51 }, (_, index) => ({
+    ...finding,
+    reference_id: `ref-${index + 1}`,
+    literal: `Stuk ${index + 1}`,
+  }));
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({ json: { ...report, findings } }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const queue = page.getByRole('region', { name: 'References' });
+  const last = queue.getByRole('button', { name: /^Stuk 50/ });
+  await last.focus();
+  await page.keyboard.press('j');
+  const next = queue.getByRole('button', { name: /^Stuk 51/ });
+  await expect(next).toBeFocused();
+  await expect(next).toHaveAttribute('aria-current', 'true');
+  await page.keyboard.press('k');
+  await expect(queue.getByRole('button', { name: /^Stuk 50/ })).toBeFocused();
 });
