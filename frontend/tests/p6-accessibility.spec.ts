@@ -42,12 +42,12 @@ test('P6 NL/FR/EN, keyboard, reflow, reduced motion, forced colors and axe', asy
   await page.setViewportSize({ width: 320, height: 700 });
   await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' });
   await expect(page.getByRole('heading', { name: 'Review the evidence' })).toBeVisible();
-  const english = page.getByRole('button', { name: examples[2] });
+  const english = page.getByRole('button', { name: examples[2]! });
   await english.focus();
   await expect(english).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(english).toHaveAttribute('aria-current', 'true');
-  await expect(page.getByRole('heading', { name: examples[2] })).toBeVisible();
+  await expect(page.getByRole('heading', { name: examples[2]! })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'none' });

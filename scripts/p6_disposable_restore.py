@@ -15,7 +15,6 @@ import psycopg
 
 from scripts.verify_s2_002_database import _env
 
-
 SOURCE = "caseproof_s2_ci"
 TARGET = "caseproof_p6_restore_ci"
 
