@@ -189,3 +189,19 @@ def test_locator_rejects_mismatched_exact_text_and_invalid_digest(override):
     }
     with pytest.raises(ValueError):
         correction_anchor(original, target)
+
+
+def test_locator_exact_text_matches_before_in_contract():
+    from apps.api.dossier_journey import CorrectionPreviewBody
+    from hashlib import sha256
+
+    base = dict(snapshot_hash='a' * 64, original_sha256='b' * 64,
+                reference_id='ref-1', paragraph_index=0, before='Stuk 1', after='Stuk 2')
+    identity = dict(exact_text='Stuk 1', prefix='Before ', suffix=' after',
+                    occurrence_index=0, content_hash=sha256(b'Before Stuk 1 after').hexdigest(),
+                    paragraph_id=None, source_version_id='version-1')
+    assert CorrectionPreviewBody.model_validate({**base, 'locator_identity': identity}).locator_identity is not None
+    with pytest.raises(ValueError):
+        CorrectionPreviewBody.model_validate({**base, 'locator_identity': {**identity, 'exact_text': 'Stuk 9'}})
+    with pytest.raises(ValueError):
+        CorrectionPreviewBody.model_validate({**base, 'locator_identity': {**identity, 'content_hash': 'z' * 64}})

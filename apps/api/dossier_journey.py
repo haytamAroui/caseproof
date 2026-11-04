@@ -127,6 +127,12 @@ class DocxLocatorIdentity(BaseModel):
 class CorrectionPreviewBody(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     locator_identity: DocxLocatorIdentity | None = None
+
+    @model_validator(mode="after")
+    def check_locator_correspondence(self) -> CorrectionPreviewBody:
+        if self.locator_identity is not None and self.locator_identity.exact_text != self.before:
+            raise ValueError("locator exact text differs from correction before text")
+        return self
     snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     original_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     reference_id: str = Field(min_length=1, max_length=256)
