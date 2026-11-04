@@ -667,4 +667,231 @@ test('J and K move focus and selection across reference pages', async ({
   await expect(next).toHaveAttribute('aria-current', 'true');
   await page.keyboard.press('k');
   await expect(queue.getByRole('button', { name: /^Stuk 50/ })).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('region', { name: 'Stuk 50' })).toBeFocused();
+  await expect(queue.getByRole('button', { name: /^Stuk 50/ })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+});
+
+test('coverage navigation reveals a filtered reference on its queue page', async ({
+  page,
+}) => {
+  const findings = Array.from({ length: 51 }, (_, index) => ({
+    ...finding,
+    reference_id: `ref-${index + 1}`,
+    literal: `Stuk ${index + 1}`,
+    region: index === 50 ? 'word/header1.xml' : 'word/document.xml',
+  }));
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        findings,
+        coverage: {
+          docx_regions: {
+            coverage_unknown: false,
+            regions: [
+              {
+                part: 'word/header1.xml',
+                kind: 'HEADER',
+                status: 'SCANNED',
+                reason: 'SCANNED',
+              },
+            ],
+          },
+        },
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await page
+    .getByLabel('Search reference text (this session only)')
+    .fill('Stuk 1');
+  const coverage = page.getByRole('region', {
+    name: 'Verification and processing coverage',
+  });
+  await coverage.getByText('DOCX region coverage', { exact: true }).click();
+  await coverage
+    .getByRole('button', { name: 'Open detected reference in this region' })
+    .click();
+  const queue = page.getByRole('region', { name: 'References' });
+  await expect(queue.getByRole('button', { name: /^Stuk 51/ })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+  await expect(
+    page.getByLabel('Search reference text (this session only)'),
+  ).toHaveValue('');
+  await expect(queue.getByRole('button', { name: 'Show all' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page
+    .getByLabel('Search reference text (this session only)')
+    .fill('not present');
+  await expect(
+    queue.getByText('The selected reference is outside this queue', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Stuk 51', exact: true }),
+  ).toBeVisible();
+});
+
+test('quotation and derived source text are separate and never rendered as markup', async ({
+  page,
+}) => {
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        findings: [
+          {
+            ...finding,
+            quoted_text: '<img src=x>',
+            source_text_context: 'Scanned text: <img src=x>',
+            source_text_context_partial: true,
+            translation_review_required: true,
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const context = page.getByRole('region', {
+    name: 'Quotation and derived source text',
+  });
+  await expect(context.getByText('<img src=x>', { exact: true })).toBeVisible();
+  await expect(context.getByText('Scanned text: <img src=x>')).toBeVisible();
+  await expect(
+    context.getByText('Translation requires human review', { exact: false }),
+  ).toBeVisible();
+  await expect(context.locator('img')).toHaveCount(0);
+  await context
+    .getByRole('button', { name: 'Highlight exact text occurrences' })
+    .click();
+  await expect(
+    context.getByText('1 exact occurrences', { exact: false }),
+  ).toBeVisible();
+  await expect(context.locator('mark')).toHaveText('<img src=x>');
+  await expect(context.locator('img')).toHaveCount(0);
+});
+
+test('attention filter retains qualified and contradicted human support', async ({
+  page,
+}) => {
+  const base = { ...finding, fidelity: 'exact_match' };
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        findings: [
+          {
+            ...base,
+            reference_id: 'supported',
+            literal: 'Supported',
+            support: 'supported',
+          },
+          {
+            ...base,
+            reference_id: 'qualified',
+            literal: 'Qualified',
+            support: 'qualified',
+          },
+          {
+            ...base,
+            reference_id: 'contradicted',
+            literal: 'Contradicted',
+            support: 'contradicted',
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const queue = page.getByRole('region', { name: 'References' });
+  await expect(queue.getByRole('button', { name: /^Qualified/ })).toBeVisible();
+  await expect(
+    queue.getByRole('button', { name: /^Contradicted/ }),
+  ).toBeVisible();
+  await expect(queue.getByRole('button', { name: /^Supported/ })).toHaveCount(
+    0,
+  );
+  await expect(
+    queue.getByText('2 need attention out of 3', { exact: false }),
+  ).toBeVisible();
+});
+
+test('next saved decision follows the active filtered queue', async ({
+  page,
+}) => {
+  const findings = [
+    finding,
+    {
+      ...finding,
+      reference_id: 'ref-clear',
+      literal: 'Stuk clear',
+      fidelity: 'exact_match',
+      support: 'supported',
+    },
+    { ...finding, reference_id: 'ref-next', literal: 'Stuk next' },
+  ];
+  await page.route('**/dossier/reviews', (route) => {
+    const command = route.request().postDataJSON() as {
+      reference_id: string;
+      request_id: string;
+      decision: 'CONFIRMED_QUALIFIED';
+      rationale: string;
+      reviewed_region_ids: string[];
+    };
+    ledger.decisions.push({
+      reference_id: command.reference_id,
+      request_id: command.request_id,
+      decision: command.decision,
+      rationale: command.rationale,
+      reviewed_region_ids: command.reviewed_region_ids,
+      reviewer_id: 'reviewer',
+      timestamp: '2026-11-02T17:00:00Z',
+    });
+    return route.abort('failed');
+  });
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({ json: { ...report, findings } }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const review = page.getByRole('region', { name: 'Human review' });
+  await review.getByRole('checkbox', { name: /Region 1/ }).check();
+  await review
+    .getByLabel('Rationale (required, visible to authorized reviewers)')
+    .fill('Viewed preserved pixels');
+  await review.getByRole('button', { name: 'Save human decision' }).click();
+  await review
+    .getByRole('button', { name: 'Reconcile durable receipt' })
+    .click();
+  await expect(
+    review.getByRole('button', { name: 'Save & Next finding' }),
+  ).toBeVisible();
+  await page
+    .getByLabel('Search reference text (this session only)')
+    .fill('Stuk 1');
+  await expect(
+    review.getByRole('button', { name: 'Save & Next finding' }),
+  ).toHaveCount(0);
+  await page.getByLabel('Search reference text (this session only)').clear();
+  await page.getByRole('button', { name: 'Save & Next finding' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Stuk next', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'References' })
+      .getByRole('button', { name: /^Stuk next/ }),
+  ).toHaveAttribute('aria-current', 'true');
 });

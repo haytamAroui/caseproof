@@ -144,6 +144,24 @@ def test_review_replay_returns_one_persisted_receipt_and_rejects_changed_input()
     assert client.post(route("reviews"), json=command, headers=mutation_headers).status_code == 404
 
 
+def test_review_refuses_unselected_or_invented_visual_regions():
+    store, client = rig()
+    command = {
+        "snapshot_hash": SNAP, "reference_id": REF, "request_id": str(uuid4()),
+        "decision": "CONFIRMED_QUALIFIED", "rationale": "Compared source",
+        "reviewed_region_ids": [],
+    }
+    headers = {**auth(), "If-Match": f"snapshot_id:{SNAP}", "Idempotency-Key": command["request_id"]}
+    assert client.post(route("reviews"), json=command, headers=headers).status_code == 409
+    assert store.rows == []
+    store.report["findings"][0]["visual_assessment"]["regions"] = []
+    command["reviewed_region_ids"] = ["c" * 64]
+    assert client.post(route("reviews"), json=command, headers=headers).status_code == 409
+    assert store.rows == []
+    command["reviewed_region_ids"] = []
+    assert client.post(route("reviews"), json=command, headers=headers).status_code == 200
+
+
 def test_review_request_and_ledger_reject_invented_decisions_or_timestamps():
     command = {"snapshot_hash": SNAP, "reference_id": REF, "request_id": str(uuid4()),
                "decision": "CONFIRMED_SUPPORTED", "rationale": "Inspected"}

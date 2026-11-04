@@ -47,7 +47,7 @@ export function ReviewPanel({
   scope: Scope;
   finding: FindingView;
   inspected: boolean;
-  onNext?: () => void;
+  onNext?: (() => void) | undefined;
 }) {
   const session = useSession();
   const controller = useSessionController();

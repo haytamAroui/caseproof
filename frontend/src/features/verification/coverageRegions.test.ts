@@ -72,5 +72,11 @@ describe('source-page coverage ledger', () => {
     expect(
       coveragePages({ source_pages: [row], source_pages_total: null }).unknown,
     ).toBe(true);
+    const inconsistent = coveragePages({
+      source_pages: [row],
+      source_pages_total: 2,
+    });
+    expect(inconsistent.invalid).toBe(true);
+    expect(inconsistent.unknown).toBe(true);
   });
 });

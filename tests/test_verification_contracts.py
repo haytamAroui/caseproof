@@ -16,6 +16,39 @@ from tests.test_phase4_headless_api import docx
 from tests.test_visual_dossier_api import DiskStore, client
 
 
+@pytest.mark.parametrize(('source', 'quote'), [
+    ('Payment of EUR 1,250 is due.', 'Payment of EUR 1,350 is due.'),
+    ('Payment of EUR 1,250 is due.', 'Payment of USD 1,250 is due.'),
+    ('Payment is due on 12 June 2026.', 'Payment is due on 13 June 2026.'),
+    ('Payment is not due.', 'Payment is due.'),
+])
+def test_substantive_quote_changes_do_not_become_exact_matches(source, quote):
+    finding = {
+        'quoted_text': quote,
+        'translation_review_required': False,
+        'visual_assessment': {'state': 'not_assessed', 'reason': 'uncalibrated_agreement'},
+        'support': 'not_assessed',
+    }
+    assess_fidelity(finding, {'layer_text': source})
+    assert finding['literal_assessment']['state'] == 'quote_not_found'
+    assert finding['fidelity'] != 'exact_match'
+    assert finding['support'] == 'not_assessed'
+
+
+def test_repeated_quote_and_unreliable_ocr_keep_distinct_uncertainty():
+    quote = 'Payment is due.'
+    finding = {
+        'quoted_text': quote,
+        'translation_review_required': False,
+        'visual_assessment': {'state': 'ocr_unreliable', 'reason': 'low_confidence'},
+        'support': 'not_assessed',
+    }
+    assess_fidelity(finding, {'layer_text': f'{quote} {quote}'})
+    assert finding['literal_assessment']['state'] == 'multiple_matches'
+    assert finding['fidelity'] == 'ocr_unreliable'
+    assert finding['support'] == 'not_assessed'
+
+
 def test_structured_hidden_and_nested_story_coverage_accounts_without_duplicate_references():
     payload = _docx(body=f'''<w:document xmlns:w="{NS}"><w:body>
       <w:p><w:r><w:t>Stuk 1.</w:t></w:r><w:txbxContent><w:p><w:r><w:t>Stuk 99.</w:t></w:r></w:p></w:txbxContent></w:p>

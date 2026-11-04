@@ -1157,7 +1157,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         if body.decision == "CONFIRMED_SUPPORTED" and finding["technical_check"] != "checked":
             raise HTTPException(409, "resolve identity and pinpoint before confirming support")
         required = {r["region_id"] for r in finding.get("visual_assessment", {}).get("regions", [])}
-        if required and set(body.reviewed_region_ids) != required:
+        if set(body.reviewed_region_ids) != required:
             raise HTTPException(409, "inspect and explicitly confirm every selected visual region")
         payload = body.model_dump(mode="json")
         return s.rpc(bearer, case_id, "review", payload)

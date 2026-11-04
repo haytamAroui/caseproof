@@ -556,3 +556,125 @@ test('a stale snapshot opens its preserved PDF in explicitly historical read-onl
     page.getByRole('button', { name: /export signed/i }),
   ).toHaveCount(0);
 });
+
+test('source-bound raster outlines align with pixels on mixed-size nonzero CropBoxes', async ({
+  page,
+}) => {
+  const cropped = manifest.fixtures.find((item) => item.name === 'mixed_crop')!;
+  const crops = [
+    [100, 150, 500, 700],
+    [50, 100, 750, 550],
+  ];
+  const regions = [
+    { bbox: [40, 460, 160, 500], image_size: [400, 550] },
+    { bbox: [90, 310, 210, 350], image_size: [700, 450] },
+  ];
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        findings: report.findings.map((item) => ({
+          ...item,
+          page_mapping: 'mapped',
+        })),
+      },
+    }),
+  );
+  await page.route('**/viewer', (route) => {
+    const second = route.request().url().includes('/r2/');
+    return route.fulfill({
+      json: {
+        ...view(second ? 'r2' : 'r1'),
+        original_sha256: cropped.sha256,
+        byte_length: cropped.bytes,
+        page_mapping: 'mapped',
+        pdf_page: second ? 2 : 1,
+      },
+    });
+  });
+  await page.route('**/viewer/regions', (route) => {
+    const index = route.request().url().includes('/r2/') ? 1 : 0;
+    return route.fulfill({
+      json: {
+        schema: 'caseproof-raster-overlays-v1',
+        snapshot_hash: snapshot,
+        original_sha256: cropped.sha256,
+        source_version_id: 'source',
+        interpretation: 'navigation_only_never_a_verdict',
+        unassessed_region_count: 0,
+        regions: [
+          {
+            region_id: 'c'.repeat(64),
+            original_sha256: cropped.sha256,
+            page_number: index + 1,
+            ...regions[index],
+            crop_box: crops[index],
+            rotation: 0,
+            user_unit: 1,
+            cropbox_rasterized: true,
+          },
+        ],
+      },
+    });
+  });
+  await page.route('**/viewer/original', async (route) =>
+    route.fulfill({
+      body: await readFile(
+        'tests/viewer-comparison/generated/fixtures/mixed_crop.pdf',
+      ),
+      contentType: 'application/pdf',
+      headers: {
+        'X-CaseProof-Snapshot': snapshot,
+        'X-CaseProof-Original-SHA256': cropped.sha256,
+      },
+    }),
+  );
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  for (let index = 0; index < 2; index++) {
+    if (index) await page.getByRole('button', { name: /^Stuk 2/ }).click();
+    await expect(
+      page.getByText(`PDF page ${index + 1} of 2`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('1 source-bound raster outline(s) aligned on this page.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    const box = regions[index]!;
+    const pixels = await page.locator('.viewer-page').evaluate((node, data) => {
+      const canvases = node.querySelectorAll('canvas');
+      const original = canvases[0] as HTMLCanvasElement;
+      const overlay = canvases[1] as HTMLCanvasElement;
+      const ctx = original.getContext('2d')!;
+      const over = overlay.getContext('2d')!;
+      const px = (x: number, width: number, total: number) =>
+        Math.round((x / total) * width);
+      const x1 = px(data.bbox[0]!, original.width, data.image_size[0]!);
+      const x2 = px(data.bbox[2]!, original.width, data.image_size[0]!);
+      const y1 = px(data.bbox[1]!, original.height, data.image_size[1]!);
+      const y2 = px(data.bbox[3]!, original.height, data.image_size[1]!);
+      const interior = ctx.getImageData(
+        Math.floor((x1 + x2) / 2),
+        Math.floor((y1 + y2) / 2),
+        1,
+        1,
+      ).data;
+      const nearby = over.getImageData(
+        Math.max(0, x1 - 3),
+        Math.max(0, y1 - 3),
+        7,
+        7,
+      ).data;
+      return {
+        dark: interior[0]! < 30 && interior[1]! < 30 && interior[2]! < 30,
+        outline: Array.from(nearby).some(
+          (value, at) => at % 4 === 3 && value > 0,
+        ),
+      };
+    }, box);
+    expect(pixels).toEqual({ dark: true, outline: true });
+  }
+});
