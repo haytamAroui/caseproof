@@ -245,6 +245,7 @@ def test_nested_table_target_abstains_without_guessing_a_parent_cell():
 def test_table_cell_writer_preserves_other_cells_and_source_bytes():
     from hashlib import sha256
     from zipfile import ZipFile
+
     from infrastructure.parsers.dossier_docx_export import corrected_docx_preview
 
     document = Document()
