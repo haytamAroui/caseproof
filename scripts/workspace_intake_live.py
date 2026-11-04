@@ -41,6 +41,7 @@ def _exercise() -> None:
         "refs/pull/178/merge", "refs/pull/182/merge", "refs/pull/183/merge", "refs/pull/184/merge",
         "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
         "refs/heads/feat/p5-p6-readability-drift-pilot", "refs/pull/185/merge", "refs/pull/187/merge", "refs/pull/189/merge",
+        "refs/pull/190/merge",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
     key, run, org = (
@@ -53,16 +54,25 @@ def _exercise() -> None:
     from reportlab.pdfgen import canvas
 
     document = Document()
-    if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
+    table_correction = os.getenv("CASEPROOF_F5_TABLE_CORRECTION") == "YES"
+    if table_correction and os.getenv("CASEPROOF_F5_BROWSER_LIVE") != "YES":
+        raise RuntimeError("TABLE_CORRECTION_REQUIRES_SIGNED_F5")
+    if table_correction:
+        document.add_paragraph("Unrelated introductory text")
+        cell = document.add_table(rows=1, cols=1).cell(0, 0)
+        target = cell.paragraphs[0]
+        target.add_run("😀 Zie Stu")
+        target.add_run("k 1, printed p. 4.").italic = True
+    elif os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
         target = document.add_paragraph("😀 Zie Stu")
         target.add_run("k 1, printed p. 4.").italic = True
     else:
         document.add_paragraph("Zie Stuk 1, printed p. 4.")
     document.add_paragraph("Voir Pièce 2, printed p. 7.")
     if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
-        # Unrelated structures must not prevent a simple exact target. Keep the
-        # table free of references so existing source mappings stay unchanged.
-        document.add_table(rows=1, cols=1).cell(0, 0).text = "Synthetic background table"
+        if not table_correction:
+            # Unrelated structures must not prevent a plain exact target.
+            document.add_table(rows=1, cols=1).cell(0, 0).text = "Synthetic background table"
         background = document.add_paragraph("Unrelated ")
         background.add_run("formatted text").bold = True
     draft = io.BytesIO()
@@ -337,6 +347,8 @@ def _exercise() -> None:
             previous_url = page.url
             correction = page.get_by_role("region", name="Correction preview and recheck", exact=True)
             expect(correction.get_by_label("Exact original text")).to_be_visible(timeout=90000)
+            if table_correction:
+                expect(correction.get_by_text("Source-bound table-cell reference")).to_be_visible(timeout=90000)
             before = correction.get_by_label("Exact original text").input_value()
             if "1" not in before:
                 raise RuntimeError("F5_SYNTHETIC_REFERENCE_DIFFERS")
@@ -408,7 +420,10 @@ def _exercise() -> None:
             if old_original.status != 200 or hashlib.sha256(old_original.body()).hexdigest() != hashlib.sha256(bundle[0].content).hexdigest():
                 raise RuntimeError("F5_ORIGINAL_CHANGED_OR_UNAVAILABLE")
             print("F5_SIGNED_ORIGINAL_SHA256_UNCHANGED_PASSED", flush=True)
-            print("F5_SPLIT_FORMATTED_REFERENCE_AND_UNRELATED_TABLE_CORRECTION_PASSED", flush=True)
+            if table_correction:
+                print("F5_GENUINE_SIGNED_TABLE_CELL_PREVIEW_COMMIT_RECHECK_PASSED", flush=True)
+            else:
+                print("F5_SPLIT_FORMATTED_REFERENCE_AND_UNRELATED_TABLE_CORRECTION_PASSED", flush=True)
             page.unroute("**/corrections/commit", lose_correction_ack)
             replay = page.request.post(
                 correction_base[0] + '/corrections/commit', data=correction_request, headers=correction_headers,
