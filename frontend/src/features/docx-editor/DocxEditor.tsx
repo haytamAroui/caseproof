@@ -613,6 +613,56 @@ export function DocxEditor({ api }: { api: ApiClient }) {
         </aside>
       </div>
       {prepared && (
+        <section className="docx-approval" aria-label="Document-wide review and activation">
+          <h2>Document-wide review and activation</h2>
+          <p>These consequential actions require an independently approved, actor-scoped document-review database contract. If it is unavailable, CaseProof refuses the request and preserves the original.</p>
+          <label htmlFor="docx-approval-rationale">Human review rationale (required)</label>
+          <textarea
+            id="docx-approval-rationale"
+            rows={3}
+            minLength={10}
+            maxLength={2000}
+            value={rationale}
+            disabled={busy || reviewSaved || Boolean(committedVersion)}
+            onChange={(event) => {
+              setRationale(event.target.value);
+              setReviewId(null);
+              setReviewSaved(false);
+              setCommitId(null);
+              setCommitUnknown(false);
+            }}
+          />
+          <div className="docx-approval-actions">
+            <button
+              disabled={busy || reviewSaved || rationale.trim().length < 10 || Boolean(committedVersion)}
+              onClick={() => void saveDocumentReview()}
+            >
+              {reviewId ? 'Reconcile exact review request' : 'Save document-wide human review'}
+            </button>
+            <button
+              disabled={busy || !reviewSaved || Boolean(committedVersion)}
+              onClick={() => void commitDocumentEdit()}
+            >
+              {commitUnknown ? 'Retry identical commit' : 'Commit reviewed new draft'}
+            </button>
+            <button
+              disabled={busy || !reviewSaved || !commitId || Boolean(committedVersion)}
+              onClick={() => void reconcileDocumentEdit()}
+            >
+              Reconcile durable commit status
+            </button>
+            <button
+              disabled={busy || !committedVersion}
+              onClick={() => void recheckActivatedDraft()}
+            >
+              Recheck activated draft
+            </button>
+          </div>
+          {reviewSaved && <p role="status">Saved document-wide review confirmed.</p>}
+          {committedVersion && <p className="docx-mono">Activated version: {committedVersion}</p>}
+        </section>
+      )}
+      {prepared && (
         <section className="docx-preview-receipt" aria-label="Candidate preview receipt">
           <h2>Prepared derivative</h2>
           <p>{prepared.receipt.operations_count} operation(s), {prepared.receipt.derivative_byte_length.toLocaleString()} bytes</p>
