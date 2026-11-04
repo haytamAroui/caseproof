@@ -270,7 +270,7 @@ export function CorrectionPanel({
       );
     } catch (e) {
       if (e instanceof ApiError && e.status === 412) {
-        setCommand(null);
+        setUnknown(true);
         setPreview(null);
         setStale(true);
         return;

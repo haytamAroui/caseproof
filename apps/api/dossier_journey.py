@@ -21,7 +21,7 @@ from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
 from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
-from apps.api.dossier_draft_revisions import DraftRevisionClient
+from apps.api.dossier_draft_revisions import DraftRevisionClient, stale_snapshot_conflict
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
 from apps.api.litigation_live_journey import HOST, JourneyClient
@@ -141,6 +141,17 @@ class CorrectionPreviewBody(BaseModel):
     after: str = Field(max_length=4000)
 
 
+def reopen_for_mutation(
+    store: DossierStore, bearer: str, case: str, brief: str, snapshot: str
+) -> tuple[dict[str, Any], bytes]:
+    try:
+        return store.reopen(bearer, case, brief, snapshot)
+    except HTTPException as exc:
+        if exc.status_code == 409:
+            raise HTTPException(412, "snapshot is stale") from None
+        raise
+
+
 def validate_correction_target(
     original: bytes, finding: dict[str, Any], brief: str, command: CorrectionPreviewBody
 ) -> None:
@@ -213,6 +224,8 @@ class DossierStore:
         if status in (400, 401, 403, 404):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         if status == 409:
+            if action == "review" and stale_snapshot_conflict(raw):
+                raise HTTPException(412, "snapshot is stale")
             raise HTTPException(409, "stale dossier or idempotency conflict")
         if status != 200 or len(raw) > 4_000_000:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -371,9 +384,9 @@ class DossierStore:
             # predicate transactionally. This API gate prevents bypassing the review
             # receipt even if the browser sends a direct commit.
             self.correction_review_receipt(bearer, case, brief, command.snapshot_hash, command.reference_id)
-            report, original = self.reopen(bearer, case, brief, command.snapshot_hash)
+            report, original = reopen_for_mutation(self, bearer, case, brief, command.snapshot_hash)
             if report["snapshot_hash"] != command.snapshot_hash:
-                raise HTTPException(409, "stale dossier correction")
+                raise HTTPException(412, "snapshot is stale")
             finding = next((f for f in report["findings"] if f["reference_id"] == command.reference_id), None)
             if finding is None:
                 raise HTTPException(422, "unknown correction reference")
@@ -882,9 +895,9 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         s, bearer = active(authorization)
         if if_match != "snapshot_id:" + body.snapshot_hash:
             raise HTTPException(412, "snapshot precondition required")
-        report, original = s.reopen(bearer, case_id, brief_id, body.snapshot_hash)
+        report, original = reopen_for_mutation(s, bearer, case_id, brief_id, body.snapshot_hash)
         if report["snapshot_hash"] != body.snapshot_hash:
-            raise HTTPException(409, "stale dossier correction")
+            raise HTTPException(412, "snapshot is stale")
         finding = next((f for f in report["findings"] if f["reference_id"] == body.reference_id), None)
         if finding is None:
             raise HTTPException(422, "unknown correction reference")
@@ -1095,9 +1108,11 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             raise HTTPException(412, "snapshot precondition required")
         if idempotency_key != str(body.request_id):
             raise HTTPException(422, "idempotency key must match durable review request")
-        report, _ = s.reopen(bearer, case_id, brief_id, body.snapshot_hash)
+        report, _ = reopen_for_mutation(s, bearer, case_id, brief_id, body.snapshot_hash)
         finding = next((f for f in report["findings"] if f["reference_id"] == body.reference_id), None)
-        if report["snapshot_hash"] != body.snapshot_hash or finding is None:
+        if report["snapshot_hash"] != body.snapshot_hash:
+            raise HTTPException(412, "snapshot is stale")
+        if finding is None:
             raise HTTPException(409, "stale or unknown finding")
         if body.decision == "CONFIRMED_SUPPORTED" and finding["technical_check"] != "checked":
             raise HTTPException(409, "resolve identity and pinpoint before confirming support")

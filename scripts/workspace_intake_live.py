@@ -325,10 +325,28 @@ def _exercise() -> None:
                 if response.status != 200:
                     raise RuntimeError("F5_COMMIT_REJECTED")
                 route.abort("failed")
-            page.route("**/corrections/commit", lose_correction_ack)
-            _stage("COMMIT_ACTIVATE")
-            correction.get_by_role("button", name="Explicitly commit and activate new draft").click()
-            correction.get_by_role("button", name="Reconcile identical operation").click(timeout=180000)
+            stale_context = acceptance.browser.new_context()
+            try:
+                stale_page = stale_context.new_page()
+                stale_page.goto(previous_url)
+                acceptance.login(stale_page)
+                stale_panel = stale_page.get_by_role("region", name="Correction preview and recheck", exact=True)
+                stale_panel.get_by_label("Replacement text").fill(replacement, timeout=90000)
+                stale_preview = stale_panel.get_by_role("button", name="Validate exact preview")
+                expect(stale_preview).to_be_enabled(timeout=90000)
+                page.route("**/corrections/commit", lose_correction_ack)
+                _stage("COMMIT_ACTIVATE")
+                correction.get_by_role("button", name="Explicitly commit and activate new draft").click()
+                correction.get_by_role("button", name="Reconcile identical operation").click(timeout=180000)
+                with stale_page.expect_response(lambda r: r.url.endswith("/corrections/preview")) as response:
+                    stale_preview.click()
+                if response.value.status != 412:
+                    raise RuntimeError("F5_SIGNED_SECOND_SESSION_EXPECTED_412")
+                expect(stale_panel.get_by_role("alert")).to_have_text("Stale draft. Reopen the current report.")
+                expect(stale_preview).to_be_disabled()
+                print("F5_SIGNED_SECOND_SESSION_STALE_RECOVERY_PASSED", flush=True)
+            finally:
+                stale_context.close()
             _stage("RECHECK_COMPARE")
             correction.get_by_role("button", name="Recheck activated draft", exact=True).click(timeout=90000)
             expect(correction.get_by_role("heading", name="Previous report", exact=True)).to_be_visible(timeout=180000)
@@ -361,7 +379,7 @@ def _exercise() -> None:
                 data={key: value for key, value in correction_request.items() if key != 'request_id'},
                 headers=correction_headers,
             )
-            if stale.status not in (409, 412):
+            if stale.status != 412:
                 raise RuntimeError("F5_SIGNED_OLD_SNAPSHOT_PREVIEW_NOT_REJECTED")
             print("F5_SIGNED_PREVIEW_LOST_ACK_COMMIT_RECONCILE_RECHECK_COMPARE_PASSED", flush=True)
             _server_stop(proc)
