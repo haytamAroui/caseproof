@@ -15,10 +15,14 @@ DOCUMENT = (b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocess
             b'<w:body><w:p><w:r><w:t>Stuk 1</w:t></w:r></w:p></w:body></w:document>')
 
 
-def _package(document: bytes = DOCUMENT, relationships: bytes = b'<Relationships/>') -> bytes:
+def _package(
+    document: bytes = DOCUMENT,
+    relationships: bytes = b'<Relationships/>',
+    content_types: bytes = b'<Types/>',
+) -> bytes:
     stream = BytesIO()
     with ZipFile(stream, 'w', compression=ZIP_DEFLATED) as archive:
-        archive.writestr('[Content_Types].xml', b'<Types/>')
+        archive.writestr('[Content_Types].xml', content_types)
         archive.writestr('word/document.xml', document)
         archive.writestr('_rels/.rels', relationships)
     return stream.getvalue()
@@ -51,3 +55,12 @@ def test_hostile_relationships_are_rejected_in_worker(relationships: bytes) -> N
 def test_hostile_document_xml_is_rejected_in_worker(document: bytes) -> None:
     with pytest.raises(ExtractionError, match='document_parse_rejected'):
         LimitedDocumentParser().parse(_source(_package(document=document)))
+
+@pytest.mark.parametrize('content_types', [
+    b'<Types',
+    b'<!DOCTYPE Types [<!ENTITY type "synthetic">]><Types>&type;</Types>',
+    b'<Types>' + b'<a>' * 256 + b'</a>' * 256 + b'</Types>',
+])
+def test_hostile_content_types_are_rejected_in_worker(content_types: bytes) -> None:
+    with pytest.raises(ExtractionError, match='document_parse_rejected'):
+        LimitedDocumentParser().parse(_source(_package(content_types=content_types)))
