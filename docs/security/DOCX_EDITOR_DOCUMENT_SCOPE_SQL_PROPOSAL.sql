@@ -19,7 +19,7 @@ create table caseproof.dossier_document_edit_reviews (
   original_sha256 text not null check (original_sha256 ~ '^[0-9a-f]{64}$'),
   command_sha256 text not null check (command_sha256 ~ '^[0-9a-f]{64}$'),
   candidate_sha256 text not null check (candidate_sha256 ~ '^[0-9a-f]{64}$'),
-  rationale text not null check (length(rationale) between 10 and 2000),
+  rationale text not null check (length(btrim(rationale)) between 10 and 2000),
   created_at timestamptz not null default clock_timestamp(),
   primary key (org_id, case_id, actor_id, request_id),
   foreign key (org_id, case_id) references caseproof.cases(org_id, id) on delete cascade,
@@ -49,7 +49,7 @@ begin
     or p_data->>'original_sha256' !~ '^[0-9a-f]{64}$'
     or p_data->>'command_sha256' !~ '^[0-9a-f]{64}$'
     or p_data->>'candidate_sha256' !~ '^[0-9a-f]{64}$'
-    or length(coalesce(p_data->>'rationale','')) not between 10 and 2000
+    or length(btrim(coalesce(p_data->>'rationale',''))) not between 10 and 2000
   then raise exception 'unavailable' using errcode='42501'; end if;
 
   select c.org_id into o from caseproof.cases c
