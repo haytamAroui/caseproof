@@ -487,10 +487,9 @@ export function CorrectionPanel({
       )}
       {anchor.data && (
         <p className="small" role="status">
-          Verified target: {anchor.data.paragraph_index >= 50_000
-            ? 'simple top-level DOCX table cell'
-            : 'main-body DOCX paragraph'}. The target is bound to the
-          preserved source and snapshot.
+          {anchor.data.paragraph_index >= 50_000
+            ? 'Source-bound table-cell reference'
+            : 'Source-bound body-paragraph reference'}
         </p>
       )}
       <fieldset disabled={busy || Boolean(command)}>
