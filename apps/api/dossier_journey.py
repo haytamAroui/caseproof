@@ -111,8 +111,22 @@ class VerificationOptions(BaseModel):
     source_languages: dict[str, Literal["nl", "fr", "en", "de"]] = Field(default_factory=dict, max_length=32)
 
 
+class DocxLocatorIdentity(BaseModel):
+    """Version-bound identity for an exact editable DOCX paragraph."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    exact_text: str = Field(min_length=1, max_length=4000)
+    prefix: str = Field(max_length=4000)
+    suffix: str = Field(max_length=4000)
+    occurrence_index: int = Field(ge=0, le=100000)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    paragraph_id: str | None = Field(default=None, pattern=r"^[0-9A-Fa-f]{8}$")
+    source_version_id: str = Field(min_length=1, max_length=256)
+
+
 class CorrectionPreviewBody(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+    locator_identity: DocxLocatorIdentity | None = None
     snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     original_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     reference_id: str = Field(min_length=1, max_length=256)
