@@ -75,6 +75,35 @@ class DraftRevisionClient:
                          {'p_case': case, 'p_parent': parent, 'p_snapshot': snapshot, 'p_reference': reference},
                          key=self.key, bearer=bearer)
 
+    def editor_review(
+        self, bearer: str, case: str, parent: str, snapshot: str,
+        review_request: str, values: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Separate actor-scoped whole-DOCX review, never a synthetic finding."""
+        return self._rpc(
+            'caseproof_dossier_document_edit_review',
+            {
+                'p_case': case, 'p_parent': parent, 'p_snapshot': snapshot,
+                'p_request': review_request, 'p_data': values,
+            },
+            key=self.key, bearer=bearer,
+        )
+
+    def editor_reserve(
+        self, bearer: str, case: str, parent: str, snapshot: str,
+        request: str, review_request: str, values: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Atomically require a separately saved, actor-bound review receipt."""
+        return self._rpc(
+            'caseproof_dossier_document_edit_reserve',
+            {
+                'p_case': case, 'p_parent': parent, 'p_snapshot': snapshot,
+                'p_request': request, 'p_review': review_request,
+                'p_data': values,
+            },
+            key=self.key, bearer=bearer,
+        )
+
     def activate(self, bearer: str, case: str, request: str, digest: str, size: int) -> dict[str, Any]:
         key = self.trusted_key
         if not key:
