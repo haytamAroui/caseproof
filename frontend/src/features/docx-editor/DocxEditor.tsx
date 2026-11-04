@@ -98,7 +98,7 @@ function parseBlocks(
       typeof row.editable !== 'boolean'
     )
       throw Error('One or more editor blocks are invalid.');
-    return row as Block;
+    return row as unknown as Block;
   });
   return {
     original_sha256: v.original_sha256,
@@ -135,7 +135,7 @@ function parseRevisions(x: unknown, briefId: string, snapshot: string, original:
       !sha.test(r.text_sha256)
     )
       throw Error('Word revision identity is invalid.');
-    return r as Revision;
+    return r as unknown as Revision;
   });
 }
 function parsePreview(x: unknown, command: Command, briefId: string): Preview {
@@ -223,7 +223,7 @@ export function DocxEditor({ api }: { api: ApiClient }) {
       return [] as Revision[];
     }
   })();
-  const revisionMismatch = revisions.isSuccess && source.isSuccess &&
+  const revisionMismatch = revisions.isSuccess && source.data !== undefined &&
     (() => {
       try {
         parseRevisions(revisions.data, briefId, snapshot, source.data.original_sha256);
@@ -337,7 +337,7 @@ export function DocxEditor({ api }: { api: ApiClient }) {
   if (source.isError) return <Notice error>{source.error.message}</Notice>;
 
   return (
-    <main className="docx-editor" aria-label="Structured Word candidate editor">
+    <section className="docx-editor" aria-label="Structured Word candidate editor">
       <header className="docx-editor-heading">
         <div>
           <p className="docx-eyebrow">CaseProof · DOCX candidate workspace</p>
@@ -477,6 +477,6 @@ export function DocxEditor({ api }: { api: ApiClient }) {
           <p><strong>Not committed.</strong> Source SHA-256 and frozen snapshot remain unchanged.</p>
         </section>
       )}
-    </main>
+    </section>
   );
 }
