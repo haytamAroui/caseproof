@@ -85,17 +85,6 @@ jobs:
           npm audit --json > "$RUNNER_TEMP/caseproof-all-audit.json" || test "$?" -eq 1
           npm audit --omit=dev --json > "$RUNNER_TEMP/caseproof-production-audit.json" || test "$?" -eq 1
           node scripts/p6-dependency-audit.mjs "$RUNNER_TEMP/caseproof-all-audit.json" "$RUNNER_TEMP/caseproof-production-audit.json"
-      - name: Temporary formatting diagnostics for changed P6 sources
-        working-directory: frontend
-        run: |
-          echo P6_FORMATTED_AUDIT_BEGIN
-          npx prettier scripts/p6-dependency-audit.mjs | base64 -w0
-          echo
-          echo P6_FORMATTED_AUDIT_END
-          echo P6_FORMATTED_A11Y_BEGIN
-          npx prettier tests/p6-accessibility.spec.ts | base64 -w0
-          echo
-          echo P6_FORMATTED_A11Y_END
       - name: Ensure no external package data is uploaded as an artifact
         run: echo "Only sanitized package/severity findings are emitted into job logs."
 

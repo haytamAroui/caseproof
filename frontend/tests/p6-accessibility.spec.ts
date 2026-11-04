@@ -10,16 +10,27 @@ const examples = [
   'Exhibit A — This English reference is unsupported; a human must review the source and no verified identity may be inferred.',
 ];
 const report = {
-  schema: 'caseproof-dossier-v1', case_id: matter, brief_id: brief,
+  schema: 'caseproof-dossier-v1',
+  case_id: matter,
+  brief_id: brief,
   snapshot_hash: snapshot,
-  coverage: { references_detected: 3, references_not_assessed: 2, fully_checked: false },
+  coverage: {
+    references_detected: 3,
+    references_not_assessed: 2,
+    fully_checked: false,
+  },
   findings: examples.map((literal, index) => ({
-    reference_id: 'ref-' + index, literal,
+    reference_id: 'ref-' + index,
+    literal,
     identity: index === 2 ? 'not_assessed' : 'resolved',
-    page_mapping: 'unmapped', fidelity: 'not_assessed', support: 'not_assessed',
+    page_mapping: 'unmapped',
+    fidelity: 'not_assessed',
+    support: 'not_assessed',
   })),
 };
-test('P6 NL/FR/EN, keyboard, reflow, reduced motion, forced colors and axe', async ({ page }) => {
+test('P6 NL/FR/EN, keyboard, reflow, reduced motion, forced colors and axe', async ({
+  page,
+}) => {
   const external: string[] = [];
   page.on('request', (request) => {
     if (new URL(request.url()).origin !== 'http://127.0.0.1:4173')
@@ -29,29 +40,51 @@ test('P6 NL/FR/EN, keyboard, reflow, reduced motion, forced colors and axe', asy
     window.caseproofSession = { getBearer: async () => 'synthetic-a11y-only' };
   });
   await page.route('**/v2/**', (route) => route.fulfill({ json: report }));
-  await page.goto('/workspace/matters/' + matter + '/briefs/' + brief + '?snapshot=' + snapshot);
+  await page.goto(
+    '/workspace/matters/' +
+      matter +
+      '/briefs/' +
+      brief +
+      '?snapshot=' +
+      snapshot,
+  );
   await page.getByRole('button', { name: 'Connect session' }).click();
-  await expect(page.getByRole('heading', { name: 'Review the evidence' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Review the evidence' }),
+  ).toBeVisible();
   for (const literal of examples)
     await expect(page.getByRole('button', { name: literal })).toBeVisible();
 
   const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
-  expect(results.violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(
+    results.violations.map((v) => ({ id: v.id, nodes: v.nodes.length })),
+  ).toEqual([]);
 
   await page.setViewportSize({ width: 320, height: 700 });
   await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' });
-  await expect(page.getByRole('heading', { name: 'Review the evidence' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Review the evidence' }),
+  ).toBeVisible();
   const english = page.getByRole('button', { name: examples[2]! });
   await english.focus();
   await expect(english).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(english).toHaveAttribute('aria-current', 'true');
   await expect(page.getByRole('heading', { name: examples[2]! })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'none' });
-  await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
-  await expect(page.getByRole('heading', { name: 'Review the evidence' })).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.zoom = '2';
+  });
+  await expect(
+    page.getByRole('heading', { name: 'Review the evidence' }),
+  ).toBeVisible();
   expect(external).toEqual([]);
 });
