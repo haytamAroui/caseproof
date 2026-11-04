@@ -279,7 +279,8 @@ def test_document_wide_review_commit_replay_and_integrity_with_disposable_adapte
         def reserve(self, bearer, case, request, action, values):
             assert bearer == "signed" and case == "matter"
             assert action == "status" and request == COMMIT_ID
-            assert values["command_sha256"] == digest
+            if values["command_sha256"] != digest:
+                raise HTTPException(409, "durable request ID used with different edit")
             if self.reserved is None:
                 return {"state": "absent"}
             return {
