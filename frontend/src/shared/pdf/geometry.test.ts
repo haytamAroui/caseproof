@@ -103,3 +103,46 @@ it('raster payload cannot cross a snapshot, original hash or source version', ()
     parseRasterRegions({ ...payload, source_version_id: 'new' }, expected),
   ).toThrow();
 });
+
+it('rejects an OCR word with unbounded or malformed raster coordinates', () => {
+  const expected = {
+    snapshot: 'a'.repeat(64),
+    sha256: 'b'.repeat(64),
+    version: 'old',
+  };
+  const region = {
+    region_id: 'c'.repeat(64),
+    original_sha256: expected.sha256,
+    page_number: 1,
+    bbox: [0, 0, 10, 10],
+    image_size: [100, 200],
+    crop_box: [0, 0, 100, 200],
+    rotation: 0,
+    user_unit: 1,
+    cropbox_rasterized: true,
+    ocr_word: { text: 'word', bbox: [1, 2, 10, 12] },
+  };
+  const payload = {
+    schema: 'caseproof-raster-overlays-v1',
+    snapshot_hash: expected.snapshot,
+    original_sha256: expected.sha256,
+    source_version_id: expected.version,
+    interpretation: 'navigation_only_never_a_verdict',
+    regions: [region],
+    unassessed_region_count: 0,
+  };
+  expect(parseRasterRegions(payload, expected).regions[0]?.ocr_word?.text).toBe(
+    'word',
+  );
+  expect(() =>
+    parseRasterRegions(
+      {
+        ...payload,
+        regions: [
+          { ...region, ocr_word: { text: 'word', bbox: [-1, 0, 10, 10] } },
+        ],
+      },
+      expected,
+    ),
+  ).toThrow();
+});

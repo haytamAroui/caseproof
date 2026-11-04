@@ -111,13 +111,14 @@ export function coveragePages(coverage: Record<string, unknown>): {
       reason: row.reason,
     });
   }
+  const total = coverage.source_pages_total;
+  const validTotal =
+    typeof total === 'number' && Number.isSafeInteger(total) && total >= 0;
+  const inconsistent = validTotal && total !== values.length;
   return {
     pages,
     limited: values.length > 1000,
-    invalid,
-    unknown:
-      typeof coverage.source_pages_total !== 'number' ||
-      !Number.isSafeInteger(coverage.source_pages_total) ||
-      coverage.source_pages_total < 0,
+    invalid: invalid || inconsistent,
+    unknown: !validTotal || inconsistent,
   };
 }

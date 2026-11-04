@@ -6,6 +6,9 @@ import { useSession } from '../../shared/session';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
 import { coveragePages, coverageRegions } from './coverageRegions';
+import { quoteMatches } from './quoteComparison';
+import { CoverageSource } from './CoverageSource';
+import { OriginalDraftDownload } from './OriginalDraftDownload';
 import type { ReactNode } from 'react';
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -26,7 +29,7 @@ export function ReportScreen({
     finding: FindingView,
     historical: boolean,
     inspected: boolean,
-    onNext: () => void,
+    onNext: (() => void) | undefined,
   ) => ReactNode;
 }) {
   const { caseId = '', briefId = '' } = useParams();
@@ -36,6 +39,7 @@ export function ReportScreen({
   const valid =
     uuid.test(caseId) && uuid.test(briefId) && /^[0-9a-f]{64}$/.test(snapshot);
   const queueRef = useRef<HTMLElement>(null);
+  const inspectionRef = useRef<HTMLElement>(null);
   const focusReference = useRef<string | null>(null);
   const [filter, setFilter] = useState<'attention' | 'all'>('attention');
   const [search, setSearch] = useState('');
@@ -72,7 +76,7 @@ export function ReportScreen({
     f.identity !== 'resolved' ||
     f.page_mapping !== 'mapped' ||
     f.fidelity !== 'exact_match' ||
-    f.support === 'not_assessed';
+    f.support !== 'supported';
   const filtered = report.findings
     .filter((f) => filter === 'all' || needsAttention(f))
     .filter((f) =>
@@ -80,9 +84,21 @@ export function ReportScreen({
     )
     .sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
   function selectReference(referenceId: string) {
+    // Coverage links may target a reference hidden by the current filters.
+    // Reveal it in the queue rather than displaying a selection the queue omits.
+    const ordered = [...report.findings].sort(
+      (a, b) => Number(needsAttention(b)) - Number(needsAttention(a)),
+    );
+    const index = ordered.findIndex(
+      (finding) => finding.reference_id === referenceId,
+    );
+    if (index < 0) return;
+    setFilter('all');
+    setSearch('');
     setParams(
       (p) => {
         p.set('finding', referenceId);
+        p.set('page', String(Math.floor(index / 50)));
         return p;
       },
       { replace: true },
@@ -98,12 +114,26 @@ export function ReportScreen({
         )
       : 0;
   const visible = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  const selectedQueueIndex = selected
+    ? filtered.findIndex((f) => f.reference_id === selected.reference_id)
+    : -1;
+  const nextFinding =
+    selectedQueueIndex >= 0 ? filtered[selectedQueueIndex + 1] : undefined;
   function movePage(next: number) {
     setParams(
       (p) => {
         p.set('page', String(next));
         const first = filtered[next * pageSize];
         if (first) p.set('finding', first.reference_id);
+        return p;
+      },
+      { replace: true },
+    );
+  }
+  function resetPage() {
+    setParams(
+      (p) => {
+        p.set('page', '0');
         return p;
       },
       { replace: true },
@@ -153,9 +183,24 @@ export function ReportScreen({
               event.nativeEvent.isComposing ||
               !(event.target instanceof HTMLButtonElement) ||
               !event.target.classList.contains('finding') ||
-              (event.key !== 'j' && event.key !== 'k')
+              (event.key !== 'j' && event.key !== 'k' && event.key !== ' ')
             )
               return;
+            if (event.key === ' ') {
+              event.preventDefault();
+              const referenceId = event.target.dataset.referenceId;
+              if (referenceId && referenceId !== selected?.reference_id) {
+                setParams(
+                  (current) => {
+                    current.set('finding', referenceId);
+                    return current;
+                  },
+                  { replace: true },
+                );
+              }
+              inspectionRef.current?.focus();
+              return;
+            }
             const currentReference = event.target.dataset.referenceId;
             const index = filtered.findIndex(
               (finding) => finding.reference_id === currentReference,
@@ -184,13 +229,20 @@ export function ReportScreen({
             of {report.findings.length} detected references. Review coverage
             separately.
           </p>
+          <p role="status">
+            {filtered.length} references match the current filter and search.
+            {selected &&
+            !filtered.some((f) => f.reference_id === selected.reference_id)
+              ? ' The selected reference is outside this queue; it remains open for inspection.'
+              : ''}
+          </p>
           <div className="catalog-actions">
             <button
               className="button"
               aria-pressed={filter === 'attention'}
               onClick={() => {
                 setFilter('attention');
-                movePage(0);
+                resetPage();
               }}
             >
               Needs attention
@@ -200,7 +252,7 @@ export function ReportScreen({
               aria-pressed={filter === 'all'}
               onClick={() => {
                 setFilter('all');
-                movePage(0);
+                resetPage();
               }}
             >
               Show all
@@ -212,7 +264,7 @@ export function ReportScreen({
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
-                movePage(0);
+                resetPage();
               }}
               placeholder="Reference text"
               maxLength={200}
@@ -223,15 +275,15 @@ export function ReportScreen({
               className="button"
               onClick={() => {
                 setSearch('');
-                movePage(0);
+                resetPage();
               }}
             >
               Clear reference search
             </button>
           )}
           <p className="small">
-            When a reference button is focused, press J/K for next/previous. No
-            decision is saved by a shortcut.
+            When a reference button is focused, press J/K for next/previous or
+            Space to inspect it. No decision is saved by a shortcut.
           </p>
           {report.findings.length === 0 ? (
             <p>
@@ -296,7 +348,12 @@ export function ReportScreen({
             </nav>
           )}
         </section>
-        <section className="inspection" aria-labelledby="finding-title">
+        <section
+          className="inspection"
+          aria-labelledby="finding-title"
+          ref={inspectionRef}
+          tabIndex={-1}
+        >
           {selected ? (
             <>
               <p className="eyebrow">Selected reference</p>
@@ -310,6 +367,7 @@ export function ReportScreen({
                 <StateValue label="Fidelity" value={selected.fidelity} />
                 <StateValue label="Human support" value={selected.support} />
               </dl>
+              <QuoteContext finding={selected} />
               <FindingInspection
                 key={`${session.epoch}:${caseId}:${briefId}:${snapshot}:${selected.reference_id}:${historical}`}
                 finding={selected}
@@ -317,19 +375,35 @@ export function ReportScreen({
                 renderSource={renderSource}
                 renderDraft={renderDraft}
                 renderReview={renderReview}
-                onNext={() => {
-                  const current = report.findings.findIndex(
-                    (f) => f.reference_id === selected.reference_id,
-                  );
-                  const next = report.findings[current + 1];
-                  if (next) selectReference(next.reference_id);
-                }}
+                onNext={
+                  nextFinding
+                    ? () => {
+                        setParams(
+                          (p) => {
+                            p.set('finding', nextFinding.reference_id);
+                            p.set(
+                              'page',
+                              String(
+                                Math.floor((selectedQueueIndex + 1) / pageSize),
+                              ),
+                            );
+                            return p;
+                          },
+                          { replace: true },
+                        );
+                      }
+                    : undefined
+                }
               />
             </>
           ) : (
             <h2 id="finding-title">No reference selected</h2>
           )}
           <CoverageSummary
+            key={`${session.epoch}:${caseId}:${briefId}:${snapshot}:${historical}`}
+            api={api}
+            scope={{ caseId, briefId, snapshot, historical }}
+            sources={report.sources}
             coverage={report.coverage}
             findings={report.findings}
             onSelectReference={selectReference}
@@ -340,6 +414,89 @@ export function ReportScreen({
         </section>
       </div>
     </>
+  );
+}
+
+function QuoteContext({ finding }: { finding: FindingView }) {
+  const [showMatches, setShowMatches] = useState(false);
+  const quote = finding.quoted_text;
+  const source = finding.source_text_context;
+  const validQuote =
+    typeof quote === 'string' && quote.length > 0 && quote.length <= 1000;
+  const validSource =
+    typeof source === 'string' && source.length > 0 && source.length <= 4000;
+  const comparison =
+    validQuote && validSource ? quoteMatches(source, quote) : null;
+  return (
+    <section
+      className="draft-context"
+      aria-label="Quotation and derived source text"
+    >
+      <h3>Quotation and derived source text</h3>
+      <p>
+        Compare this text with the preserved source pixels. A text match is not
+        a finding of legal support.
+      </p>
+      <h4>Quotation in draft</h4>
+      <p>
+        {validQuote
+          ? quote
+          : 'No supported quotation is available in this report.'}
+      </p>
+      <h4>Extracted source text</h4>
+      {validSource ? (
+        <>
+          {comparison && (
+            <button
+              type="button"
+              className="button"
+              aria-pressed={showMatches}
+              onClick={() => setShowMatches((value) => !value)}
+            >
+              {showMatches
+                ? 'Hide exact text highlights'
+                : 'Highlight exact text occurrences'}
+            </button>
+          )}
+          {showMatches && comparison && (
+            <p role="status">
+              {comparison.occurrences} exact occurrences in the supplied derived
+              text. Highlights are text navigation only, not verified source
+              locations.
+            </p>
+          )}
+          <pre>
+            {showMatches && comparison
+              ? comparison.segments.map((segment, index) =>
+                  segment.matched ? (
+                    <mark key={index}>{segment.text}</mark>
+                  ) : (
+                    segment.text
+                  ),
+                )
+              : source}
+          </pre>
+          <p>
+            Derived page text; it may contain OCR errors and does not identify a
+            verified crop.
+            {finding.source_text_context_partial === false
+              ? ''
+              : ' The supplied text may be incomplete.'}
+          </p>
+        </>
+      ) : (
+        <p>
+          Extracted source text is unavailable or unsupported. Inspect the
+          preserved pixels.
+        </p>
+      )}
+      {finding.translation_review_required === true && (
+        <Notice>
+          Translation requires human review; the texts may be in different
+          languages.
+        </Notice>
+      )}
+    </section>
   );
 }
 
@@ -367,10 +524,10 @@ function FindingInspection({
         finding: FindingView,
         historical: boolean,
         inspected: boolean,
-        onNext: () => void,
+        onNext: (() => void) | undefined,
       ) => ReactNode)
     | undefined;
-  onNext: () => void;
+  onNext: (() => void) | undefined;
 }) {
   const [inspected, setInspected] = useState(false);
   return (
@@ -390,16 +547,56 @@ function FindingInspection({
 }
 
 function CoverageSummary({
+  api,
+  scope,
+  sources,
   coverage,
   findings,
   onSelectReference,
 }: {
+  api: ApiClient;
+  scope: {
+    caseId: string;
+    briefId: string;
+    snapshot: string;
+    historical: boolean;
+  };
+  sources: unknown;
   coverage: Record<string, unknown>;
   findings: FindingView[];
   onSelectReference: (reference: string) => void;
 }) {
+  const [selectedPage, setSelectedPage] = useState<{
+    versionId: string;
+    sha256: string;
+    length: number;
+    page: number;
+  } | null>(null);
   const ledger = coverageRegions(coverage);
   const pageLedger = coveragePages(coverage);
+  const drafts = Array.isArray(sources)
+    ? sources.filter((source: unknown) => {
+        if (!source || typeof source !== 'object' || Array.isArray(source))
+          return false;
+        const row = source as Record<string, unknown>;
+        return (
+          row.role === 'draft' &&
+          row.version_id === scope.briefId &&
+          row.media_type ===
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+          typeof row.sha256 === 'string' &&
+          /^[0-9a-f]{64}$/.test(row.sha256) &&
+          typeof row.byte_length === 'number' &&
+          Number.isSafeInteger(row.byte_length) &&
+          row.byte_length > 0 &&
+          row.byte_length <= 20_000_000
+        );
+      })
+    : [];
+  const draft =
+    drafts.length === 1
+      ? (drafts[0] as { sha256: string; byte_length: number })
+      : null;
   const referencesByPage = new Map<string, FindingView>();
   const referencesByRegion = new Map<string, FindingView>();
   for (const finding of findings) {
@@ -435,6 +632,13 @@ function CoverageSummary({
     ['Unsupported notation', count('unsupported_references')],
     ['Unprocessed DOCX regions', count('unprocessed_regions')],
     ['Pending inventory exceptions', count('inventory_exceptions_pending')],
+    ['Known source pages', count('source_pages_known_total')],
+    [
+      'Total source pages',
+      pageLedger.unknown ? null : count('source_pages_total'),
+    ],
+    ['Pages processed by OCR worker', count('source_pages_ocr_processed')],
+    ['Pages failed or not processed', count('source_pages_failed_or_skipped')],
     ['Visual pages completed', count('visual_pages_completed')],
     ['Visual findings not assessed', count('visual_findings_not_assessed')],
   ] as const;
@@ -530,12 +734,23 @@ function CoverageSummary({
           Text extraction, visual inspection and editability are separate; a
           listed region is not a verified finding.
         </p>
+        {draft && (
+          <OriginalDraftDownload
+            api={api}
+            {...scope}
+            sha256={draft.sha256}
+            length={draft.byte_length}
+          />
+        )}
+        {!draft && (
+          <p>Preserved original DOCX access is unavailable for this report.</p>
+        )}
       </details>
       <details>
         <summary>Source-page processing</summary>
         {pageLedger.unknown && (
           <Notice>
-            The total source-page count is unavailable or unknown.
+            The total source-page count is unavailable, unknown or inconsistent.
           </Notice>
         )}
         {pageLedger.invalid && (
@@ -557,6 +772,30 @@ function CoverageSummary({
                 page.page,
               ]);
               const reference = referencesByPage.get(key);
+              const matching = Array.isArray(sources)
+                ? sources.filter((source: unknown) => {
+                    if (
+                      !source ||
+                      typeof source !== 'object' ||
+                      Array.isArray(source)
+                    )
+                      return false;
+                    const row = source as Record<string, unknown>;
+                    return (
+                      row.version_id === page.versionId &&
+                      row.sha256 === page.sha256 &&
+                      row.media_type === 'application/pdf' &&
+                      typeof row.byte_length === 'number' &&
+                      Number.isSafeInteger(row.byte_length) &&
+                      row.byte_length > 0 &&
+                      row.byte_length <= 20_000_000
+                    );
+                  })
+                : [];
+              const length =
+                matching.length === 1
+                  ? (matching[0] as Record<string, unknown>).byte_length
+                  : null;
               return (
                 <li key={`${key}:${index}`}>
                   <p>
@@ -579,6 +818,27 @@ function CoverageSummary({
                       No mapped reference is available for this source page.
                     </p>
                   )}
+                  {typeof length === 'number' && page.page <= 200 && (
+                    <button
+                      type="button"
+                      className="button"
+                      onClick={() =>
+                        setSelectedPage({
+                          versionId: page.versionId,
+                          sha256: page.sha256,
+                          length,
+                          page: page.page,
+                        })
+                      }
+                    >
+                      Open preserved PDF page {page.page}
+                    </button>
+                  )}
+                  {(typeof length !== 'number' || page.page > 200) && (
+                    <p>
+                      Preserved PDF page access is unavailable for this entry.
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -589,6 +849,15 @@ function CoverageSummary({
           support.
         </p>
       </details>
+      {selectedPage && (
+        <CoverageSource
+          key={`${selectedPage.versionId}:${selectedPage.sha256}:${selectedPage.page}`}
+          api={api}
+          {...scope}
+          {...selectedPage}
+          onClose={() => setSelectedPage(null)}
+        />
+      )}
       <details>
         <summary>Machine-readable coverage record</summary>
         <pre>{JSON.stringify(coverage, null, 2)}</pre>

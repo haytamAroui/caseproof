@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/m3-f4-v31-reviewer-closure'
+    if: github.repository == 'haytamAroui/caseproof' && github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/m3-f4-v31-reviewer-closure' || github.head_ref == 'feat/p2-reviewer-workspace-reconciliation')
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 20

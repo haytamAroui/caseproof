@@ -67,6 +67,7 @@ export interface RasterRegion {
   rotation: 0 | 90 | 180 | 270;
   user_unit: number;
   cropbox_rasterized: true;
+  ocr_word?: { text: string; bbox: [number, number, number, number] };
 }
 
 export function parseRasterRegions(
@@ -115,6 +116,25 @@ export function parseRasterRegions(
     )
       throw new Error('Invalid raster region');
     ids.add(region.region_id);
+    if (region.ocr_word !== undefined) {
+      const word = region.ocr_word;
+      if (
+        !word ||
+        typeof word.text !== 'string' ||
+        word.text.length < 1 ||
+        word.text.length > 256 ||
+        !Array.isArray(word.bbox) ||
+        word.bbox.length !== 4 ||
+        !word.bbox.every(Number.isInteger) ||
+        word.bbox[0] < 0 ||
+        word.bbox[1] < 0 ||
+        word.bbox[0] >= word.bbox[2] ||
+        word.bbox[1] >= word.bbox[3] ||
+        word.bbox[2] > region.image_size[0] ||
+        word.bbox[3] > region.image_size[1]
+      )
+        throw new Error('Invalid OCR word geometry');
+    }
   }
   return { regions, unassessed: response.unassessed_region_count as number };
 }

@@ -1157,7 +1157,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         if body.decision == "CONFIRMED_SUPPORTED" and finding["technical_check"] != "checked":
             raise HTTPException(409, "resolve identity and pinpoint before confirming support")
         required = {r["region_id"] for r in finding.get("visual_assessment", {}).get("regions", [])}
-        if required and set(body.reviewed_region_ids) != required:
+        if set(body.reviewed_region_ids) != required:
             raise HTTPException(409, "inspect and explicitly confirm every selected visual region")
         payload = body.model_dump(mode="json")
         return s.rpc(bearer, case_id, "review", payload)
@@ -1284,9 +1284,28 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
 
     @router.get(base + "/sources/{version_id}/original")
     def original(
-        case_id: str, brief_id: str, version_id: str, authorization: str | None = Header(default=None)
+        case_id: str, brief_id: str, version_id: str, authorization: str | None = Header(default=None),
+        snapshot_hash: str | None = None,
     ) -> Response:
         s, bearer = active(authorization)
+        if snapshot_hash is not None:
+            if len(snapshot_hash) != 64 or any(c not in "0123456789abcdef" for c in snapshot_hash):
+                raise HTTPException(422, "invalid snapshot identity")
+            report, files = s.reopen_originals(bearer, case_id, brief_id, snapshot_hash)
+            matches = [row for row in report.get("sources", []) if row.get("version_id") == version_id]
+            if len(matches) != 1:
+                raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+            source = matches[0]
+            raw = files.get(version_id)
+            if (not isinstance(raw, bytes) or len(raw) != source.get("byte_length")
+                    or hashlib.sha256(raw).hexdigest() != source.get("sha256")):
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+            return Response(raw, media_type="application/octet-stream", headers={
+                "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+                "Content-Disposition": "attachment; filename=caseproof-original",
+                "X-CaseProof-Snapshot": snapshot_hash,
+                "X-CaseProof-Original-SHA256": source["sha256"],
+            })
         sources, files = s.sources(bearer, case_id)
         if not any(x["role"] == "draft" and x["version_id"] == brief_id for x in sources):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)

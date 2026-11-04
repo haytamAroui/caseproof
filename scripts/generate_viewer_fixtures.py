@@ -120,6 +120,7 @@ def main():
         ("rotate270", 270, False, 1, False, False),
         ("crop", 90, True, 1, False, False),
         ("mixed", 0, False, 2, False, False),
+        ("mixedcrop", 0, False, 2, False, False),
         ("hostile", 0, False, 1, False, True),
         ("large200", 0, False, 200, False, False),
         ("overflow201", 0, False, 201, False, False),
@@ -127,7 +128,7 @@ def main():
     rows = []
     for name, rotation, cropped, count, scan, hostile in specs:
         writer = PdfWriter()
-        writer.append(PdfReader(io.BytesIO(vector(count, scan, hostile, name == "mixed"))))
+        writer.append(PdfReader(io.BytesIO(vector(count, scan, hostile, name in {"mixed", "mixedcrop"}))))
         if hostile:
             writer.add_open_action(
                 JavaScript("globalThis.__caseproofPdfExecuted=1; app.alert('hostile synthetic');")
@@ -137,6 +138,10 @@ def main():
                 p.rotate(rotation)
             if cropped:
                 p.cropbox = RectangleObject([100, 150, 500, 700])
+            if name == "mixedcrop":
+                p.cropbox = RectangleObject(
+                    [100, 150, 500, 700] if p == writer.pages[0] else [50, 100, 750, 550]
+                )
             if name == "mixed" and p == writer.pages[1]:
                 p[NameObject("/UserUnit")] = FloatObject(1.25)
         buffer = io.BytesIO()
@@ -144,7 +149,7 @@ def main():
         pdf = buffer.getvalue()
         path = out / (name + ".pdf")
         path.write_bytes(pdf)
-        crop = [100, 150, 500, 700] if cropped else [0, 0, 600, 800]
+        crop = [100, 150, 500, 700] if cropped or name == "mixedcrop" else [0, 0, 600, 800]
         row = {
             "name": name,
             "sha256": hashlib.sha256(pdf).hexdigest(),
@@ -159,6 +164,8 @@ def main():
             "scan": scan,
             "server": [],
         }
+        if name == "mixedcrop":
+            row["pageCropBoxes"] = [[100, 150, 500, 700], [50, 100, 750, 550]]
         if args.server and count <= 200:
             for page in [1, 200] if count == 200 else [1, 2] if name == "mixed" else [1]:
                 start = time.perf_counter()

@@ -177,7 +177,20 @@ def create_dossier_viewer_router(store: DossierStore | None) -> APIRouter:
             except (ValidationError, KeyError, TypeError, ValueError):
                 unassessed += 1
                 continue
-            supported.append(projected.model_dump(mode="json"))
+            item = projected.model_dump(mode="json")
+            # With a text layer, word_bbox refers to the layer token and the
+            # overlapping OCR may consist of multiple words. Only expose a
+            # word-level OCR anchor for scan-only tokens with valid geometry.
+            word = row.get("visual_text")
+            bbox = row.get("word_bbox")
+            width, height = projected.image_size
+            if (row.get("extracted_text") == "" and isinstance(word, str)
+                    and 0 < len(word) <= 256 and isinstance(bbox, list) and len(bbox) == 4
+                    and all(type(v) is int for v in bbox)
+                    and 0 <= bbox[0] < bbox[2] <= width
+                    and 0 <= bbox[1] < bbox[3] <= height):
+                item["ocr_word"] = {"text": word, "bbox": bbox}
+            supported.append(item)
         return {"schema": "caseproof-raster-overlays-v1", "snapshot_hash": snapshot,
                 "original_sha256": view.original_sha256,
                 "source_version_id": view.version_id,

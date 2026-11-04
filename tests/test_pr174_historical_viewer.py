@@ -106,6 +106,25 @@ def test_provenance_regions_bind_to_historical_original_and_abstain_on_bad_geome
     assert result["regions"] == [] and result["unassessed_region_count"] == 1
 
 
+def test_scan_ocr_word_projection_requires_valid_scan_only_geometry():
+    store, client = rig()
+    original = store.frozen_report
+    data = {"extracted_text": "", "visual_text": "synthetic", "word_bbox": [11, 21, 29, 39]}
+
+    def report(*args, **kwargs):
+        value = original(*args, **kwargs)
+        value["visual_pages"]["old:1"]["regions"][0].update(data)
+        return value
+
+    store.frozen_report = report
+    result = client.get(BASE + "/regions", headers=HEADERS).json()
+    assert result["regions"][0]["ocr_word"] == {"text": "synthetic", "bbox": [11, 21, 29, 39]}
+    data["word_bbox"] = [-1, 21, 29, 39]
+    assert "ocr_word" not in client.get(BASE + "/regions", headers=HEADERS).json()["regions"][0]
+    data.update(word_bbox=[11, 21, 29, 39], extracted_text="layer text")
+    assert "ocr_word" not in client.get(BASE + "/regions", headers=HEADERS).json()["regions"][0]
+
+
 def test_old_source_missing_corrupt_revoked_and_cross_scope_denied():
     store, client = rig()
     assert client.get(BASE + "/original").status_code == 401
