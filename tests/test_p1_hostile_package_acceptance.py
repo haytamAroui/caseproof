@@ -78,3 +78,32 @@ def test_part_limit_prevents_expansion(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(docx_region_inventory, "MAX_PART_BYTES", 10)
     _assert_unknown(_package(_entries(), ZIP_DEFLATED))
+
+
+def test_encrypted_entry_is_refused_before_discovery() -> None:
+    payload = bytearray(_package(_entries()))
+    with ZipFile(io.BytesIO(payload)) as archive:
+        info = archive.getinfo('word/document.xml')
+        struct.pack_into('<H', payload, info.header_offset + 6, info.flag_bits | 1)
+        offset = archive.start_dir
+        while payload[offset:offset + 4] == b'PK\x01\x02':
+            name_len, extra_len, comment_len = struct.unpack_from('<HHH', payload, offset + 28)
+            name = bytes(payload[offset + 46:offset + 46 + name_len])
+            if name == b'word/document.xml':
+                flags = struct.unpack_from('<H', payload, offset + 8)[0]
+                struct.pack_into('<H', payload, offset + 8, flags | 1)
+                break
+            offset += 46 + name_len + extra_len + comment_len
+        else:
+            raise AssertionError('central directory missing document')
+    assert inventory_docx_regions(bytes(payload)).reason == 'ENCRYPTED_ZIP_ENTRY'
+    _assert_unknown(bytes(payload))
+
+
+def test_total_expanded_size_is_checked_before_reading(monkeypatch: pytest.MonkeyPatch) -> None:
+    from infrastructure.parsers import docx_region_inventory
+
+    monkeypatch.setattr(docx_region_inventory, 'MAX_TOTAL_UNCOMPRESSED', 12)
+    payload = _package(_entries(), ZIP_DEFLATED)
+    assert inventory_docx_regions(payload).reason == 'UNCOMPRESSED_LIMIT'
+    _assert_unknown(payload)
