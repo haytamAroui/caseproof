@@ -603,7 +603,7 @@ test('coverage details distinguish regions and only navigate to an existing exac
   });
   await coverage.getByText('DOCX region coverage', { exact: true }).click();
   await expect(
-    coverage.getByText('UNSUPPORTED_STRUCTURED_CONTENT', { exact: false }),
+    coverage.locator('p').filter({ hasText: 'UNSUPPORTED_STRUCTURED_CONTENT' }),
   ).toBeVisible();
   await expect(
     coverage.getByRole('button', {
@@ -615,7 +615,7 @@ test('coverage details distinguish regions and only navigate to an existing exac
   ).toBeVisible();
   await coverage.getByText('Source-page processing', { exact: true }).click();
   await expect(
-    coverage.getByText('ocr_unavailable', { exact: false }),
+    coverage.locator('p').filter({ hasText: 'ocr_unavailable' }),
   ).toBeVisible();
   await expect(
     coverage.getByRole('button', {
