@@ -6,6 +6,8 @@
 **Suggested repository location:** `docs/CASEPROOF_AGENT_MASTER_TODO.md`.  
 **Status:** Proposed execution backlog. This file creates no production approval, reviewer sign-off, new API or completed milestone.
 
+> **4 Nov 2026 P5/P6 engineering evidence:** [PR #185](https://github.com/haytamAroui/caseproof/pull/185) implements readable DOCX export, frozen reference-drift explanations, real **LibreOffice Writer** synthetic document round-trip, disposable PostgreSQL 17 restore/erasure-replay, production-vs-dev npm audit, visible non-offline Supabase intake disclosure, and automated multilingual accessibility checks. The [dated acceptance matrix](pilot/P5_P6_ACCEPTANCE_MATRIX.md) identifies individual CI run receipts. **11 npm moderate advisories affect dev tooling, not shipped production dependencies, and remain subject to owner review.** T61 Word, T70 independent security, T73 actual privacy/egress approval, T74 real operational restore, T75 manual AT, T76 representative corpus, T78 practitioner results and T79 pilot declaration are **NOT DONE**. Synthetic success does not waive the real pilot gates.
+
 ## 1. Agent start here
 
 1. Read applicable `AGENTS.md` and repository constitutional rules. Read this task list once, then the selected task and actual relevant code/tests. Check current branch, working tree, upstream head and exact installed contracts. Preserve unrelated changes.

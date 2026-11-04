@@ -40,7 +40,7 @@ jobs:
       - name: Test deterministic dossier, original preservation and annotations
         run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_dossier_journey.py tests/test_dossier_download_reopen.py tests/test_f3_v31_hardening.py
       - name: ASVS file-boundary and canonical MCP contract regression
-        run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_asvs_file_boundaries.py tests/test_mcp_adapter_contract.py tests/test_mcp_canonical_dossier.py tests/test_mcp_http_parity.py tests/test_page_coordinator.py tests/test_private_telemetry.py tests/test_report_markdown_security.py tests/test_docx_export_security.py
+        run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_asvs_file_boundaries.py tests/test_mcp_adapter_contract.py tests/test_mcp_canonical_dossier.py tests/test_mcp_http_parity.py tests/test_page_coordinator.py tests/test_private_telemetry.py tests/test_report_markdown_security.py tests/test_docx_export_security.py tests/test_p5_docx_report.py tests/test_finding_drift.py
       - name: Signed worker 200-page recovery and adversarial receipt tests
         run: uv run --locked --with python-docx --with reportlab --with pillow pytest -q tests/test_signed_page_jobs.py tests/test_signed_page_worker_recovery.py
       - name: Bounded 200-page text bundle measurement

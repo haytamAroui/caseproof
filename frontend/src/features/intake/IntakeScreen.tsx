@@ -50,6 +50,15 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
         original is written. Preservation does not confirm inventory or verify
         claims.
       </Notice>
+      <Notice>
+        Signed development mode sends original document bytes and review/source
+        metadata over HTTPS from this local application to configured Supabase
+        Auth, private Storage and database services. This is not offline or
+        zero-egress. The isolated OCR worker does not restrict the API or
+        browser network paths. Do not upload confidential client files before
+        the data owner has approved processing rights, location, retention,
+        backups, access and contractual terms.
+      </Notice>
       {query.isPending && <Notice>Reading current source state…</Notice>}
       {query.isError && receipt && (
         <Notice error>
