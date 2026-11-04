@@ -16,6 +16,7 @@ from infrastructure.parsers.docx_structured_editing import (
     decide_document_revisions,
     edit_document_text,
     list_document_blocks,
+    list_document_revisions,
 )
 
 
@@ -32,6 +33,9 @@ def main() -> int:
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--plan", type=Path)
+    parser.add_argument("--list-targets", action="store_true")
+    parser.add_argument("--list-revisions", action="store_true")
+    parser.add_argument("--include-text", action="store_true")
     args = parser.parse_args()
     source = args.input.resolve(strict=True)
     original = source.read_bytes()
@@ -41,13 +45,36 @@ def main() -> int:
         kinds: dict[str, int] = {}
         for block in blocks:
             kinds[block.kind] = kinds.get(block.kind, 0) + 1
-        print(json.dumps({
+        payload = {
             "schema": "caseproof-docx-local-inspection-v1",
             "source_sha256": digest,
             "paragraph_counts": kinds,
             "editable_plain_text_blocks": sum(b.editable for b in blocks),
             "limitations": "No review authority, tracking acceptance or CaseProof activation",
-        }, sort_keys=True))
+        }
+        if args.list_targets:
+            payload["targets"] = [
+                {
+                    "part": b.part,
+                    "paragraph_index": b.paragraph_index,
+                    "kind": b.kind,
+                    "expected_text_sha256": b.text_sha256,
+                    "editable": b.editable,
+                    **({"before": b.text} if args.include_text else {}),
+                }
+                for b in blocks
+            ]
+        if args.list_revisions:
+            payload["revisions"] = [
+                {
+                    "part": r.part, "revision_id": r.revision_id,
+                    "kind": r.kind, "author": r.author,
+                    "timestamp": r.timestamp,
+                    "text_sha256": r.text_sha256,
+                }
+                for r in list_document_revisions(original)
+            ]
+        print(json.dumps(payload, sort_keys=True))
         return 0
     if args.output is None or args.plan is None:
         parser.error("--output and --plan are required for changes")
