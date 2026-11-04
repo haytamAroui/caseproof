@@ -1,53 +1,37 @@
-# CaseProof P5/P6 — operational and practitioner acceptance ledger
+# CaseProof P5/P6 — dated engineering and pilot evidence ledger
 
-**Prepared:** 2026-11-04 · **Environment:** development / synthetic fixtures only.
-**Baseline:** main `a449278b5e49038983b801eab2c49b5982cca531`.
-**Scope:** This is an evidence collection and release gating worksheet, **not evidence that any host, person, deployment, backup, or customer dataset was tested**.
+**4 November 2026.** Branch: feat/p5-p6-readability-drift-pilot; PR #185. The evidence below is **synthetic and development scoped**. It is not Microsoft Word certification, operational Supabase restore proof, manual accessibility sign-off, representative-corpus permission, practitioner agreement or approval to process confidential dossiers.
 
-## Required final-head engineering evidence
+## Engineering evidence collected
 
-| Gate | Required independent evidence | Current observation |
+| Area | Actual observation | Evidence and limitation |
 | --- | --- | --- |
-| P5 DOCX appendix (T15/T60) | Synthetic real-format DOCX golden/readback tests, original ZIP-member comparison, Unicode/invalid-XML negative controls, final-head CI | Pending final-head workflow |
-| P5 exhibit drift (T47/T48/T66) | Server-issued old/new snapshot correspondence, ambiguous/unsupported/renumbered/source/page tests; UI fails closed; no review transfer | Pending final-head workflow |
-| P6 build and dependency hygiene (T72) | Pinned uv/npm lockfiles, locked install and frozen graph/SBOM generation; independent dependency review | Pending final-head workflow |
-| P6 integrated signed journey (T77) | Protected genuine signed-browser run on exact PR HEAD; auth→matter→intake→confirm→verify→review→correction→recheck→release→restart/historical; adversarial denial and zero-residual fixture cleanup | Not executed for this HEAD |
-| P6 release declaration (T79) | Complete reviewer/CI receipts, rollback and independently approved scope | Not approved |
+| P5 report and provenance | Readable DOCX labeled appendix, XML character rejection, preserved original ZIP members, source/draft digest and review identities | [kernel architecture regression](https://github.com/haytamAroui/caseproof/actions/runs/41816156764), source tests. Automated render does not prove legal correctness |
+| P5 exhibit drift | Frozen snapshot-bound explanatory matching, uncertain/unsupported changes and no review transfer | [application and browser tests](https://github.com/haytamAroui/caseproof/actions/runs/41816156761), server-side tests; not a semantic proof |
+| T61 Writer host | **PASS: actual LibreOffice Writer 24.2.7.2 on Ubuntu CI**, synthetic original → corrected → annotated DOCX → PDF and ODT/DOCX reopen, text/table/ZIP checks | [P6 host/restore evidence](https://github.com/haytamAroui/caseproof/actions/runs/41827922427). Microsoft Word desktop and independent visual host audit remain OPEN |
+| T70 dev security | Read-only catalog audit of private tables, public privileged RPCs, auth settings; zero direct grants on selected private release/snapshot tables | [Detailed inspection](P6_SECURITY_DEPENDENCY_PRIVACY_TRIAGE_2026-11-04.md), Supabase dev. 15 privileged-RPC advisories still require independent review |
+| T72 dependency hygiene | npm lock and Python lock checked; sanitized audit = **11 moderate dev-tooling, 0 production**, no high/critical | [P6 supply-chain run](https://github.com/haytamAroui/caseproof/actions/runs/41827922427). Dev advisories not patched or waived; independent owner disposition OPEN |
+| T73 privacy disclosure | Signed development intake visibly states originals and metadata go to Supabase; never claims offline or zero-egress; deployment assessments verified | [P6 corpus/privacy contracts](https://github.com/haytamAroui/caseproof/actions/runs/41827922427), [flow map](../security/PILOT_DATA_FLOW.md). Provider/region/retention/whole-deployment capture and contracts OPEN |
+| T74 isolated restore | **PASS: PostgreSQL 17 disposable backup/restore**, four actual CaseProof relation-count checks, test of stale pre-erasure backup, replayed synthetic erasure, private direct grants checked, isolated copy dropped | [P6 restore drill](https://github.com/haytamAroui/caseproof/actions/runs/41827922427). **NOT** an actual Supabase provider backup/restore or full legal-hold recovery test |
+| T75 automated a11y | **PASS: Playwright + axe**, keyboard/Enter, narrow 320px, browser zoom simulation, forced colors, reduced motion, long NL/FR/EN synthetic citations | [Frontend CI](https://github.com/haytamAroui/caseproof/actions/runs/41827922398). Genuine screen-reader and human WCAG 2.2 AA review OPEN |
+| T76 synthetic corpus | **PASS: author-supplied unadjudicated** NL/FR/EN/mixed regression fixtures and negative controls, integrity check with SHA | [P6 corpus validation](https://github.com/haytamAroui/caseproof/actions/runs/41827922427). Rights-cleared representative client corpus and independent gold labels OPEN |
+| T77 signed integrated journey | **PASS: implementation SHA 9004659**, genuine signed intake, review, correction/recheck, release, historical cold reopen, revocation and zero-residual teardown | [Signed F6 run 41827922447](https://github.com/haytamAroui/caseproof/actions/runs/41827922447), confirmed success. Subsequent documentation-only HEAD still requires fresh CI; skipped narrower workflows never count as passes |
+| T78 practitioner utility | **NOT RUN** | [Consent, denominator and stop rules](P6_PRACTITIONER_AND_CORPUS_PROTOCOL.md). No independent participants, metrics or commitments claimed |
+| T79 formal pilot declaration | **BLOCKED pending human/operational gates** | No sign-off or real client upload authorization |
 
-Relevant protected workflow: [F6 genuine signed reviewed export](../../.github/workflows/review-f6-live.yml); offline tests are **not** real signed acceptance. A skipped, failing or older SHA gate never counts as pass.
+## Outstanding genuine acceptance (requires actual people/systems)
 
-## Human and operational gates — independently owned, not automatable by code alone
+- Microsoft Word desktop on declared OS, versioned host reopening and manual inspection of all supported formatting.
+- Independent expert review of public SECURITY DEFINER RPC bodies, security advisories, actual signed role/tenant matrix, and selected provider configuration; enable/approve leaked-password protection.
+- A selected deployment and privacy owner to record provider regions, data-processing terms, exact retention/backup expiry, legal holds, full-flow network captures and actual authorized restore of provider backups.
+- Independent manual accessibility tester using actual screen reader and browser, including keyboard, localization, 200% real zoom, forced colors and error focus.
+- Written permission for real representative NL/FR/EN dossiers, confidential custody and independent adjudicated labels; 2 reviewers' blinded manual-vs-CaseProof study and safety/utility report.
+- Actual pilot/operations/security/privacy decisions, with named signers, signed-off residual risk, rollback and stop rules.
 
-| Gate | Required evidence record | Closure rule |
-| --- | --- | --- |
-| T61 DOCX host interoperability | Host name, **desktop Word/LibreOffice** version, OS, date, fixture hash; reopen screenshots or inspected notes for paragraphs, styles, runs, tables, footnotes, comments, hyperlinks and corrected/annotated derivatives | Real test on each declared supported host; list unsupported constructs |
-| T70 actual grants and RLS | Dev project ref, read-only catalog SQL, function owner/search_path, grants, policy tests, independent security reviewer, advisor output | No privileged simulated claim represented as signed RLS |
-| T73 processing/egress/privacy | Selected local/hybrid/hosted topology, data flow, capture boundaries, OCR/model/provider regions, approved retention, exact UI disclosure | Deployment capture and contract evidence; no zero-egress marketing claim |
-| T74 backup/restore/erasure | Approved isolated backup, restore timestamps, operator, artifacts/checksums for originals, OCR, snapshots, receipts, releases, legal-hold and deleted data | Prove authorized read and that deleted private data did not reappear; record cleanup; no production restore |
-| T75 manual accessibility and languages | Browser/OS, actual screen reader/AT, keyboard/reflow/200% zoom/forced-colors/reduced-motion, NL/FR/EN examples, independent tester | WCAG 2.2 AA issues logged and repaired, not axe-only |
-| T76 rights-cleared documents | Permission/license record, data owner, source hash, NL/FR/EN and scanned/text fixtures, source security classification, independent gold labels | No confidential source committed, uploaded or shared with unapproved tools |
-| T78 practitioner utility | Consent/data terms; reviewer roles; timed manual vs CaseProof cases; recall, false approvals, uncertainty comprehension and review agreement with denominators | Real participants and reviewer sign-off; no invented outcomes |
-| T79 pilot approval | Named accountable product/security/operational owners with dated decision, limits, rollback and signed evidence links | Explicit sign-off after all required gates pass |
+## Per-gate evidence schema (do not fabricate)
 
-## Evidence record template (one per gate)
+task_id, status (OPEN / EVIDENCED / APPROVED / BLOCKED), actor and reviewer, environment, document class and rights, exact commit, run URL, tool/host versions, observed result, negative cases, limitations, zero-residual cleanup, rollback, dated approval. Missing evidence is OPEN, not zero.
 
-```yaml
-task_id: T77
-status: PENDING # PASS / FAIL / PENDING
-owner_or_reviewer: null # must be actual accountable person
-implementation_commit: null
-pull_request: null
-execution_date_utc: null
-environment_and_versions: null
-fixture_rights_and_sha256: null
-commands_or_protocol: null
-workflow_run_or_private_evidence_uri: null
-observed_result: null
-adversarial_negative_cases: null
-cleanup_and_zero_residual: null
-limitations: null
-rollback: null
-approval: null
-```
+See [practitioner protocol](P6_PRACTITIONER_AND_CORPUS_PROTOCOL.md) and [P6 dev security triage](P6_SECURITY_DEPENDENCY_PRIVACY_TRIAGE_2026-11-04.md). No customer documents or credentials are stored in public CI artifacts.
 
-This worksheet does not create credentials or authorize production operations. Keep any client materials and private run artifacts outside public GitHub; use only redacted evidence metadata. Preserve source bytes and decision identities. Work requiring an owner decision or host access stays **PENDING**, even if automated CI is green.
+Authoritative external acceptance frameworks: [GDPR Article 32](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679), [WCAG 2.2](https://www.w3.org/TR/WCAG22/), [npm security audit](https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities/).

@@ -1,8 +1,10 @@
 # CaseProof — engineering state and dated evidence
 
-## 4 November 2026 — P5/P6 implementation PR under verification
+## 4 November 2026 — P5/P6 engineering acceptance extended; pilot gate still blocked
 
-A consolidated P5/P6 branch proposes a readable append-only DOCX appendix, conservative server-bound finding drift explanations and reviewer-facing comparison, locked dependency/SBOM CI, and protected signed-journey eligibility. Code and offline tests do **not** prove that desktop Word, rights-cleared practitioner documents, actual backup/restore, manual accessibility or practitioner evaluation have been tested. Exact PR-head CI and the protected signed-browser workflow have not yet been observed; P5 engineering and P6 pilot approval remain **open**. [P5/P6 acceptance ledger](pilot/P5_P6_ACCEPTANCE_MATRIX.md) separates evidence and actual owner decisions.
+[PR #185](https://github.com/haytamAroui/caseproof/pull/185) extends the readable DOCX appendix, snapshot-bound drift reasons and signed reviewer flow with **real LibreOffice Writer 24.2.7.2 synthetic DOCX/PDF/ODT round-trip**, an **isolated PostgreSQL 17 backup/restore with erasure-replay check**, an installed npm supply-chain audit, visible truthful signed-development egress disclosure, and automated NL/FR/EN keyboard/axe/reflow/reduced-motion/forced-color coverage. [Dated evidence matrix](pilot/P5_P6_ACCEPTANCE_MATRIX.md) links the CI receipts and scope. The npm audit classified 11 moderate advisories in **development-only** dependencies, 0 in the production tree; independent advisory remediation/approval remains open. Actual read-only dev SQL catalog/privileged function/grant inspection is in [P6 security triage](pilot/P6_SECURITY_DEPENDENCY_PRIVACY_TRIAGE_2026-11-04.md). Whole-deployment capture, provider/contract and actual Supabase restore are not proven.
+
+**Pilot not approved.** Desktop Microsoft Word host checks, actual assistive-technology testing, independent security sign-off, rights-cleared representative client corpus with two reviewers' adjudication, practitioner utility and owner privacy/retention approval remain **OPEN**. Synthetic CI and previous signed-journey successes do not satisfy real-data authorization. The agent must not merge or mark T61/T70/T73–T79 complete on the basis of code only.
 
 ## 2 November 2026 — F2 workflow v3.1 retrofit engineering checks passed
 
