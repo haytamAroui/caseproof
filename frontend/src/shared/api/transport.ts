@@ -206,7 +206,7 @@ export class ApiClient {
           new URL(path, 'https://caseproof.invalid').pathname,
         );
         // Editing permissions do not imply the source-reading session is revoked.
-        const editorBoundary = /\\/dossier\\/editor(?:\\/|$)/.test(
+        const editorBoundary = /\/dossier\/editor(?:\/|$)/.test(
           new URL(path, 'https://caseproof.invalid').pathname,
         );
         if (
