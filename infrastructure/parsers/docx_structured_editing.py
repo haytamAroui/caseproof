@@ -188,6 +188,46 @@ def _check_source(original: bytes, expected_sha256: str) -> None:
     _validate_derivative_package(original)
 
 
+@dataclass(frozen=True)
+class DocumentRevision:
+    part: str
+    revision_id: int
+    kind: Literal["inserted", "deleted"]
+    author: str
+    timestamp: str
+    text_sha256: str
+
+
+def list_document_revisions(original: bytes) -> tuple[DocumentRevision, ...]:
+    """Inspect OOXML textual suggestions without returning confidential text."""
+    _validate_derivative_package(original)
+    output: list[DocumentRevision] = []
+    with ZipFile(io.BytesIO(original)) as archive:
+        parts = sorted(name for name in archive.namelist() if STORY.fullmatch(name))
+    for part in parts:
+        doc = _open_story(original, part)
+        for kind, tag in (("inserted", "ins"), ("deleted", "del")):
+            for node in doc.getElementsByTagNameNS(W, tag):
+                raw_id = node.getAttributeNS(W, "id")
+                if not raw_id.isdigit() or int(raw_id) > 2_000_000_000:
+                    raise ValueError("unsupported revision identity")
+                value = "".join(
+                    child.data
+                    for name in ("t", "delText")
+                    for txt in node.getElementsByTagNameNS(W, name)
+                    for child in txt.childNodes if child.nodeType == child.TEXT_NODE
+                )
+                output.append(DocumentRevision(
+                    part, int(raw_id), kind,
+                    node.getAttributeNS(W, "author")[:MAX_AUTHOR],
+                    node.getAttributeNS(W, "date")[:64],
+                    hashlib.sha256(value.encode()).hexdigest(),
+                ))
+                if len(output) > MAX_BLOCKS:
+                    raise ValueError("too many document revisions")
+    return tuple(sorted(output, key=lambda revision: (revision.part, revision.revision_id, revision.kind)))
+
+
 def _next_revision_id(original: bytes) -> int:
     maximum = 0
     with ZipFile(io.BytesIO(original)) as archive:
