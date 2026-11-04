@@ -72,7 +72,8 @@ class EditorCandidateBody(BaseModel):
             raise ValueError("duplicate revision target")
         try:
             date = datetime.fromisoformat(self.timestamp)
-            if date.utcoffset() is None or date.utcoffset().total_seconds() != 0:
+            offset = date.utcoffset()
+            if offset is None or offset.total_seconds() != 0:
                 raise ValueError
         except ValueError:
             raise ValueError("invalid timestamp") from None
