@@ -13,6 +13,7 @@ from defusedxml.common import DefusedXmlException  # type: ignore[import-untyped
 
 from application.documents.file_boundary import validate_original_container
 from application.extraction.contracts import ExtractionError
+from infrastructure.parsers.docx_edit_targets import select_editable_paragraph
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 
 NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -294,7 +295,7 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
 
 def corrected_docx_preview(original: bytes, *, expected_sha256: str,
                            paragraph_index: int, before: str, after: str) -> bytes:
-    """Bounded plain-run correction; preserve all other ZIP member bytes.
+    """Bounded plain-run body/table-cell correction; preserve other ZIP member bytes.
 
     Replacement inherits the first affected run's formatting; unaffected text
     retains its run formatting. Fields, revisions, hyperlinks and bookmarks
@@ -322,13 +323,7 @@ def corrected_docx_preview(original: bytes, *, expected_sha256: str,
         def elements(node: Any) -> list[Any]:
             return [child for child in node.childNodes if child.nodeType == child.ELEMENT_NODE]
 
-        bodies = [node for node in elements(document.documentElement)
-                  if node.namespaceURI == NS and node.localName == 'body']
-        paragraphs = [] if len(bodies) != 1 else [node for node in elements(bodies[0])
-                     if node.namespaceURI == NS and node.localName == 'p']
-        if paragraph_index >= len(paragraphs):
-            raise ValueError('paragraph unavailable')
-        paragraph = paragraphs[paragraph_index]
+        paragraph = select_editable_paragraph(document, paragraph_index)
         children = elements(paragraph)
         runs = [node for node in children if node.namespaceURI == NS and node.localName == 'r']
         if (not runs or any(node.namespaceURI != NS or node.localName not in {'pPr', 'r'}
