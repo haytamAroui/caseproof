@@ -13,13 +13,23 @@ uncommitted DOCX bytes. Signed browser fixture checks were added; final-head
 results remain to be confirmed. New editor work does **not** use or weaken
 the reference-scoped F5 reservation authority.
 
-**NOT complete/NOT merged:** document-wide reviewed authorization and
-durable storage/activation, the new corresponding audited PostgreSQL
-reservation and idempotency contract, loss-aware full-document Word editing
-parity, a fully embedded OOXML renderer, desktop Word/LibreOffice
-round-trip acceptance, independent security review, generated editor TS/AJV
-contracts, manual accessibility and pilot authorization. Downloading a local
-candidate is not an activated or rechecked CaseProof draft. See
+**ADDITIONAL CODE (not deployed):** `apps/api/docx_editor_api.py`
+now provides signed document-wide review/commit/status routes using an
+explicit `draft:edit` permission in the
+[uninstalled SQL proposal](security/DOCX_EDITOR_DOCUMENT_SCOPE_SQL_PROPOSAL.sql),
+audited actor-scoped reservation, trusted Storage readback and a distinct
+freshly authorized activation RPC. The React UI has review rationale,
+durable request ID reconciliation and required recheck navigation.
+[Disposable PostgreSQL suite](../scripts/verify_document_editor_disposable.py)
+now includes audit rollback and permission-revocation cases; **final-head
+CI is not yet verified**, and no approval or live SQL installation occurred.
+
+**NOT complete/NOT merged:** real signed full-document activation, independent
+SQL/RLS and Office compatibility approval, loss-aware full-document Word editing
+parity, a pixel-faithful embedded OOXML renderer, desktop Word/LibreOffice
+round-trip acceptance, generated editor TS/AJV contracts, manual accessibility
+and pilot authorization. A local candidate is not an activated/rechecked
+CaseProof draft until signed review/activation and fresh verification pass. See
 [ADR 0033](adr/0033-optional-word-editor-and-review-boundaries.md).
 
 ## 4 November 2026 — PR #185 merged; PR #186 housekeeping and outstanding pilot gates
