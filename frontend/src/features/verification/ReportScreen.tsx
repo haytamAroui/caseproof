@@ -7,6 +7,8 @@ import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
 import { coveragePages, coverageRegions } from './coverageRegions';
 import { quoteMatches } from './quoteComparison';
+import { CoverageSource } from './CoverageSource';
+import { OriginalDraftDownload } from './OriginalDraftDownload';
 import type { ReactNode } from 'react';
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -398,6 +400,10 @@ export function ReportScreen({
             <h2 id="finding-title">No reference selected</h2>
           )}
           <CoverageSummary
+            key={`${session.epoch}:${caseId}:${briefId}:${snapshot}:${historical}`}
+            api={api}
+            scope={{ caseId, briefId, snapshot, historical }}
+            sources={report.sources}
             coverage={report.coverage}
             findings={report.findings}
             onSelectReference={selectReference}
@@ -541,16 +547,56 @@ function FindingInspection({
 }
 
 function CoverageSummary({
+  api,
+  scope,
+  sources,
   coverage,
   findings,
   onSelectReference,
 }: {
+  api: ApiClient;
+  scope: {
+    caseId: string;
+    briefId: string;
+    snapshot: string;
+    historical: boolean;
+  };
+  sources: unknown;
   coverage: Record<string, unknown>;
   findings: FindingView[];
   onSelectReference: (reference: string) => void;
 }) {
+  const [selectedPage, setSelectedPage] = useState<{
+    versionId: string;
+    sha256: string;
+    length: number;
+    page: number;
+  } | null>(null);
   const ledger = coverageRegions(coverage);
   const pageLedger = coveragePages(coverage);
+  const drafts = Array.isArray(sources)
+    ? sources.filter((source: unknown) => {
+        if (!source || typeof source !== 'object' || Array.isArray(source))
+          return false;
+        const row = source as Record<string, unknown>;
+        return (
+          row.role === 'draft' &&
+          row.version_id === scope.briefId &&
+          row.media_type ===
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+          typeof row.sha256 === 'string' &&
+          /^[0-9a-f]{64}$/.test(row.sha256) &&
+          typeof row.byte_length === 'number' &&
+          Number.isSafeInteger(row.byte_length) &&
+          row.byte_length > 0 &&
+          row.byte_length <= 20_000_000
+        );
+      })
+    : [];
+  const draft =
+    drafts.length === 1
+      ? (drafts[0] as { sha256: string; byte_length: number })
+      : null;
   const referencesByPage = new Map<string, FindingView>();
   const referencesByRegion = new Map<string, FindingView>();
   for (const finding of findings) {
@@ -688,6 +734,17 @@ function CoverageSummary({
           Text extraction, visual inspection and editability are separate; a
           listed region is not a verified finding.
         </p>
+        {draft && (
+          <OriginalDraftDownload
+            api={api}
+            {...scope}
+            sha256={draft.sha256}
+            length={draft.byte_length}
+          />
+        )}
+        {!draft && (
+          <p>Preserved original DOCX access is unavailable for this report.</p>
+        )}
       </details>
       <details>
         <summary>Source-page processing</summary>
@@ -715,6 +772,30 @@ function CoverageSummary({
                 page.page,
               ]);
               const reference = referencesByPage.get(key);
+              const matching = Array.isArray(sources)
+                ? sources.filter((source: unknown) => {
+                    if (
+                      !source ||
+                      typeof source !== 'object' ||
+                      Array.isArray(source)
+                    )
+                      return false;
+                    const row = source as Record<string, unknown>;
+                    return (
+                      row.version_id === page.versionId &&
+                      row.sha256 === page.sha256 &&
+                      row.media_type === 'application/pdf' &&
+                      typeof row.byte_length === 'number' &&
+                      Number.isSafeInteger(row.byte_length) &&
+                      row.byte_length > 0 &&
+                      row.byte_length <= 20_000_000
+                    );
+                  })
+                : [];
+              const length =
+                matching.length === 1
+                  ? (matching[0] as Record<string, unknown>).byte_length
+                  : null;
               return (
                 <li key={`${key}:${index}`}>
                   <p>
@@ -737,6 +818,27 @@ function CoverageSummary({
                       No mapped reference is available for this source page.
                     </p>
                   )}
+                  {typeof length === 'number' && page.page <= 200 && (
+                    <button
+                      type="button"
+                      className="button"
+                      onClick={() =>
+                        setSelectedPage({
+                          versionId: page.versionId,
+                          sha256: page.sha256,
+                          length,
+                          page: page.page,
+                        })
+                      }
+                    >
+                      Open preserved PDF page {page.page}
+                    </button>
+                  )}
+                  {(typeof length !== 'number' || page.page > 200) && (
+                    <p>
+                      Preserved PDF page access is unavailable for this entry.
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -747,6 +849,15 @@ function CoverageSummary({
           support.
         </p>
       </details>
+      {selectedPage && (
+        <CoverageSource
+          key={`${selectedPage.versionId}:${selectedPage.sha256}:${selectedPage.page}`}
+          api={api}
+          {...scope}
+          {...selectedPage}
+          onClose={() => setSelectedPage(null)}
+        />
+      )}
       <details>
         <summary>Machine-readable coverage record</summary>
         <pre>{JSON.stringify(coverage, null, 2)}</pre>

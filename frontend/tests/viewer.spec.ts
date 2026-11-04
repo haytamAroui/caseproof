@@ -678,3 +678,69 @@ test('source-bound raster outlines align with pixels on mixed-size nonzero CropB
     expect(pixels).toEqual({ dark: true, outline: true });
   }
 });
+
+test('OCR word positions are opt-in, source bound and exposed as accessible text', async ({
+  page,
+}) => {
+  await page.route('**/viewer/regions', (route) =>
+    route.fulfill({
+      json: {
+        schema: 'caseproof-raster-overlays-v1',
+        snapshot_hash: snapshot,
+        original_sha256: fixture.sha256,
+        source_version_id: 'source',
+        interpretation: 'navigation_only_never_a_verdict',
+        unassessed_region_count: 0,
+        regions: [
+          {
+            region_id: 'c'.repeat(64),
+            original_sha256: fixture.sha256,
+            page_number: 1,
+            bbox: [140, 560, 260, 600],
+            image_size: [600, 800],
+            crop_box: [0, 0, 600, 800],
+            rotation: 0,
+            user_unit: 1,
+            cropbox_rasterized: true,
+            ocr_word: { text: '<synthetic>', bbox: [145, 565, 255, 595] },
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Show OCR word positions' }).click();
+  await expect(
+    page.getByRole('list', { name: 'OCR words on this page' }),
+  ).toContainText('<synthetic>');
+  await expect(
+    page.getByText('Derived OCR words and numbered positions', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Hide navigation boxes' }).click();
+  const overlayHasWord = await page
+    .locator('.viewer-overlay')
+    .evaluate((node) => {
+      const canvas = node as HTMLCanvasElement;
+      const x = Math.round((145 / 600) * canvas.width);
+      const y = Math.round((565 / 800) * canvas.height);
+      const pixels = canvas
+        .getContext('2d')!
+        .getImageData(x - 3, y - 3, 7, 7).data;
+      return Array.from(pixels).some(
+        (value, index) => index % 4 === 3 && value > 0,
+      );
+    });
+  expect(overlayHasWord).toBe(true);
+  await page.getByRole('button', { name: 'Hide OCR word positions' }).click();
+  await expect(
+    page.getByRole('list', { name: 'OCR words on this page' }),
+  ).toHaveCount(0);
+});

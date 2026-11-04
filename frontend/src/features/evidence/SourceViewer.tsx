@@ -62,6 +62,7 @@ function SourceInspection({
   const [result, setResult] = useState<PdfPageResult | null>(null);
   const [search, setSearch] = useState('');
   const [showBoxes, setShowBoxes] = useState(true);
+  const [showOcr, setShowOcr] = useState(false);
   const [mapping, setMapping] = useState('');
   const [hash, setHash] = useState('');
   const [legacy, setLegacy] = useState(0);
@@ -218,12 +219,12 @@ function SourceInspection({
     layer.width = canvas.current.width;
     layer.height = canvas.current.height;
     const context = layer.getContext('2d');
-    if (!context || !result || !showBoxes) return;
+    if (!context || !result) return;
     const xScale = layer.width / result.width,
       yScale = layer.height / result.height;
     context.strokeStyle = getComputedStyle(layer).getPropertyValue('--focus');
     context.lineWidth = 2 * xScale;
-    for (const region of rasterRegions) {
+    for (const region of showBoxes ? rasterRegions : []) {
       if (region.page_number !== page || region.original_sha256 !== hash)
         continue;
       const box = projectRasterBox(region, result);
@@ -235,7 +236,35 @@ function SourceInspection({
         (box[3] - box[1]) * yScale,
       );
     }
-    if (!search.trim()) return;
+    if (showOcr) {
+      const words = rasterRegions.filter(
+        (region) =>
+          region.page_number === page &&
+          region.original_sha256 === hash &&
+          region.ocr_word,
+      );
+      words.forEach((region, index) => {
+        const box = projectRasterBox(
+          { ...region, bbox: region.ocr_word!.bbox },
+          result,
+        );
+        if (!box) return;
+        context.strokeRect(
+          box[0] * xScale,
+          box[1] * yScale,
+          (box[2] - box[0]) * xScale,
+          (box[3] - box[1]) * yScale,
+        );
+        context.font = `${Math.max(12, 12 * xScale)}px sans-serif`;
+        context.fillStyle = context.strokeStyle;
+        context.fillText(
+          String(index + 1),
+          box[0] * xScale,
+          Math.max(12, box[1] * yScale),
+        );
+      });
+    }
+    if (!showBoxes || !search.trim()) return;
     for (const item of result.textBoxes.filter((item) =>
       item.text.includes(search),
     )) {
@@ -247,7 +276,7 @@ function SourceInspection({
         (y2 - y1) * yScale,
       );
     }
-  }, [result, search, showBoxes, rasterRegions, page, hash]);
+  }, [result, search, showBoxes, showOcr, rasterRegions, page, hash]);
   useEffect(() => {
     if (
       result &&
@@ -363,6 +392,40 @@ function SourceInspection({
               }{' '}
               source-bound raster outline(s) aligned on this page.
             </p>
+          )}
+          {rasterRegions.some(
+            (region) => region.page_number === page && region.ocr_word,
+          ) && (
+            <>
+              <Button
+                aria-pressed={showOcr}
+                onClick={() => setShowOcr((value) => !value)}
+              >
+                {showOcr
+                  ? 'Hide OCR word positions'
+                  : 'Show OCR word positions'}
+              </Button>
+              {showOcr && (
+                <div>
+                  <p>
+                    Derived OCR words and numbered positions are navigation
+                    aids, not proof of accuracy or support. Only available valid
+                    positions are shown; omissions do not establish complete
+                    OCR. Compare them with the preserved pixels.
+                  </p>
+                  <ol aria-label="OCR words on this page">
+                    {rasterRegions
+                      .filter(
+                        (region) =>
+                          region.page_number === page && region.ocr_word,
+                      )
+                      .map((region) => (
+                        <li key={region.region_id}>{region.ocr_word!.text}</li>
+                      ))}
+                  </ol>
+                </div>
+              )}
+            </>
           )}
           <div className="viewer-controls" aria-label="Source page controls">
             <Button

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 
 const caseId = '11111111-1111-4111-8111-111111111111';
 const brief = '22222222-2222-4222-8222-222222222222';
@@ -894,4 +895,137 @@ test('next saved decision follows the active filtered queue', async ({
       .getByRole('region', { name: 'References' })
       .getByRole('button', { name: /^Stuk next/ }),
   ).toHaveAttribute('aria-current', 'true');
+});
+
+test('unmatched coverage page opens the snapshot-bound original and clears on sign-out', async ({
+  page,
+}) => {
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        sources: [
+          {
+            version_id: 'source',
+            sha256: source.sha256,
+            media_type: 'application/pdf',
+            byte_length: source.bytes,
+          },
+        ],
+        coverage: {
+          source_pages_total: 1,
+          source_pages: [
+            {
+              version_id: 'source',
+              original_sha256: source.sha256,
+              pdf_page: 2,
+              method: 'FAILED',
+              reason: 'ocr_unavailable',
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await page.route('**/dossier/sources/source/original?*', (route) =>
+    route.fulfill({
+      body: originalPdf,
+      contentType: 'application/octet-stream',
+      headers: {
+        'X-CaseProof-Snapshot': snapshot,
+        'X-CaseProof-Original-SHA256': source.sha256,
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const coverage = page.getByRole('region', {
+    name: 'Verification and processing coverage',
+  });
+  await coverage.getByText('Source-page processing', { exact: true }).click();
+  await expect(
+    coverage.getByText('No mapped reference is available', { exact: false }),
+  ).toBeVisible();
+  await coverage
+    .getByRole('button', { name: 'Open preserved PDF page 2' })
+    .click();
+  const original = coverage.getByRole('region', {
+    name: 'Coverage original source',
+  });
+  await expect(
+    original.getByText('Original PDF page 2 rendered.', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    original.getByRole('img', { name: 'Preserved original PDF page 2' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'End session' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Coverage original source' }),
+  ).toHaveCount(0);
+});
+
+test('unanchored DOCX region offers only a snapshot-bound preserved original', async ({
+  page,
+}) => {
+  const original = Buffer.from('synthetic preserved draft');
+  const sha = createHash('sha256').update(original).digest('hex');
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        sources: [
+          {
+            role: 'draft',
+            version_id: brief,
+            sha256: sha,
+            byte_length: original.length,
+            media_type:
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          },
+        ],
+        coverage: {
+          docx_regions: {
+            coverage_unknown: false,
+            regions: [
+              {
+                part: 'word/header1.xml',
+                kind: 'HEADER',
+                status: 'UNPROCESSED_REGION',
+                reason: 'NOT_SCANNED',
+              },
+            ],
+          },
+        },
+      },
+    }),
+  );
+  await page.route(`**/dossier/sources/${brief}/original?*`, (route) =>
+    route.fulfill({
+      body: original,
+      contentType: 'application/octet-stream',
+      headers: {
+        'X-CaseProof-Snapshot': snapshot,
+        'X-CaseProof-Original-SHA256': sha,
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const coverage = page.getByRole('region', {
+    name: 'Verification and processing coverage',
+  });
+  await coverage.getByText('DOCX region coverage', { exact: true }).click();
+  await expect(
+    coverage.getByText('No detected reference is available', { exact: false }),
+  ).toBeVisible();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    coverage
+      .getByRole('button', { name: 'Download preserved original DOCX' })
+      .click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(
+    'caseproof-preserved-original.docx',
+  );
+  expect(await download.failure()).toBeNull();
 });

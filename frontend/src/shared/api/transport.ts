@@ -5,6 +5,7 @@ type BinaryBinding = {
   length: number;
   media?:
     | 'application/json'
+    | 'application/octet-stream'
     | 'text/markdown'
     | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   export?: true;
@@ -52,6 +53,24 @@ export class ApiClient {
     )
       throw new ApiError(502);
     return (await this.read(path, signal, binding)) as Uint8Array;
+  }
+  async preservedOriginal(
+    path: string,
+    binding: { sha256: string; snapshot: string; length: number },
+    signal: AbortSignal,
+  ): Promise<Uint8Array> {
+    if (
+      !/^[0-9a-f]{64}$/.test(binding.sha256) ||
+      !/^[0-9a-f]{64}$/.test(binding.snapshot) ||
+      !Number.isInteger(binding.length) ||
+      binding.length < 1 ||
+      binding.length > 20_000_000
+    )
+      throw new ApiError(502);
+    return (await this.read(path, signal, {
+      ...binding,
+      media: 'application/octet-stream',
+    })) as Uint8Array;
   }
   async artifact(
     path: string,

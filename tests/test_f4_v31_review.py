@@ -162,6 +162,38 @@ def test_review_refuses_unselected_or_invented_visual_regions():
     assert client.post(route("reviews"), json=command, headers=headers).status_code == 200
 
 
+def test_snapshot_bound_original_rejects_unknown_and_corrupt_bytes():
+    import hashlib
+
+    store, client = rig()
+    raw = b"%PDF-1.7\nsynthetic"
+    digest = hashlib.sha256(raw).hexdigest()
+    report = {"sources": [{"version_id": "source", "sha256": digest, "byte_length": len(raw)}]}
+    def reopen(bearer, case, brief, snapshot):
+        store.reopen(bearer, case, brief, snapshot)
+        return report, {"source": raw}
+    store.reopen_originals = reopen
+    path = route(f"sources/source/original?snapshot_hash={SNAP}")
+    response = client.get(path, headers=auth())
+    assert response.content == raw
+    assert response.headers["x-caseproof-snapshot"] == SNAP
+    assert response.headers["x-caseproof-original-sha256"] == digest
+    assert client.get(path.replace("sources/source/", "sources/other/"), headers=auth()).status_code == 404
+    assert client.get(path.replace("/case/", "/foreign/"), headers=auth()).status_code == 404
+    assert client.get(path.replace("/brief/", "/other/"), headers=auth()).status_code == 404
+    report["sources"].append(dict(report["sources"][0]))
+    assert client.get(path, headers=auth()).status_code == 404
+    report["sources"].pop()
+    store.stale = True
+    assert client.get(path, headers=auth()).status_code == 409
+    store.stale = False
+    store.revoked = True
+    assert client.get(path, headers=auth()).status_code == 404
+    store.revoked = False
+    report["sources"][0]["sha256"] = "b" * 64
+    assert client.get(path, headers=auth()).status_code == 503
+
+
 def test_review_request_and_ledger_reject_invented_decisions_or_timestamps():
     command = {"snapshot_hash": SNAP, "reference_id": REF, "request_id": str(uuid4()),
                "decision": "CONFIRMED_SUPPORTED", "rationale": "Inspected"}

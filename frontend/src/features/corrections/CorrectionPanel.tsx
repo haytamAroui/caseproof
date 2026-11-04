@@ -8,6 +8,7 @@ import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 import { useSession } from '../../shared/session';
 import { CorrectionRecovery } from './CorrectionRecovery';
 import { comparisonCounts, findingReasons } from './comparison';
+import { boundedRedline } from './boundedRedline';
 
 type Scope = { caseId: string; briefId: string; snapshot: string };
 type Preview = {
@@ -438,6 +439,7 @@ export function CorrectionPanel({
       setBusy(false);
     }
   }
+  const redline = preview ? boundedRedline(before, after) : null;
   return (
     <section
       className="draft-context"
@@ -508,7 +510,10 @@ export function CorrectionPanel({
         <div aria-label="Before and after correction">
           <p>Proposed change (not committed)</p>
           <p>
-            <del>{before}</del> <ins>{after}</ins>
+            {redline?.prefix}
+            <del>{redline?.removed}</del>
+            <ins>{redline?.added}</ins>
+            {redline?.suffix}
           </p>
           <p className="small">Original SHA-256: {preview.original_sha256}</p>
           <p className="small">
