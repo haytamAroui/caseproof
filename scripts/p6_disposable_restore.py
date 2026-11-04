@@ -20,12 +20,25 @@ SOURCE = "caseproof_s2_ci"
 TARGET = "caseproof_p6_restore_ci"
 
 
-def _call(command: list[str], *, database: str, timeout: int = 90) -> None:
+def _call(command: list[str], *, database: str, timeout: int = 90,
+          backup_dir: Path | None = None) -> None:
+    # Ubuntu's default pg_dump can be older than the postgres:17 service.
+    # Always use the matching PostgreSQL 17 client *inside isolated CI*.
     env = {**os.environ, "PGDATABASE": database}
-    result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, env=env, check=False)
+    client = [
+        "docker", "run", "--rm", "--network", "host",
+        "-e", "PGHOST", "-e", "PGPORT", "-e", "PGUSER", "-e", "PGPASSWORD",
+        "-e", "PGDATABASE=" + database,
+    ]
+    if backup_dir is not None:
+        client.extend(["--volume", str(backup_dir) + ":/caseproof-backup"])
+    client.extend(["postgres:17", *command])
+    result = subprocess.run(client, capture_output=True, text=True, timeout=timeout,
+                            env=env, check=False)
     if result.returncode != 0:
-        # Do not echo potentially sensitive SQL, dump output, or credentials.
-        raise RuntimeError("Isolated backup/restore subprocess failed")
+        # Only an operation + return code. No SQL, credentials or dump bytes in logs.
+        raise RuntimeError("Isolated " + command[0] + " failed (exit " +
+                           str(result.returncode) + ")")
 
 
 def main() -> None:
@@ -54,8 +67,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="caseproof-p6-backup-") as dirname:
         output = Path(dirname) / "synthetic.dump"
         started = time.monotonic()
-        _call(["pg_dump", "--format=custom", "--file", str(output), "--no-owner",
-               "--no-privileges", "--dbname", SOURCE], database=SOURCE)
+        _call(["pg_dump", "--format=custom", "--file", "/caseproof-backup/synthetic.dump", "--no-owner",
+               "--no-privileges", "--dbname", SOURCE], database=SOURCE, backup_dir=Path(dirname))
         if not output.is_file() or output.stat().st_size < 4096:
             raise AssertionError("Synthetic PostgreSQL backup missing")
         # Erasure takes effect *after* backup. The restore must be quarantined
@@ -66,7 +79,8 @@ def main() -> None:
         _call(["createdb", TARGET], database=SOURCE)
         try:
             _call(["pg_restore", "--no-owner", "--no-privileges", "--exit-on-error",
-                   "--dbname", TARGET, str(output)], database=TARGET, timeout=180)
+                   "--dbname", TARGET, "/caseproof-backup/synthetic.dump"],
+                  database=TARGET, timeout=180, backup_dir=Path(dirname))
             with psycopg.connect(dbname=TARGET, autocommit=True) as target:
                 # Demonstrate the actual stale-backup resurrection *before*
                 # erasure replay. This is an isolated quarantine observation.

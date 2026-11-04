@@ -102,4 +102,4 @@ jobs:
       - name: Validate author-labelled synthetic corpus, not real practitioner labels
         run: uv run --locked python -m scripts.validate_litigation_corpus
       - name: Keep deployment/retention/egress claims fail-closed
-        run: uv run --locked pytest -q tests/test_deployment_assessment.py tests/test_litigation_m0_corpus.py
+        run: uv run --locked pytest -q tests/test_deployment_assessment.py tests/test_litigation_m0_corpus.py tests/test_p6_privacy_disclosure.py
