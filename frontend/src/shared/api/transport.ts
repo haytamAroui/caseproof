@@ -16,7 +16,9 @@ export class ApiError extends Error {
         ? 'This report is unavailable for the current session.'
         : status === 409
           ? 'The snapshot changed. Reopen the current report.'
-          : 'The service could not return this report. Try again.',
+          : status === 412
+            ? 'Snapshot stale. Reopen the current report.'
+            : 'The service could not return this report. Try again.',
     );
   }
 }
@@ -32,8 +34,9 @@ export class ApiClient {
     path: string,
     body: unknown,
     signal?: AbortSignal,
+    mutation?: { snapshot: string; idempotencyKey?: string },
   ): Promise<unknown> {
-    return this.read(path, signal, undefined, body);
+    return this.read(path, signal, undefined, body, mutation);
   }
   async pdf(
     path: string,
@@ -76,6 +79,7 @@ export class ApiClient {
     signal?: AbortSignal,
     binding?: BinaryBinding,
     body?: unknown,
+    mutation?: { snapshot: string; idempotencyKey?: string },
   ): Promise<unknown> {
     if (
       !path.startsWith('/v2/') ||
@@ -84,6 +88,13 @@ export class ApiClient {
       !new URL(path, 'https://caseproof.invalid').pathname.startsWith('/v2/')
     )
       throw Error('Only same-origin application API paths are allowed');
+    if (
+      mutation &&
+      (!/^[0-9a-f]{64}$/.test(mutation.snapshot) ||
+        (mutation.idempotencyKey !== undefined &&
+          !/^[0-9a-f-]{36}$/.test(mutation.idempotencyKey)))
+    )
+      throw Error('Invalid mutation correspondence');
     const epoch = this.session.getSnapshot().epoch;
     const { controller, release } = this.session.requestController();
     const combined = AbortSignal.any([
@@ -108,6 +119,12 @@ export class ApiClient {
         headers: {
           Authorization: `Bearer ${token}`,
           ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...(mutation
+            ? { 'If-Match': `snapshot_id:${mutation.snapshot}` }
+            : {}),
+          ...(mutation?.idempotencyKey
+            ? { 'Idempotency-Key': mutation.idempotencyKey }
+            : {}),
         },
         signal: combined,
         credentials: 'omit',

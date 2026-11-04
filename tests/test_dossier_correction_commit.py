@@ -104,7 +104,7 @@ def test_changed_command_and_stale_snapshot_rejected():
     service, command = store()
     with pytest.raises(HTTPException) as stale:
         service.commit_correction('signed', 'case', 'old', command.model_copy(update={'snapshot_hash': 'b'*64}))
-    assert stale.value.status_code == 409 and service.client.library.writes == 0
+    assert stale.value.status_code == 412 and service.client.library.writes == 0
     service.commit_correction('signed', 'case', 'old', command)
     with pytest.raises(HTTPException) as conflict:
         service.commit_correction('signed', 'case', 'old', command.model_copy(update={'after': 'p. 4'}))

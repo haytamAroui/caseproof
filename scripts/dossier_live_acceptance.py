@@ -24,10 +24,16 @@ from tests.fixtures.factory import SyntheticSource
 
 
 def request(token, method, path, payload=None):
+    headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+    if method == "POST" and payload and "/dossier/" in path:
+        if path.endswith(("/reviews", "/corrections/preview", "/corrections/commit")):
+            headers["If-Match"] = "snapshot_id:" + payload["snapshot_hash"]
+        if path.endswith(("/reviews", "/corrections/commit")) and "request_id" in payload:
+            headers["Idempotency-Key"] = str(payload["request_id"])
     con = http.client.HTTPConnection('127.0.0.1', 8765, timeout=120)
     try:
         con.request(method, path, json.dumps(payload).encode() if payload is not None else None,
-                    {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+                    headers)
         res = con.getresponse()
         return res.status, res.read(4_000_001)
     finally:
@@ -314,7 +320,7 @@ def main():
         if old_export not in (403, 404, 409):
             raise RuntimeError('DOSSIER_STALE_EXPORT_NOT_INVALIDATED')
         current = json_request(token, 'GET', base + '/export')
-        if stale != 409 or current['human_decisions'] or current['snapshot_hash'] == review['snapshot_hash']:
+        if stale != 412 or current['human_decisions'] or current['snapshot_hash'] == review['snapshot_hash']:
             raise RuntimeError('DOSSIER_STALE_REVIEW_NOT_INVALIDATED')
         print('DOSSIER_CHANGED_CONFIRMATION_INVALIDATES_OLD_REVIEW_PASSED', flush=True)
         if os.getenv('CASEPROOF_PR174_BROWSER_LIVE') == 'YES':
@@ -341,7 +347,7 @@ def main():
             stale_preview, _ = request(token, 'POST', base + '/corrections/preview', stale_command)
             stale_commit, _ = request(token, 'POST', base + '/corrections/commit',
                                       {**stale_command, 'request_id': str(uuid4())})
-            if stale_preview != 409 or stale_commit != 409:
+            if stale_preview != 412 or stale_commit != 412:
                 raise RuntimeError('PR174_HISTORICAL_CORRECTION_WRITE_NOT_FENCED')
             if browser_acceptance is None:
                 raise RuntimeError('PR174_GENUINE_BROWSER_REQUIRED')

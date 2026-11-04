@@ -107,9 +107,10 @@ def test_actual_document_dossier_crop_review_restart_export_and_denials(tmp_path
     assert c.get(route.replace('/case/','/other/'),headers=headers).status_code==404
     review={'snapshot_hash':sha,'reference_id':conflict['reference_id'],'request_id':str(uuid4()),
             'decision':'CONFIRMED_QUALIFIED','rationale':'I inspected the preserved strike and crop.'}
-    assert c.post(base+'/reviews',headers=headers,json=review).status_code==409
+    mutation_headers = {**headers, "If-Match": f"snapshot_id:{sha}", "Idempotency-Key": review["request_id"]}
+    assert c.post(base+'/reviews',headers=mutation_headers,json=review).status_code==409
     review['reviewed_region_ids']=[r['region_id'] for r in conflict['visual_assessment']['regions']]
-    assert c.post(base+'/reviews',headers=headers,json=review).status_code==200
+    assert c.post(base+'/reviews',headers=mutation_headers,json=review).status_code==200
     reopened=client(DiskStore(tmp_path))
     assert reopened.get(base+'?snapshot_hash='+sha,headers=headers).json()==report
     for format in ('json','markdown','docx'):

@@ -1,6 +1,7 @@
 """Resolve a report reference to a supported, exact main-body DOCX paragraph."""
 from __future__ import annotations
 
+import hashlib
 import io
 from typing import Any
 from xml.dom import minidom
@@ -21,6 +22,9 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
     exactly; unsupported target structures and tracked changes still abstain.
     """
     literal, offsets = finding.get('literal'), finding.get('offsets')
+    locator = finding.get('locator_identity')
+    if locator is not None and not isinstance(locator, dict):
+        raise ValueError('invalid locator identity')
     if (finding.get('region') != 'word/document.xml' or not isinstance(literal, str)
             or not literal or not isinstance(offsets, dict)
             or type(offsets.get('start')) is not int or type(offsets.get('end')) is not int):
@@ -93,4 +97,51 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
             raise ValueError('unsupported target run')
     if region[left:right].count(literal) != 1:
         raise ValueError('ambiguous reference in paragraph')
+    if locator is not None:
+        paragraph_text = region[left:right]
+        exact_text = locator.get('exact_text')
+        if exact_text is not None and (not isinstance(exact_text, str) or exact_text != literal):
+            raise ValueError('stale locator exact text')
+        expected_hash = locator.get('content_hash')
+        if (not isinstance(expected_hash, str) or len(expected_hash) != 64
+                or any(character not in '0123456789abcdef' for character in expected_hash)):
+            raise ValueError('invalid locator content hash')
+        if hashlib.sha256(paragraph_text.encode('utf-8')).hexdigest() != expected_hash:
+            raise ValueError('stale locator content hash')
+        expected_id = locator.get('paragraph_id')
+        if expected_id is not None:
+            para_ns = 'http://schemas.microsoft.com/office/word/2010/wordml'
+            actual_id = paragraph.getAttributeNS(para_ns, 'paraId')
+            if not actual_id or actual_id != expected_id:
+                raise ValueError('stale locator paragraph identity')
+        prefix, suffix = locator.get('prefix'), locator.get('suffix')
+        if not isinstance(prefix, str) or not isinstance(suffix, str):
+            raise ValueError('invalid locator context')
+        local_start, local_end = start - left, end - left
+        if not paragraph_text[:local_start].endswith(prefix) or not paragraph_text[local_end:].startswith(suffix):
+            raise ValueError('stale locator context')
+        occurrence = locator.get('occurrence_index')
+        if type(occurrence) is not int or occurrence < 0:
+            raise ValueError('invalid locator occurrence')
+        occurrences = [i for i in range(len(paragraph_text)) if paragraph_text.startswith(literal, i)]
+        if occurrence >= len(occurrences) or occurrences[occurrence] != local_start:
+            raise ValueError('stale locator occurrence')
     return index
+
+
+def bound_locator(original: bytes, finding: dict[str, Any], source_version_id: str) -> dict[str, Any]:
+    """Identity extracted from the source bytes and its already validated target."""
+    from docx import Document
+    index = correction_anchor(original, finding)
+    paragraph = Document(io.BytesIO(original)).paragraphs[index]
+    content = paragraph.text
+    literal = finding['literal']
+    at = content.find(literal)
+    if at < 0 or content.find(literal, at + 1) >= 0:
+        raise ValueError('ambiguous target')
+    para_ns = 'http://schemas.microsoft.com/office/word/2010/wordml'
+    return {'exact_text': literal, 'prefix': content[max(0, at - 4000):at],
+            'suffix': content[at + len(literal):at + len(literal) + 4000], 'occurrence_index': 0,
+            'content_hash': hashlib.sha256(content.encode()).hexdigest(),
+            'paragraph_id': paragraph._p.get(f'{{{para_ns}}}paraId'),
+            'source_version_id': source_version_id}

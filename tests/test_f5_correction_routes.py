@@ -49,12 +49,16 @@ def fixture(large=False):
 def test_anchor_and_preview_bind_reference_to_specific_paragraph():
     client, raw = fixture()
     base = '/v2/matters/case/briefs/parent/dossier'
-    headers = {'Authorization': 'Bearer signed'}
+    headers = {'Authorization': 'Bearer signed', 'If-Match': 'snapshot_id:' + 'a' * 64}
     anchor = client.get(f'{base}/snapshots/{"a" * 64}/references/ref-1/correction-anchor', headers=headers)
     assert anchor.status_code == 200
     assert anchor.json()['paragraph_index'] == 1
     payload = {'snapshot_hash': 'a' * 64, 'original_sha256': sha256(raw).hexdigest(),
                'reference_id': 'ref-1', 'paragraph_index': 1, 'before': 'Stuk 1', 'after': 'Stuk 2'}
+    payload['locator_identity'] = anchor.json()['locator_identity']
+    stale = client.post(f'{base}/corrections/preview',
+                        headers={**headers, 'If-Match': 'snapshot_id:' + 'b' * 64}, json=payload)
+    assert stale.status_code == 412
     preview = client.post(f'{base}/corrections/preview', headers=headers, json=payload)
     assert preview.status_code == 200
     assert preview.json()['committed'] is False
@@ -76,7 +80,7 @@ def test_large_docx_preview_stays_bounded_without_base64():
     payload = {'snapshot_hash': 'a' * 64, 'original_sha256': sha256(raw).hexdigest(),
                'reference_id': 'ref-1', 'paragraph_index': 1, 'before': 'Stuk 1', 'after': 'Stuk 2'}
     response = client.post(base + '/corrections/preview',
-                           headers={'Authorization': 'Bearer signed'}, json=payload)
+                           headers={'Authorization': 'Bearer signed', 'If-Match': 'snapshot_id:' + 'a' * 64}, json=payload)
     assert response.status_code == 200
     assert len(response.content) < 16384
     receipt = response.json()

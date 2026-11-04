@@ -126,3 +126,83 @@ def test_anchor_accepts_reference_split_across_plain_formatted_runs():
     output = io.BytesIO()
     document.save(output)
     assert correction_anchor(output.getvalue(), finding(4, 10)) == 0
+
+
+def test_locator_identity_accepts_exact_paragraph_context():
+    from hashlib import sha256
+
+    original = docx('Before Stuk 1 after')
+    target = finding(7, 13)
+    target['locator_identity'] = {
+        'content_hash': sha256(b'Before Stuk 1 after').hexdigest(),
+        'paragraph_id': None,
+        'prefix': 'Before ',
+        'suffix': ' after',
+        'occurrence_index': 0,
+    }
+    assert correction_anchor(original, target) == 0
+
+
+@pytest.mark.parametrize('change', [
+    {'content_hash': '0' * 64},
+    {'paragraph_id': 'DEADBEEF'},
+    {'prefix': 'Wrong '},
+    {'suffix': ' wrong'},
+    {'occurrence_index': 1},
+])
+def test_locator_identity_fails_closed_when_stale(change):
+    from hashlib import sha256
+
+    original = docx('Before Stuk 1 after')
+    target = finding(7, 13)
+    target['locator_identity'] = {
+        'content_hash': sha256(b'Before Stuk 1 after').hexdigest(),
+        'paragraph_id': None,
+        'prefix': 'Before ',
+        'suffix': ' after',
+        'occurrence_index': 0,
+        **change,
+    }
+    with pytest.raises(ValueError):
+        correction_anchor(original, target)
+
+
+@pytest.mark.parametrize('override', [
+    {'exact_text': 'Stuk 2'},
+    {'exact_text': 123},
+    {'content_hash': 'z' * 64},
+    {'content_hash': 'A' * 64},
+])
+def test_locator_rejects_mismatched_exact_text_and_invalid_digest(override):
+    from hashlib import sha256
+
+    original = docx('Before Stuk 1 after')
+    target = finding(7, 13)
+    target['locator_identity'] = {
+        'exact_text': 'Stuk 1',
+        'content_hash': sha256(b'Before Stuk 1 after').hexdigest(),
+        'paragraph_id': None,
+        'prefix': 'Before ',
+        'suffix': ' after',
+        'occurrence_index': 0,
+        **override,
+    }
+    with pytest.raises(ValueError):
+        correction_anchor(original, target)
+
+
+def test_locator_exact_text_matches_before_in_contract():
+    from hashlib import sha256
+
+    from apps.api.dossier_journey import CorrectionPreviewBody
+
+    base = dict(snapshot_hash='a' * 64, original_sha256='b' * 64,
+                reference_id='ref-1', paragraph_index=0, before='Stuk 1', after='Stuk 2')
+    identity = dict(exact_text='Stuk 1', prefix='Before ', suffix=' after',
+                    occurrence_index=0, content_hash=sha256(b'Before Stuk 1 after').hexdigest(),
+                    paragraph_id=None, source_version_id='version-1')
+    assert CorrectionPreviewBody.model_validate({**base, 'locator_identity': identity}).locator_identity is not None
+    with pytest.raises(ValueError):
+        CorrectionPreviewBody.model_validate({**base, 'locator_identity': {**identity, 'exact_text': 'Stuk 9'}})
+    with pytest.raises(ValueError):
+        CorrectionPreviewBody.model_validate({**base, 'locator_identity': {**identity, 'content_hash': 'z' * 64}})

@@ -38,7 +38,7 @@ def _exercise() -> None:
         "refs/pull/175/merge",
         "refs/pull/176/merge",
         "refs/pull/177/merge", "refs/heads/feat/f5-correction-recheck-workspace",
-        "refs/pull/178/merge", "refs/pull/182/merge", "refs/pull/183/merge",
+        "refs/pull/178/merge", "refs/pull/182/merge", "refs/pull/183/merge", "refs/pull/184/merge",
         "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
@@ -318,16 +318,35 @@ def _exercise() -> None:
             def lose_correction_ack(route: Route) -> None:
                 writes[0] += 1
                 correction_request.update(route.request.post_data_json)
-                correction_headers['Authorization'] = route.request.headers['authorization']
+                for name in ('authorization', 'if-match', 'idempotency-key'):
+                    correction_headers[name] = route.request.headers[name]
                 correction_base[0] = route.request.url.removesuffix('/corrections/commit')
                 response = route.fetch(timeout=180000)
                 if response.status != 200:
                     raise RuntimeError("F5_COMMIT_REJECTED")
                 route.abort("failed")
-            page.route("**/corrections/commit", lose_correction_ack)
-            _stage("COMMIT_ACTIVATE")
-            correction.get_by_role("button", name="Explicitly commit and activate new draft").click()
-            correction.get_by_role("button", name="Reconcile identical operation").click(timeout=180000)
+            stale_context = acceptance.browser.new_context()
+            try:
+                stale_page = stale_context.new_page()
+                stale_page.goto(previous_url)
+                acceptance.login(stale_page)
+                stale_panel = stale_page.get_by_role("region", name="Correction preview and recheck", exact=True)
+                stale_panel.get_by_label("Replacement text").fill(replacement, timeout=90000)
+                stale_preview = stale_panel.get_by_role("button", name="Validate exact preview")
+                expect(stale_preview).to_be_enabled(timeout=90000)
+                page.route("**/corrections/commit", lose_correction_ack)
+                _stage("COMMIT_ACTIVATE")
+                correction.get_by_role("button", name="Explicitly commit and activate new draft").click()
+                correction.get_by_role("button", name="Reconcile identical operation").click(timeout=180000)
+                with stale_page.expect_response(lambda r: r.url.endswith("/corrections/preview")) as response:
+                    stale_preview.click()
+                if response.value.status != 412:
+                    raise RuntimeError("F5_SIGNED_SECOND_SESSION_EXPECTED_412")
+                expect(stale_panel.get_by_role("alert")).to_have_text("Stale draft. Reopen the current report.")
+                expect(stale_preview).to_be_disabled()
+                print("F5_SIGNED_SECOND_SESSION_STALE_RECOVERY_PASSED", flush=True)
+            finally:
+                stale_context.close()
             _stage("RECHECK_COMPARE")
             correction.get_by_role("button", name="Recheck activated draft", exact=True).click(timeout=90000)
             expect(correction.get_by_role("heading", name="Previous report", exact=True)).to_be_visible(timeout=180000)
@@ -343,6 +362,25 @@ def _exercise() -> None:
             print("F5_SIGNED_ORIGINAL_SHA256_UNCHANGED_PASSED", flush=True)
             print("F5_SPLIT_FORMATTED_REFERENCE_AND_UNRELATED_TABLE_CORRECTION_PASSED", flush=True)
             page.unroute("**/corrections/commit", lose_correction_ack)
+            replay = page.request.post(
+                correction_base[0] + '/corrections/commit', data=correction_request, headers=correction_headers,
+            )
+            if replay.status != 200 or replay.json().get('replayed') is not True:
+                raise RuntimeError("F5_SIGNED_DURABLE_REPLAY_FAILED")
+            changed = page.request.post(
+                correction_base[0] + '/corrections/commit',
+                data={**correction_request, 'after': correction_request['after'] + ' changed'},
+                headers=correction_headers,
+            )
+            if changed.status != 409:
+                raise RuntimeError("F5_SIGNED_DIFFERENT_COMMAND_REPLAY_NOT_REJECTED")
+            stale = page.request.post(
+                correction_base[0] + '/corrections/preview',
+                data={key: value for key, value in correction_request.items() if key != 'request_id'},
+                headers=correction_headers,
+            )
+            if stale.status != 412:
+                raise RuntimeError("F5_SIGNED_OLD_SNAPSHOT_PREVIEW_NOT_REJECTED")
             print("F5_SIGNED_PREVIEW_LOST_ACK_COMMIT_RECONCILE_RECHECK_COMPARE_PASSED", flush=True)
             _server_stop(proc)
             proc = _server_start()
@@ -451,6 +489,11 @@ def _exercise() -> None:
             )
             if denied_recovery.status not in (403, 404):
                 raise RuntimeError("F5_REVOKED_RECOVERY_NOT_DENIED")
+            denied_replay = page.request.post(
+                correction_base[0] + '/corrections/commit', data=correction_request, headers=correction_headers,
+            )
+            if denied_replay.status not in (403, 404):
+                raise RuntimeError("F5_REVOKED_REPLAY_NOT_DENIED")
             print("F5_GENUINE_SIGNED_REVOKED_RECOVERY_DENIED_PASSED", flush=True)
         page.goto(ORIGIN + f"/workspace/matters/{case}/sources")
         acceptance.login(page)

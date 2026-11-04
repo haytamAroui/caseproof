@@ -16,6 +16,18 @@ from apps.api.supabase_auth_verifier import (
 HOST = 'ldwmocpxwskvhoojndrd.supabase.co'
 
 
+def stale_snapshot_conflict(raw: bytes) -> bool:
+    try:
+        error = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return False
+    return (
+        isinstance(error, dict)
+        and error.get("code") == "23505"
+        and error.get("message") in ("stale snapshot", "stale parent")
+    )
+
+
 class DraftRevisionClient:
     def __init__(self, key: str, trusted_key: str | None):
         self.key = key
@@ -37,6 +49,8 @@ class DraftRevisionClient:
         finally:
             connection.close()
         if status == 409:
+            if stale_snapshot_conflict(raw):
+                raise HTTPException(412, "snapshot is stale")
             raise HTTPException(409, 'stale draft or correction command')
         if status in (400, 401, 403, 404):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)

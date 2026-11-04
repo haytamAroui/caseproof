@@ -21,7 +21,7 @@ from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
 from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
-from apps.api.dossier_draft_revisions import DraftRevisionClient
+from apps.api.dossier_draft_revisions import DraftRevisionClient, stale_snapshot_conflict
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
 from apps.api.litigation_live_journey import HOST, JourneyClient
@@ -35,7 +35,7 @@ from domains.disputes.dossier_verification import build_findings
 from domains.disputes.exhibit_identity import InventoryStatus
 from domains.disputes.page_labels import PAGE_LABEL_PATTERN
 from domains.disputes.reference_detection import detect_exhibit_references
-from infrastructure.parsers.docx_correction_anchor import correction_anchor
+from infrastructure.parsers.docx_correction_anchor import bound_locator, correction_anchor
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from infrastructure.parsers.dossier_docx_export import annotated_docx, corrected_docx_preview
@@ -111,14 +111,61 @@ class VerificationOptions(BaseModel):
     source_languages: dict[str, Literal["nl", "fr", "en", "de"]] = Field(default_factory=dict, max_length=32)
 
 
+class DocxLocatorIdentity(BaseModel):
+    """Version-bound identity for an exact editable DOCX paragraph."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    exact_text: str = Field(min_length=1, max_length=4000)
+    prefix: str = Field(max_length=4000)
+    suffix: str = Field(max_length=4000)
+    occurrence_index: int = Field(ge=0, le=100000)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    paragraph_id: str | None = Field(default=None, pattern=r"^[0-9A-Fa-f]{8}$")
+    source_version_id: str = Field(min_length=1, max_length=256)
+
+
 class CorrectionPreviewBody(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+    locator_identity: DocxLocatorIdentity | None = None
+
+    @model_validator(mode="after")
+    def check_locator_correspondence(self) -> CorrectionPreviewBody:
+        if self.locator_identity is not None and self.locator_identity.exact_text != self.before:
+            raise ValueError("locator exact text differs from correction before text")
+        return self
     snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     original_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     reference_id: str = Field(min_length=1, max_length=256)
     paragraph_index: int = Field(ge=0, le=100000)
     before: str = Field(min_length=1, max_length=4000)
     after: str = Field(max_length=4000)
+
+
+class StaleDossierConflict(HTTPException):
+    def __init__(self) -> None:
+        super().__init__(409, "snapshot is stale")
+
+
+def reopen_for_mutation(
+    store: DossierStore, bearer: str, case: str, brief: str, snapshot: str
+) -> tuple[dict[str, Any], bytes]:
+    try:
+        return store.reopen(bearer, case, brief, snapshot)
+    except HTTPException as exc:
+        if exc.status_code == 409:
+            raise HTTPException(412, "snapshot is stale") from None
+        raise
+
+
+def validate_correction_target(
+    original: bytes, finding: dict[str, Any], brief: str, command: CorrectionPreviewBody
+) -> None:
+    identity = command.locator_identity
+    if command.before != finding.get("literal") or (identity is not None and identity.source_version_id != brief):
+        raise ValueError("correction does not match reference anchor")
+    target = {**finding, "locator_identity": identity.model_dump() if identity is not None else None}
+    if correction_anchor(original, target) != command.paragraph_index:
+        raise ValueError("correction does not match reference anchor")
 
 
 class CorrectionCommitBody(CorrectionPreviewBody):
@@ -182,6 +229,10 @@ class DossierStore:
         if status in (400, 401, 403, 404):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         if status == 409:
+            if stale_snapshot_conflict(raw):
+                if action == "review":
+                    raise HTTPException(412, "snapshot is stale")
+                raise StaleDossierConflict()
             raise HTTPException(409, "stale dossier or idempotency conflict")
         if status != 200 or len(raw) > 4_000_000:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -259,8 +310,9 @@ class DossierStore:
         self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
     ) -> dict[str, Any]:
         """Read durable operation status without repeating a consequential write."""
-        values = command.model_dump()
-        values.pop("request_id")
+        values = command.model_dump(exclude={"request_id"})
+        if command.locator_identity is None:
+            values.pop("locator_identity")
         digest = hashlib.sha256(canonical({"case": case, "brief": brief, **values}).encode()).hexdigest()
         status = self.revisions.reserve(
             bearer, case, command.request_id, "status", {"command_sha256": digest}
@@ -319,8 +371,9 @@ class DossierStore:
     def commit_correction(
         self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
     ) -> dict[str, Any]:
-        values = command.model_dump()
-        values.pop("request_id")
+        values = command.model_dump(exclude={"request_id"})
+        if command.locator_identity is None:
+            values.pop("locator_identity")
         command_sha = hashlib.sha256(canonical({"case": case, "brief": brief, **values}).encode()).hexdigest()
         existing = self.revisions.reserve(
             bearer, case, command.request_id, "status", {"command_sha256": command_sha}
@@ -337,10 +390,13 @@ class DossierStore:
             # The reserve RPC independently enforces the same actor/snapshot/reference
             # predicate transactionally. This API gate prevents bypassing the review
             # receipt even if the browser sends a direct commit.
-            self.correction_review_receipt(bearer, case, brief, command.snapshot_hash, command.reference_id)
-            report, original = self.reopen(bearer, case, brief, command.snapshot_hash)
+            try:
+                self.correction_review_receipt(bearer, case, brief, command.snapshot_hash, command.reference_id)
+            except StaleDossierConflict:
+                raise HTTPException(412, "snapshot is stale") from None
+            report, original = reopen_for_mutation(self, bearer, case, brief, command.snapshot_hash)
             if report["snapshot_hash"] != command.snapshot_hash:
-                raise HTTPException(409, "stale dossier correction")
+                raise HTTPException(412, "snapshot is stale")
             finding = next((f for f in report["findings"] if f["reference_id"] == command.reference_id), None)
             if finding is None:
                 raise HTTPException(422, "unknown correction reference")
@@ -355,8 +411,7 @@ class DossierStore:
         else:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
-            if command.before != finding.get("literal") or correction_anchor(original, finding) != command.paragraph_index:
-                raise ValueError("correction does not match reference anchor")
+            validate_correction_target(original, finding, brief, command)
             derivative = corrected_docx_preview(
                 original,
                 expected_sha256=command.original_sha256,
@@ -806,11 +861,12 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         try:
             index = correction_anchor(original, finding)
+            locator = bound_locator(original, finding, brief_id)
         except ValueError:
             raise HTTPException(422, "unsupported or ambiguous correction anchor") from None
         return {"snapshot_hash": snapshot_hash, "brief_version_id": brief_id,
                 "reference_id": reference_id, "original_sha256": hashlib.sha256(original).hexdigest(),
-                "paragraph_index": index, "before": finding["literal"]}
+                "paragraph_index": index, "before": finding["literal"], "locator_identity": locator}
 
     @router.get(base + "/snapshots/{snapshot_hash}/references/{reference_id}/correction-operations")
     def correction_operations(
@@ -844,17 +900,19 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         brief_id: str,
         body: CorrectionPreviewBody,
         authorization: str | None = Header(default=None),
+        if_match: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
-        report, original = s.reopen(bearer, case_id, brief_id, body.snapshot_hash)
+        if if_match != "snapshot_id:" + body.snapshot_hash:
+            raise HTTPException(412, "snapshot precondition required")
+        report, original = reopen_for_mutation(s, bearer, case_id, brief_id, body.snapshot_hash)
         if report["snapshot_hash"] != body.snapshot_hash:
-            raise HTTPException(409, "stale dossier correction")
+            raise HTTPException(412, "snapshot is stale")
         finding = next((f for f in report["findings"] if f["reference_id"] == body.reference_id), None)
         if finding is None:
             raise HTTPException(422, "unknown correction reference")
         try:
-            if body.before != finding.get("literal") or correction_anchor(original, finding) != body.paragraph_index:
-                raise ValueError("correction does not match reference anchor")
+            validate_correction_target(original, finding, brief_id, body)
             derivative = corrected_docx_preview(
                 original,
                 expected_sha256=body.original_sha256,
@@ -897,8 +955,14 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         brief_id: str,
         body: CorrectionCommitBody,
         authorization: str | None = Header(default=None),
+        if_match: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
+        if if_match != "snapshot_id:" + body.snapshot_hash:
+            raise HTTPException(412, "snapshot precondition required")
+        if idempotency_key != body.request_id:
+            raise HTTPException(422, "idempotency key must match durable correction request")
         return s.commit_correction(bearer, case_id, brief_id, body)
 
     @router.post(base + "/recheck")
@@ -1046,11 +1110,19 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         brief_id: str,
         body: VisualDecisionBody,
         authorization: str | None = Header(default=None),
+        if_match: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
-        report, _ = s.reopen(bearer, case_id, brief_id, body.snapshot_hash)
+        if if_match != "snapshot_id:" + body.snapshot_hash:
+            raise HTTPException(412, "snapshot precondition required")
+        if idempotency_key != str(body.request_id):
+            raise HTTPException(422, "idempotency key must match durable review request")
+        report, _ = reopen_for_mutation(s, bearer, case_id, brief_id, body.snapshot_hash)
         finding = next((f for f in report["findings"] if f["reference_id"] == body.reference_id), None)
-        if report["snapshot_hash"] != body.snapshot_hash or finding is None:
+        if report["snapshot_hash"] != body.snapshot_hash:
+            raise HTTPException(412, "snapshot is stale")
+        if finding is None:
             raise HTTPException(409, "stale or unknown finding")
         if body.decision == "CONFIRMED_SUPPORTED" and finding["technical_check"] != "checked":
             raise HTTPException(409, "resolve identity and pinpoint before confirming support")
