@@ -1354,6 +1354,8 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         )
 
     from apps.api.dossier_export_release import create_release_router
+    from apps.api.docx_editor_api import create_document_editor_router
 
     router.include_router(create_release_router(store))
+    router.include_router(create_document_editor_router(store))
     return router
