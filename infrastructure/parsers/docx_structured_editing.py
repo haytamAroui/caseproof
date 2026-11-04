@@ -10,7 +10,7 @@ import hashlib
 import io
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 from xml.dom import minidom
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -196,6 +196,7 @@ class DocumentRevision:
     author: str
     timestamp: str
     text_sha256: str
+    text: str = field(repr=False)
 
 
 def list_document_revisions(original: bytes) -> tuple[DocumentRevision, ...]:
@@ -217,11 +218,14 @@ def list_document_revisions(original: bytes) -> tuple[DocumentRevision, ...]:
                     for txt in node.getElementsByTagNameNS(W, name)
                     for child in txt.childNodes if child.nodeType == child.TEXT_NODE
                 )
+                if len(value) > MAX_TEXT:
+                    raise ValueError("Word revision text exceeds inspection bound")
                 output.append(DocumentRevision(
                     part, int(raw_id), cast(Literal["inserted", "deleted"], kind),
                     node.getAttributeNS(W, "author")[:MAX_AUTHOR],
                     node.getAttributeNS(W, "date")[:64],
                     hashlib.sha256(value.encode()).hexdigest(),
+                    value,
                 ))
                 if len(output) > MAX_BLOCKS:
                     raise ValueError("too many document revisions")
