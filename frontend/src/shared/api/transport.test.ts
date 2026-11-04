@@ -231,8 +231,7 @@ describe('cancelled matter reads', () => {
 describe('signed DOCX candidate transport', () => {
   const snapshot = 'a'.repeat(64);
   const original = 'b'.repeat(64);
-  const path =
-    '/v2/matters/case/briefs/brief/dossier/editor/candidate';
+  const path = '/v2/matters/case/briefs/brief/dossier/editor/candidate';
 
   it('downloads only a SHA-bound, snapshot-bound binary candidate', async () => {
     const bytes = new TextEncoder().encode('PK safe derivative');
@@ -308,19 +307,22 @@ describe('signed DOCX candidate transport', () => {
     expect(send).toHaveBeenCalledOnce();
   });
 
-  it.each([403, 404])('does not sign out report readers on editor denial %s', async (status) => {
-    const s = session();
-    const clear = vi.fn();
-    s.onClear(clear);
-    const send = vi.fn<typeof fetch>(
-      async () => new Response(null, { status }),
-    );
-    await expect(
-      new ApiClient(s, send).get(
-        `/v2/matters/case/briefs/brief/dossier/editor/blocks?snapshot_hash=${snapshot}`,
-      ),
-    ).rejects.toThrow();
-    expect(clear).not.toHaveBeenCalled();
-    expect(s.getSnapshot().connected).toBe(true);
-  });
+  it.each([403, 404])(
+    'does not sign out report readers on editor denial %s',
+    async (status) => {
+      const s = session();
+      const clear = vi.fn();
+      s.onClear(clear);
+      const send = vi.fn<typeof fetch>(
+        async () => new Response(null, { status }),
+      );
+      await expect(
+        new ApiClient(s, send).get(
+          `/v2/matters/case/briefs/brief/dossier/editor/blocks?snapshot_hash=${snapshot}`,
+        ),
+      ).rejects.toThrow();
+      expect(clear).not.toHaveBeenCalled();
+      expect(s.getSnapshot().connected).toBe(true);
+    },
+  );
 });

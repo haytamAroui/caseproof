@@ -56,7 +56,8 @@ type Preview = {
   operations_count: number;
 };
 const sha = /^[0-9a-f]{64}$/;
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const uuid =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function object(x: unknown): Record<string, unknown> {
   if (!x || typeof x !== 'object' || Array.isArray(x))
@@ -85,12 +86,16 @@ function parseBlocks(
     const row = object(raw);
     if (
       typeof row.part !== 'string' ||
-      !/^word\/(?:document|header[0-9]+|footer[0-9]+|footnotes|endnotes)\.xml$/.test(row.part) ||
+      !/^word\/(?:document|header[0-9]+|footer[0-9]+|footnotes|endnotes)\.xml$/.test(
+        row.part,
+      ) ||
       typeof row.paragraph_index !== 'number' ||
       !Number.isInteger(row.paragraph_index) ||
       row.paragraph_index < 0 ||
       row.paragraph_index > 2999 ||
-      !['body', 'table', 'textbox', 'story', 'unsupported'].includes(String(row.kind)) ||
+      !['body', 'table', 'textbox', 'story', 'unsupported'].includes(
+        String(row.kind),
+      ) ||
       typeof row.text !== 'string' ||
       row.text.length > 20000 ||
       typeof row.text_sha256 !== 'string' ||
@@ -109,7 +114,12 @@ function parseBlocks(
     has_more: v.has_more,
   };
 }
-function parseRevisions(x: unknown, briefId: string, snapshot: string, original: string): Revision[] {
+function parseRevisions(
+  x: unknown,
+  briefId: string,
+  snapshot: string,
+  original: string,
+): Revision[] {
   const v = object(x);
   if (
     v.schema !== 'caseproof-docx-editor-revisions-v1' ||
@@ -124,7 +134,9 @@ function parseRevisions(x: unknown, briefId: string, snapshot: string, original:
     const r = object(entry);
     if (
       typeof r.part !== 'string' ||
-      !/^word\/(?:document|header[0-9]+|footer[0-9]+|footnotes|endnotes)\.xml$/.test(r.part) ||
+      !/^word\/(?:document|header[0-9]+|footer[0-9]+|footnotes|endnotes)\.xml$/.test(
+        r.part,
+      ) ||
       typeof r.revision_id !== 'number' ||
       !Number.isInteger(r.revision_id) ||
       r.revision_id < 0 ||
@@ -181,7 +193,10 @@ export function DocxEditor({ api }: { api: ApiClient }) {
   const [edits, setEdits] = useState<Record<string, Edit>>({});
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [tracking, setTracking] = useState(true);
-  const [prepared, setPrepared] = useState<{ command: Command; receipt: Preview } | null>(null);
+  const [prepared, setPrepared] = useState<{
+    command: Command;
+    receipt: Preview;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [rationale, setRationale] = useState('');
@@ -201,7 +216,14 @@ export function DocxEditor({ api }: { api: ApiClient }) {
   );
 
   const source = useQuery({
-    queryKey: ['docx-editor-blocks', session.epoch, caseId, briefId, snapshot, page],
+    queryKey: [
+      'docx-editor-blocks',
+      session.epoch,
+      caseId,
+      briefId,
+      snapshot,
+      page,
+    ],
     queryFn: async ({ signal }) => {
       const response = await api.get(
         `${root}/blocks?snapshot_hash=${snapshot}&offset=${page * 20}&limit=20`,
@@ -213,7 +235,13 @@ export function DocxEditor({ api }: { api: ApiClient }) {
   });
 
   const revisions = useQuery({
-    queryKey: ['docx-editor-revisions', session.epoch, caseId, briefId, snapshot],
+    queryKey: [
+      'docx-editor-revisions',
+      session.epoch,
+      caseId,
+      briefId,
+      snapshot,
+    ],
     queryFn: ({ signal }) =>
       api.get(`${root}/revisions?snapshot_hash=${snapshot}`, signal),
     enabled: valid && session.connected && source.isSuccess,
@@ -221,26 +249,43 @@ export function DocxEditor({ api }: { api: ApiClient }) {
   const parsedRevisions = (() => {
     if (!source.data || !revisions.data) return [] as Revision[];
     try {
-      return parseRevisions(revisions.data, briefId, snapshot, source.data.original_sha256);
+      return parseRevisions(
+        revisions.data,
+        briefId,
+        snapshot,
+        source.data.original_sha256,
+      );
     } catch {
       return [] as Revision[];
     }
   })();
-  const revisionMismatch = revisions.isSuccess && source.data !== undefined &&
+  const revisionMismatch =
+    revisions.isSuccess &&
+    source.data !== undefined &&
     (() => {
       try {
-        parseRevisions(revisions.data, briefId, snapshot, source.data.original_sha256);
+        parseRevisions(
+          revisions.data,
+          briefId,
+          snapshot,
+          source.data.original_sha256,
+        );
         return false;
       } catch {
         return true;
       }
     })();
 
-  const changed = Object.values(edits).filter((edit) => edit.after !== edit.before);
+  const changed = Object.values(edits).filter(
+    (edit) => edit.after !== edit.before,
+  );
   const selectedRevisions = Object.values(decisions);
   const mixed = changed.length > 0 && selectedRevisions.length > 0;
   const ready =
-    !busy && !mixed && !revisionMismatch && source.isSuccess &&
+    !busy &&
+    !mixed &&
+    !revisionMismatch &&
+    source.isSuccess &&
     ((changed.length > 0 && changed.length <= 40) ||
       (selectedRevisions.length > 0 && selectedRevisions.length <= 40));
 
@@ -277,9 +322,12 @@ export function DocxEditor({ api }: { api: ApiClient }) {
     setDecisions((previous) => {
       const next = { ...previous };
       if (!action) delete next[revisionKey(revision)];
-      else next[revisionKey(revision)] = {
-        part: revision.part, revision_id: revision.revision_id, action,
-      };
+      else
+        next[revisionKey(revision)] = {
+          part: revision.part,
+          revision_id: revision.revision_id,
+          action,
+        };
       return next;
     });
   }
@@ -297,11 +345,22 @@ export function DocxEditor({ api }: { api: ApiClient }) {
       decisions: selectedRevisions,
     };
     try {
-      const received = await api.post(`${root}/preview`, command, undefined, { snapshot });
-      setPrepared({ command, receipt: parsePreview(received, command, briefId) });
-      setNotice('Source-bound candidate prepared. No change has been committed.');
+      const received = await api.post(`${root}/preview`, command, undefined, {
+        snapshot,
+      });
+      setPrepared({
+        command,
+        receipt: parsePreview(received, command, briefId),
+      });
+      setNotice(
+        'Source-bound candidate prepared. No change has been committed.',
+      );
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The editor preview was refused.');
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'The editor preview was refused.',
+      );
     } finally {
       setBusy(false);
     }
@@ -331,9 +390,13 @@ export function DocxEditor({ api }: { api: ApiClient }) {
       link.href = url;
       link.download = 'caseproof-uncommitted-edited-candidate.docx';
       link.click();
-      setNotice('Candidate downloaded and SHA-256 checked. It is NOT a reviewed or activated draft. Use a separately authorized import and recheck.');
+      setNotice(
+        'Candidate downloaded and SHA-256 checked. It is NOT a reviewed or activated draft. Use a separately authorized import and recheck.',
+      );
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Candidate download failed.');
+      setNotice(
+        error instanceof Error ? error.message : 'Candidate download failed.',
+      );
     } finally {
       if (url) {
         const value = url;
@@ -345,17 +408,25 @@ export function DocxEditor({ api }: { api: ApiClient }) {
   }
 
   async function saveDocumentReview() {
-    if (!prepared || busy || rationale.trim().length < 10 || committedVersion) return;
+    if (!prepared || busy || rationale.trim().length < 10 || committedVersion)
+      return;
     const id = reviewId ?? crypto.randomUUID();
     setReviewId(id);
     setBusy(true);
     setNotice('Requesting a signed whole-document review receipt…');
     try {
-      const reply = object(await api.post(
-        `${root}/review`,
-        { ...prepared.command, review_request_id: id, rationale: rationale.trim() },
-        undefined, { snapshot, idempotencyKey: id },
-      ));
+      const reply = object(
+        await api.post(
+          `${root}/review`,
+          {
+            ...prepared.command,
+            review_request_id: id,
+            rationale: rationale.trim(),
+          },
+          undefined,
+          { snapshot, idempotencyKey: id },
+        ),
+      );
       if (
         reply.schema !== 'caseproof-document-editor-review-v1' ||
         reply.review_request_id !== id ||
@@ -365,13 +436,16 @@ export function DocxEditor({ api }: { api: ApiClient }) {
         reply.requires_separate_commit !== true ||
         typeof reply.command_sha256 !== 'string' ||
         !sha.test(reply.command_sha256)
-      ) throw Error('The document-review receipt could not be verified.');
+      )
+        throw Error('The document-review receipt could not be verified.');
       setReviewSaved(true);
-      setNotice('Human document review recorded. No new version is yet active.');
+      setNotice(
+        'Human document review recorded. No new version is yet active.',
+      );
     } catch (error) {
       setNotice(
         (error instanceof Error ? error.message : 'Review outcome unknown.') +
-        ' Only the same review request ID can be reconciled.',
+          ' Only the same review request ID can be reconciled.',
       );
     } finally {
       setBusy(false);
@@ -391,13 +465,15 @@ export function DocxEditor({ api }: { api: ApiClient }) {
       reply.requires_recheck !== true ||
       typeof reply.version_id !== 'string' ||
       !uuid.test(reply.version_id)
-    ) throw Error('The activated draft receipt is not trustworthy.');
+    )
+      throw Error('The activated draft receipt is not trustworthy.');
     setCommittedVersion(reply.version_id);
     setCommitUnknown(false);
     setNotice('New draft activated; mandatory recheck is required.');
   }
   async function commitDocumentEdit() {
-    if (!reviewSaved || !reviewId || !prepared || busy || committedVersion) return;
+    if (!reviewSaved || !reviewId || !prepared || busy || committedVersion)
+      return;
     const id = commitId ?? crypto.randomUUID();
     setCommitId(id);
     setCommitUnknown(true);
@@ -414,37 +490,51 @@ export function DocxEditor({ api }: { api: ApiClient }) {
     } catch (error) {
       setNotice(
         (error instanceof Error ? error.message : 'Commit not acknowledged.') +
-        ' Operation outcome may be unknown. Reconcile the same request ID.',
+          ' Operation outcome may be unknown. Reconcile the same request ID.',
       );
     } finally {
       setBusy(false);
     }
   }
   async function reconcileDocumentEdit() {
-    if (!reviewSaved || !commitId || !prepared || busy || committedVersion) return;
+    if (!reviewSaved || !commitId || !prepared || busy || committedVersion)
+      return;
     setBusy(true);
     setNotice('Reading durable status for the exact request ID…');
     try {
-      const status = object(await api.post(
-        `${root}/status`, durableCommand(commitId),
-      ));
+      const status = object(
+        await api.post(`${root}/status`, durableCommand(commitId)),
+      );
       if (status.schema !== 'caseproof-document-editor-status-v1')
         throw Error('The operation status is not a supported receipt.');
       if (status.state === 'active') {
-        if (typeof status.version_id !== 'string' || !uuid.test(status.version_id))
+        if (
+          typeof status.version_id !== 'string' ||
+          !uuid.test(status.version_id)
+        )
           throw Error('Activated version ID is missing.');
         setCommittedVersion(status.version_id);
         setCommitUnknown(false);
-        setNotice('Activation confirmed. Recheck the new draft before using it.');
+        setNotice(
+          'Activation confirmed. Recheck the new draft before using it.',
+        );
       } else if (status.state === 'reserved') {
         setCommitUnknown(true);
-        setNotice('Reserved but not activated. Retry the identical commit, not a new edit.');
+        setNotice(
+          'Reserved but not activated. Retry the identical commit, not a new edit.',
+        );
       } else if (status.state === 'absent') {
         setCommitUnknown(false);
-        setNotice('No durable operation exists. The existing review may still be used.');
+        setNotice(
+          'No durable operation exists. The existing review may still be used.',
+        );
       } else throw Error('Unknown document-edit status.');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not reconcile the operation.');
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not reconcile the operation.',
+      );
     } finally {
       setBusy(false);
     }
@@ -453,43 +543,65 @@ export function DocxEditor({ api }: { api: ApiClient }) {
     if (!committedVersion || busy) return;
     setBusy(true);
     try {
-      const report = object(await api.post(
-        `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(committedVersion)}/dossier/recheck`,
-        {},
-      ));
+      const report = object(
+        await api.post(
+          `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(committedVersion)}/dossier/recheck`,
+          {},
+        ),
+      );
       if (
         report.brief_id !== committedVersion ||
         typeof report.snapshot_hash !== 'string' ||
         !sha.test(report.snapshot_hash)
-      ) throw Error('Recheck did not confirm the activated version.');
+      )
+        throw Error('Recheck did not confirm the activated version.');
       void navigate(
         `/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(committedVersion)}?snapshot=${report.snapshot_hash}`,
       );
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Recheck unavailable; previous decisions remain stale.');
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Recheck unavailable; previous decisions remain stale.',
+      );
     } finally {
       setBusy(false);
     }
   }
 
   if (!valid)
-    return <Notice error>Provide a valid matter, draft version and snapshot.</Notice>;
-  if (source.isPending) return <Notice>Opening source-bound document blocks…</Notice>;
+    return (
+      <Notice error>Provide a valid matter, draft version and snapshot.</Notice>
+    );
+  if (source.isPending)
+    return <Notice>Opening source-bound document blocks…</Notice>;
   if (source.isError) return <Notice error>{source.error.message}</Notice>;
 
   return (
-    <section className="docx-editor" aria-label="Structured Word candidate editor">
+    <section
+      className="docx-editor"
+      aria-label="Structured Word candidate editor"
+    >
       <header className="docx-editor-heading">
         <div>
           <p className="docx-eyebrow">CaseProof · DOCX candidate workspace</p>
           <h1>Edit the preserved draft</h1>
-          <p>Word paragraphs, ordinary tables, supported textboxes and textual tracked changes. No source document is overwritten.</p>
-          <Link to={`/matters/${caseId}/briefs/${briefId}?snapshot=${snapshot}`}>
+          <p>
+            Word paragraphs, ordinary tables, supported textboxes and textual
+            tracked changes. No source document is overwritten.
+          </p>
+          <Link
+            to={`/matters/${caseId}/briefs/${briefId}?snapshot=${snapshot}`}
+          >
             Return to evidence review
           </Link>
         </div>
       </header>
-      <div className="docx-ribbon" role="group" aria-label="Candidate editing tools">
+      <div
+        className="docx-ribbon"
+        role="group"
+        aria-label="Candidate editing tools"
+      >
         <label>
           <input
             type="checkbox"
@@ -499,9 +611,12 @@ export function DocxEditor({ api }: { api: ApiClient }) {
               clearApproval();
               setPrepared(null);
               setEdits((old) =>
-                Object.fromEntries(Object.entries(old).map(([key, edit]) => [
-                  key, { ...edit, track_changes: event.target.checked },
-                ])),
+                Object.fromEntries(
+                  Object.entries(old).map(([key, edit]) => [
+                    key,
+                    { ...edit, track_changes: event.target.checked },
+                  ]),
+                ),
               );
             }}
           />
@@ -531,92 +646,172 @@ export function DocxEditor({ api }: { api: ApiClient }) {
         pixel-faithful Word renderer. Complex structures abstain. Download does
         not commit, approve, activate or recheck a legal document.
       </div>
-      {notice && <p className="docx-editor-status" role="status">{notice}</p>}
+      {notice && (
+        <p className="docx-editor-status" role="status">
+          {notice}
+        </p>
+      )}
       <div className="docx-editor-layout">
         <aside className="docx-editor-sidebar" aria-label="Document summary">
           <h2>Source identity</h2>
-          <p><strong>{source.data.total}</strong> blocks · <strong>{source.data.editable_count}</strong> text-editable</p>
+          <p>
+            <strong>{source.data.total}</strong> blocks ·{' '}
+            <strong>{source.data.editable_count}</strong> text-editable
+          </p>
           <p className="docx-mono">SHA-256: {source.data.original_sha256}</p>
           <p className="docx-mono">Snapshot: {snapshot}</p>
-          <p>{changed.length} staged replacements · {selectedRevisions.length} revision decisions</p>
+          <p>
+            {changed.length} staged replacements · {selectedRevisions.length}{' '}
+            revision decisions
+          </p>
           {mixed && (
-            <Notice error>Text replacements and revision decisions must be prepared separately.</Notice>
+            <Notice error>
+              Text replacements and revision decisions must be prepared
+              separately.
+            </Notice>
           )}
-          {changed.length > 40 && <Notice error>At most 40 edits per candidate.</Notice>}
+          {changed.length > 40 && (
+            <Notice error>At most 40 edits per candidate.</Notice>
+          )}
           <h2>Review boundary</h2>
-          <p>A new document-wide authorization, durable import and independent recheck are required before this candidate becomes a CaseProof version.</p>
+          <p>
+            A new document-wide authorization, durable import and independent
+            recheck are required before this candidate becomes a CaseProof
+            version.
+          </p>
         </aside>
-        <section className="docx-editor-document" aria-label="Editable DOCX text blocks">
+        <section
+          className="docx-editor-document"
+          aria-label="Editable DOCX text blocks"
+        >
           <div className="docx-editor-toolbar">
             <h2>Document text</h2>
-            <span>Blocks {page * 20 + 1}–{Math.min((page + 1) * 20, source.data.total)}</span>
+            <span>
+              Blocks {page * 20 + 1}–
+              {Math.min((page + 1) * 20, source.data.total)}
+            </span>
           </div>
           {source.data.blocks.map((block) => (
             <article key={keyFor(block)} className="docx-block">
               <header>
                 <span className="docx-kind">{block.kind}</span>
-                <small>{block.part} · Paragraph {block.paragraph_index + 1}</small>
-                {!block.editable && <span className="docx-unsupported">Unsupported for editing</span>}
+                <small>
+                  {block.part} · Paragraph {block.paragraph_index + 1}
+                </small>
+                {!block.editable && (
+                  <span className="docx-unsupported">
+                    Unsupported for editing
+                  </span>
+                )}
               </header>
-              <label htmlFor={`edit-${keyFor(block)}`}>Source-bound paragraph</label>
+              <label htmlFor={`edit-${keyFor(block)}`}>
+                Source-bound paragraph
+              </label>
               <textarea
                 id={`edit-${keyFor(block)}`}
                 value={edits[keyFor(block)]?.after ?? block.text}
                 disabled={!block.editable || busy}
                 maxLength={20000}
-                rows={Math.min(10, Math.max(2, Math.ceil(block.text.length / 90)))}
+                rows={Math.min(
+                  10,
+                  Math.max(2, Math.ceil(block.text.length / 90)),
+                )}
                 onChange={(event) => setBlock(block, event.target.value)}
               />
               {edits[keyFor(block)] && (
-                <p className="docx-changed">Locally modified · {tracking ? 'Tracked replacement' : 'Direct replacement'}</p>
+                <p className="docx-changed">
+                  Locally modified ·{' '}
+                  {tracking ? 'Tracked replacement' : 'Direct replacement'}
+                </p>
               )}
             </article>
           ))}
           <nav aria-label="Document block pagination" className="docx-page-nav">
-            <button disabled={page === 0 || busy} onClick={() => setPage((p) => p - 1)}>
+            <button
+              disabled={page === 0 || busy}
+              onClick={() => setPage((p) => p - 1)}
+            >
               Previous blocks
             </button>
-            <span>Page {page + 1} of {Math.max(1, Math.ceil(source.data.total / 20))}</span>
-            <button disabled={!source.data.has_more || busy} onClick={() => setPage((p) => p + 1)}>
+            <span>
+              Page {page + 1} of{' '}
+              {Math.max(1, Math.ceil(source.data.total / 20))}
+            </span>
+            <button
+              disabled={!source.data.has_more || busy}
+              onClick={() => setPage((p) => p + 1)}
+            >
               Next blocks
             </button>
           </nav>
         </section>
-        <aside className="docx-editor-revisions" aria-label="Native Word revision review">
+        <aside
+          className="docx-editor-revisions"
+          aria-label="Native Word revision review"
+        >
           <h2>Tracked changes</h2>
           {revisions.isPending && <p>Reading revision identities…</p>}
-          {revisions.isError && <Notice error>Revision inventory unavailable.</Notice>}
-          {revisionMismatch && <Notice error>Revision receipt does not match this document.</Notice>}
-          {!revisions.isPending && !revisions.isError && !revisionMismatch &&
-            parsedRevisions.length === 0 && <p>No native textual revisions identified.</p>}
-          {!revisionMismatch && parsedRevisions.map((row) => (
-            <div key={revisionKey(row)} className="docx-revision">
-              <strong>{row.kind === 'inserted' ? 'Insertion' : 'Deletion'} #{row.revision_id}</strong>
-              <small>{row.part}</small>
-              <small>{row.author} · {row.timestamp}</small>
-              <label>
-                Decision
-                <select
-                  value={decisions[revisionKey(row)]?.action ?? ''}
-                  disabled={busy}
-                  onChange={(event) =>
-                    setRevision(row, event.target.value as '' | 'accept' | 'reject')
-                  }
-                >
-                  <option value="">Keep unresolved</option>
-                  <option value="accept">Accept</option>
-                  <option value="reject">Reject</option>
-                </select>
-              </label>
-            </div>
-          ))}
+          {revisions.isError && (
+            <Notice error>Revision inventory unavailable.</Notice>
+          )}
+          {revisionMismatch && (
+            <Notice error>
+              Revision receipt does not match this document.
+            </Notice>
+          )}
+          {!revisions.isPending &&
+            !revisions.isError &&
+            !revisionMismatch &&
+            parsedRevisions.length === 0 && (
+              <p>No native textual revisions identified.</p>
+            )}
+          {!revisionMismatch &&
+            parsedRevisions.map((row) => (
+              <div key={revisionKey(row)} className="docx-revision">
+                <strong>
+                  {row.kind === 'inserted' ? 'Insertion' : 'Deletion'} #
+                  {row.revision_id}
+                </strong>
+                <small>{row.part}</small>
+                <small>
+                  {row.author} · {row.timestamp}
+                </small>
+                <label>
+                  Decision
+                  <select
+                    value={decisions[revisionKey(row)]?.action ?? ''}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setRevision(
+                        row,
+                        event.target.value as '' | 'accept' | 'reject',
+                      )
+                    }
+                  >
+                    <option value="">Keep unresolved</option>
+                    <option value="accept">Accept</option>
+                    <option value="reject">Reject</option>
+                  </select>
+                </label>
+              </div>
+            ))}
         </aside>
       </div>
       {prepared && (
-        <section className="docx-approval" aria-label="Document-wide review and activation">
+        <section
+          className="docx-approval"
+          aria-label="Document-wide review and activation"
+        >
           <h2>Document-wide review and activation</h2>
-          <p>These consequential actions require an independently approved, actor-scoped document-review database contract. If it is unavailable, CaseProof refuses the request and preserves the original.</p>
-          <label htmlFor="docx-approval-rationale">Human review rationale (required)</label>
+          <p>
+            These consequential actions require an independently approved,
+            actor-scoped document-review database contract. If it is
+            unavailable, CaseProof refuses the request and preserves the
+            original.
+          </p>
+          <label htmlFor="docx-approval-rationale">
+            Human review rationale (required)
+          </label>
           <textarea
             id="docx-approval-rationale"
             rows={3}
@@ -634,19 +829,30 @@ export function DocxEditor({ api }: { api: ApiClient }) {
           />
           <div className="docx-approval-actions">
             <button
-              disabled={busy || reviewSaved || rationale.trim().length < 10 || Boolean(committedVersion)}
+              disabled={
+                busy ||
+                reviewSaved ||
+                rationale.trim().length < 10 ||
+                Boolean(committedVersion)
+              }
               onClick={() => void saveDocumentReview()}
             >
-              {reviewId ? 'Reconcile exact review request' : 'Save document-wide human review'}
+              {reviewId
+                ? 'Reconcile exact review request'
+                : 'Save document-wide human review'}
             </button>
             <button
               disabled={busy || !reviewSaved || Boolean(committedVersion)}
               onClick={() => void commitDocumentEdit()}
             >
-              {commitUnknown ? 'Retry identical commit' : 'Commit reviewed new draft'}
+              {commitUnknown
+                ? 'Retry identical commit'
+                : 'Commit reviewed new draft'}
             </button>
             <button
-              disabled={busy || !reviewSaved || !commitId || Boolean(committedVersion)}
+              disabled={
+                busy || !reviewSaved || !commitId || Boolean(committedVersion)
+              }
               onClick={() => void reconcileDocumentEdit()}
             >
               Reconcile durable commit status
@@ -658,16 +864,29 @@ export function DocxEditor({ api }: { api: ApiClient }) {
               Recheck activated draft
             </button>
           </div>
-          {reviewSaved && <p role="status">Saved document-wide review confirmed.</p>}
-          {committedVersion && <p className="docx-mono">Activated version: {committedVersion}</p>}
+          {reviewSaved && (
+            <p role="status">Saved document-wide review confirmed.</p>
+          )}
+          {committedVersion && (
+            <p className="docx-mono">Activated version: {committedVersion}</p>
+          )}
         </section>
       )}
       {prepared && (
-        <section className="docx-preview-receipt" aria-label="Candidate preview receipt">
+        <section
+          className="docx-preview-receipt"
+          aria-label="Candidate preview receipt"
+        >
           <h2>Prepared derivative</h2>
-          <p>{prepared.receipt.operations_count} operation(s), {prepared.receipt.derivative_byte_length.toLocaleString()} bytes</p>
+          <p>
+            {prepared.receipt.operations_count} operation(s),{' '}
+            {prepared.receipt.derivative_byte_length.toLocaleString()} bytes
+          </p>
           <p className="docx-mono">{prepared.receipt.derivative_sha256}</p>
-          <p><strong>Not committed.</strong> Source SHA-256 and frozen snapshot remain unchanged.</p>
+          <p>
+            <strong>Not committed.</strong> Source SHA-256 and frozen snapshot
+            remain unchanged.
+          </p>
         </section>
       )}
     </section>

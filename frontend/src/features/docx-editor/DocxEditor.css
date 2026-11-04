@@ -16,16 +16,16 @@ no fake page-fidelity. */
   margin: 0 0 8px;
   font-size: clamp(1.65rem, 2vw, 2.25rem);
   line-height: 1.2;
-  letter-spacing: -.025em;
+  letter-spacing: -0.025em;
 }
 .docx-editor-heading p {
   max-width: 850px;
 }
 .docx-eyebrow {
   color: #4f627b;
-  font-size: .76rem;
+  font-size: 0.76rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .docx-editor a {
@@ -60,7 +60,7 @@ no fake page-fidelity. */
   background: white;
   padding: 9px 13px;
   font: inherit;
-  font-size: .88rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: #253b55;
   cursor: pointer;
@@ -69,13 +69,15 @@ no fake page-fidelity. */
   background: #e9f0f6;
   border-color: #728ea9;
 }
-.docx-editor button:focus-visible, .docx-editor textarea:focus-visible, .docx-editor select:focus-visible {
+.docx-editor button:focus-visible,
+.docx-editor textarea:focus-visible,
+.docx-editor select:focus-visible {
   outline: 3px solid #34709f;
   outline-offset: 2px;
 }
 .docx-editor button:disabled {
   cursor: not-allowed;
-  opacity: .52;
+  opacity: 0.52;
 }
 .docx-ribbon button:nth-of-type(1) {
   background: #294d72;
@@ -87,7 +89,7 @@ no fake page-fidelity. */
 }
 .docx-scope-note {
   color: #4d5c6c;
-  font-size: .88rem;
+  font-size: 0.88rem;
   padding: 13px 0;
 }
 .docx-editor-status {
@@ -98,33 +100,42 @@ no fake page-fidelity. */
 }
 .docx-editor-layout {
   display: grid;
-  grid-template-columns: minmax(205px, 250px) minmax(340px, 1fr) minmax(220px, 285px);
+  grid-template-columns: minmax(205px, 250px) minmax(340px, 1fr) minmax(
+      220px,
+      285px
+    );
   gap: 18px;
   align-items: start;
   margin-top: 18px;
 }
-.docx-editor-sidebar, .docx-editor-revisions, .docx-editor-document {
+.docx-editor-sidebar,
+.docx-editor-revisions,
+.docx-editor-document {
   border: 1px solid #d3dbe4;
   border-radius: 10px;
   min-width: 0;
   background: white;
 }
-.docx-editor-sidebar, .docx-editor-revisions {
+.docx-editor-sidebar,
+.docx-editor-revisions {
   padding: 19px;
 }
-.docx-editor-sidebar h2, .docx-editor-revisions h2, .docx-editor-document h2 {
+.docx-editor-sidebar h2,
+.docx-editor-revisions h2,
+.docx-editor-document h2 {
   font-size: 1rem;
-  letter-spacing: -.01em;
+  letter-spacing: -0.01em;
   margin: 0 0 13px;
 }
-.docx-editor-sidebar p, .docx-editor-revisions p {
-  font-size: .83rem;
+.docx-editor-sidebar p,
+.docx-editor-revisions p {
+  font-size: 0.83rem;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .docx-mono {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: .7rem !important;
+  font-size: 0.7rem !important;
   overflow-wrap: anywhere;
 }
 .docx-editor-toolbar {
@@ -139,7 +150,7 @@ no fake page-fidelity. */
   margin: 0;
 }
 .docx-editor-toolbar span {
-  font-size: .8rem;
+  font-size: 0.8rem;
   color: #627288;
 }
 .docx-block {
@@ -158,7 +169,7 @@ no fake page-fidelity. */
 }
 .docx-block header small {
   color: #67778b;
-  font-size: .72rem;
+  font-size: 0.72rem;
   overflow-wrap: anywhere;
 }
 .docx-kind {
@@ -166,17 +177,17 @@ no fake page-fidelity. */
   background: #eaf0f6;
   color: #2e536f;
   border-radius: 5px;
-  font-size: .73rem;
+  font-size: 0.73rem;
   font-weight: 700;
   padding: 3px 8px;
 }
 .docx-unsupported {
-  font-size: .72rem;
+  font-size: 0.72rem;
   color: #7a6045;
 }
 .docx-block label {
   display: block;
-  font-size: .78rem;
+  font-size: 0.78rem;
   font-weight: 600;
   margin-bottom: 7px;
 }
@@ -190,7 +201,7 @@ no fake page-fidelity. */
   padding: 12px 14px;
   line-height: 1.6;
   font-family: inherit;
-  font-size: .95rem;
+  font-size: 0.95rem;
   color: #1b2c43;
   min-height: 70px;
 }
@@ -200,7 +211,7 @@ no fake page-fidelity. */
   color: #667589;
 }
 .docx-changed {
-  font-size: .77rem;
+  font-size: 0.77rem;
   color: #1e597d;
   margin: 8px 0 0;
 }
@@ -213,7 +224,7 @@ no fake page-fidelity. */
 }
 .docx-page-nav span {
   color: #54677f;
-  font-size: .78rem;
+  font-size: 0.78rem;
   text-align: center;
 }
 .docx-revision {
@@ -223,18 +234,18 @@ no fake page-fidelity. */
   gap: 8px;
 }
 .docx-revision strong {
-  font-size: .84rem;
+  font-size: 0.84rem;
 }
 .docx-revision small {
   display: block;
-  font-size: .72rem;
+  font-size: 0.72rem;
   overflow-wrap: anywhere;
   color: #607187;
 }
 .docx-revision label {
   display: grid;
   gap: 5px;
-  font-size: .76rem;
+  font-size: 0.76rem;
   font-weight: 600;
 }
 .docx-revision select {

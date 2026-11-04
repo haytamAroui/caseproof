@@ -154,7 +154,9 @@ export function ReportScreen({
           Reviewed exports and historical downloads
         </Link>
         {!historical && (
-          <Link to={`/matters/${caseId}/briefs/${briefId}/edit?snapshot=${snapshot}`}>
+          <Link
+            to={`/matters/${caseId}/briefs/${briefId}/edit?snapshot=${snapshot}`}
+          >
             Edit current DOCX candidate (not committed)
           </Link>
         )}
