@@ -200,14 +200,15 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
             raise ValueError('invalid coverage structure')
         line('Coverage / dekking / couverture', heading=True)
         for key in (
-            'checked', 'unresolved', 'references_detected', 'references_checked',
+            'checked', 'unresolved', 'fully_checked', 'references_detected', 'references_checked',
             'references_not_assessed', 'text_coverage_complete',
             'reference_recall_measured', 'source_pages_known_total',
             'source_pages_total', 'source_pages_ocr_processed',
             'source_pages_failed_or_skipped',
         ):
             if key in coverage:
-                line(key.replace('_', ' ').capitalize(), coverage[key], indent=1)
+                line('Fully checked (fully_checked)' if key == 'fully_checked'
+                     else key.replace('_', ' ').capitalize(), coverage[key], indent=1)
         for key in ('dimension_counts', 'docx_regions', 'source_page_counts_unknown'):
             if key in coverage:
                 details('DOCX region coverage (docx_regions)' if key == 'docx_regions'

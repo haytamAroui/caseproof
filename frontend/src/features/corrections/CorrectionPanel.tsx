@@ -134,7 +134,10 @@ function parseDrift(
       !['unchanged', 'changed', 'uncertain', 'added', 'removed'].includes(
         String(row.status),
       ) ||
-      !(before === null || (typeof before === 'string' && oldIds.has(before))) ||
+      !(
+        before === null ||
+        (typeof before === 'string' && oldIds.has(before))
+      ) ||
       !(after === null || (typeof after === 'string' && newIds.has(after))) ||
       (before === null && after === null) ||
       !Array.isArray(row.reasons) ||
