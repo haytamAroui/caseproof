@@ -141,6 +141,11 @@ class CorrectionPreviewBody(BaseModel):
     after: str = Field(max_length=4000)
 
 
+class StaleDossierConflict(HTTPException):
+    def __init__(self) -> None:
+        super().__init__(409, "snapshot is stale")
+
+
 def reopen_for_mutation(
     store: DossierStore, bearer: str, case: str, brief: str, snapshot: str
 ) -> tuple[dict[str, Any], bytes]:
@@ -224,8 +229,10 @@ class DossierStore:
         if status in (400, 401, 403, 404):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         if status == 409:
-            if action == "review" and stale_snapshot_conflict(raw):
-                raise HTTPException(412, "snapshot is stale")
+            if stale_snapshot_conflict(raw):
+                if action == "review":
+                    raise HTTPException(412, "snapshot is stale")
+                raise StaleDossierConflict()
             raise HTTPException(409, "stale dossier or idempotency conflict")
         if status != 200 or len(raw) > 4_000_000:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -383,7 +390,10 @@ class DossierStore:
             # The reserve RPC independently enforces the same actor/snapshot/reference
             # predicate transactionally. This API gate prevents bypassing the review
             # receipt even if the browser sends a direct commit.
-            self.correction_review_receipt(bearer, case, brief, command.snapshot_hash, command.reference_id)
+            try:
+                self.correction_review_receipt(bearer, case, brief, command.snapshot_hash, command.reference_id)
+            except StaleDossierConflict:
+                raise HTTPException(412, "snapshot is stale") from None
             report, original = reopen_for_mutation(self, bearer, case, brief, command.snapshot_hash)
             if report["snapshot_hash"] != command.snapshot_hash:
                 raise HTTPException(412, "snapshot is stale")
