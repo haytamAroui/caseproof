@@ -17,6 +17,7 @@ from pypdf import __version__ as PDF_VERSION
 
 from application.documents.contracts import MAX_BLOCKS, MAX_TEXT_CHARS, PARSER_SCHEMA
 from application.extraction.contracts import ExtractionError
+from infrastructure.parsers.safe_docx_xml import parse_docx_xml
 
 
 class Builder:
@@ -250,16 +251,13 @@ def parse_docx(raw: bytes) -> dict[str, Any]:
             names = {part.filename for part in entries}
             if "word/document.xml" not in names or "[Content_Types].xml" not in names:
                 raise ExtractionError("docx_document_part_required")
+            # Apply the same XML resource limits to package metadata and document parts.
+            parse_docx_xml(archive.read("[Content_Types].xml"))
             for name in sorted(n for n in names if n.endswith(".rels")):
-                rels = SafeXML.fromstring(
-                    archive.read(name), forbid_dtd=True, forbid_entities=True, forbid_external=True
-                )
+                rels = parse_docx_xml(archive.read(name))
                 if any(el.attrib.get("TargetMode", "").lower() == "external" for el in rels.iter()):
                     raise ExtractionError("docx_external_relationship_unsupported")
-            document = SafeXML.fromstring(
-                archive.read("word/document.xml"),
-                forbid_dtd=True, forbid_entities=True, forbid_external=True,
-            )
+            document = parse_docx_xml(archive.read("word/document.xml"))
             body = document.find(_W + "body")
             if body is None:
                 raise ExtractionError("docx_body_required")
@@ -286,10 +284,7 @@ def parse_docx(raw: bytes) -> dict[str, Any]:
                 part_name = f"word/{kind}.xml"
                 if part_name not in names:
                     continue
-                tree = SafeXML.fromstring(
-                    archive.read(part_name),
-                    forbid_dtd=True, forbid_entities=True, forbid_external=True,
-                )
+                tree = parse_docx_xml(archive.read(part_name))
                 if any(el.tag == _W + "txbxContent" for el in tree.iter()):
                     raise ExtractionError("docx_textboxes_unsupported")
                 for i, para in enumerate(tree.iter(_W + "p")):

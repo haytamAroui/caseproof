@@ -8,6 +8,7 @@ from enum import StrEnum
 from io import BytesIO
 from xml.etree.ElementTree import Element, ParseError
 from zipfile import BadZipFile, ZipFile
+from zlib import error as ZlibError
 
 from defusedxml.common import DefusedXmlException  # type: ignore[import-untyped]
 
@@ -135,5 +136,6 @@ def inventory_docx_regions(payload: bytes) -> DocxCoverage:
                 } for node in root.iter()):
                     regions.append(DocxRegion(name + "#structured", "STRUCTURED_CONTENT", RegionStatus.UNSUPPORTED, "UNSUPPORTED_STRUCTURED_CONTENT"))
             return DocxCoverage(tuple(regions), False)
-    except (BadZipFile, ParseError, DefusedXmlException, OSError, RuntimeError, ValueError):
+    except (BadZipFile, EOFError, ParseError, DefusedXmlException, OSError, RuntimeError,
+            ValueError, NotImplementedError, ZlibError):
         return DocxCoverage((), True, "UNREADABLE_PACKAGE")

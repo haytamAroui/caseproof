@@ -45,6 +45,10 @@ jobs:
           retention-days: 30
       - name: Run unit tests
         run: uv run --locked pytest -q
+      - name: Bounded synthetic DOCX mutation smoke
+        run: |
+          ulimit -v 524288
+          timeout 30s uv run --locked python -m scripts.p1_docx_discovery_fuzz
       - name: Ruff check
         run: uv run --locked ruff check .
       - name: Mypy check

@@ -600,3 +600,7 @@ at head `a66348e76c3881bc53e079595b465622fd6b604e`. F2 inspection merged in
 41443170522](https://github.com/haytamAroui/caseproof/actions/runs/41443170522)
 at head `41072716621c9bbd676d4bceb91062f5344bf33b`. These historical run
 links are not new-head acceptance.
+
+### P1 parser acceptance in progress — 4 November 2026
+
+Draft PR [#187](https://github.com/haytamAroui/caseproof/pull/187) extends synthetic XML and hostile-archive acceptance. See [P1 parser acceptance](p1/PARSER_ACCEPTANCE_2026-11-04.md) for scope, initial CI evidence and open security and capacity gates. Final-head CI and independent review remain required.
