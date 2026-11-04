@@ -175,3 +175,54 @@ def test_correction_review_receipt_requires_same_actor_reference_and_snapshot():
     assert proof['snapshot_hash'] == 'a'*64
     with __import__('pytest').raises(Exception):
         service.correction_review_receipt('signed', 'case', 'parent', 'a'*64, 'other-ref')
+
+
+def test_signed_route_rejects_forged_table_target_and_previews_exact_cell():
+    from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
+
+    document = Document()
+    document.add_paragraph('Ordinary text')
+    table = document.add_table(rows=1, cols=2)
+    table.cell(0, 0).text = 'See Stuk 1'
+    table.cell(0, 1).text = 'Unrelated'
+    buffer = io.BytesIO()
+    document.save(buffer)
+    original = buffer.getvalue()
+    extracted = extract_docx_text_regions(original)
+    body = next(region.text for region in extracted.regions if region.part == 'word/document.xml')
+    start = body.index('Stuk 1')
+    report = {'snapshot_hash': 'a' * 64, 'findings': [{
+        'reference_id': 'ref-cell', 'region': 'word/document.xml', 'literal': 'Stuk 1',
+        'offsets': {'start': start, 'end': start + 6},
+    }]}
+
+    class Store:
+        def reopen(self, bearer, case, brief, snapshot):
+            assert bearer == 'signed' and snapshot == report['snapshot_hash']
+            return report, original
+
+    app = FastAPI()
+    app.include_router(create_dossier_router(Store()))
+    client = TestClient(app)
+    base = '/v2/matters/case/briefs/parent/dossier'
+    headers = {'Authorization': 'Bearer signed', 'If-Match': 'snapshot_id:' + 'a' * 64}
+    anchor = client.get(f'{base}/snapshots/{"a" * 64}/references/ref-cell/correction-anchor',
+                        headers=headers)
+    assert anchor.status_code == 200
+    assert anchor.json()['paragraph_index'] == 50_000
+    command = {
+        'snapshot_hash': 'a' * 64, 'original_sha256': sha256(original).hexdigest(),
+        'reference_id': 'ref-cell', 'paragraph_index': 50_000,
+        'before': 'Stuk 1', 'after': 'Pièce 2',
+        'locator_identity': anchor.json()['locator_identity'],
+    }
+    preview = client.post(base + '/corrections/preview', headers=headers, json=command)
+    assert preview.status_code == 200
+    assert preview.json()['committed'] is False
+    assert preview.json()['paragraph_index'] == 50_000
+    assert preview.json()['derivative_sha256'] != sha256(original).hexdigest()
+    forged = {**command, 'paragraph_index': 0}
+    assert client.post(base + '/corrections/preview', headers=headers, json=forged).status_code == 422
+    replaced = {**command, 'before': 'Unrelated'}
+    assert client.post(base + '/corrections/preview', headers=headers, json=replaced).status_code == 422
+    assert Document(io.BytesIO(original)).tables[0].cell(0, 0).text == 'See Stuk 1'
