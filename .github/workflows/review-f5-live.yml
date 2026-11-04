@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f5-correction-recheck-workspace' || (github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/f5-correction-recheck-workspace' || github.head_ref == 'feat/p2-p3-review-correction' || github.head_ref == 'feat/bounded-locator-snapshot-correspondence' || github.head_ref == 'feat/structured-docx-table-corrections')))
+    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f5-correction-recheck-workspace' || (github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/f5-correction-recheck-workspace' || github.head_ref == 'feat/p2-p3-review-correction' || github.head_ref == 'feat/bounded-locator-snapshot-correspondence' || github.head_ref == 'feat/structured-docx-table-corrections' || github.head_ref == 'feat/word-document-editor-tracked-changes')))
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 20
@@ -20,7 +20,8 @@ jobs:
       CASEPROOF_F3_BROWSER_LIVE: "YES"
       CASEPROOF_F4_BROWSER_LIVE: "YES"
       CASEPROOF_F5_BROWSER_LIVE: "YES"
-      CASEPROOF_F5_TABLE_CORRECTION: ${{ github.head_ref == 'feat/structured-docx-table-corrections' && 'YES' || 'NO' }}
+      CASEPROOF_DOCX_EDITOR_BROWSER_LIVE: ${{ github.head_ref == 'feat/word-document-editor-tracked-changes' && 'YES' || 'NO' }}
+      CASEPROOF_F5_TABLE_CORRECTION: ${{ (github.head_ref == 'feat/structured-docx-table-corrections' || github.head_ref == 'feat/word-document-editor-tracked-changes') && 'YES' || 'NO' }}
       CASEPROOF_OCR_SANDBOX: docker
       CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
     steps:
