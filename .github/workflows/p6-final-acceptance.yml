@@ -1,0 +1,105 @@
+name: P6 host, restore, dependency and corpus evidence
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  docx-writer:
+    if: github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CASEPROOF_SYNTHETIC_HOST_TEST: "YES"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Install an actual LibreOffice Writer host
+        run: sudo apt-get update -qq && sudo apt-get install -y libreoffice-writer
+      - name: CaseProof original, corrected and annotated DOCX host round-trip
+        run: uv run --locked python -m scripts.p6_docx_host_acceptance
+      - name: Existing structural DOCX, footnote and XML regressions
+        run: uv run --locked pytest -q tests/test_f6_docx_format_integrity.py tests/test_p5_docx_report.py
+
+  restore-simulation:
+    if: github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: caseproof_s2_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: caseproof_ephemeral_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caseproof_s2_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 8
+    env:
+      CASEPROOF_DISPOSABLE_DB: "YES"
+      CASEPROOF_P6_RESTORE_DISPOSABLE: "YES"
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: caseproof_s2_ci
+      PGUSER: postgres
+      PGPASSWORD: caseproof_ephemeral_ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Install actual PostgreSQL dump/restore client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Install real disposable migrations and negative retention tests
+        run: uv run --locked python -m scripts.verify_retention_disposable
+      - name: Backup, restore, check private grants, replay synthetic erasure and destroy copy
+        run: uv run --locked python -m scripts.p6_disposable_restore
+
+  supply-chain:
+    if: github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install committed pinned dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Audit all and shipped dependency graphs; fail on serious exposure
+        working-directory: frontend
+        run: |
+          npm audit --json > "$RUNNER_TEMP/caseproof-all-audit.json" || test "$?" -eq 1
+          npm audit --omit=dev --json > "$RUNNER_TEMP/caseproof-production-audit.json" || test "$?" -eq 1
+          node scripts/p6-dependency-audit.mjs "$RUNNER_TEMP/caseproof-all-audit.json" "$RUNNER_TEMP/caseproof-production-audit.json"
+      - name: Ensure no external package data is uploaded as an artifact
+        run: echo "Only sanitized package/severity findings are emitted into job logs."
+
+  corpus-and-privacy-contracts:
+    if: github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Validate author-labelled synthetic corpus, not real practitioner labels
+        run: uv run --locked python -m scripts.validate_litigation_corpus
+      - name: Keep deployment/retention/egress claims fail-closed
+        run: uv run --locked pytest -q tests/test_deployment_assessment.py tests/test_litigation_m0_corpus.py
