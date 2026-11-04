@@ -38,7 +38,7 @@ def _exercise() -> None:
         "refs/pull/175/merge",
         "refs/pull/176/merge",
         "refs/pull/177/merge", "refs/heads/feat/f5-correction-recheck-workspace",
-        "refs/pull/178/merge", "refs/pull/182/merge", "refs/pull/183/merge",
+        "refs/pull/178/merge", "refs/pull/182/merge", "refs/pull/183/merge", "refs/pull/184/merge",
         "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
@@ -471,6 +471,11 @@ def _exercise() -> None:
             )
             if denied_recovery.status not in (403, 404):
                 raise RuntimeError("F5_REVOKED_RECOVERY_NOT_DENIED")
+            denied_replay = page.request.post(
+                correction_base[0] + '/corrections/commit', data=correction_request, headers=correction_headers,
+            )
+            if denied_replay.status not in (403, 404):
+                raise RuntimeError("F5_REVOKED_REPLAY_NOT_DENIED")
             print("F5_GENUINE_SIGNED_REVOKED_RECOVERY_DENIED_PASSED", flush=True)
         page.goto(ORIGIN + f"/workspace/matters/{case}/sources")
         acceptance.login(page)
