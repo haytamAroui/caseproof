@@ -104,6 +104,30 @@ class DraftRevisionClient:
             key=self.key, bearer=bearer,
         )
 
+    def editor_activate(
+        self, bearer: str, case: str, request: str,
+        review_request: str, digest: str, size: int,
+    ) -> dict[str, Any]:
+        """Recheck fresh document-edit scope in a separate trusted activation RPC."""
+        key = self.trusted_key
+        if not key:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            actor = self.verifier.verify_bearer(bearer)
+        except InvalidBearer:
+            raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+        except IdentityServiceUnavailable:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return self._rpc(
+            "caseproof_dossier_document_edit_activate",
+            {
+                "p_actor": actor.subject_id, "p_case": case,
+                "p_request": request, "p_review": review_request,
+                "p_sha256": digest, "p_length": size,
+            },
+            key=key, bearer=key if key.startswith("eyJ") else None,
+        )
+
     def activate(self, bearer: str, case: str, request: str, digest: str, size: int) -> dict[str, Any]:
         key = self.trusted_key
         if not key:
