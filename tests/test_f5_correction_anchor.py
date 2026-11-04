@@ -165,3 +165,27 @@ def test_locator_identity_fails_closed_when_stale(change):
     }
     with pytest.raises(ValueError):
         correction_anchor(original, target)
+
+
+@pytest.mark.parametrize('override', [
+    {'exact_text': 'Stuk 2'},
+    {'exact_text': 123},
+    {'content_hash': 'z' * 64},
+    {'content_hash': 'A' * 64},
+])
+def test_locator_rejects_mismatched_exact_text_and_invalid_digest(override):
+    from hashlib import sha256
+
+    original = docx('Before Stuk 1 after')
+    target = finding(7, 13)
+    target['locator_identity'] = {
+        'exact_text': 'Stuk 1',
+        'content_hash': sha256('Before Stuk 1 after'.encode()).hexdigest(),
+        'paragraph_id': None,
+        'prefix': 'Before ',
+        'suffix': ' after',
+        'occurrence_index': 0,
+        **override,
+    }
+    with pytest.raises(ValueError):
+        correction_anchor(original, target)
