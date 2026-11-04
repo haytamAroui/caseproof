@@ -102,7 +102,7 @@ export class ApiClient {
     signal: AbortSignal,
   ): Promise<Uint8Array> {
     if (
-      !/^\\/v2\\/matters\\/[^/]+\\/briefs\\/[^/]+\\/dossier\\/editor\\/candidate$/.test(
+      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/editor\/candidate$/.test(
         new URL(path, 'https://caseproof.invalid').pathname,
       ) ||
       !/^[0-9a-f]{64}$/.test(receipt.sha256) ||
