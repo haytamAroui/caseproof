@@ -46,6 +46,7 @@ function previewReceipt(
     paragraph_index: number;
     before: string;
     after: string;
+    locator_identity?: Record<string, unknown>;
   },
   briefId: string,
 ): Preview {
@@ -139,7 +140,9 @@ export function CorrectionPanel({
         (result.paragraph_index as number) > 100000
       )
         throw Error('Unverified correction anchor');
-      return result.paragraph_index as number;
+      const identity = record(result.locator_identity);
+      if (identity.source_version_id !== scope.briefId || identity.exact_text !== before || !sha.test(identity.content_hash as string)) throw Error('Unverified correction locator');
+      return { paragraph_index: result.paragraph_index as number, locator_identity: identity };
     },
     retry: false,
     enabled: session.connected,
@@ -198,7 +201,8 @@ export function CorrectionPanel({
     snapshot_hash: scope.snapshot,
     original_sha256: originalSha,
     reference_id: finding.reference_id,
-    paragraph_index: anchor.data ?? -1,
+    paragraph_index: anchor.data?.paragraph_index ?? -1,
+    locator_identity: anchor.data?.locator_identity,
     before,
     after,
   });
@@ -208,7 +212,7 @@ export function CorrectionPanel({
     invalidate();
     try {
       const result = previewReceipt(
-        await api.post(`${base}/corrections/preview`, payload()),
+        await api.post(`${base}/corrections/preview`, payload(), undefined, { snapshot: scope.snapshot }),
         payload(),
         scope.briefId,
       );
@@ -216,7 +220,7 @@ export function CorrectionPanel({
       setMessage('Read-only preview validated. No change was committed.');
     } catch (e) {
       setMessage(
-        e instanceof ApiError && e.status === 409
+        e instanceof ApiError && (e.status === 409 || e.status === 412)
           ? 'Stale draft. Reopen the current report.'
           : 'Preview unavailable or unsupported. No commit allowed.',
       );
@@ -243,7 +247,7 @@ export function CorrectionPanel({
       };
       setCommand(submitted);
       const result = commitReceipt(
-        await api.post(`${base}/corrections/commit`, submitted),
+        await api.post(`${base}/corrections/commit`, submitted, undefined, { snapshot: scope.snapshot, idempotencyKey: submitted.request_id }),
       );
       setReceipt(result);
       setMessage(

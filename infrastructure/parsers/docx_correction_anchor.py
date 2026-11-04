@@ -127,3 +127,21 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
         if occurrence >= len(matches) or matches[occurrence] != local_start:
             raise ValueError('stale locator occurrence')
     return index
+
+
+def bound_locator(original: bytes, finding: dict[str, Any], source_version_id: str) -> dict[str, Any]:
+    """Identity extracted from the source bytes and its already validated target."""
+    from docx import Document
+    index = correction_anchor(original, finding)
+    paragraph = Document(io.BytesIO(original)).paragraphs[index]
+    content = paragraph.text
+    literal = finding['literal']
+    at = content.find(literal)
+    if at < 0 or content.find(literal, at + 1) >= 0:
+        raise ValueError('ambiguous target')
+    para_ns = 'http://schemas.microsoft.com/office/word/2010/wordml'
+    return {'exact_text': literal, 'prefix': content[:at],
+            'suffix': content[at + len(literal):], 'occurrence_index': 0,
+            'content_hash': hashlib.sha256(content.encode()).hexdigest(),
+            'paragraph_id': paragraph._p.get('{%s}paraId' % para_ns),
+            'source_version_id': source_version_id}

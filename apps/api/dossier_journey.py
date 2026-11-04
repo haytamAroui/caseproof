@@ -35,7 +35,7 @@ from domains.disputes.dossier_verification import build_findings
 from domains.disputes.exhibit_identity import InventoryStatus
 from domains.disputes.page_labels import PAGE_LABEL_PATTERN
 from domains.disputes.reference_detection import detect_exhibit_references
-from infrastructure.parsers.docx_correction_anchor import correction_anchor
+from infrastructure.parsers.docx_correction_anchor import bound_locator, correction_anchor
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from infrastructure.parsers.dossier_docx_export import annotated_docx, corrected_docx_preview
@@ -375,7 +375,7 @@ class DossierStore:
         else:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
-            if command.before != finding.get("literal") or correction_anchor(original, finding) != command.paragraph_index:
+            if command.before != finding.get("literal") or correction_anchor(original, {**finding, 'locator_identity': command.locator_identity.model_dump() if command.locator_identity else None}) != command.paragraph_index or (command.locator_identity is not None and command.locator_identity.source_version_id != brief):
                 raise ValueError("correction does not match reference anchor")
             derivative = corrected_docx_preview(
                 original,
@@ -826,11 +826,12 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         try:
             index = correction_anchor(original, finding)
+            locator = bound_locator(original, finding, brief_id)
         except ValueError:
             raise HTTPException(422, "unsupported or ambiguous correction anchor") from None
         return {"snapshot_hash": snapshot_hash, "brief_version_id": brief_id,
                 "reference_id": reference_id, "original_sha256": hashlib.sha256(original).hexdigest(),
-                "paragraph_index": index, "before": finding["literal"]}
+                "paragraph_index": index, "before": finding["literal"], "locator_identity": locator}
 
     @router.get(base + "/snapshots/{snapshot_hash}/references/{reference_id}/correction-operations")
     def correction_operations(
@@ -864,8 +865,11 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         brief_id: str,
         body: CorrectionPreviewBody,
         authorization: str | None = Header(default=None),
+        if_match: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
+        if if_match != "snapshot_id:" + body.snapshot_hash:
+            raise HTTPException(412, "snapshot precondition required")
         report, original = s.reopen(bearer, case_id, brief_id, body.snapshot_hash)
         if report["snapshot_hash"] != body.snapshot_hash:
             raise HTTPException(409, "stale dossier correction")
@@ -873,7 +877,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         if finding is None:
             raise HTTPException(422, "unknown correction reference")
         try:
-            if body.before != finding.get("literal") or correction_anchor(original, finding) != body.paragraph_index:
+            if body.before != finding.get("literal") or correction_anchor(original, {**finding, 'locator_identity': body.locator_identity.model_dump() if body.locator_identity else None}) != body.paragraph_index or (body.locator_identity is not None and body.locator_identity.source_version_id != brief_id):
                 raise ValueError("correction does not match reference anchor")
             derivative = corrected_docx_preview(
                 original,
@@ -917,8 +921,14 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         brief_id: str,
         body: CorrectionCommitBody,
         authorization: str | None = Header(default=None),
+        if_match: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
+        if if_match != "snapshot_id:" + body.snapshot_hash:
+            raise HTTPException(412, "snapshot precondition required")
+        if idempotency_key != body.request_id:
+            raise HTTPException(422, "idempotency key must match durable correction request")
         return s.commit_correction(bearer, case_id, brief_id, body)
 
     @router.post(base + "/recheck")
