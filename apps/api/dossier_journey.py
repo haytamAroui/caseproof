@@ -803,6 +803,36 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             "report": report,
         }
 
+    @router.get(base + "/history/{snapshot_hash}/comparison")
+    def compare_frozen_findings(
+        case_id: str, brief_id: str, snapshot_hash: str,
+        current_brief_id: str, current_snapshot_hash: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        from application.litigation.finding_drift import explain_finding_drift
+
+        s, bearer = active(authorization)
+        for digest in (snapshot_hash, current_snapshot_hash):
+            if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+                raise HTTPException(422, "invalid snapshot identity")
+        for version in (brief_id, current_brief_id):
+            try:
+                if str(UUID(version)) != version:
+                    raise ValueError
+            except ValueError:
+                raise HTTPException(422, "invalid draft version") from None
+        old = s.frozen_report(bearer, case_id, brief_id, snapshot_hash, historical=True)
+        new = s.frozen_report(bearer, case_id, current_brief_id,
+                              current_snapshot_hash, historical=True)
+        if (old.get('brief_id') != brief_id or old.get('snapshot_hash') != snapshot_hash
+                or new.get('brief_id') != current_brief_id
+                or new.get('snapshot_hash') != current_snapshot_hash):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            return explain_finding_drift(old, new)
+        except ValueError:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+
     @router.get(base + "/history/{snapshot_hash}/sources/{version_id}/original")
     def historical_original(
         case_id: str,

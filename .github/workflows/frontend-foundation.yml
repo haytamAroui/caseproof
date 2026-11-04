@@ -31,6 +31,14 @@ jobs:
         run: uv run --locked python -m scripts.generate_viewer_fixtures --out frontend/tests/viewer-comparison/generated/fixtures
       - run: npm ci
         working-directory: frontend
+      - name: Check locked production dependency graph and generate local SBOM
+        working-directory: frontend
+        run: |
+          npm ls --omit=dev --all
+          npm sbom --omit=dev --sbom-format=cyclonedx > "$RUNNER_TEMP/caseproof-web-sbom.json"
+          node -e "const fs=require('node:fs'); const s=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/caseproof-web-sbom.json')); if(!Array.isArray(s.components) || !s.components.length) process.exit(1)"
+      - name: Record reproducible Python lockfile dependency tree
+        run: uv tree --locked --depth 2 > "$RUNNER_TEMP/caseproof-python-dependencies.txt"
       - name: Enforce M3 design, database and security policy
         run: npm run policy:check
         working-directory: frontend

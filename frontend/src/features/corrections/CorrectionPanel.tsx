@@ -84,6 +84,70 @@ function commitReceipt(x: unknown): Commit {
     throw Error('Activation not confirmed');
   return r as Commit;
 }
+type DriftRow = {
+  previous_reference_id: string | null;
+  current_reference_id: string | null;
+  status: 'unchanged' | 'changed' | 'uncertain' | 'added' | 'removed';
+  reasons: string[];
+  review_transfer: 'never';
+};
+type Drift = {
+  schema: 'caseproof-finding-drift-v1';
+  previous_brief_id: string;
+  previous_snapshot_hash: string;
+  current_brief_id: string;
+  current_snapshot_hash: string;
+  correspondence_basis: string;
+  review_transfer: 'never';
+  rows: DriftRow[];
+};
+
+function parseDrift(
+  response: unknown,
+  previous: DossierView,
+  current: DossierView,
+): Drift {
+  const envelope = record(response);
+  if (
+    envelope.schema !== 'caseproof-finding-drift-v1' ||
+    envelope.case_id !== previous.case_id ||
+    envelope.previous_brief_id !== previous.brief_id ||
+    envelope.previous_snapshot_hash !== previous.snapshot_hash ||
+    envelope.current_brief_id !== current.brief_id ||
+    envelope.current_snapshot_hash !== current.snapshot_hash ||
+    envelope.review_transfer !== 'never' ||
+    envelope.correspondence_basis !==
+      'unique_region_and_start_offset_candidate_not_identity_proof' ||
+    !Array.isArray(envelope.rows) ||
+    envelope.rows.length > 20000
+  )
+    throw Error('Unbound reference correspondence');
+
+  const oldIds = new Set(previous.findings.map((item) => item.reference_id));
+  const newIds = new Set(current.findings.map((item) => item.reference_id));
+  for (const entry of envelope.rows) {
+    const row = record(entry);
+    const before = row.previous_reference_id;
+    const after = row.current_reference_id;
+    if (
+      row.review_transfer !== 'never' ||
+      !['unchanged', 'changed', 'uncertain', 'added', 'removed'].includes(
+        String(row.status),
+      ) ||
+      !(before === null || (typeof before === 'string' && oldIds.has(before))) ||
+      !(after === null || (typeof after === 'string' && newIds.has(after))) ||
+      (before === null && after === null) ||
+      !Array.isArray(row.reasons) ||
+      row.reasons.length > 20 ||
+      !row.reasons.every(
+        (reason: unknown) => typeof reason === 'string' && reason.length <= 120,
+      )
+    )
+      throw Error('Unverified reference correspondence row');
+  }
+  return envelope as Drift;
+}
+
 /** A bounded correction command: never silently infer a DOCX paragraph index from a text excerpt. */
 export function CorrectionPanel({
   api,
@@ -109,6 +173,7 @@ export function CorrectionPanel({
   const [unknown, setUnknown] = useState(false);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [recoveryReady, setRecoveryReady] = useState(false);
+  const [drift, setDrift] = useState<Drift | null>(null);
   const [comparison, setComparison] = useState<{
     old: DossierView;
     current: DossierView;
@@ -345,8 +410,23 @@ export function CorrectionPanel({
         old.snapshot_hash !== scope.snapshot
       )
         throw Error('Historical report binding mismatch');
+      let explained: Drift | null = null;
+      try {
+        const payload = await api.get(
+          `${base}/history/${encodeURIComponent(scope.snapshot)}/comparison?current_brief_id=${encodeURIComponent(current.brief_id)}&current_snapshot_hash=${encodeURIComponent(current.snapshot_hash)}`,
+        );
+        explained = parseDrift(payload, old, current);
+      } catch {
+        // Recheck remains valid; correspondence is explicitly unavailable.
+        // Never fabricate a match or carry forward a human decision.
+      }
+      setDrift(explained);
       setComparison({ old, current });
-      setMessage('Recheck completed. Compare the preserved reports below.');
+      setMessage(
+        explained
+          ? 'Recheck completed. Reference drift remains a review aid, not approval.'
+          : 'Recheck completed. Reference drift is unavailable; manually inspect both frozen reports.',
+      );
     } catch {
       setMessage(
         'Recheck could not be confirmed. Reopen the activated draft from authorized history.',
@@ -471,6 +551,35 @@ export function CorrectionPanel({
             old={comparison.old}
             current={comparison.current}
           />
+          {drift ? (
+            <section aria-label="Exhibit reference drift">
+              <h4>Reference drift explanations</h4>
+              <Notice>
+                Matches are positional candidates only. Renumbered, ambiguous
+                and unsupported citations require renewed human inspection. No
+                prior signed decision is carried forward.
+              </Notice>
+              <ul>
+                {drift.rows.map((row, index) => (
+                  <li
+                    key={`${row.previous_reference_id ?? 'new'}-${row.current_reference_id ?? 'gone'}-${index}`}
+                  >
+                    <strong>{row.status}</strong> — previous{' '}
+                    {row.previous_reference_id ?? 'none'}; rechecked{' '}
+                    {row.current_reference_id ?? 'none'}.
+                    {row.reasons.length > 0 && (
+                      <span> Reasons: {row.reasons.join(', ')}.</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : (
+            <Notice>
+              Reference drift comparison was not confirmed by the signed API.
+              Previous review cannot be transferred to the new draft.
+            </Notice>
+          )}
           {(
             [
               ['Previous report', comparison.old],

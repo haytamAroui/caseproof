@@ -6,6 +6,8 @@
 **Suggested repository location:** `docs/CASEPROOF_AGENT_MASTER_TODO.md`.  
 **Status:** Proposed execution backlog. This file creates no production approval, reviewer sign-off, new API or completed milestone.
 
+> **4 Nov 2026 P5/P6 consolidation:** The implementation branch `feat/p5-p6-readability-drift-pilot` introduces the DOCX appendix, authenticated frozen-report drift comparison, additional tests and dependency/SBOM checks. These changes are **not** marked DONE until final-head CI and required acceptance evidence have been inspected. T61, T70, T73–T79 still require independent operational/practitioner evidence; do not infer that code alone closes them. See [P5/P6 acceptance ledger](pilot/P5_P6_ACCEPTANCE_MATRIX.md).
+
 ## 1. Agent start here
 
 1. Read applicable `AGENTS.md` and repository constitutional rules. Read this task list once, then the selected task and actual relevant code/tests. Check current branch, working tree, upstream head and exact installed contracts. Preserve unrelated changes.

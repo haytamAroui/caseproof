@@ -77,61 +77,215 @@ def _validate_derivative_package(original: bytes) -> None:
 
 
 def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
+    """Append a human-readable, scoped appendix; never change the preserved original.
+
+    Unrepresentable XML characters cause refusal, not silent sanitization. All
+    user-supplied content is inserted as inert XML text, never markup.
+    """
     _validate_derivative_package(original)
-    extracted = extract_docx_text_regions(original)  # bounded ZIP/XML validation
+    extracted = extract_docx_text_regions(original)
     if not any(r.part == 'word/document.xml' for r in extracted.regions):
         raise ValueError('draft cannot be annotated')
+
     with ZipFile(io.BytesIO(original)) as source:
-        document = minidom.parseString(source.read('word/document.xml'))
+        raw_document = source.read('word/document.xml')
+        SafeXML.fromstring(raw_document, forbid_dtd=True, forbid_entities=True,
+                           forbid_external=True)
+        document = minidom.parseString(raw_document)
         bodies = document.getElementsByTagNameNS(NS, 'body')
         if len(bodies) != 1:
             raise ValueError('missing body')
         body = bodies[0]
         prefix = (body.prefix + ':') if body.prefix else ''
-        lines = ['CaseProof — scoped review annotations (derivative; original preserved)',
-                 'Snapshot: ' + report['snapshot_hash'],
-                 'Coverage: ' + str(report['coverage']),
-                 'No filing, authenticity, fidelity or legal-support certificate.']
-        lines.append('Verification contract: ' + str(report.get('verification_contract', {})))
-        lines.append('Abstentions: ' + str(report.get('abstentions', [])))
-        decisions = report['human_decisions']
-        for f in report['findings']:
-            human = [d for d in decisions if d['reference_id'] == f['reference_id']]
-            lines.append(f"{f['reference_id']} {f['literal']}: identity={f['identity']}; page={f['page_mapping']}; "
-                         f"fidelity={f['fidelity']}; automated support=not_assessed; "
-                         f"source={f['version_id']}; OCR={f['ocr_uncertainty']}")
-            lines.append('Identity reason: ' + str(f.get('identity_reason')) + '; literal=' + str(f.get('literal_assessment', {})) +
-                         '; translation_review_required=' + str(f.get('translation_review_required', False)) +
-                         '; draft_language=' + str(f.get('draft_language')) + '; source_language=' + str(f.get('source_language')) +
-                         '; quoted_text=' + str(f.get('quoted_text')))
-            lines.append('Source original context: ' + str(f.get('source_text_context', '')) + '; context_partial=' + str(f.get('source_text_context_partial', False)))
-            visual = f.get('visual_assessment', {})
-            lines.append('Visual fidelity: ' + str(visual.get('state', 'not_assessed')) +
-                         '; reason=' + str(visual.get('reason', 'visual_not_run')) +
-                         '; calibration=' + str(visual.get('calibration_status', 'not_available')))
-            for region in visual.get('regions', []):
-                lines.append('Region ' + region['region_id'] + '; crop SHA256=' + region['crop_sha256'] +
-                             '; page=' + str(region['page_number']) + '; bbox=' + str(region['bbox']) +
-                             '; extracted=' + region['extracted_text'] + '; OCR=' + region['visual_text'])
-            for decision in human:
-                lines.append('Human decision: ' + decision['decision'] + '; reviewer=' +
-                             str(decision.get('reviewer_id', 'unknown')) + '; timestamp=' +
-                             str(decision.get('timestamp', 'unknown')) + '; rationale=' + decision['rationale'])
         section = next((node for node in body.childNodes
                         if node.namespaceURI == NS and node.localName == 'sectPr'), None)
-        for line in lines:
-            paragraph = document.createElementNS(NS, prefix + 'p')
-            run = document.createElementNS(NS, prefix + 'r')
-            text = document.createElementNS(NS, prefix + 't')
-            text.appendChild(document.createTextNode(line))
-            run.appendChild(text)
-            paragraph.appendChild(run)
+        written = 0
+
+        def element(name: str) -> Any:
+            return document.createElementNS(NS, prefix + name)
+
+        def scalar(value: Any) -> str:
+            if value is None:
+                return 'not supplied'
+            if type(value) is bool:
+                return 'yes' if value else 'no'
+            if isinstance(value, (str, int, float)):
+                result = str(value)
+                if not _valid_xml_text(result):
+                    raise ValueError('annotation contains XML-invalid characters')
+                return result
+            raise ValueError('unsupported annotation value')
+
+        def run_text(run: Any, value: str) -> None:
+            if not _valid_xml_text(value):
+                raise ValueError('annotation contains XML-invalid characters')
+            for part in re.split(r'(\r\n|\r|\n|\t)', value):
+                if part in ('\r', '\n', '\r\n'):
+                    run.appendChild(element('br'))
+                elif part == '\t':
+                    run.appendChild(element('tab'))
+                elif part:
+                    node = element('t')
+                    node.setAttributeNS('http://www.w3.org/XML/1998/namespace',
+                                        'xml:space', 'preserve')
+                    node.appendChild(document.createTextNode(part))
+                    run.appendChild(node)
+
+        def line(label: str, value: Any = None, *, heading: bool = False,
+                 indent: int = 0) -> None:
+            nonlocal written
+            written += 1
+            if written > 3500:
+                raise ValueError('annotation exceeds supported paragraph count')
+            paragraph = element('p')
+            properties = element('pPr')
+            if indent:
+                indentation = element('ind')
+                indentation.setAttributeNS(NS, prefix + 'left', str(min(indent, 3) * 360))
+                properties.appendChild(indentation)
+            if heading:
+                spacing = element('spacing')
+                spacing.setAttributeNS(NS, prefix + 'before', '180')
+                properties.appendChild(spacing)
+            if properties.childNodes:
+                paragraph.appendChild(properties)
+            header = element('r')
+            header_properties = element('rPr')
+            header_properties.appendChild(element('b'))
+            header.appendChild(header_properties)
+            run_text(header, label + (': ' if value is not None else ''))
+            paragraph.appendChild(header)
+            if value is not None:
+                content = element('r')
+                run_text(content, scalar(value))
+                paragraph.appendChild(content)
             body.insertBefore(paragraph, section)
+
+        def details(label: str, value: Any, *, depth: int = 1) -> None:
+            """Label nested data without Python repr, hiding nothing silently."""
+            if depth > 3:
+                line(label, 'Nested details: consult the frozen JSON artifact', indent=2)
+                return
+            if isinstance(value, dict):
+                line(label, heading=depth == 1, indent=min(depth - 1, 2))
+                for key, item in value.items():
+                    if not isinstance(key, str):
+                        raise ValueError('invalid annotation field name')
+                    details(key.replace('_', ' ').capitalize(), item, depth=depth + 1)
+            elif isinstance(value, list):
+                if len(value) > 50:
+                    line(label, f'{len(value)} entries; item-level details in frozen JSON export',
+                         indent=min(depth, 2))
+                else:
+                    line(label + f' ({len(value)} entries)', heading=depth == 1,
+                         indent=min(depth - 1, 2))
+                    for index, item in enumerate(value, 1):
+                        details(f'Item {index}', item, depth=depth + 1)
+            else:
+                line(label, value, indent=min(depth, 2))
+
+        line('CaseProof — scoped review appendix / overzicht / annexe', heading=True)
+        line('Derivative notice',
+             'Annotated copy only. The preserved source is unchanged; no legal, '
+             'authenticity, filing or fidelity certificate is issued.')
+        line('Snapshot SHA-256', report['snapshot_hash'])
+        for key, label in (
+            ('case_id', 'Matter'), ('brief_id', 'Draft source version'),
+            ('bundle_signature', 'Bundle signature'), ('confirmation_id', 'Inventory confirmation'),
+        ):
+            if key in report and report[key] is not None:
+                line(label, report[key])
+        coverage = report['coverage']
+        if not isinstance(coverage, dict):
+            raise ValueError('invalid coverage structure')
+        line('Coverage / dekking / couverture', heading=True)
+        for key in (
+            'checked', 'unresolved', 'references_detected', 'references_checked',
+            'references_not_assessed', 'text_coverage_complete',
+            'reference_recall_measured', 'source_pages_known_total',
+            'source_pages_total', 'source_pages_ocr_processed',
+            'source_pages_failed_or_skipped',
+        ):
+            if key in coverage:
+                line(key.replace('_', ' ').capitalize(), coverage[key], indent=1)
+        for key in ('dimension_counts', 'docx_regions', 'source_page_counts_unknown'):
+            if key in coverage:
+                details(key.replace('_', ' ').capitalize(), coverage[key])
+        if 'source_pages' in coverage:
+            pages = coverage['source_pages']
+            if not isinstance(pages, list):
+                raise ValueError('invalid source page ledger')
+            line('Source-page ledger',
+                 f'{len(pages)} entries; full method and error details in frozen JSON',
+                 indent=1)
+        line('Verification scope and limitations', heading=True)
+        verification = report.get('verification_contract', {})
+        if not isinstance(verification, dict):
+            raise ValueError('invalid verification contract')
+        details('Verification contract', verification)
+        line('Machine text matches do not establish semantic legal support.')
+        line('Unmapped, unsupported and OCR-unreliable portions remain unresolved.')
+        abstentions = report.get('abstentions', [])
+        if not isinstance(abstentions, list):
+            raise ValueError('invalid abstentions structure')
+        details('Abstentions / onthoudingen / abstentions', abstentions)
+        findings = report['findings']
+        decisions = report['human_decisions']
+        if not isinstance(findings, list) or not isinstance(decisions, list):
+            raise ValueError('invalid findings or decisions')
+        line('Findings / vaststellingen / constatations', heading=True)
+        line('Number of detected references', len(findings))
+        for index, finding in enumerate(findings, 1):
+            if not isinstance(finding, dict):
+                raise ValueError('invalid finding')
+            line(f'Reference {index}', finding['reference_id'], heading=True)
+            for key, label in (
+                ('literal', 'Literal citation'), ('identity', 'Identity'),
+                ('identity_reason', 'Identity reason'), ('page_mapping', 'Page mapping'),
+                ('page_mapping_reason', 'Page reason'), ('pdf_page', 'Physical PDF page'),
+                ('printed_page', 'Printed page'), ('bundle_page', 'Bundle page'),
+                ('fidelity', 'Literal fidelity'), ('support', 'Human support state'),
+                ('version_id', 'Preserved source version'),
+                ('source_sha256', 'Source SHA-256'), ('ocr_uncertainty', 'OCR uncertainty'),
+                ('draft_language', 'Draft language'), ('source_language', 'Source language'),
+                ('translation_review_required', 'Translation review needed'),
+                ('quoted_text', 'Quoted text'), ('source_text_context', 'Source representation context'),
+                ('source_text_context_partial', 'Context was partial'),
+            ):
+                if key in finding:
+                    line(label, finding[key], indent=1)
+            for key in ('literal_assessment', 'visual_assessment'):
+                if key in finding:
+                    value = finding[key]
+                    if key == 'visual_assessment' and isinstance(value, dict):
+                        regions = value.get('regions', [])
+                        if not isinstance(regions, list):
+                            raise ValueError('invalid visual regions')
+                        value = {k: v for k, v in value.items() if k != 'regions'}
+                        details('Visual region count', len(regions))
+                        for region_index, region in enumerate(regions, 1):
+                            details(f'Visual region {region_index}', region)
+                    details(key.replace('_', ' ').capitalize(), value)
+            line('Automated legal support', 'not assessed', indent=1)
+        line('Persisted human review / menselijke beoordeling / revue humaine',
+             heading=True)
+        line('Number of decision receipts', len(decisions))
+        for index, decision in enumerate(decisions, 1):
+            if not isinstance(decision, dict):
+                raise ValueError('invalid human decision')
+            line(f'Decision {index}', decision.get('reference_id'), heading=True)
+            for key, label in (
+                ('decision', 'Decision'), ('reviewer_id', 'Reviewer identity'),
+                ('timestamp', 'Review timestamp'), ('request_id', 'Review request ID'),
+                ('rationale', 'Rationale'),
+            ):
+                if key in decision:
+                    line(label, decision[key], indent=1)
         output = io.BytesIO()
         with ZipFile(output, 'w', ZIP_DEFLATED) as target:
-            for item in source.infolist():
-                target.writestr(item, document.toxml(encoding='utf-8')
-                                if item.filename == 'word/document.xml' else source.read(item))
+            for entry in source.infolist():
+                target.writestr(entry, document.toxml(encoding='utf-8')
+                                if entry.filename == 'word/document.xml' else source.read(entry))
     return output.getvalue()
 
 
