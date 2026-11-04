@@ -53,7 +53,7 @@ def _exercise() -> None:
 
     document = Document()
     if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
-        target = document.add_paragraph("Zie Stu")
+        target = document.add_paragraph("😀 Zie Stu")
         target.add_run("k 1, printed p. 4.").italic = True
     else:
         document.add_paragraph("Zie Stuk 1, printed p. 4.")
@@ -292,6 +292,8 @@ def _exercise() -> None:
             before = correction.get_by_label("Exact original text").input_value()
             if "1" not in before:
                 raise RuntimeError("F5_SYNTHETIC_REFERENCE_DIFFERS")
+            expect(page.get_by_role("region", name="Read-only draft reference").locator("mark")).to_have_text(before)
+            print("F5_UNICODE_EXCERPT_REFERENCE_MATCHED_PASSED", flush=True)
             _stage("EXACT_REFERENCE_PREVIEW")
             # F6's second release needs a newly checked *mapped* reference:
             # an edit to the reference's presentation preserves exhibit 1

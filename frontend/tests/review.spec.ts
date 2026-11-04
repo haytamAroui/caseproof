@@ -449,3 +449,68 @@ test('inspection and unsaved review never carry into another snapshot with the s
     }),
   ).toBeVisible();
 });
+
+test('draft excerpt highlights the exact reference after an astral Unicode character', async ({
+  page,
+}) => {
+  await page.route('**/draft-context', (route) =>
+    route.fulfill({
+      json: {
+        schema: 'caseproof-draft-excerpt-v1',
+        case_id: caseId,
+        brief_id: brief,
+        snapshot_hash: snapshot,
+        reference_id: 'ref-one',
+        original_sha256: 'b'.repeat(64),
+        available: true,
+        region: 'word/document.xml',
+        excerpt: '😀 Before Stuk 1 after',
+        selection_start: 9,
+        selection_end: 15,
+        reason: null,
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const context = page.getByRole('region', {
+    name: 'Read-only draft reference',
+  });
+  await expect(context.locator('mark')).toHaveText('Stuk 1');
+  await expect(context.getByText('😀 Before', { exact: false })).toBeVisible();
+});
+
+test('draft excerpt refuses a server selection that does not match the finding', async ({
+  page,
+}) => {
+  await page.route('**/draft-context', (route) =>
+    route.fulfill({
+      json: {
+        schema: 'caseproof-draft-excerpt-v1',
+        case_id: caseId,
+        brief_id: brief,
+        snapshot_hash: snapshot,
+        reference_id: 'ref-one',
+        original_sha256: 'b'.repeat(64),
+        available: true,
+        region: 'word/document.xml',
+        excerpt: 'Before Stuk 2 after',
+        selection_start: 7,
+        selection_end: 13,
+        reason: null,
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const context = page.getByRole('region', {
+    name: 'Read-only draft reference',
+  });
+  await expect(
+    context.getByText('Draft context unavailable', { exact: false }),
+  ).toBeVisible();
+  await expect(context.locator('mark')).toHaveCount(0);
+  await expect(
+    page.getByRole('region', { name: 'Correction preview and recheck' }),
+  ).toHaveCount(0);
+});

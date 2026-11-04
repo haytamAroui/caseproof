@@ -133,6 +133,7 @@ function ReviewWorkspace({ api }: { api: ApiClient }) {
             briefId={briefId}
             snapshot={snapshot}
             referenceId={finding.reference_id}
+            literal={finding.literal}
             renderCorrection={(originalSha) => (
               <CorrectionPanel
                 key={`${caseId}:${briefId}:${snapshot}:${finding.reference_id}:${originalSha}`}
