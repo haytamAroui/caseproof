@@ -185,17 +185,13 @@ export function DocxEditor({ api }: { api: ApiClient }) {
   const [notice, setNotice] = useState('');
   const request = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    setPage(0);
-    setEdits({});
-    setDecisions({});
-    setPrepared(null);
-    setNotice('');
-    return () => {
+  useEffect(
+    () => () => {
       request.current?.abort();
       request.current = null;
-    };
-  }, [session.epoch, caseId, briefId, snapshot]);
+    },
+    [],
+  );
 
   const source = useQuery({
     queryKey: ['docx-editor-blocks', session.epoch, caseId, briefId, snapshot, page],
@@ -479,4 +475,12 @@ export function DocxEditor({ api }: { api: ApiClient }) {
       )}
     </section>
   );
+}
+
+export function ScopedDocxEditor({ api }: { api: ApiClient }) {
+  const { caseId = '', briefId = '' } = useParams();
+  const [params] = useSearchParams();
+  const session = useSession();
+  const key = `${session.epoch}:${caseId}:${briefId}:${params.get('snapshot') ?? ''}`;
+  return <DocxEditor key={key} api={api} />;
 }
