@@ -1,5 +1,5 @@
 import { CorrectionPanel, CorrectionRecovery } from '../features/corrections';
-import { ScopedDocxEditor } from '../features/docx-editor/DocxEditor';
+import { ScopedDocxEditor } from '../features/docx-editor';
 import { ExportsScreen } from '../features/exports';
 import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
