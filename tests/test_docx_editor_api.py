@@ -310,7 +310,8 @@ def test_document_wide_review_commit_replay_and_integrity_with_disposable_adapte
                 }
             return dict(self.reserved)
 
-        def activate(self, bearer, case, request, digest_value, size):
+        def editor_activate(self, bearer, case, request, review, digest_value, size):
+            assert review == REVIEW_ID
             assert self.reserved is not None
             assert digest_value == self.reserved["original_sha256"]
             assert size == self.reserved["byte_length"]
