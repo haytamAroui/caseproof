@@ -93,6 +93,12 @@ class EditorReviewBody(EditorCandidateBody):
     review_request_id: str = Field(pattern=UUID_V4)
     rationale: str = Field(min_length=10, max_length=2000)
 
+    @model_validator(mode="after")
+    def nonempty_review(self) -> EditorReviewBody:
+        if len(self.rationale.strip()) < 10:
+            raise ValueError("substantive human rationale is required")
+        return self
+
 
 class EditorCommitBody(EditorCandidateBody):
     review_request_id: str = Field(pattern=UUID_V4)
@@ -274,6 +280,8 @@ def create_document_editor_router(store: DossierStore | None) -> APIRouter:
         if_match: str | None = Header(default=None),
     ) -> Response:
         derivative, digest = candidate(case_id, brief_id, body, authorization, if_match)
+        if len(derivative) > 5_242_880:
+            raise HTTPException(422, "candidate exceeds bounded DOCX export limit")
         return Response(
             derivative,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -300,6 +308,8 @@ def create_document_editor_router(store: DossierStore | None) -> APIRouter:
         derivative, digest = candidate(
             case_id, brief_id, body, authorization, if_match
         )
+        if len(derivative) > 5_242_880:
+            raise HTTPException(422, "document derivative exceeds intake limit")
         s, bearer, _ = bound(
             case_id, brief_id, body.snapshot_hash, authorization
         )
@@ -319,7 +329,6 @@ def create_document_editor_router(store: DossierStore | None) -> APIRouter:
             or response.get("review_request_id") != body.review_request_id
             or response.get("command_sha256") != fingerprint
             or response.get("candidate_sha256") != digest
-            or len(derivative) > 5_242_880
         ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return {
@@ -423,6 +432,8 @@ def create_document_editor_router(store: DossierStore | None) -> APIRouter:
             except ValueError:
                 raise HTTPException(422, "stale reserved document edit") from None
             digest = hashlib.sha256(derivative).hexdigest()
+        if len(derivative) > 5_242_880:
+            raise HTTPException(422, "document derivative exceeds intake limit")
         reserved = s.revisions.editor_reserve(
             bearer, case_id, brief_id, body.snapshot_hash,
             body.request_id, body.review_request_id,
