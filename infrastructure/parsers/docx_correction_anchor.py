@@ -99,8 +99,12 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
         raise ValueError('ambiguous reference in paragraph')
     if locator is not None:
         paragraph_text = region[left:right]
+        exact_text = locator.get('exact_text')
+        if exact_text is not None and (not isinstance(exact_text, str) or exact_text != literal):
+            raise ValueError('stale locator exact text')
         expected_hash = locator.get('content_hash')
-        if not isinstance(expected_hash, str) or len(expected_hash) != 64:
+        if (not isinstance(expected_hash, str) or len(expected_hash) != 64
+                or any(character not in '0123456789abcdef' for character in expected_hash)):
             raise ValueError('invalid locator content hash')
         if hashlib.sha256(paragraph_text.encode('utf-8')).hexdigest() != expected_hash:
             raise ValueError('stale locator content hash')
