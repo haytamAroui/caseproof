@@ -1,8 +1,8 @@
 """Resolve a report reference to a supported, exact main-body DOCX paragraph."""
 from __future__ import annotations
 
-import io
 import hashlib
+import io
 from typing import Any
 from xml.dom import minidom
 from zipfile import ZipFile
@@ -123,8 +123,8 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
         occurrence = locator.get('occurrence_index')
         if type(occurrence) is not int or occurrence < 0:
             raise ValueError('invalid locator occurrence')
-        matches = [i for i in range(len(paragraph_text)) if paragraph_text.startswith(literal, i)]
-        if occurrence >= len(matches) or matches[occurrence] != local_start:
+        occurrences = [i for i in range(len(paragraph_text)) if paragraph_text.startswith(literal, i)]
+        if occurrence >= len(occurrences) or occurrences[occurrence] != local_start:
             raise ValueError('stale locator occurrence')
     return index
 
@@ -140,8 +140,8 @@ def bound_locator(original: bytes, finding: dict[str, Any], source_version_id: s
     if at < 0 or content.find(literal, at + 1) >= 0:
         raise ValueError('ambiguous target')
     para_ns = 'http://schemas.microsoft.com/office/word/2010/wordml'
-    return {'exact_text': literal, 'prefix': content[:at],
-            'suffix': content[at + len(literal):], 'occurrence_index': 0,
+    return {'exact_text': literal, 'prefix': content[max(0, at - 4000):at],
+            'suffix': content[at + len(literal):at + len(literal) + 4000], 'occurrence_index': 0,
             'content_hash': hashlib.sha256(content.encode()).hexdigest(),
-            'paragraph_id': paragraph._p.get('{%s}paraId' % para_ns),
+            'paragraph_id': paragraph._p.get(f'{{{para_ns}}}paraId'),
             'source_version_id': source_version_id}

@@ -318,7 +318,8 @@ def _exercise() -> None:
             def lose_correction_ack(route: Route) -> None:
                 writes[0] += 1
                 correction_request.update(route.request.post_data_json)
-                correction_headers['Authorization'] = route.request.headers['authorization']
+                for name in ('authorization', 'if-match', 'idempotency-key'):
+                    correction_headers[name] = route.request.headers[name]
                 correction_base[0] = route.request.url.removesuffix('/corrections/commit')
                 response = route.fetch(timeout=180000)
                 if response.status != 200:
@@ -343,6 +344,25 @@ def _exercise() -> None:
             print("F5_SIGNED_ORIGINAL_SHA256_UNCHANGED_PASSED", flush=True)
             print("F5_SPLIT_FORMATTED_REFERENCE_AND_UNRELATED_TABLE_CORRECTION_PASSED", flush=True)
             page.unroute("**/corrections/commit", lose_correction_ack)
+            replay = page.request.post(
+                correction_base[0] + '/corrections/commit', data=correction_request, headers=correction_headers,
+            )
+            if replay.status != 200 or replay.json().get('replayed') is not True:
+                raise RuntimeError("F5_SIGNED_DURABLE_REPLAY_FAILED")
+            changed = page.request.post(
+                correction_base[0] + '/corrections/commit',
+                data={**correction_request, 'after': correction_request['after'] + ' changed'},
+                headers=correction_headers,
+            )
+            if changed.status != 409:
+                raise RuntimeError("F5_SIGNED_DIFFERENT_COMMAND_REPLAY_NOT_REJECTED")
+            stale = page.request.post(
+                correction_base[0] + '/corrections/preview',
+                data={key: value for key, value in correction_request.items() if key != 'request_id'},
+                headers=correction_headers,
+            )
+            if stale.status not in (409, 412):
+                raise RuntimeError("F5_SIGNED_OLD_SNAPSHOT_PREVIEW_NOT_REJECTED")
             print("F5_SIGNED_PREVIEW_LOST_ACK_COMMIT_RECONCILE_RECHECK_COMPARE_PASSED", flush=True)
             _server_stop(proc)
             proc = _server_start()

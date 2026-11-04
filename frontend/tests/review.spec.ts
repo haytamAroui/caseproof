@@ -239,6 +239,15 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
         original_sha256: 'b'.repeat(64),
         paragraph_index: 0,
         before: finding.literal,
+        locator_identity: {
+          exact_text: finding.literal,
+          prefix: '',
+          suffix: '',
+          occurrence_index: 0,
+          content_hash: 'c'.repeat(64),
+          paragraph_id: null,
+          source_version_id: brief,
+        },
       },
     }),
   );
@@ -375,6 +384,15 @@ test('correction commit is blocked without a durable actor-scoped review receipt
         original_sha256: 'b'.repeat(64),
         paragraph_index: 0,
         before: finding.literal,
+        locator_identity: {
+          exact_text: finding.literal,
+          prefix: '',
+          suffix: '',
+          occurrence_index: 0,
+          content_hash: 'c'.repeat(64),
+          paragraph_id: null,
+          source_version_id: brief,
+        },
       },
     }),
   );

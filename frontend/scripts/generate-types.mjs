@@ -15,6 +15,17 @@ for (const [name, type, stem] of [
   ['review-ledger', 'ReviewLedgerView', 'review-ledger-generated'],
   ['draft-excerpt', 'DraftExcerptView', 'draft-excerpt-generated'],
   ['review-command', 'VisualDecisionBody', 'review-command-generated'],
+  ['docx-locator-v1', 'DocxLocatorIdentity', 'docx-locator-v1-generated'],
+  [
+    'correction-preview-v1',
+    'CorrectionPreviewBody',
+    'correction-preview-v1-generated',
+  ],
+  [
+    'correction-commit-v1',
+    'CorrectionCommitBody',
+    'correction-commit-v1-generated',
+  ],
 ]) {
   const source = new URL(
       `../src/shared/api/${name}.schema.json`,

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import type { ApiClient, DossierView, FindingView } from '../../shared/api';
 import { ApiError, parseDossier } from '../../shared/api';
+import validateLocator from '../../shared/api/docx-locator-v1-generated-validator';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 import { useSession } from '../../shared/session';
 import { CorrectionRecovery } from './CorrectionRecovery';
@@ -46,7 +47,6 @@ function previewReceipt(
     paragraph_index: number;
     before: string;
     after: string;
-    locator_identity?: Record<string, unknown>;
   },
   briefId: string,
 ): Preview {
@@ -105,6 +105,7 @@ export function CorrectionPanel({
   const [receipt, setReceipt] = useState<Commit | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [stale, setStale] = useState(false);
   const [unknown, setUnknown] = useState(false);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [recoveryReady, setRecoveryReady] = useState(false);
@@ -140,9 +141,17 @@ export function CorrectionPanel({
         (result.paragraph_index as number) > 100000
       )
         throw Error('Unverified correction anchor');
-      const identity = record(result.locator_identity);
-      if (identity.source_version_id !== scope.briefId || identity.exact_text !== before || (typeof identity.content_hash !== 'string' || !sha.test(identity.content_hash))) throw Error('Unverified correction locator');
-      return { paragraph_index: result.paragraph_index as number, locator_identity: identity };
+      const identity = result.locator_identity;
+      if (
+        !validateLocator(identity) ||
+        identity.source_version_id !== scope.briefId ||
+        identity.exact_text !== before
+      )
+        throw Error('Unverified correction locator');
+      return {
+        paragraph_index: result.paragraph_index as number,
+        locator_identity: identity,
+      };
     },
     retry: false,
     enabled: session.connected,
@@ -181,6 +190,7 @@ export function CorrectionPanel({
   });
   const reviewReady = review.isSuccess && Boolean(review.data);
   const valid =
+    !stale &&
     sha.test(originalSha) &&
     sha.test(scope.snapshot) &&
     anchor.data !== undefined &&
@@ -212,18 +222,20 @@ export function CorrectionPanel({
     invalidate();
     try {
       const result = previewReceipt(
-        await api.post(`${base}/corrections/preview`, payload(), undefined, { snapshot: scope.snapshot }),
+        await api.post(`${base}/corrections/preview`, payload(), undefined, {
+          snapshot: scope.snapshot,
+        }),
         payload(),
         scope.briefId,
       );
       setPreview(result);
       setMessage('Read-only preview validated. No change was committed.');
     } catch (e) {
-      setMessage(
-        e instanceof ApiError && (e.status === 409 || e.status === 412)
-          ? 'Stale draft. Reopen the current report.'
-          : 'Preview unavailable or unsupported. No commit allowed.',
-      );
+      if (e instanceof ApiError && (e.status === 409 || e.status === 412)) {
+        setStale(true);
+      } else {
+        setMessage('Preview unavailable or unsupported. No commit allowed.');
+      }
     } finally {
       setBusy(false);
     }
@@ -247,13 +259,22 @@ export function CorrectionPanel({
       };
       setCommand(submitted);
       const result = commitReceipt(
-        await api.post(`${base}/corrections/commit`, submitted, undefined, { snapshot: scope.snapshot, idempotencyKey: submitted.request_id }),
+        await api.post(`${base}/corrections/commit`, submitted, undefined, {
+          snapshot: scope.snapshot,
+          idempotencyKey: submitted.request_id,
+        }),
       );
       setReceipt(result);
       setMessage(
         'New draft activated. Recheck is required; previous approvals are not transferred.',
       );
     } catch (e) {
+      if (e instanceof ApiError && e.status === 412) {
+        setCommand(null);
+        setPreview(null);
+        setStale(true);
+        return;
+      }
       if (e instanceof ApiError && e.status === 409) setCommand(null);
       setUnknown(!(e instanceof ApiError && e.status === 409));
       setMessage(
@@ -342,6 +363,7 @@ export function CorrectionPanel({
     >
       <UnsavedChanges dirty={Boolean(preview && !command)} />
       <h3>Propose a bounded DOCX correction</h3>
+      {stale && <p role="alert">Stale draft. Reopen the current report.</p>}
       <CorrectionRecovery
         api={api}
         scope={scope}

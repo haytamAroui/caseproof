@@ -11,7 +11,13 @@ from application.litigation.workspace_contract import (
     ReportCatalogView,
     ReviewLedgerView,
 )
-from apps.api.dossier_journey import InventoryConfirmation, VisualDecisionBody
+from apps.api.dossier_journey import (
+    CorrectionCommitBody,
+    CorrectionPreviewBody,
+    DocxLocatorIdentity,
+    InventoryConfirmation,
+    VisualDecisionBody,
+)
 from apps.api.workspace_auth import SessionView
 from apps.api.workspace_intake import CreatedMatter, IntakeView, OrganizationView
 
@@ -31,7 +37,10 @@ def main() -> None:
                           (ViewerContext, TARGET.with_name("viewer.schema.json")),
                           (ReviewLedgerView, TARGET.with_name("review-ledger.schema.json")),
                           (DraftExcerptView, TARGET.with_name("draft-excerpt.schema.json")),
-                          (VisualDecisionBody, TARGET.with_name("review-command.schema.json"))):
+                          (VisualDecisionBody, TARGET.with_name("review-command.schema.json")),
+                          (DocxLocatorIdentity, TARGET.with_name("docx-locator-v1.schema.json")),
+                          (CorrectionPreviewBody, TARGET.with_name("correction-preview-v1.schema.json")),
+                          (CorrectionCommitBody, TARGET.with_name("correction-commit-v1.schema.json"))):
         schema = model.model_json_schema()
         schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
         content = json.dumps(schema, indent=2, sort_keys=True) + "\n"

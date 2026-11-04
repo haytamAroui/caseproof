@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "DocxLocatorIdentity": {
+      "additionalProperties": false,
+      "description": "Version-bound identity for an exact editable DOCX paragraph.",
+      "properties": {
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "exact_text": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Exact Text",
+          "type": "string"
+        },
+        "occurrence_index": {
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Occurrence Index",
+          "type": "integer"
+        },
+        "paragraph_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9A-Fa-f]{8}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paragraph Id"
+        },
+        "prefix": {
+          "maxLength": 4000,
+          "title": "Prefix",
+          "type": "string"
+        },
+        "source_version_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Source Version Id",
+          "type": "string"
+        },
+        "suffix": {
+          "maxLength": 4000,
+          "title": "Suffix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "exact_text",
+        "prefix",
+        "suffix",
+        "occurrence_index",
+        "content_hash",
+        "source_version_id"
+      ],
+      "title": "DocxLocatorIdentity",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "after": {
+      "maxLength": 4000,
+      "title": "After",
+      "type": "string"
+    },
+    "before": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Before",
+      "type": "string"
+    },
+    "locator_identity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocxLocatorIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "original_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Original Sha256",
+      "type": "string"
+    },
+    "paragraph_index": {
+      "maximum": 100000,
+      "minimum": 0,
+      "title": "Paragraph Index",
+      "type": "integer"
+    },
+    "reference_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Reference Id",
+      "type": "string"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "snapshot_hash",
+    "original_sha256",
+    "reference_id",
+    "paragraph_index",
+    "before",
+    "after"
+  ],
+  "title": "CorrectionPreviewBody",
+  "type": "object"
+}

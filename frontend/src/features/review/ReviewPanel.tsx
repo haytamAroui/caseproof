@@ -140,7 +140,10 @@ export function ReviewPanel({
     setBusy(true);
     setMessage('Submitting the unchanged authorized decision…');
     try {
-      const response = await api.post(`${base}/reviews`, command, undefined, { snapshot: scope.snapshot, idempotencyKey: command.request_id });
+      const response = await api.post(`${base}/reviews`, command, undefined, {
+        snapshot: scope.snapshot,
+        idempotencyKey: command.request_id,
+      });
       controller.assert(epoch);
       parseReviewWriteReceipt(response, command);
       const updated = await ledger.refetch();
@@ -168,7 +171,10 @@ export function ReviewPanel({
         );
       }
     } catch (error) {
-      if (error instanceof ApiError && (error.status === 409 || error.status === 412)) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 409 || error.status === 412)
+      ) {
         setOutcome('rejected');
         setMessage(
           'The snapshot or review revision changed. Reopen the current report before any new decision.',

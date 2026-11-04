@@ -134,7 +134,7 @@ def test_locator_identity_accepts_exact_paragraph_context():
     original = docx('Before Stuk 1 after')
     target = finding(7, 13)
     target['locator_identity'] = {
-        'content_hash': sha256('Before Stuk 1 after'.encode()).hexdigest(),
+        'content_hash': sha256(b'Before Stuk 1 after').hexdigest(),
         'paragraph_id': None,
         'prefix': 'Before ',
         'suffix': ' after',
@@ -156,7 +156,7 @@ def test_locator_identity_fails_closed_when_stale(change):
     original = docx('Before Stuk 1 after')
     target = finding(7, 13)
     target['locator_identity'] = {
-        'content_hash': sha256('Before Stuk 1 after'.encode()).hexdigest(),
+        'content_hash': sha256(b'Before Stuk 1 after').hexdigest(),
         'paragraph_id': None,
         'prefix': 'Before ',
         'suffix': ' after',
@@ -180,7 +180,7 @@ def test_locator_rejects_mismatched_exact_text_and_invalid_digest(override):
     target = finding(7, 13)
     target['locator_identity'] = {
         'exact_text': 'Stuk 1',
-        'content_hash': sha256('Before Stuk 1 after'.encode()).hexdigest(),
+        'content_hash': sha256(b'Before Stuk 1 after').hexdigest(),
         'paragraph_id': None,
         'prefix': 'Before ',
         'suffix': ' after',
@@ -192,8 +192,9 @@ def test_locator_rejects_mismatched_exact_text_and_invalid_digest(override):
 
 
 def test_locator_exact_text_matches_before_in_contract():
-    from apps.api.dossier_journey import CorrectionPreviewBody
     from hashlib import sha256
+
+    from apps.api.dossier_journey import CorrectionPreviewBody
 
     base = dict(snapshot_hash='a' * 64, original_sha256='b' * 64,
                 reference_id='ref-1', paragraph_index=0, before='Stuk 1', after='Stuk 2')

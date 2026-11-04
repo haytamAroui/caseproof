@@ -141,6 +141,17 @@ class CorrectionPreviewBody(BaseModel):
     after: str = Field(max_length=4000)
 
 
+def validate_correction_target(
+    original: bytes, finding: dict[str, Any], brief: str, command: CorrectionPreviewBody
+) -> None:
+    identity = command.locator_identity
+    if command.before != finding.get("literal") or (identity is not None and identity.source_version_id != brief):
+        raise ValueError("correction does not match reference anchor")
+    target = {**finding, "locator_identity": identity.model_dump() if identity is not None else None}
+    if correction_anchor(original, target) != command.paragraph_index:
+        raise ValueError("correction does not match reference anchor")
+
+
 class CorrectionCommitBody(CorrectionPreviewBody):
     request_id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 
@@ -279,8 +290,9 @@ class DossierStore:
         self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
     ) -> dict[str, Any]:
         """Read durable operation status without repeating a consequential write."""
-        values = command.model_dump()
-        values.pop("request_id")
+        values = command.model_dump(exclude={"request_id"})
+        if command.locator_identity is None:
+            values.pop("locator_identity")
         digest = hashlib.sha256(canonical({"case": case, "brief": brief, **values}).encode()).hexdigest()
         status = self.revisions.reserve(
             bearer, case, command.request_id, "status", {"command_sha256": digest}
@@ -339,8 +351,9 @@ class DossierStore:
     def commit_correction(
         self, bearer: str, case: str, brief: str, command: CorrectionCommitBody
     ) -> dict[str, Any]:
-        values = command.model_dump()
-        values.pop("request_id")
+        values = command.model_dump(exclude={"request_id"})
+        if command.locator_identity is None:
+            values.pop("locator_identity")
         command_sha = hashlib.sha256(canonical({"case": case, "brief": brief, **values}).encode()).hexdigest()
         existing = self.revisions.reserve(
             bearer, case, command.request_id, "status", {"command_sha256": command_sha}
@@ -375,8 +388,7 @@ class DossierStore:
         else:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
-            if command.before != finding.get("literal") or correction_anchor(original, {**finding, 'locator_identity': command.locator_identity.model_dump() if command.locator_identity else None}) != command.paragraph_index or (command.locator_identity is not None and command.locator_identity.source_version_id != brief):
-                raise ValueError("correction does not match reference anchor")
+            validate_correction_target(original, finding, brief, command)
             derivative = corrected_docx_preview(
                 original,
                 expected_sha256=command.original_sha256,
@@ -877,8 +889,7 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         if finding is None:
             raise HTTPException(422, "unknown correction reference")
         try:
-            if body.before != finding.get("literal") or correction_anchor(original, {**finding, 'locator_identity': body.locator_identity.model_dump() if body.locator_identity else None}) != body.paragraph_index or (body.locator_identity is not None and body.locator_identity.source_version_id != brief_id):
-                raise ValueError("correction does not match reference anchor")
+            validate_correction_target(original, finding, brief_id, body)
             derivative = corrected_docx_preview(
                 original,
                 expected_sha256=body.original_sha256,
