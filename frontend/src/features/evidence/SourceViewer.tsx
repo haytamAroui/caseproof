@@ -20,6 +20,27 @@ export interface ViewerScope {
   referenceId: string;
   historical?: boolean;
 }
+function positionedOcr(
+  regions: RasterRegion[],
+  result: PdfPageResult | null,
+  page: number,
+  hash: string,
+) {
+  if (!result) return [];
+  return regions.flatMap((region) => {
+    if (
+      region.page_number !== page ||
+      region.original_sha256 !== hash ||
+      !region.ocr_word
+    )
+      return [];
+    const box = projectRasterBox(
+      { ...region, bbox: region.ocr_word.bbox },
+      result,
+    );
+    return box ? [{ region, box }] : [];
+  });
+}
 interface SourceViewerProps {
   api: ApiClient;
   scope: ViewerScope;
@@ -237,18 +258,8 @@ function SourceInspection({
       );
     }
     if (showOcr) {
-      const words = rasterRegions.filter(
-        (region) =>
-          region.page_number === page &&
-          region.original_sha256 === hash &&
-          region.ocr_word,
-      );
-      words.forEach((region, index) => {
-        const box = projectRasterBox(
-          { ...region, bbox: region.ocr_word!.bbox },
-          result,
-        );
-        if (!box) return;
+      const words = positionedOcr(rasterRegions, result, page, hash);
+      words.forEach(({ box }, index) => {
         context.strokeRect(
           box[0] * xScale,
           box[1] * yScale,
@@ -299,6 +310,7 @@ function SourceInspection({
     result && search.trim()
       ? result.textBoxes.filter((item) => item.text.includes(search)).length
       : 0;
+  const ocrWords = positionedOcr(rasterRegions, result, page, hash);
   return (
     <section className="source-viewer" aria-label="Preserved PDF inspection">
       <h3>Preserved source pixels</h3>
@@ -393,9 +405,7 @@ function SourceInspection({
               source-bound raster outline(s) aligned on this page.
             </p>
           )}
-          {rasterRegions.some(
-            (region) => region.page_number === page && region.ocr_word,
-          ) && (
+          {ocrWords.length > 0 && (
             <>
               <Button
                 aria-pressed={showOcr}
@@ -414,19 +424,26 @@ function SourceInspection({
                     OCR. Compare them with the preserved pixels.
                   </p>
                   <ol aria-label="OCR words on this page">
-                    {rasterRegions
-                      .filter(
-                        (region) =>
-                          region.page_number === page && region.ocr_word,
-                      )
-                      .map((region) => (
-                        <li key={region.region_id}>{region.ocr_word!.text}</li>
-                      ))}
+                    {ocrWords.map(({ region }) => (
+                      <li key={region.region_id}>{region.ocr_word!.text}</li>
+                    ))}
                   </ol>
                 </div>
               )}
             </>
           )}
+          {rasterRegions.some(
+            (region) => region.page_number === page && region.ocr_word,
+          ) &&
+            ocrWords.length <
+              rasterRegions.filter(
+                (region) => region.page_number === page && region.ocr_word,
+              ).length && (
+              <Notice>
+                Some OCR positions cannot be aligned with this PDF page and are
+                not displayed.
+              </Notice>
+            )}
           <div className="viewer-controls" aria-label="Source page controls">
             <Button
               disabled={page <= 1}

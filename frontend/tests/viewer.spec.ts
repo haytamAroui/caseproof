@@ -744,3 +744,47 @@ test('OCR word positions are opt-in, source bound and exposed as accessible text
     page.getByRole('list', { name: 'OCR words on this page' }),
   ).toHaveCount(0);
 });
+
+test('OCR word positions abstain when the PDF CropBox does not match provenance', async ({
+  page,
+}) => {
+  await page.route('**/viewer/regions', (route) =>
+    route.fulfill({
+      json: {
+        schema: 'caseproof-raster-overlays-v1',
+        snapshot_hash: snapshot,
+        original_sha256: fixture.sha256,
+        source_version_id: 'source',
+        interpretation: 'navigation_only_never_a_verdict',
+        unassessed_region_count: 0,
+        regions: [
+          {
+            region_id: 'd'.repeat(64),
+            original_sha256: fixture.sha256,
+            page_number: 1,
+            bbox: [140, 560, 260, 600],
+            image_size: [600, 800],
+            crop_box: [1, 0, 601, 800],
+            rotation: 0,
+            user_unit: 1,
+            cropbox_rasterized: true,
+            ocr_word: { text: 'synthetic', bbox: [145, 565, 255, 595] },
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByText('Source page rendered.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Show OCR word positions' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText('Some OCR positions cannot be aligned', { exact: false }),
+  ).toBeVisible();
+});
