@@ -141,7 +141,7 @@ export function CorrectionPanel({
       )
         throw Error('Unverified correction anchor');
       const identity = record(result.locator_identity);
-      if (identity.source_version_id !== scope.briefId || identity.exact_text !== before || !sha.test(identity.content_hash as string)) throw Error('Unverified correction locator');
+      if (identity.source_version_id !== scope.briefId || identity.exact_text !== before || (typeof identity.content_hash !== 'string' || !sha.test(identity.content_hash))) throw Error('Unverified correction locator');
       return { paragraph_index: result.paragraph_index as number, locator_identity: identity };
     },
     retry: false,
