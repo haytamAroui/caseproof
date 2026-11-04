@@ -9,8 +9,9 @@ from __future__ import annotations
 import hashlib
 import io
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Sequence
+from typing import Any, Literal
 from xml.dom import minidom
 from zipfile import ZIP_DEFLATED, ZipFile
 
