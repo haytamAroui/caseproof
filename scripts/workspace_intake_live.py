@@ -356,6 +356,12 @@ def _exercise() -> None:
             expect(editor.get_by_role(
                 "heading", name="Edit the preserved draft"
             )).to_be_visible(timeout=90000)
+            # python-docx paragraph.text reflects accepted plain text, not
+            # unresolved w:ins revisions. Test the explicit direct-replacement
+            # mode here; native tracked revisions have separate OOXML tests.
+            editor.get_by_role(
+                "checkbox", name="Track changes in Word"
+            ).uncheck()
             source_block = editor.locator(".docx-block").filter(
                 has_text="Unrelated introductory text"
             ).first
