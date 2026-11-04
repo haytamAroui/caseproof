@@ -42,6 +42,15 @@ jobs:
       - name: Enforce M3 design, database and security policy
         run: npm run policy:check
         working-directory: frontend
+      - name: Surface expected Prettier output for a failing source check
+        working-directory: frontend
+        run: |
+          if ! npx prettier --check src/features/corrections/CorrectionPanel.tsx; then
+            echo BEGIN_CASEPROOF_PRETTIER
+            npx prettier src/features/corrections/CorrectionPanel.tsx | base64 -w0
+            echo
+            echo END_CASEPROOF_PRETTIER
+          fi
       - run: npm run contracts:check && npm run lint && npm test && npm run build
         working-directory: frontend
       - name: Check generated TypeScript and AJV artifacts are committed

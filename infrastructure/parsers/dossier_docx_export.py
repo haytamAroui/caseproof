@@ -184,7 +184,7 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
             else:
                 line(label, value, indent=min(depth, 2))
 
-        line('CaseProof — scoped review appendix / overzicht / annexe', heading=True)
+        line('CaseProof — scoped review annotations / overzicht / annexe', heading=True)
         line('Derivative notice',
              'Annotated copy only. The preserved source is unchanged; no legal, '
              'authenticity, filing or fidelity certificate is issued.')
@@ -210,7 +210,8 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
                 line(key.replace('_', ' ').capitalize(), coverage[key], indent=1)
         for key in ('dimension_counts', 'docx_regions', 'source_page_counts_unknown'):
             if key in coverage:
-                details(key.replace('_', ' ').capitalize(), coverage[key])
+                details('DOCX region coverage (docx_regions)' if key == 'docx_regions'
+                        else key.replace('_', ' ').capitalize(), coverage[key])
         if 'source_pages' in coverage:
             pages = coverage['source_pages']
             if not isinstance(pages, list):
@@ -248,7 +249,7 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
                 ('version_id', 'Preserved source version'),
                 ('source_sha256', 'Source SHA-256'), ('ocr_uncertainty', 'OCR uncertainty'),
                 ('draft_language', 'Draft language'), ('source_language', 'Source language'),
-                ('translation_review_required', 'Translation review needed'),
+                ('translation_review_required', 'Translation review needed (translation_review_required)'),
                 ('quoted_text', 'Quoted text'), ('source_text_context', 'Source representation context'),
                 ('source_text_context_partial', 'Context was partial'),
             ):
@@ -264,9 +265,10 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
                         value = {k: v for k, v in value.items() if k != 'regions'}
                         details('Visual region count', len(regions))
                         for region_index, region in enumerate(regions, 1):
-                            details(f'Visual region {region_index}', region)
+                            details(f'Visual region {region_index}',
+                                    {k: v for k, v in region.items() if k != 'crop_base64'})
                     details(key.replace('_', ' ').capitalize(), value)
-            line('Automated legal support', 'not assessed', indent=1)
+            line('Automated legal support', 'not_assessed', indent=1)
         line('Persisted human review / menselijke beoordeling / revue humaine',
              heading=True)
         line('Number of decision receipts', len(decisions))

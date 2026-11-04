@@ -53,7 +53,7 @@ def test_appendix_is_readable_keeps_original_structure_and_zip_members():
     output = annotated_docx(original, report())
     text = '\n'.join(p.text for p in Document(io.BytesIO(output)).paragraphs)
     assert 'Preserved brief' in text
-    assert 'CaseProof — scoped review appendix' in text
+    assert 'CaseProof — scoped review annotations' in text
     assert 'Coverage / dekking / couverture' in text
     assert 'Checked: 1' in text
     assert 'ocr_unreliable' in text
