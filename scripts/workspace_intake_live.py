@@ -42,6 +42,7 @@ def _exercise() -> None:
         "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
         "refs/heads/feat/p5-p6-readability-drift-pilot", "refs/pull/185/merge", "refs/pull/187/merge", "refs/pull/189/merge",
         "refs/pull/190/merge",
+        "refs/pull/191/merge",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
     key, run, org = (
@@ -342,6 +343,54 @@ def _exercise() -> None:
             page.goto(report_url)
             acceptance.login(page)
             expect(page.get_by_role("heading", name="Review the evidence")).to_be_visible(timeout=90000)
+
+        if os.getenv("CASEPROOF_DOCX_EDITOR_BROWSER_LIVE") == "YES":
+            _stage("SIGNED_DOCX_EDITOR_UNCOMMITTED_CANDIDATE")
+            editor_origin = page.url
+            page.get_by_role(
+                "link", name="Edit current DOCX candidate (not committed)"
+            ).click()
+            editor = page.get_by_role(
+                "region", name="Structured Word candidate editor", exact=True
+            )
+            expect(editor.get_by_role(
+                "heading", name="Edit the preserved draft"
+            )).to_be_visible(timeout=90000)
+            source_block = editor.locator(".docx-block").filter(
+                has_text="Unrelated introductory text"
+            ).first
+            expect(source_block).to_be_visible(timeout=90000)
+            source_block.get_by_role(
+                "textbox", name="Source-bound paragraph"
+            ).fill("Reviewed unrelated text")
+            editor.get_by_role("button", name="Preview edits").click()
+            receipt = editor.get_by_role(
+                "region", name="Candidate preview receipt"
+            )
+            expect(receipt.get_by_role(
+                "heading", name="Prepared derivative"
+            )).to_be_visible(timeout=90000)
+            with page.expect_download(timeout=90000) as download:
+                editor.get_by_role("button", name="Download DOCX candidate").click()
+            from pathlib import Path
+
+            received = download.value
+            if received.failure() is not None:
+                raise RuntimeError("EDITOR_SIGNED_DOWNLOAD_FAILED")
+            candidate = Path(received.path()).read_bytes()
+            digest = hashlib.sha256(candidate).hexdigest()
+            if receipt.locator(".docx-mono").inner_text().strip() != digest:
+                raise RuntimeError("EDITOR_SIGNED_BINARY_RECEIPT_MISMATCH")
+            if Document(io.BytesIO(candidate)).paragraphs[0].text != "Reviewed unrelated text":
+                raise RuntimeError("EDITOR_SIGNED_TEXT_NOT_APPLIED")
+            if hashlib.sha256(bundle[0].content).hexdigest() == digest:
+                raise RuntimeError("EDITOR_SIGNED_CANDIDATE_NOT_CHANGED")
+            print("DOCX_EDITOR_GENUINE_SIGNED_PREVIEW_BINARY_AND_ORIGINAL_IMMUTABLE_PASSED", flush=True)
+            page.goto(editor_origin)
+            acceptance.login(page)
+            expect(page.get_by_role(
+                "heading", name="Review the evidence"
+            )).to_be_visible(timeout=90000)
 
         if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
             previous_url = page.url
