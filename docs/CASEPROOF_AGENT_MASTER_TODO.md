@@ -8,6 +8,27 @@
 
 > **4 Nov 2026 P5/P6 engineering evidence:** [PR #185](https://github.com/haytamAroui/caseproof/pull/185) implements readable DOCX export, frozen reference-drift explanations, real **LibreOffice Writer** synthetic document round-trip, disposable PostgreSQL 17 restore/erasure-replay, production-vs-dev npm audit, visible non-offline Supabase intake disclosure, and automated multilingual accessibility checks. The [dated acceptance matrix](pilot/P5_P6_ACCEPTANCE_MATRIX.md) identifies individual CI run receipts. **11 npm moderate advisories affect dev tooling, not shipped production dependencies, and remain subject to owner review.** T61 Word, T70 independent security, T73 actual privacy/egress approval, T74 real operational restore, T75 manual AT, T76 representative corpus, T78 practitioner results and T79 pilot declaration are **NOT DONE**. Synthetic success does not waive the real pilot gates.
 
+## 0. P5/P6 task truth after engineering merge — 4 November 2026
+
+**Source:** [merged PR #185](https://github.com/haytamAroui/caseproof/pull/185), squash merge `b162a5f7a08975949a32671cbea774b7f0a7bb09`, tested PR head `3c6058a054ffd5172413cba5b90eb9af4bb44586`. At that head, 19 workflows succeeded, four narrower live workflows were intentionally skipped, none failed. The final combined signed F6 passed and covered F3/F4/F5 journeys, but skipped independent jobs are not counted as passed. [P5/P6 evidence matrix](pilot/P5_P6_ACCEPTANCE_MATRIX.md) is the evidence ledger; [PR #186](https://github.com/haytamAroui/caseproof/pull/186) reconciles task records and makes P6 workflow branch-neutral.
+
+| Task | Current evidence-based state | Still required to close |
+| --- | --- | --- |
+| T15 / T60 readable DOCX | Engineering implemented; [kernel final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829163374); [P6 host/restore/supply-chain acceptance](https://github.com/haytamAroui/caseproof/actions/runs/41829163280) | Independent code review and supported-host sign-off |
+| T47 / T48 / T66 finding drift | Engineering implemented; [frontend final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829163384) | Independent review; uncertain results never transfer approval |
+| T61 document hosts | LibreOffice synthetic round-trip passed | Actual desktop Word and manual formatting inspection |
+| T70 live security | Dev catalog/adviser inspected | Independent review of 15 privileged RPCs, grants/roles and auth settings |
+| T72 dependencies | Production graph 0 known advisories; dev graph 11 moderate | Patch or explicit accountable risk disposition |
+| T73 privacy and egress | Accurate intake disclosure; synthetic privacy contracts | Deployment-specific providers, regions, retention, capture and approval |
+| T74 restore | Actual disposable PostgreSQL restore + synthetic erasure replay | Authorized operational Supabase backup/retention restore proof |
+| T75 accessibility | Automated keyboard/axe/locale/resize checks | Manual screen-reader, browser and WCAG 2.2 AA acceptance |
+| T76 corpus | Author-supplied synthetic NL/FR/EN fixtures | Rights-cleared representative data and independent labels |
+| T77 final signed E2E | **Passed** [signed F6 final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829162860), exact final PR head and zero-residual teardown | None for the bounded T77 engineering check; pilot gates are independent |
+| T78 practitioner evidence | Written protocol only | Two independent reviewers, authorized dossiers, timed/comparative observations |
+| T79 pilot declaration | **Blocked**, no approval | Signed owner decisions after T61/T70/T72–T78 are accepted |
+
+**Closure rule:** A green CI job or an agent-authored status note is not human sign-off. Keep external gates unchecked until actual evidence and accountable reviewer/owner decisions exist. T62–T65 remain conditional, not silently required or accepted.
+
 ## 1. Agent start here
 
 1. Read applicable `AGENTS.md` and repository constitutional rules. Read this task list once, then the selected task and actual relevant code/tests. Check current branch, working tree, upstream head and exact installed contracts. Preserve unrelated changes.
@@ -315,7 +336,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T15 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** D06.  
+**Status:** IMPLEMENTED_REVIEW_PENDING. **Depends on:** D06.  
+**Evidence (4 Nov 2026, merged PR #185):** Safe XML annotation serialization is in the merged DOCX exporter; structural and XML regressions passed in [kernel final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829163374). Independent code review remains unrecorded.  
 **Build:** Preserve significant whitespace with xml:space where needed. Reject XML-invalid characters or visibly substitute with a transformation disclosure. Preserve raw source and OCR representation; add emitted XML/reopen regressions.  
 **Done when:** No silent stripping, malformed derivative or corruption of originals. Normal multilingual text survives.  
 **Touch points:** infrastructure/parsers/dossier_docx_export.py. **Trace:** A8; F1.
@@ -558,7 +580,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T47 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T46.  
+**Status:** IMPLEMENTED_REVIEW_PENDING. **Depends on:** T46.  
+**Evidence (4 Nov 2026, merged PR #185):** Frozen snapshot-bound correspondence, explicit uncertain states and no decision transfer are implemented and regression-tested; [frontend final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829163384) and [signed F6 final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829162860) passed. Independent review remains open.  
 **Build:** Version explanatory matching across two frozen snapshots, using locator/version lineage and reference/context evidence. Classify unchanged/changed/added/removed/uncertain; handle ties conservatively.  
 **Done when:** Repeated/relocated/edited citations do not silently match incorrectly; paragraph hashes alone do not determine correspondence.  
 **Touch points:** Application comparison projection; generated schema. **Trace:** E; StetDoc S5/S8.
@@ -567,7 +590,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T48 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T47.  
+**Status:** IMPLEMENTED_REVIEW_PENDING. **Depends on:** T47.  
+**Evidence (4 Nov 2026, merged PR #185):** Correction workspace exposes explained frozen old/new drift with uncertainty; [frontend final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829163384) passed. Independent review remains open.  
 **Build:** Extend existing comparison UI with correspondence and separate dimension deltas/reasons. Display historical reviews read-only. Open either snapshot with exact source context.  
 **Done when:** Reviewer sees why date/currency/page/fidelity changed and what remains unassessed; no correspondence treated as human approval.  
 **Touch points:** CorrectionPanel.tsx; app navigation. **Trace:** E; Vaquill V7/V9.
@@ -663,7 +687,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T60 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T15, D06.  
+**Status:** IMPLEMENTED_REVIEW_PENDING. **Depends on:** T15, D06.  
+**Evidence (4 Nov 2026, merged PR #185):** Readable, labeled derivative appendix replaces Python dictionary repr, preserves original ZIP parts and refuses XML-invalid characters. [kernel final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829163374) and [P6 host/restore/supply-chain acceptance](https://github.com/haytamAroui/caseproof/actions/runs/41829163280) passed on synthetic fixtures; independent code/host review remains open.  
 **Build:** Retain existing append model and original body elements. Replace str(dict) output with labeled scope/counts/limitations and per-finding reasons/review identity/time. Include only available bound release metadata.  
 **Done when:** NL/FR/EN report readable; valid whitespace/XML; preserves body semantics and untouched ZIP payloads; no certificate wording.  
 **Touch points:** dossier_docx_export.py; real-format fixture tests. **Trace:** F1; StetDoc S10.
@@ -672,7 +697,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T61 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T60; any adopted writer.  
+**Status:** PARTIAL_LIBREOFFICE_PASSED_WORD_OPEN. **Depends on:** T60; any adopted writer.  
+**Evidence (4 Nov 2026, merged PR #185):** Real LibreOffice Writer 24.2.7.2 synthetic DOCX/PDF/ODT round-trip passed in [P6 host/restore/supply-chain acceptance](https://github.com/haytamAroui/caseproof/actions/runs/41829163280); Microsoft Word desktop and independent visual-format review were not run. Do not check this task off.  
 **Build:** Render/reopen representative original/corrected/annotated fixtures in supported desktop Word and LibreOffice. Inspect styles/runs/tables/footnotes/comments/links, package validity and exact historical retrieval.  
 **Done when:** Record host/version, observations, failures and limitations. Prior LibreOffice evidence is scoped; do not relabel it Word acceptance.  
 **Touch points:** Output fixtures; host verification receipt. **Trace:** F acceptance; UF05.
@@ -717,7 +743,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T66 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T47.  
+**Status:** IMPLEMENTED_REVIEW_PENDING. **Depends on:** T47.  
+**Evidence (4 Nov 2026, merged PR #185):** Exhibit-reference drift explanations and changed source/page reasoning are implemented with explicit uncertain/unsupported cases; [frontend final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829163384) passed. No review transfer; independent review still needed.  
 **Build:** Compare CaseProof reference identity/source/page changes after correction; keep structural engine warnings separate from domain verification. Classify unsupported/ambiguous drift explicitly.  
 **Done when:** Renumbered Stuk/Pièce, changed source and moved references cannot silently retain old approval.  
 **Touch points:** Application comparison; explanatory UI. **Trace:** StetDoc S8; E.
@@ -729,7 +756,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T70 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** Authorized read access.  
+**Status:** PARTIAL_DEV_AUDIT_REVIEW_OPEN. **Depends on:** Authorized read access.  
+**Evidence (4 Nov 2026, merged PR #185):** Read-only Supabase dev catalog inspection was recorded in [security triage](pilot/P6_SECURITY_DEPENDENCY_PRIVACY_TRIAGE_2026-11-04.md); 15 public privileged RPC warnings, 29 private no-policy notices and leaked-password setting require independent scrutiny and signed-role tests. No grant/auth setting changed.  
 **Build:** Check live CaseProof dev function owner/search_path/grants, SECURITY DEFINER boundaries, private tables/RLS, cross-matter and revoked roles; compare migrations and advisor findings. Record actual leaked-password protection availability/state.  
 **Done when:** Dated findings and remediation evidence; no blanket change of function mode or claim that advisor warnings prove exploitability.  
 **Touch points:** Connected CaseProof dev; SQL catalog; security receipts. **Trace:** G1; S13.
@@ -747,7 +775,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T72 and record its acceptance evidence.
 
-**Status:** VERIFY_EXISTING. **Depends on:** T06.  
+**Status:** PARTIAL_SUPPLY_CHAIN_REVIEW_OPEN. **Depends on:** T06.  
+**Evidence (4 Nov 2026, merged PR #185):** The locked npm security audit in [P6 host/restore/supply-chain acceptance](https://github.com/haytamAroui/caseproof/actions/runs/41829163280) found 0 moderate-or-higher production advisories and 11 moderate development-only lint/tooling advisories; remediation or signed exception is still required.  
 **Build:** Inspect existing lockfile, dependency/secret scanning and SBOM tools; add missing useful controls. Scope artifacts and logs to synthetic/non-sensitive content.  
 **Done when:** Build inputs traceable; no duplicate policy tools or secret leakage; approved headers/assets remain pinned.  
 **Touch points:** CI; dependency files; SBOM/notices. **Trace:** G5; Vaquill V15.
@@ -756,7 +785,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T73 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** Actual deployment mode selected.  
+**Status:** PARTIAL_INTAKE_DISCLOSURE_ONLY. **Depends on:** Actual deployment mode selected.  
+**Evidence (4 Nov 2026, merged PR #185):** Intake now accurately discloses Supabase originals/metadata egress and automated contracts pass in [P6 host/restore/supply-chain acceptance](https://github.com/haytamAroui/caseproof/actions/runs/41829163280); actual deployment regions/processors, capture, retention, legal hold, privacy owner and agreements are not approved.  
 **Build:** Map SEC01–16 data flows, browser/backend/OCR/model location, providers/regions, network capture scope and contractual retention. Display accurate P10/session policy before confidential use.  
 **Done when:** No unmeasured zero-egress/compliance statement; local/hybrid/hosted boundaries documented with independent acceptance.  
 **Touch points:** ADR0025; security evidence; processing disclosure UI. **Trace:** S13/P10; H.
@@ -765,7 +795,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T74 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** Operational owner and approved isolated environment.  
+**Status:** PARTIAL_DISPOSABLE_RESTORE_ONLY. **Depends on:** Operational owner and approved isolated environment.  
+**Evidence (4 Nov 2026, merged PR #185):** PostgreSQL 17 pg_dump/pg_restore, four relation checks, synthetic erasure replay and direct-grant denial passed in [P6 host/restore/supply-chain acceptance](https://github.com/haytamAroui/caseproof/actions/runs/41829163280); an authorized actual Supabase operational-backup restore and full retention/legal-hold review remain open.  
 **Build:** Test restore, access control and erasure replay against actual retention/legal-hold policy. Include sources, OCR/geometry, snapshots/reviews/releases, scratch and backups.  
 **Done when:** No deleted sensitive content reappears after restore; dated actual restore/retention evidence; destructive controls remain authorized.  
 **Touch points:** Existing retention/backup services; isolated acceptance. **Trace:** G4; S13.
@@ -774,7 +805,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T75 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** Affected final UI.  
+**Status:** PARTIAL_AUTOMATED_A11Y_ONLY. **Depends on:** Affected final UI.  
+**Evidence (4 Nov 2026, merged PR #185):** Playwright/axe, keyboard, 320px, zoom simulation, forced colors, reduced motion, multilingual tests passed in [frontend final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829163384); no manual screen-reader or WCAG 2.2 AA sign-off.  
 **Build:** Test keyboard-only and screen reader, zoom/reflow, reduced motion, forced colors, narrow panes, accessible labels/modal/error focus and long NL/FR/EN text. Fix gaps in shared primitives.  
 **Done when:** Record browsers/AT/versions and remaining limits; no fully-accessible claim from axe alone.  
 **Touch points:** All P01–P10/W surfaces; theme/shared UI. **Trace:** G6; blueprint §10–11.
@@ -783,16 +815,18 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T76 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** Practitioner/data permission.  
+**Status:** PARTIAL_SYNTHETIC_CORPUS_ONLY. **Depends on:** Practitioner/data permission.  
+**Evidence (4 Nov 2026, merged PR #185):** Authored NL/FR/EN synthetic fixtures validated in [P6 host/restore/supply-chain acceptance](https://github.com/haytamAroui/caseproof/actions/runs/41829163280); real data-owner authorization, representative dossiers and independent gold labels have not been obtained.  
 **Build:** Gather representative NL/FR/EN briefs/inventories/text+scans, independent expected labels, repeated citations, formatting/tables/notes and seeded substantive errors. Pin hashes privately where needed.  
 **Done when:** Rights and access recorded; expected outcomes independently reviewed; synthetic versus real results distinguishable.  
 **Touch points:** Private corpus manifests; synthetic CI generator. **Trace:** H; StetDoc S7.
 
 #### T77 — Run final integrated signed acceptance
 
-- [ ] Complete T77 and record its acceptance evidence.
+- [x] Complete T77 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** All required bundle tasks and fixes.  
+**Status:** PASSED_FINAL_HEAD_SIGNED_ACCEPTANCE. **Depends on:** All required bundle tasks and fixes.  
+**Evidence (4 Nov 2026, merged PR #185):** Exact PR head `3c6058a054ffd5172413cba5b90eb9af4bb44586` passed [signed F6 final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829162860): signed intake through historical release, lost-ack reconciliation, stale/revoked denial and `ZERO_RESIDUAL_VERIFIED`. This checks engineering T77 only, not pilot/production authorization.  
 **Build:** Create authorized matter from genuine signed browser, complete intake through historical release after restart. Include stale/revoked/cross-matter, lost ack, competing writes, wrong-source render and tamper.  
 **Done when:** Final implementation SHA, relevant CI and zero-residual cleanup recorded; no earlier-run substitution or skipped-gate concealment.  
 **Touch points:** Existing protected signed workflows/fixtures; evidence record. **Trace:** G3; UF01–UF05.
@@ -801,7 +835,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T78 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T76 and authorized test/pilot mode.  
+**Status:** BLOCKED_REAL_CORPUS_AND_REVIEWERS. **Depends on:** T76 and authorized test/pilot mode.  
+**Evidence (4 Nov 2026, merged PR #185):** The [practitioner study protocol](pilot/P6_PRACTITIONER_AND_CORPUS_PROTOCOL.md) exists, but no permissioned representative corpus, real reviewer sessions, denominators, independent outcomes or utility metrics have been recorded.  
 **Build:** Interview practitioners, observe timed manual-versus-CaseProof review, record recall/false-verification denominators, uncertainty comprehension, review agreement and paid commitment hypotheses. Define stop criteria and data terms.  
 **Done when:** Real owners review outcomes; no zero-risk extrapolation; selected capacity actually fits target dossiers.  
 **Touch points:** Pilot protocol; independent results. **Trace:** H/M5.
@@ -810,7 +845,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T79 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T77; T70/T73–T78 for pilot.  
+**Status:** BLOCKED_PILOT_APPROVAL. **Depends on:** T77; T70/T73–T78 for pilot.  
+**Evidence (4 Nov 2026, merged PR #185):** PR #185 merged as engineering work at `b162a5f7a08975949a32671cbea774b7f0a7bb09`; [signed F6 final-head run](https://github.com/haytamAroui/caseproof/actions/runs/41829162860) and [P6 host/restore/supply-chain acceptance](https://github.com/haytamAroui/caseproof/actions/runs/41829163280) passed. Independent security, privacy/egress, operational restore, Microsoft Word, manual AT, rights and practitioners remain open: **pilot NOT approved**.  
 **Build:** Record completed scope, limits, review owners, rollback and release controls. Pilot-ready requires capacity proof, representative data, operational/privacy/security/accessibility/practitioner gates.  
 **Done when:** No CI-only product/production approval; no invented acceptance signer. Update backlog and dated status.  
 **Touch points:** STATUS; acceptance records; this backlog. **Trace:** Definition of done.

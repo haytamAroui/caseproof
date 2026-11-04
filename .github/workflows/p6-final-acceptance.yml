@@ -1,4 +1,5 @@
 name: P6 host, restore, dependency and corpus evidence
+# All PRs targeting main exercise this synthetic gate. No historical branch-only job guard.
 on:
   pull_request:
     branches: [main]
@@ -7,7 +8,6 @@ permissions:
   contents: read
 jobs:
   docx-writer:
-    if: github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -27,7 +27,6 @@ jobs:
         run: uv run --locked pytest -q tests/test_f6_docx_format_integrity.py tests/test_p5_docx_report.py
 
   restore-simulation:
-    if: github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -64,7 +63,6 @@ jobs:
         run: uv run --locked python -m scripts.p6_disposable_restore
 
   supply-chain:
-    if: github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -89,7 +87,6 @@ jobs:
         run: echo "Only sanitized package/severity findings are emitted into job logs."
 
   corpus-and-privacy-contracts:
-    if: github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

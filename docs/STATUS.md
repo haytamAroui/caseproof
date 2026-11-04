@@ -1,5 +1,14 @@
 # CaseProof — engineering state and dated evidence
 
+## 4 November 2026 — PR #185 merged; PR #186 housekeeping and outstanding pilot gates
+
+[PR #185](https://github.com/haytamAroui/caseproof/pull/185) was **squash merged** to `main` as `b162a5f7a08975949a32671cbea774b7f0a7bb09`. Last tested PR head `3c6058a054ffd5172413cba5b90eb9af4bb44586` has **19 succeeded, 4 intentionally skipped, 0 failed** workflow conclusions. [Final signed F6](https://github.com/haytamAroui/caseproof/actions/runs/41829162860), [P6 host/restore/dependency/corpus](https://github.com/haytamAroui/caseproof/actions/runs/41829163280), [frontend](https://github.com/haytamAroui/caseproof/actions/runs/41829163384) and [kernel](https://github.com/haytamAroui/caseproof/actions/runs/41829163374) all succeeded on that head. The combined F6 genuinely exercises F3/F4/F5 paths; their separately skipped jobs are not claimed as passes.
+
+[PR #186](https://github.com/haytamAroui/caseproof/pull/186) reconciles [master TODO](CASEPROOF_AGENT_MASTER_TODO.md) and [task evidence](pilot/P5_P6_ACCEPTANCE_MATRIX.md), and removes the historical branch-only P6 CI guard so future PRs targeting main receive the synthetic P6 checks. This is **housekeeping and repeatable CI**, not a second implementation of P5/P6 or a security/privacy sign-off.
+
+**Pilot NOT approved:** Real Microsoft Word, independent 15-RPC security/role/audit review, disposition of 11 moderate dev dependency advisories (0 production findings on the sampled lockfile), deployment-specific egress/retention and actual Supabase restore, manual AT/WCAG, rights-cleared independent corpus, actual practitioner outcomes and accountable owner approvals remain OPEN. T77 exact-head signed engineering acceptance alone is PASSED. See the evidence ledger for precise requirements. Unchecked external tasks remain unchecked.
+
+
 ## 4 November 2026 — P5/P6 engineering acceptance extended; pilot gate still blocked
 
 [PR #185](https://github.com/haytamAroui/caseproof/pull/185) extends the readable DOCX appendix, snapshot-bound drift reasons and signed reviewer flow with **real LibreOffice Writer 24.2.7.2 synthetic DOCX/PDF/ODT round-trip**, an **isolated PostgreSQL 17 backup/restore with erasure-replay check**, an installed npm supply-chain audit, visible truthful signed-development egress disclosure, and automated NL/FR/EN keyboard/axe/reflow/reduced-motion/forced-color coverage. [Dated evidence matrix](pilot/P5_P6_ACCEPTANCE_MATRIX.md) links the CI receipts and scope. The npm audit classified 11 moderate advisories in **development-only** dependencies, 0 in the production tree; independent advisory remediation/approval remains open. Actual read-only dev SQL catalog/privileged function/grant inspection is in [P6 security triage](pilot/P6_SECURITY_DEPENDENCY_PRIVACY_TRIAGE_2026-11-04.md). Whole-deployment capture, provider/contract and actual Supabase restore are not proven.
