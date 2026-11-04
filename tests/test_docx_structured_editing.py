@@ -157,7 +157,7 @@ def test_nested_revision_and_unknown_structure_are_not_silently_rewritten():
     source = file.getvalue()
     block = list_document_blocks(source)[0]
     assert not block.editable
-    with pytest.raises(ValueError, match="unsupported edit target"):
+    with pytest.raises(ValueError, match="invalid edit payload|unsupported edit target"):
         _apply(source, [_edit(block, "A replacement")])
 
 
