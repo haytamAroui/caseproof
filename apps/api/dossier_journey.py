@@ -1087,8 +1087,14 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         brief_id: str,
         body: VisualDecisionBody,
         authorization: str | None = Header(default=None),
+        if_match: str | None = Header(default=None),
+        idempotency_key: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
+        if if_match != "snapshot_id:" + body.snapshot_hash:
+            raise HTTPException(412, "snapshot precondition required")
+        if idempotency_key != str(body.request_id):
+            raise HTTPException(422, "idempotency key must match durable review request")
         report, _ = s.reopen(bearer, case_id, brief_id, body.snapshot_hash)
         finding = next((f for f in report["findings"] if f["reference_id"] == body.reference_id), None)
         if report["snapshot_hash"] != body.snapshot_hash or finding is None:

@@ -74,7 +74,13 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30,'application/pdf','{role}
                    parent_sha256='a'*64,reference_id='ref-0000',sha256='c'*64,byte_length=40)
     args = [case,request,'reserve',json.dumps(command)]
     call('caseproof_dossier_draft_reserve',args,user=other,succeeds=False)
-    reserved = json.loads(call('caseproof_dossier_draft_reserve',args))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        reservations = list(pool.map(
+            lambda _: json.loads(call('caseproof_dossier_draft_reserve', args)), range(2),
+        ))
+    assert sorted(result['replayed'] for result in reservations) == [False, True]
+    reserved = reservations[0]
+    assert reservations[1]['version_id'] == reserved['version_id']
     assert reserved['state']=='reserved'
     owned_path = '/'.join([org, case, docs[0], reserved['version_id'], 'c'*64])
     assert _run(f"select resource_id from caseproof.test_run_registry where run_id='{fixture_run}' "

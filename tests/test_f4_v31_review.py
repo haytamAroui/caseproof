@@ -127,17 +127,21 @@ def test_review_replay_returns_one_persisted_receipt_and_rejects_changed_input()
         "decision": "CONFIRMED_SUPPORTED", "rationale": "Compared pixels and context",
         "reviewed_region_ids": ["c" * 64],
     }
-    first = client.post(route("reviews"), json=command, headers=auth())
+    mutation_headers = {**auth(), "If-Match": f"snapshot_id:{SNAP}", "Idempotency-Key": command["request_id"]}
+    assert client.post(route("reviews"), json=command, headers=auth()).status_code == 412
+    wrong_key = {**mutation_headers, "Idempotency-Key": str(uuid4())}
+    assert client.post(route("reviews"), json=command, headers=wrong_key).status_code == 422
+    first = client.post(route("reviews"), json=command, headers=mutation_headers)
     assert first.status_code == 200
-    second = client.post(route("reviews"), json=command, headers=auth())
+    second = client.post(route("reviews"), json=command, headers=mutation_headers)
     assert second.status_code == 200
     ledger = client.get(route(f"reviews?snapshot_hash={SNAP}"), headers=auth()).json()
     assert len(ledger["decisions"]) == 1
     assert ledger["decisions"][0]["request_id"] == command["request_id"]
-    assert client.post(route("reviews"), json={**command, "rationale": "Changed"}, headers=auth()).status_code == 409
-    assert client.post(route("reviews"), json={**command, "reviewed_region_ids": []}, headers=auth()).status_code == 409
+    assert client.post(route("reviews"), json={**command, "rationale": "Changed"}, headers=mutation_headers).status_code == 409
+    assert client.post(route("reviews"), json={**command, "reviewed_region_ids": []}, headers=mutation_headers).status_code == 409
     store.revoked = True
-    assert client.post(route("reviews"), json=command, headers=auth()).status_code == 404
+    assert client.post(route("reviews"), json=command, headers=mutation_headers).status_code == 404
 
 
 def test_review_request_and_ledger_reject_invented_decisions_or_timestamps():

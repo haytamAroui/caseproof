@@ -24,10 +24,16 @@ from tests.fixtures.factory import SyntheticSource
 
 
 def request(token, method, path, payload=None):
+    headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+    if method == "POST" and payload and "/dossier/" in path:
+        if path.endswith(("/reviews", "/corrections/preview", "/corrections/commit")):
+            headers["If-Match"] = "snapshot_id:" + payload["snapshot_hash"]
+        if path.endswith(("/reviews", "/corrections/commit")) and "request_id" in payload:
+            headers["Idempotency-Key"] = str(payload["request_id"])
     con = http.client.HTTPConnection('127.0.0.1', 8765, timeout=120)
     try:
         con.request(method, path, json.dumps(payload).encode() if payload is not None else None,
-                    {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+                    headers)
         res = con.getresponse()
         return res.status, res.read(4_000_001)
     finally:

@@ -38,3 +38,9 @@ src/shared/api/draft-excerpt.schema.json
 src/shared/api/draft-excerpt-generated*
 src/shared/api/review-command.schema.json
 src/shared/api/review-command-generated*
+src/shared/api/docx-locator-v1.schema.json
+src/shared/api/docx-locator-v1-generated*
+src/shared/api/correction-preview-v1.schema.json
+src/shared/api/correction-preview-v1-generated*
+src/shared/api/correction-commit-v1.schema.json
+src/shared/api/correction-commit-v1-generated*

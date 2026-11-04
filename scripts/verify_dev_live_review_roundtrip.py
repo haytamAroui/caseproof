@@ -99,12 +99,18 @@ def _server_stop(proc: subprocess.Popen[bytes] | None) -> None:
 def _request(
     token: str, method: str, path: str, payload: dict[str, Any] | None = None,
 ) -> tuple[int, dict[str, Any]]:
+    headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+    if method == "POST" and payload and "/dossier/" in path:
+        if path.endswith(("/reviews", "/corrections/preview", "/corrections/commit")):
+            headers["If-Match"] = "snapshot_id:" + payload["snapshot_hash"]
+        if path.endswith(("/reviews", "/corrections/commit")) and "request_id" in payload:
+            headers["Idempotency-Key"] = str(payload["request_id"])
     con = http.client.HTTPConnection("127.0.0.1", PORT, timeout=15)
     try:
         con.request(
             method, path,
             None if payload is None else json.dumps(payload).encode(),
-            {"Authorization": "Bearer " + token, "Content-Type": "application/json"},
+            headers,
         )
         response = con.getresponse()
         status = response.status
