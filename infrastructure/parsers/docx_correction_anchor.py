@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 from typing import Any
 from xml.dom import minidom
 from zipfile import ZipFile
@@ -21,6 +22,9 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
     exactly; unsupported target structures and tracked changes still abstain.
     """
     literal, offsets = finding.get('literal'), finding.get('offsets')
+    locator = finding.get('locator_identity')
+    if locator is not None and not isinstance(locator, dict):
+        raise ValueError('invalid locator identity')
     if (finding.get('region') != 'word/document.xml' or not isinstance(literal, str)
             or not literal or not isinstance(offsets, dict)
             or type(offsets.get('start')) is not int or type(offsets.get('end')) is not int):
@@ -93,4 +97,29 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
             raise ValueError('unsupported target run')
     if region[left:right].count(literal) != 1:
         raise ValueError('ambiguous reference in paragraph')
+    if locator is not None:
+        paragraph_text = region[left:right]
+        expected_hash = locator.get('content_hash')
+        if not isinstance(expected_hash, str) or len(expected_hash) != 64:
+            raise ValueError('invalid locator content hash')
+        if hashlib.sha256(paragraph_text.encode('utf-8')).hexdigest() != expected_hash:
+            raise ValueError('stale locator content hash')
+        expected_id = locator.get('paragraph_id')
+        if expected_id is not None:
+            para_ns = 'http://schemas.microsoft.com/office/word/2010/wordml'
+            actual_id = paragraph.getAttributeNS(para_ns, 'paraId')
+            if not actual_id or actual_id != expected_id:
+                raise ValueError('stale locator paragraph identity')
+        prefix, suffix = locator.get('prefix'), locator.get('suffix')
+        if not isinstance(prefix, str) or not isinstance(suffix, str):
+            raise ValueError('invalid locator context')
+        local_start, local_end = start - left, end - left
+        if not paragraph_text[:local_start].endswith(prefix) or not paragraph_text[local_end:].startswith(suffix):
+            raise ValueError('stale locator context')
+        occurrence = locator.get('occurrence_index')
+        if type(occurrence) is not int or occurrence < 0:
+            raise ValueError('invalid locator occurrence')
+        matches = [i for i in range(len(paragraph_text)) if paragraph_text.startswith(literal, i)]
+        if occurrence >= len(matches) or matches[occurrence] != local_start:
+            raise ValueError('stale locator occurrence')
     return index
