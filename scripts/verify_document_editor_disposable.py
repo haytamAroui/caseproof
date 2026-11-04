@@ -25,13 +25,13 @@ def main() -> None:
 insert into auth.users(id,instance_id) values('{actor}','{org}'),('{other}','{org}');
 insert into caseproof.organizations(id,display_name) values('{org}','Synthetic editor');
 insert into caseproof.organization_members(org_id,user_id,actions) values
-('{org}','{actor}',array['case:read','evidence:read','finding:write','review:request']),
+('{org}','{actor}',array['case:read','evidence:read','finding:write','review:request','draft:edit']),
 ('{org}','{other}',array['case:read','evidence:read','finding:write','review:request']);
 insert into caseproof.cases(id,org_id,created_by_user,effective_policy_version)
 values('{case}','{org}','{actor}','caseproof-dev-txt-v1');
 insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
 values('{org}','{case}','{actor}','reviewer',
-array['case:read','evidence:read','evidence:upload','draft:check','review:request']);
+array['case:read','evidence:read','evidence:upload','draft:check','review:request','draft:edit']);
 """, env)
     sources = []
     for doc, version, role in zip(
@@ -158,17 +158,28 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30000,'{media}','{role}');
 
     # Only a trusted service-role readback assertion can activate; even that
     # operation fails if the bytes/digest do not match the reserved derivative.
-    activation = [actor, case, request_id, candidate_sha, "40000"]
-    call("caseproof_dossier_draft_activate", activation, succeeds=False)
-    call("caseproof_dossier_draft_activate", [
+    activation = [actor, case, request_id, review_id, candidate_sha, "40000"]
+    call("caseproof_dossier_document_edit_activate", activation, succeeds=False)
+    call("caseproof_dossier_document_edit_activate", [
         actor, case, request_id, "f" * 64, "40000"
     ], service=True, succeeds=False)
+    # A user whose fresh document-edit grant was revoked cannot activate a
+    # reserved edit despite retaining every ordinary citation-review permission.
+    _run(
+        f"update caseproof.organization_members set actions=array_remove(actions,'draft:edit')"
+        f" where org_id='{org}' and user_id='{actor}';", env
+    )
+    call("caseproof_dossier_document_edit_activate", activation, service=True, succeeds=False)
+    _run(
+        f"update caseproof.organization_members set actions=array_append(actions,'draft:edit')"
+        f" where org_id='{org}' and user_id='{actor}';", env
+    )
     activated = json.loads(call(
-        "caseproof_dossier_draft_activate", activation, service=True
+        "caseproof_dossier_document_edit_activate", activation, service=True
     ))
     assert activated["state"] == "active"
     assert json.loads(call(
-        "caseproof_dossier_draft_activate", activation, service=True
+        "caseproof_dossier_document_edit_activate", activation, service=True
     ))["replayed"] is True
     current = json.loads(call("caseproof_dev_bundle_manifest", [case]))
     assert current["sources"][0]["version_id"] == reserved["version_id"]
