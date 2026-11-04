@@ -193,12 +193,13 @@ def test_revision_inventory_exposes_hash_without_raw_confidential_text():
 
 def test_local_cli_never_overwrites_and_inspection_omits_text(tmp_path, capsys):
     import json
-
-    from scripts.docx_local_editor import main
     import sys
 
+    from scripts.docx_local_editor import main
+
     source = tmp_path / "original.docx"
-    source.write_bytes(_draft())
+    preserved = _draft()
+    source.write_bytes(preserved)
     original_argv = sys.argv
     try:
         sys.argv = ["docx-editor", "inspect", "--input", str(source), "--list-targets"]
@@ -214,14 +215,14 @@ def test_local_cli_never_overwrites_and_inspection_omits_text(tmp_path, capsys):
             "source_sha256": view["source_sha256"],
             "author": "Local reviewer",
             "timestamp": STAMP,
-            "edits": [{**{
+            "edits": [{
                 "part": block["part"],
                 "paragraph_index": block["paragraph_index"],
                 "expected_text_sha256": block["expected_text_sha256"],
                 "before": "A plain paragraph",
                 "after": "A changed paragraph",
                 "track_changes": False,
-            }}],
+            }],
         }), encoding="utf-8")
         derivative = tmp_path / "derivative.docx"
         sys.argv = ["docx-editor", "edit", "--input", str(source),
@@ -232,6 +233,6 @@ def test_local_cli_never_overwrites_and_inspection_omits_text(tmp_path, capsys):
         assert Document(io.BytesIO(derivative.read_bytes())).paragraphs[0].text == "A changed paragraph"
         with pytest.raises(ValueError, match="never overwrite"):
             main()
-        assert source.read_bytes() == _draft()
+        assert source.read_bytes() == preserved
     finally:
         sys.argv = original_argv
