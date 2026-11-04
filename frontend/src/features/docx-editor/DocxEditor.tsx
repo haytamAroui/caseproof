@@ -344,6 +344,134 @@ export function DocxEditor({ api }: { api: ApiClient }) {
     }
   }
 
+  async function saveDocumentReview() {
+    if (!prepared || busy || rationale.trim().length < 10 || committedVersion) return;
+    const id = reviewId ?? crypto.randomUUID();
+    setReviewId(id);
+    setBusy(true);
+    setNotice('Requesting a signed whole-document review receipt…');
+    try {
+      const reply = object(await api.post(
+        `${root}/review`,
+        { ...prepared.command, review_request_id: id, rationale: rationale.trim() },
+        undefined, { snapshot, idempotencyKey: id },
+      ));
+      if (
+        reply.schema !== 'caseproof-document-editor-review-v1' ||
+        reply.review_request_id !== id ||
+        reply.candidate_sha256 !== prepared.receipt.derivative_sha256 ||
+        reply.persisted !== true ||
+        reply.activated !== false ||
+        reply.requires_separate_commit !== true ||
+        typeof reply.command_sha256 !== 'string' ||
+        !sha.test(reply.command_sha256)
+      ) throw Error('The document-review receipt could not be verified.');
+      setReviewSaved(true);
+      setNotice('Human document review recorded. No new version is yet active.');
+    } catch (error) {
+      setNotice(
+        (error instanceof Error ? error.message : 'Review outcome unknown.') +
+        ' Only the same review request ID can be reconciled.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function durableCommand(id: string) {
+    if (!prepared || !reviewId) throw Error('Saved document review required.');
+    return { ...prepared.command, review_request_id: reviewId, request_id: id };
+  }
+  function completeCommit(x: unknown) {
+    const reply = object(x);
+    if (
+      reply.schema !== 'caseproof-document-editor-commit-v1' ||
+      reply.state !== 'active' ||
+      reply.committed !== true ||
+      reply.requires_recheck !== true ||
+      typeof reply.version_id !== 'string' ||
+      !uuid.test(reply.version_id)
+    ) throw Error('The activated draft receipt is not trustworthy.');
+    setCommittedVersion(reply.version_id);
+    setCommitUnknown(false);
+    setNotice('New draft activated; mandatory recheck is required.');
+  }
+  async function commitDocumentEdit() {
+    if (!reviewSaved || !reviewId || !prepared || busy || committedVersion) return;
+    const id = commitId ?? crypto.randomUUID();
+    setCommitId(id);
+    setCommitUnknown(true);
+    setBusy(true);
+    setNotice('Saving and readback-verifying the reviewed new DOCX version…');
+    try {
+      const result = await api.post(
+        `${root}/commit`,
+        durableCommand(id),
+        undefined,
+        { snapshot, idempotencyKey: id },
+      );
+      completeCommit(result);
+    } catch (error) {
+      setNotice(
+        (error instanceof Error ? error.message : 'Commit not acknowledged.') +
+        ' Operation outcome may be unknown. Reconcile the same request ID.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function reconcileDocumentEdit() {
+    if (!reviewSaved || !commitId || !prepared || busy || committedVersion) return;
+    setBusy(true);
+    setNotice('Reading durable status for the exact request ID…');
+    try {
+      const status = object(await api.post(
+        `${root}/status`, durableCommand(commitId),
+      ));
+      if (status.schema !== 'caseproof-document-editor-status-v1')
+        throw Error('The operation status is not a supported receipt.');
+      if (status.state === 'active') {
+        if (typeof status.version_id !== 'string' || !uuid.test(status.version_id))
+          throw Error('Activated version ID is missing.');
+        setCommittedVersion(status.version_id);
+        setCommitUnknown(false);
+        setNotice('Activation confirmed. Recheck the new draft before using it.');
+      } else if (status.state === 'reserved') {
+        setCommitUnknown(true);
+        setNotice('Reserved but not activated. Retry the identical commit, not a new edit.');
+      } else if (status.state === 'absent') {
+        setCommitUnknown(false);
+        setNotice('No durable operation exists. The existing review may still be used.');
+      } else throw Error('Unknown document-edit status.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not reconcile the operation.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function recheckActivatedDraft() {
+    if (!committedVersion || busy) return;
+    setBusy(true);
+    try {
+      const report = object(await api.post(
+        `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(committedVersion)}/dossier/recheck`,
+        {},
+      ));
+      if (
+        report.brief_id !== committedVersion ||
+        typeof report.snapshot_hash !== 'string' ||
+        !sha.test(report.snapshot_hash)
+      ) throw Error('Recheck did not confirm the activated version.');
+      void navigate(
+        `/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(committedVersion)}?snapshot=${report.snapshot_hash}`,
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Recheck unavailable; previous decisions remain stale.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!valid)
     return <Notice error>Provide a valid matter, draft version and snapshot.</Notice>;
   if (source.isPending) return <Notice>Opening source-bound document blocks…</Notice>;
