@@ -286,7 +286,21 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
   await page.route('**/dossier/recheck', (route) => {
     expect(route.request().url()).toContain(`/briefs/${nextBrief}/`);
     return route.fulfill({
-      json: { ...report, brief_id: nextBrief, snapshot_hash: 'e'.repeat(64) },
+      json: {
+        ...report,
+        brief_id: nextBrief,
+        snapshot_hash: 'e'.repeat(64),
+        findings: [
+          {
+            ...finding,
+            identity_reason: 'SOURCE_CONFIRMED',
+            visual_assessment: {
+              ...finding.visual_assessment,
+              reason: 'source_scan_ocr_unavailable',
+            },
+          },
+        ],
+      },
     });
   });
   await page.route('**/dossier/history/*', (route) =>
@@ -328,6 +342,17 @@ test('correction preview, lost commit acknowledgement, durable reconciliation an
   ).toBeVisible();
   await expect(
     counts.getByText('They do not match references', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    correction.getByText('Visual assessment: source_scan_ocr_unavailable'),
+  ).toBeVisible();
+  await expect(
+    correction.getByRole('button', { name: 'Open ref-one in previous report' }),
+  ).toBeVisible();
+  await expect(
+    correction.getByRole('button', {
+      name: 'Open ref-one in rechecked report',
+    }),
   ).toBeVisible();
   expect(commits).toBe(1);
 });
@@ -513,4 +538,115 @@ test('draft excerpt refuses a server selection that does not match the finding',
   await expect(
     page.getByRole('region', { name: 'Correction preview and recheck' }),
   ).toHaveCount(0);
+});
+
+test('coverage details distinguish regions and only navigate to an existing exact region', async ({
+  page,
+}) => {
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        findings: [
+          {
+            ...finding,
+            region: 'word/document.xml',
+            version_id: 'source',
+            source_sha256: 'a'.repeat(64),
+            pdf_page: 1,
+          },
+        ],
+        coverage: {
+          ...report.coverage,
+          source_pages_total: 2,
+          source_pages: [
+            {
+              version_id: 'source',
+              original_sha256: 'a'.repeat(64),
+              pdf_page: 1,
+              method: 'FAILED',
+              reason: 'ocr_unavailable',
+            },
+            {
+              version_id: 'source',
+              original_sha256: 'b'.repeat(64),
+              pdf_page: 1,
+              method: 'NOT_PROCESSED',
+              reason: 'outside_assessed_reference_scope',
+            },
+          ],
+          docx_regions: {
+            coverage_unknown: false,
+            regions: [
+              {
+                part: 'word/document.xml',
+                kind: 'MAIN_BODY',
+                status: 'SCANNED',
+                reason: 'TEXT_SCANNED_RECALL_UNMEASURED',
+              },
+              {
+                part: 'word/document.xml#structured',
+                kind: 'STRUCTURED_CONTENT',
+                status: 'UNSUPPORTED_REGION',
+                reason: 'UNSUPPORTED_STRUCTURED_CONTENT',
+              },
+            ],
+          },
+        },
+      },
+    }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const coverage = page.getByRole('region', {
+    name: 'Verification and processing coverage',
+  });
+  await coverage.getByText('DOCX region coverage', { exact: true }).click();
+  await expect(
+    coverage.getByText('UNSUPPORTED_STRUCTURED_CONTENT', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    coverage.getByRole('button', {
+      name: 'Open detected reference in this region',
+    }),
+  ).toHaveCount(1);
+  await expect(
+    coverage.getByText('No detected reference is available', { exact: false }),
+  ).toBeVisible();
+  await coverage.getByText('Source-page processing', { exact: true }).click();
+  await expect(
+    coverage.getByText('ocr_unavailable', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    coverage.getByRole('button', {
+      name: 'Open reference on this source page',
+    }),
+  ).toHaveCount(1);
+  await expect(
+    coverage.getByText('No mapped reference is available', { exact: false }),
+  ).toBeVisible();
+});
+
+test('J and K move focus and selection across reference pages', async ({
+  page,
+}) => {
+  const findings = Array.from({ length: 51 }, (_, index) => ({
+    ...finding,
+    reference_id: `ref-${index + 1}`,
+    literal: `Stuk ${index + 1}`,
+  }));
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({ json: { ...report, findings } }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const queue = page.getByRole('region', { name: 'References' });
+  const last = queue.getByRole('button', { name: /^Stuk 50/ });
+  await last.focus();
+  await page.keyboard.press('j');
+  const next = queue.getByRole('button', { name: /^Stuk 51/ });
+  await expect(next).toBeFocused();
+  await expect(next).toHaveAttribute('aria-current', 'true');
+  await page.keyboard.press('k');
+  await expect(queue.getByRole('button', { name: /^Stuk 50/ })).toBeFocused();
 });

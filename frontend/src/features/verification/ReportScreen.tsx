@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
 import { useSession } from '../../shared/session';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
+import { coveragePages, coverageRegions } from './coverageRegions';
 import type { ReactNode } from 'react';
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -34,6 +35,8 @@ export function ReportScreen({
   const session = useSession();
   const valid =
     uuid.test(caseId) && uuid.test(briefId) && /^[0-9a-f]{64}$/.test(snapshot);
+  const queueRef = useRef<HTMLElement>(null);
+  const focusReference = useRef<string | null>(null);
   const [filter, setFilter] = useState<'attention' | 'all'>('attention');
   const [search, setSearch] = useState('');
   const query = useQuery({
@@ -42,6 +45,16 @@ export function ReportScreen({
       readReport(api, { caseId, briefId, snapshot }, signal),
     enabled: valid && session.connected,
   });
+  useEffect(() => {
+    if (!focusReference.current) return;
+    const target = focusReference.current;
+    focusReference.current = null;
+    const buttons =
+      queueRef.current?.querySelectorAll<HTMLButtonElement>('button.finding');
+    Array.from(buttons ?? [])
+      .find((button) => button.dataset.referenceId === target)
+      ?.focus();
+  }, [params, query.data]);
   if (!valid)
     return (
       <Notice error>
@@ -129,21 +142,37 @@ export function ReportScreen({
         <section
           className="queue"
           aria-label="References"
+          ref={queueRef}
           onKeyDown={(event) => {
             if (
-              event.target instanceof HTMLInputElement ||
-              event.target instanceof HTMLTextAreaElement ||
-              event.nativeEvent.isComposing
+              event.defaultPrevented ||
+              event.altKey ||
+              event.ctrlKey ||
+              event.metaKey ||
+              event.shiftKey ||
+              event.nativeEvent.isComposing ||
+              !(event.target instanceof HTMLButtonElement) ||
+              !event.target.classList.contains('finding') ||
+              (event.key !== 'j' && event.key !== 'k')
             )
               return;
-            if (event.key !== 'j' && event.key !== 'k') return;
+            const currentReference = event.target.dataset.referenceId;
             const index = filtered.findIndex(
-              (f) => f.reference_id === selected?.reference_id,
+              (finding) => finding.reference_id === currentReference,
             );
-            const next = filtered[index + (event.key === 'j' ? 1 : -1)];
+            const nextIndex = index + (event.key === 'j' ? 1 : -1);
+            const next = index < 0 ? undefined : filtered[nextIndex];
             if (next) {
               event.preventDefault();
-              selectReference(next.reference_id);
+              focusReference.current = next.reference_id;
+              setParams(
+                (current) => {
+                  current.set('finding', next.reference_id);
+                  current.set('page', String(Math.floor(nextIndex / pageSize)));
+                  return current;
+                },
+                { replace: true },
+              );
             }
           }}
         >
@@ -220,6 +249,7 @@ export function ReportScreen({
                 <li key={f.reference_id}>
                   <button
                     className="finding"
+                    data-reference-id={f.reference_id}
                     aria-current={
                       f.reference_id === selected?.reference_id
                         ? 'true'
@@ -299,7 +329,11 @@ export function ReportScreen({
           ) : (
             <h2 id="finding-title">No reference selected</h2>
           )}
-          <CoverageSummary coverage={report.coverage} />
+          <CoverageSummary
+            coverage={report.coverage}
+            findings={report.findings}
+            onSelectReference={selectReference}
+          />
           <p className="small">
             Snapshot <code>{report.snapshot_hash}</code>
           </p>
@@ -355,7 +389,39 @@ function FindingInspection({
   );
 }
 
-function CoverageSummary({ coverage }: { coverage: Record<string, unknown> }) {
+function CoverageSummary({
+  coverage,
+  findings,
+  onSelectReference,
+}: {
+  coverage: Record<string, unknown>;
+  findings: FindingView[];
+  onSelectReference: (reference: string) => void;
+}) {
+  const ledger = coverageRegions(coverage);
+  const pageLedger = coveragePages(coverage);
+  const referencesByPage = new Map<string, FindingView>();
+  const referencesByRegion = new Map<string, FindingView>();
+  for (const finding of findings) {
+    if (
+      finding.page_mapping === 'mapped' &&
+      typeof finding.version_id === 'string' &&
+      typeof finding.source_sha256 === 'string' &&
+      typeof finding.pdf_page === 'number'
+    ) {
+      const key = JSON.stringify([
+        finding.version_id,
+        finding.source_sha256,
+        finding.pdf_page,
+      ]);
+      if (!referencesByPage.has(key)) referencesByPage.set(key, finding);
+    }
+    if (
+      typeof finding.region === 'string' &&
+      !referencesByRegion.has(finding.region)
+    )
+      referencesByRegion.set(finding.region, finding);
+  }
   const count = (key: string) =>
     typeof coverage[key] === 'number' &&
     Number.isInteger(coverage[key]) &&
@@ -411,6 +477,118 @@ function CoverageSummary({ coverage }: { coverage: Record<string, unknown> }) {
             ))}
         </ul>
       )}
+      <details>
+        <summary>DOCX region coverage</summary>
+        {ledger.unknown && (
+          <Notice>Region coverage is unavailable or unknown.</Notice>
+        )}
+        {ledger.invalid && (
+          <Notice error>
+            Some region entries could not be displayed safely.
+          </Notice>
+        )}
+        {ledger.limited && (
+          <Notice>Only the first 1,000 region entries are shown.</Notice>
+        )}
+        {ledger.regions.length === 0 ? (
+          <p>
+            No region entries are available. This does not prove complete
+            coverage.
+          </p>
+        ) : (
+          <ul aria-label="DOCX coverage regions">
+            {ledger.regions.map((region, index) => {
+              const reference = referencesByRegion.get(region.part);
+              return (
+                <li key={`${region.part}:${index}`}>
+                  <p>
+                    {region.part} · {region.kind}
+                  </p>
+                  <p>
+                    Status: {region.status} · Reason: {region.reason}
+                  </p>
+                  {reference ? (
+                    <button
+                      type="button"
+                      className="button"
+                      onClick={() => onSelectReference(reference.reference_id)}
+                    >
+                      Open detected reference in this region
+                    </button>
+                  ) : (
+                    <p>
+                      No detected reference is available for navigation in this
+                      region.
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p>
+          Text extraction, visual inspection and editability are separate; a
+          listed region is not a verified finding.
+        </p>
+      </details>
+      <details>
+        <summary>Source-page processing</summary>
+        {pageLedger.unknown && (
+          <Notice>
+            The total source-page count is unavailable or unknown.
+          </Notice>
+        )}
+        {pageLedger.invalid && (
+          <Notice error>
+            Some page entries could not be displayed safely.
+          </Notice>
+        )}
+        {pageLedger.limited && (
+          <Notice>Only the first 1,000 page entries are shown.</Notice>
+        )}
+        {pageLedger.pages.length === 0 ? (
+          <p>No source-page entries are available.</p>
+        ) : (
+          <ul aria-label="Source-page processing ledger">
+            {pageLedger.pages.map((page, index) => {
+              const key = JSON.stringify([
+                page.versionId,
+                page.sha256,
+                page.page,
+              ]);
+              const reference = referencesByPage.get(key);
+              return (
+                <li key={`${key}:${index}`}>
+                  <p>
+                    Source version {page.versionId} · PDF page {page.page}
+                  </p>
+                  <p>
+                    Processing: {page.method} · Reason:{' '}
+                    {page.reason ?? 'Not supplied'}
+                  </p>
+                  {reference ? (
+                    <button
+                      type="button"
+                      className="button"
+                      onClick={() => onSelectReference(reference.reference_id)}
+                    >
+                      Open reference on this source page
+                    </button>
+                  ) : (
+                    <p>
+                      No mapped reference is available for this source page.
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p>
+          Page processing is not proof of source identity, fidelity or human
+          support.
+        </p>
+      </details>
       <details>
         <summary>Machine-readable coverage record</summary>
         <pre>{JSON.stringify(coverage, null, 2)}</pre>

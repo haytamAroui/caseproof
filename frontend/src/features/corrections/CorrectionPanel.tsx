@@ -6,7 +6,7 @@ import { ApiError, parseDossier } from '../../shared/api';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 import { useSession } from '../../shared/session';
 import { CorrectionRecovery } from './CorrectionRecovery';
-import { comparisonCounts } from './comparison';
+import { comparisonCounts, findingReasons } from './comparison';
 
 type Scope = { caseId: string; briefId: string; snapshot: string };
 type Preview = {
@@ -468,6 +468,26 @@ export function CorrectionPanel({
                     Identity: {item.identity} · Page: {item.page_mapping} ·
                     Fidelity: {item.fidelity} · Support: {item.support}
                   </p>
+                  {findingReasons(item).length > 0 && (
+                    <ul
+                      aria-label={`Reasons for ${item.reference_id} in ${label}`}
+                    >
+                      {findingReasons(item).map(([name, reason]) => (
+                        <li key={name}>
+                          {name}: {reason}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <Button
+                    onClick={() =>
+                      navigate(
+                        `/matters/${encodeURIComponent(scope.caseId)}/briefs/${encodeURIComponent(report.brief_id)}?snapshot=${encodeURIComponent(report.snapshot_hash)}&finding=${encodeURIComponent(item.reference_id)}`,
+                      )
+                    }
+                  >
+                    Open {item.reference_id} in {label.toLowerCase()}
+                  </Button>
                 </div>
               ))}
             </section>
