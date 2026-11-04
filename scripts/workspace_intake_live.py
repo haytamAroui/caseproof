@@ -364,6 +364,7 @@ def _exercise() -> None:
                 "textbox", name="Source-bound paragraph"
             ).fill("Reviewed unrelated text")
             editor.get_by_role("button", name="Preview edits").click()
+            print("F5_EDITOR_SIGNED_PREVIEW_SUBMITTED", flush=True)
             receipt = editor.get_by_role(
                 "region", name="Candidate preview receipt"
             )
@@ -376,15 +377,16 @@ def _exercise() -> None:
 
             received = download.value
             if received.failure() is not None:
-                raise RuntimeError("EDITOR_SIGNED_DOWNLOAD_FAILED")
+                raise RuntimeError("F5_EDITOR_SIGNED_DOWNLOAD_FAILED")
             candidate = Path(received.path()).read_bytes()
+            print("F5_EDITOR_SIGNED_BINARY_RECEIVED", flush=True)
             digest = hashlib.sha256(candidate).hexdigest()
             if receipt.locator(".docx-mono").inner_text().strip() != digest:
-                raise RuntimeError("EDITOR_SIGNED_BINARY_RECEIPT_MISMATCH")
+                raise RuntimeError("F5_EDITOR_SIGNED_BINARY_RECEIPT_MISMATCH")
             if Document(io.BytesIO(candidate)).paragraphs[0].text != "Reviewed unrelated text":
-                raise RuntimeError("EDITOR_SIGNED_TEXT_NOT_APPLIED")
+                raise RuntimeError("F5_EDITOR_SIGNED_TEXT_NOT_APPLIED")
             if hashlib.sha256(bundle[0].content).hexdigest() == digest:
-                raise RuntimeError("EDITOR_SIGNED_CANDIDATE_NOT_CHANGED")
+                raise RuntimeError("F5_EDITOR_SIGNED_CANDIDATE_NOT_CHANGED")
             print("DOCX_EDITOR_GENUINE_SIGNED_PREVIEW_BINARY_AND_ORIGINAL_IMMUTABLE_PASSED", flush=True)
             page.goto(editor_origin)
             acceptance.login(page)
