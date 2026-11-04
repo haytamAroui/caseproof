@@ -144,6 +144,27 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30000,'{media}','{role}');
         json.dumps({**values, "candidate_sha256": "d" * 64}),
     ], succeeds=False)
 
+    # A required audit failure must roll back both the version creation and
+    # the actor-scoped edit reservation in the same PostgreSQL transaction.
+    before_versions = _run(
+        f"select count(*) from caseproof.document_versions where org_id='{org}';", env
+    )
+    _run(
+        "create function caseproof.fail_document_reserve_audit() returns trigger"
+        " language plpgsql as $ begin if new.action='dossier_document_edit_reserved'"
+        " then raise exception 'forced edit reserve audit denial'; end if; return new; end $;"
+        "create trigger fail_document_reserve_audit before insert on caseproof.audit_events"
+        " for each row execute function caseproof.fail_document_reserve_audit();",
+        env,
+    )
+    call("caseproof_dossier_document_edit_reserve", reserve_args, succeeds=False)
+    assert _run(
+        f"select count(*) from caseproof.document_versions where org_id='{org}';", env
+    ) == before_versions
+    assert _run(
+        f"select count(*) from caseproof.dossier_draft_revisions where case_id='{case}';", env
+    ) == "0"
+    _run("drop trigger fail_document_reserve_audit on caseproof.audit_events;", env)
     # No invented finding approval is needed: the exact reviewed document
     # command is the independent authority for this new draft reservation.
     reserved = json.loads(call("caseproof_dossier_document_edit_reserve", reserve_args))
