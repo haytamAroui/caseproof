@@ -8,9 +8,10 @@ from zipfile import ZipFile
 
 from docx import Document
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from fastapi.responses import JSONResponse
+from fastapi.testclient import TestClient
 
+from apps.api.access_control import AccessRejected
 from apps.api.docx_editor_api import create_document_editor_router
 
 SNAPSHOT = "a" * 64
@@ -69,8 +70,6 @@ def client() -> tuple[TestClient, Store]:
     store = Store()
     app = FastAPI()
     app.include_router(create_document_editor_router(store))
-    from apps.api.access_control import AccessRejected
-
     app.add_exception_handler(
         AccessRejected,
         lambda _request, _error: JSONResponse(
