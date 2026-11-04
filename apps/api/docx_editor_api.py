@@ -454,8 +454,9 @@ def create_document_editor_router(store: DossierStore | None) -> APIRouter:
         readback = s.client.library.read(**params)
         if len(readback) != len(derivative) or hashlib.sha256(readback).hexdigest() != digest:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        activated = s.revisions.activate(
-            bearer, case_id, body.request_id, digest, len(readback)
+        activated = s.revisions.editor_activate(
+            bearer, case_id, body.request_id, body.review_request_id,
+            digest, len(readback),
         )
         if activated.get("state") != "active" or activated.get("version_id") != reserved["version_id"]:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
