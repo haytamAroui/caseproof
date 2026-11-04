@@ -457,13 +457,11 @@ export function CorrectionPanel({
         onReady={setRecoveryReady}
       />
       <Notice>
-        Only the exact reviewed reference in a plain main-body paragraph or
-        supported top-level table-cell paragraph can be replaced. This is
-        not a general Word editor: textboxes, nested tables and tracked changes
-        still require manual editing in a trusted document host. Replacement
-        text inherits the first affected run's formatting; surrounding text
-        keeps its formatting. Tabs and line breaks are unsupported. A saved
-        human decision is required before committing.
+        Only the exact reference in a supported DOCX paragraph can be replaced.
+        Replacement text inherits the formatting of the first affected run;
+        surrounding text keeps its formatting. Tabs and line breaks are not
+        supported in a replacement. Commit requires your own saved human
+        decision in the current snapshot.
       </Notice>
       {!reviewReady && (
         <Notice error>
@@ -484,13 +482,6 @@ export function CorrectionPanel({
         <Notice error>
           The reference cannot be safely located for correction.
         </Notice>
-      )}
-      {anchor.data && (
-        <p className="small" role="status">
-          {anchor.data.paragraph_index >= 50_000
-            ? 'Source-bound table-cell reference'
-            : 'Source-bound body-paragraph reference'}
-        </p>
       )}
       <fieldset disabled={busy || Boolean(command)}>
         <label>
