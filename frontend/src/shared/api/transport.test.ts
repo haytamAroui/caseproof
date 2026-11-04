@@ -227,3 +227,100 @@ describe('cancelled matter reads', () => {
     expect(s.getSnapshot().connected).toBe(true);
   });
 });
+
+describe('signed DOCX candidate transport', () => {
+  const snapshot = 'a'.repeat(64);
+  const original = 'b'.repeat(64);
+  const path =
+    '/v2/matters/case/briefs/brief/dossier/editor/candidate';
+
+  it('downloads only a SHA-bound, snapshot-bound binary candidate', async () => {
+    const bytes = new TextEncoder().encode('PK safe derivative');
+    const hash = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+      (b) => b.toString(16).padStart(2, '0'),
+    ).join('');
+    const send = vi.fn<typeof fetch>(
+      async () =>
+        new Response(new Blob([new Uint8Array(bytes)]), {
+          headers: {
+            'Content-Type':
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'X-CaseProof-Snapshot': snapshot,
+            'X-CaseProof-Original-SHA256': original,
+            'X-CaseProof-Edit-Candidate-SHA256': hash,
+          },
+        }),
+    );
+    const api = new ApiClient(session(), send);
+    const command = { snapshot_hash: snapshot, original_sha256: original };
+    const result = await api.editorCandidate(
+      path,
+      command,
+      { sha256: hash, byte_length: bytes.length },
+      new AbortController().signal,
+    );
+    expect(Array.from(result)).toEqual(Array.from(bytes));
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[1]).toMatchObject({
+      method: 'POST',
+      credentials: 'omit',
+      cache: 'no-store',
+      redirect: 'error',
+      headers: {
+        'If-Match': `snapshot_id:${snapshot}`,
+      },
+    });
+  });
+
+  it('rejects non-matching candidate digest, bytes, and external paths', async () => {
+    const bytes = new TextEncoder().encode('PK untrusted bytes');
+    const send = vi.fn<typeof fetch>(
+      async () =>
+        new Response(new Blob([new Uint8Array(bytes)]), {
+          headers: {
+            'Content-Type':
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'X-CaseProof-Snapshot': snapshot,
+            'X-CaseProof-Original-SHA256': original,
+            'X-CaseProof-Edit-Candidate-SHA256': 'c'.repeat(64),
+          },
+        }),
+    );
+    const api = new ApiClient(session(), send);
+    const command = { snapshot_hash: snapshot, original_sha256: original };
+    await expect(
+      api.editorCandidate(
+        path,
+        command,
+        { sha256: 'c'.repeat(64), byte_length: bytes.length },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      api.editorCandidate(
+        '/v2/matters/case/briefs/brief/dossier/corrections/commit',
+        command,
+        { sha256: 'c'.repeat(64), byte_length: bytes.length },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it.each([403, 404])('does not sign out report readers on editor denial %s', async (status) => {
+    const s = session();
+    const clear = vi.fn();
+    s.onClear(clear);
+    const send = vi.fn<typeof fetch>(
+      async () => new Response(null, { status }),
+    );
+    await expect(
+      new ApiClient(s, send).get(
+        `/v2/matters/case/briefs/brief/dossier/editor/blocks?snapshot_hash=${snapshot}`,
+      ),
+    ).rejects.toThrow();
+    expect(clear).not.toHaveBeenCalled();
+    expect(s.getSnapshot().connected).toBe(true);
+  });
+});
