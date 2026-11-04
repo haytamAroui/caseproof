@@ -149,7 +149,7 @@ def main():
         pdf = buffer.getvalue()
         path = out / (name + ".pdf")
         path.write_bytes(pdf)
-        crop = [100, 150, 500, 700] if cropped else [0, 0, 600, 800]
+        crop = [100, 150, 500, 700] if cropped or name == "mixed_crop" else [0, 0, 600, 800]
         row = {
             "name": name,
             "sha256": hashlib.sha256(pdf).hexdigest(),
