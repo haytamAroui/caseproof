@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { ApiClient } from '../../shared/api';
 import { useSession } from '../../shared/session';
 import { Notice } from '../../shared/ui';
@@ -171,6 +171,7 @@ const revisionKey = (r: { part: string; revision_id: number }) =>
 
 export function DocxEditor({ api }: { api: ApiClient }) {
   const { caseId = '', briefId = '' } = useParams();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const snapshot = params.get('snapshot') ?? '';
   const session = useSession();
@@ -183,6 +184,12 @@ export function DocxEditor({ api }: { api: ApiClient }) {
   const [prepared, setPrepared] = useState<{ command: Command; receipt: Preview } | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [rationale, setRationale] = useState('');
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [reviewSaved, setReviewSaved] = useState(false);
+  const [commitId, setCommitId] = useState<string | null>(null);
+  const [commitUnknown, setCommitUnknown] = useState(false);
+  const [committedVersion, setCommittedVersion] = useState<string | null>(null);
   const request = useRef<AbortController | null>(null);
 
   useEffect(
@@ -237,7 +244,15 @@ export function DocxEditor({ api }: { api: ApiClient }) {
     ((changed.length > 0 && changed.length <= 40) ||
       (selectedRevisions.length > 0 && selectedRevisions.length <= 40));
 
+  function clearApproval() {
+    setReviewId(null);
+    setReviewSaved(false);
+    setCommitId(null);
+    setCommitUnknown(false);
+    setCommittedVersion(null);
+  }
   function setBlock(block: Block, after: string) {
+    clearApproval();
     setPrepared(null);
     setNotice('');
     setEdits((previous) => {
@@ -257,6 +272,7 @@ export function DocxEditor({ api }: { api: ApiClient }) {
     });
   }
   function setRevision(revision: Revision, action: '' | 'accept' | 'reject') {
+    clearApproval();
     setPrepared(null);
     setDecisions((previous) => {
       const next = { ...previous };
@@ -271,6 +287,7 @@ export function DocxEditor({ api }: { api: ApiClient }) {
     if (!ready || !source.data) return;
     setBusy(true);
     setPrepared(null);
+    clearApproval();
     setNotice('');
     const command: Command = {
       snapshot_hash: snapshot,
@@ -351,6 +368,7 @@ export function DocxEditor({ api }: { api: ApiClient }) {
             checked={tracking}
             onChange={(event) => {
               setTracking(event.target.checked);
+              clearApproval();
               setPrepared(null);
               setEdits((old) =>
                 Object.fromEntries(Object.entries(old).map(([key, edit]) => [
@@ -373,6 +391,7 @@ export function DocxEditor({ api }: { api: ApiClient }) {
             setEdits({});
             setDecisions({});
             setPrepared(null);
+            clearApproval();
             setNotice('Unsaved local changes discarded.');
           }}
         >
