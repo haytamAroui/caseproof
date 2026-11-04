@@ -98,7 +98,10 @@ def _server_stop(proc: subprocess.Popen[bytes] | None) -> None:
 
 def _request(
     token: str, method: str, path: str, payload: dict[str, Any] | None = None,
+    *, max_response_bytes: int = 32768,
 ) -> tuple[int, dict[str, Any]]:
+    if not 0 < max_response_bytes <= 2 * 1024 * 1024:
+        raise ValueError("invalid live response limit")
     headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
     if method == "POST" and payload and "/dossier/" in path:
         if path.endswith(("/reviews", "/corrections/preview", "/corrections/commit")):
@@ -114,10 +117,10 @@ def _request(
         )
         response = con.getresponse()
         status = response.status
-        raw = response.read(32769)
+        raw = response.read(max_response_bytes + 1)
     finally:
         con.close()
-    if len(raw) > 32768:
+    if len(raw) > max_response_bytes:
         raise LiveFixtureError("oversized live review response")
     try:
         obj = json.loads(raw)

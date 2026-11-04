@@ -197,7 +197,7 @@ def main(*, retention_check=None):
         base = f"/v2/matters/{case}/briefs/{draft_version}/verification"
         tracemalloc.start()
         start = time.perf_counter()
-        status, discovered = _request(owner, "GET", base + "/discovery")
+        status, discovered = _request(owner, "GET", base + "/discovery", max_response_bytes=2 * 1024 * 1024)
         elapsed_ms = (time.perf_counter() - start) * 1000
         _, peak_bytes = tracemalloc.get_traced_memory()
         tracemalloc.stop()
@@ -293,7 +293,7 @@ def main(*, retention_check=None):
         if status != 200 or not png.startswith(bytes.fromhex("89504e470d0a1a0a")):
             raise RuntimeError(f"P3_COLD_RESTART_CROP_FAILED: {status}")
         print("P3_RESTART_RELOGIN_CROP_PNG: 200", flush=True)
-        status, exported = _request(fresh, "GET", base + "/export")
+        status, exported = _request(fresh, "GET", base + "/export", max_response_bytes=2 * 1024 * 1024)
         if status != 200 or not any(
             d.get("request_id") == review_id and d.get("decision") == "CONFIRMED_SUPPORTED"
             for d in exported.get("human_decisions", [])
@@ -335,7 +335,7 @@ def main(*, retention_check=None):
         if status not in (403, 404) or body.startswith(bytes.fromhex("89504e47")):
             raise RuntimeError(f"P3_REVOKED_CROP_NOT_DENIED: {status}")
         print("P3_REVOKED_CROP_DENIED", flush=True)
-        revoked_status, _ = _request(fresh, "GET", base + "/export")
+        revoked_status, _ = _request(fresh, "GET", base + "/export", max_response_bytes=2 * 1024 * 1024)
         if revoked_status not in (403, 404):
             raise RuntimeError(f"M5_REVOKED_EXPORT_NOT_DENIED:{revoked_status}")
         print("M5_REVOCATION_EXPORT_PASSED", flush=True)
