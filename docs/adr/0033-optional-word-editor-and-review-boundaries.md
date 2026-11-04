@@ -1,0 +1,39 @@
+# ADR 0033 — DOCX-rich editing as a separate optional capability (PROPOSED)
+
+**Date:** 4 November 2026. **Status:** PROPOSED — not an accepted release, change of product positioning, or authorization to deploy. **Decision owner:** unassigned. This proposal responds to the owner's request to extend supported corrections to ordinary paragraphs, tables, textboxes, native Word tracked changes and a Word-style editing interface.
+
+## Context and boundary
+
+CaseProof is an independent source verifier, not Microsoft Word. Existing F5 actions require an exact detected finding, source version, saved review receipt and canonical recheck. A general editor cannot borrow finding-specific authorization for unrelated text or modify frozen exhibits. Changing a DOCX does not approve its citations. Preserve the immutable source, separate derivative version, original/derivative SHA-256, actor/organization/matter, current snapshot and review provenance.
+
+## Split the deliverables instead of claiming parity
+
+1. **DOCX-native engine (this PR, experimental):** an offline/infrastructure kernel that identifies plain paragraphs in main document, top-level and nested table cells, supported textbox stories, headers/footers and note stories. It can replace the *complete plain-text content of an editable paragraph*, emit true OOXML `w:ins`/`w:del` revisions, and accept/reject supported textual revision IDs. It does not collapse or delete unknown structural descendants to create a false 'successful edit'. Other package members remain unchanged.
+2. **Existing verified F5 (unchanged):** finding-bound citation edits, durable signed activation and recheck; the OOXML engine is **not** wired as an alternate route to bypass actor-scoped, reference-scoped PostgreSQL reservation.
+3. **Full browser Word-style UI (NOT IMPLEMENTED):** requires a supported embedded editor with source input/output, faithful rendering, capability isolation, accessibility and safety. A visual imitation made from `contentEditable` is insufficient.
+4. **Office host (available external workflow, NOT integrated):** Microsoft Word can author paragraph/table/textbox edits and revisions but CaseProof still requires a separate reviewed derivative import/activation bridge. A downloaded copy is not an accepted CaseProof version.
+
+## Engine correctness contract
+
+- All edits bind to an expected SHA-256 of *the exact complete source DOCX* and expected SHA-256 + exact text of each selected paragraph. Duplicate, invalid, stale or unsupported targets refuse.
+- Plain text paragraph replacements preserve source document paragraph properties and first-run style, not every old mixed-run style. Explicitly report that limitation.
+- Suggesting mode generates actual `w:del` with `w:delText` and `w:ins` with author/UTC timestamp; unsupported existing revision structures are not silently normalized. Accept/reject operates on exact part/revision IDs and refuses nested/complex revisions.
+- Original input bytes never mutate; output is a separate ZIP archive; all unaffected package-part *uncompressed bytes* remain equal. Package must re-pass existing security preflight and XML safety limits.
+- No server-side storage, browser editor, review approval, recheck, retention, provenance or historical read acceptance is created by these functions. The local CLI emits *candidate* files only.
+- Host-generated timestamps in signed persisted edits must be bound to the durable operation fingerprint, never regenerated on a blind retry.
+
+## Editor engine options and licensing (4 November 2026)
+
+- **SuperDoc v2:** DOCX-native browser editor, tracked changes/comments; public AGPLv3 or a separate commercial license. No AGPL dependency may be merged under current CaseProof distribution rules without an owner/legal choice. [Editor documentation](https://docs.superdoc.dev/editor/) · [License](https://docs.superdoc.dev/resources/license/).
+- **OpenDoc / CasualOffice:** Apache-2.0, supports Word-style toolbar, tables, textboxes and revision modes, but the public embedded host contract still lacks `open(bytes)` and host-visible DOCX export. Published SDK is pre-release; a host cannot supply the authenticated preserved CaseProof draft. It must not be marketed as a fully integrated CaseProof editor yet. [Project](https://github.com/CasualOffice/opendoc) · [Embedding contract](https://opendoc.casualoffice.org/embedding.html).
+- **Native Office host:** desktop Word provides its own license, UI and revision mode. CaseProof does not assert host custody or Office Word file compatibility without actual tests.
+
+## Required work before general editing can be activated
+
+- Owner must approve product expansion relative to ADR 0018/0019 and the frontend blueprint; record choice of editor engine, licence, ongoing security owner, accessibility and 3–5 practitioner observations.
+- Introduce a **new document-scoped** signed review/approval contract; do not forge a reference ID or bypass the existing reference-scoped SQL predicate. Design PostgreSQL RLS/RPC transaction, tenant isolation, audit failure rollback, idempotency, unknown-outcome, revocation and cold reopen, then obtain independent security review.
+- Add loss-aware host import/export with canonical DOCX re-validation, compatibility/omission reports, styling/regression corpus, backed-up source and derived hashes. Verify authored tracked revisions in desktop Microsoft Word and LibreOffice. All uncovered structures explicitly abstain.
+- Implement generated Pydantic → JSON Schema → TypeScript/AJV contracts, React editing session cleanup, browser permission/abort lifecycle and a truly working embedded editing host. No browser data in URLs/logs/persistent storage.
+- Genuine signed full-document editing → source-bound preview → reviewed activation → mandatory recheck → history and revoked denial; zero residual fixtures and manual WCAG 2.2 AA testing.
+
+**Rollback:** remove experimental module/CLI and tests; existing F5 remains unchanged. Never migrate or deploy new document-editing privileges merely to satisfy a demo.
