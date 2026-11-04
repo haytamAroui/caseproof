@@ -1,4 +1,4 @@
-"""Resolve a report reference to a supported, exact main-body DOCX paragraph."""
+"""Resolve a report reference to an exact editable body or table-cell paragraph."""
 from __future__ import annotations
 
 import hashlib
@@ -9,6 +9,7 @@ from zipfile import ZipFile
 
 from defusedxml import ElementTree as SafeXML  # type: ignore[import-untyped]
 
+from infrastructure.parsers.docx_edit_targets import editable_indices, select_editable_paragraph
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 
 _NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -17,9 +18,9 @@ _NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
     """Return a paragraph index only when extraction and editable XML agree.
 
-    The editor accepts plain text runs in a direct body paragraph. Other
-    paragraphs and tables may coexist only when the extracted body is mapped
-    exactly; unsupported target structures and tracked changes still abstain.
+    Supported targets are plain text runs in a direct body paragraph or simple
+    top-level table cell. The extracted body must match exactly; unsupported
+    target structures, nested tables and tracked changes still abstain.
     """
     literal, offsets = finding.get('literal'), finding.get('offsets')
     locator = finding.get('locator_identity')
@@ -52,8 +53,7 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
     body = elements(bodies[0])
     if any(n.namespaceURI != _NS or n.localName not in {'p', 'tbl', 'sectPr'} for n in body):
         raise ValueError('unsupported body structure')
-    direct = [n for n in body if n.namespaceURI == _NS and n.localName == 'p']
-    direct_indices = {id(node): index for index, node in enumerate(direct)}
+    target_indices = editable_indices(document)
     pieces: list[str] = []
     spans: list[tuple[Any, int | None, int, int]] = []
     cursor = 0
@@ -75,7 +75,7 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
         if pieces:
             cursor += 1
         pieces.append(value)
-        spans.append((paragraph, direct_indices.get(id(paragraph)), cursor, cursor + len(value)))
+        spans.append((paragraph, target_indices.get(id(paragraph)), cursor, cursor + len(value)))
         cursor += len(value)
     if '\n'.join(pieces) != region:
         raise ValueError('unmapped document text')
@@ -85,7 +85,7 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
         raise ValueError('reference crosses paragraph')
     paragraph, index, left, right = matches[0]
     if index is None:
-        raise ValueError('target is not a direct body paragraph')
+        raise ValueError('target is not an editable body or simple table-cell paragraph')
     children = elements(paragraph)
     runs = [n for n in children if n.namespaceURI == _NS and n.localName == 'r']
     if not runs or any(n.namespaceURI != _NS or n.localName not in {'pPr', 'r'} for n in children):
@@ -131,10 +131,17 @@ def correction_anchor(original: bytes, finding: dict[str, Any]) -> int:
 
 def bound_locator(original: bytes, finding: dict[str, Any], source_version_id: str) -> dict[str, Any]:
     """Identity extracted from the source bytes and its already validated target."""
-    from docx import Document
     index = correction_anchor(original, finding)
-    paragraph = Document(io.BytesIO(original)).paragraphs[index]
-    content = paragraph.text
+    with ZipFile(io.BytesIO(original)) as archive:
+        xml = archive.read('word/document.xml')
+    SafeXML.fromstring(xml, forbid_dtd=True, forbid_entities=True, forbid_external=True)
+    document = minidom.parseString(xml)
+    paragraph = select_editable_paragraph(document, index)
+    content = ''.join(
+        child.data
+        for text in paragraph.getElementsByTagNameNS(_NS, 't')
+        for child in text.childNodes if child.nodeType == child.TEXT_NODE
+    )
     literal = finding['literal']
     at = content.find(literal)
     if at < 0 or content.find(literal, at + 1) >= 0:
@@ -143,5 +150,5 @@ def bound_locator(original: bytes, finding: dict[str, Any], source_version_id: s
     return {'exact_text': literal, 'prefix': content[max(0, at - 4000):at],
             'suffix': content[at + len(literal):at + len(literal) + 4000], 'occurrence_index': 0,
             'content_hash': hashlib.sha256(content.encode()).hexdigest(),
-            'paragraph_id': paragraph._p.get(f'{{{para_ns}}}paraId'),
+            'paragraph_id': paragraph.getAttributeNS(para_ns, 'paraId') or None,
             'source_version_id': source_version_id}
