@@ -129,6 +129,113 @@ export class ApiClient {
       { snapshot: command.snapshot_hash },
     )) as Uint8Array;
   }
+  async nativeWordUpload(
+    path: string,
+    binding: {
+      snapshot_hash: string;
+      original_sha256: string;
+      candidate_sha256: string;
+      byte_length: number;
+    },
+    bytes: Uint8Array,
+    signal: AbortSignal,
+    mutation?: { requestId: string; reviewId: string },
+  ): Promise<unknown> {
+    if (
+      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/editor\/native\/(preview|commit)$/.test(path) ||
+      path.includes('://') ||
+      /[\\\r\n?#]/.test(path) ||
+      (mutation !== undefined && !path.endsWith('/commit')) ||
+      (!mutation && !path.endsWith('/preview')) ||
+      !/^[0-9a-f]{64}$/.test(binding.snapshot_hash) ||
+      !/^[0-9a-f]{64}$/.test(binding.original_sha256) ||
+      !/^[0-9a-f]{64}$/.test(binding.candidate_sha256) ||
+      binding.candidate_sha256 === binding.original_sha256 ||
+      !Number.isInteger(binding.byte_length) ||
+      binding.byte_length !== bytes.byteLength ||
+      bytes.byteLength < 1 ||
+      bytes.byteLength > 5_242_880 ||
+      (mutation !== undefined &&
+        (!/^[0-9a-f-]{36}$/.test(mutation.requestId) ||
+          !/^[0-9a-f-]{36}$/.test(mutation.reviewId)))
+    )
+      throw new ApiError(422);
+
+    const ownDigest = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+      (b) => b.toString(16).padStart(2, '0'),
+    ).join('');
+    if (ownDigest !== binding.candidate_sha256) throw new ApiError(422);
+
+    const epoch = this.session.getSnapshot().epoch;
+    const { controller, release } = this.session.requestController();
+    const combined = AbortSignal.any([
+      signal, controller.signal, AbortSignal.timeout(180000),
+    ]);
+    try {
+      const token = await this.session.bearer(epoch);
+      this.session.assert(epoch);
+      combined.throwIfAborted();
+      const response = await this.send(path, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'If-Match': `snapshot_id:${binding.snapshot_hash}`,
+          'X-CaseProof-Snapshot-Hash': binding.snapshot_hash,
+          'X-CaseProof-Original-SHA256': binding.original_sha256,
+          'X-CaseProof-Candidate-SHA256': binding.candidate_sha256,
+          'X-CaseProof-Byte-Length': String(binding.byte_length),
+          ...(mutation
+            ? {
+                'Idempotency-Key': mutation.requestId,
+                'X-CaseProof-Review-Request-ID': mutation.reviewId,
+              }
+            : {}),
+        },
+        body: new Uint8Array(bytes),
+        signal: combined,
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'error',
+        referrerPolicy: 'no-referrer',
+      });
+      this.session.assert(epoch);
+      combined.throwIfAborted();
+      if (!response.ok) {
+        if (response.status === 401) this.session.clear();
+        throw new ApiError(response.status);
+      }
+      if (!response.headers.get('content-type')?.includes('application/json') ||
+          !response.body) throw new ApiError(502);
+      const reader = response.body.getReader();
+      let size = 0;
+      const chunks: Uint8Array[] = [];
+      try {
+        while (true) {
+          const next = await reader.read();
+          this.session.assert(epoch);
+          combined.throwIfAborted();
+          if (next.done) break;
+          size += next.value.byteLength;
+          if (size > 20000) throw new ApiError(502);
+          chunks.push(next.value);
+        }
+      } catch (error) {
+        await reader.cancel();
+        throw error;
+      } finally {
+        reader.releaseLock();
+      }
+      const result = new Uint8Array(size);
+      let cursor = 0;
+      for (const chunk of chunks) { result.set(chunk, cursor); cursor += chunk.length; }
+      this.session.assert(epoch);
+      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(result)) as unknown;
+    } finally {
+      release();
+    }
+  }
   private async read(
     path: string,
     signal?: AbortSignal,

@@ -170,6 +170,7 @@ def create_document_editor_router(store: DossierStore | None) -> APIRouter:
             "brief_version_id": brief_id,
             "snapshot_hash": snapshot_hash,
             "original_sha256": hashlib.sha256(original).hexdigest(),
+            "original_byte_length": len(original),
             "total": len(blocks),
             "offset": offset,
             "has_more": offset + limit < len(blocks),

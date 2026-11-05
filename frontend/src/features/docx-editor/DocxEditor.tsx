@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { ApiClient } from '../../shared/api';
 import { useSession } from '../../shared/session';
 import { Notice } from '../../shared/ui';
+import { NativeWordHandoff } from './NativeWordHandoff';
 import './DocxEditor.css';
 
 type Block = {
@@ -16,6 +17,7 @@ type Block = {
 };
 type Blocks = {
   original_sha256: string;
+  original_byte_length: number;
   snapshot_hash: string;
   total: number;
   editable_count: number;
@@ -75,6 +77,10 @@ function parseBlocks(
     v.snapshot_hash !== scope.snapshot ||
     typeof v.original_sha256 !== 'string' ||
     !sha.test(v.original_sha256) ||
+    typeof v.original_byte_length !== 'number' ||
+    !Number.isInteger(v.original_byte_length) ||
+    v.original_byte_length < 1 ||
+    v.original_byte_length > 5_242_880 ||
     !Number.isInteger(v.total) ||
     !Number.isInteger(v.editable_count) ||
     typeof v.has_more !== 'boolean' ||
@@ -107,6 +113,7 @@ function parseBlocks(
   });
   return {
     original_sha256: v.original_sha256,
+    original_byte_length: v.original_byte_length as number,
     snapshot_hash: v.snapshot_hash as string,
     total: v.total as number,
     editable_count: v.editable_count as number,
@@ -651,6 +658,21 @@ export function DocxEditor({ api }: { api: ApiClient }) {
           {notice}
         </p>
       )}
+      <NativeWordHandoff
+        api={api}
+        caseId={caseId}
+        briefId={briefId}
+        snapshot={snapshot}
+        originalSha256={source.data.original_sha256}
+        originalByteLength={source.data.original_byte_length}
+        onActivated={(version) => {
+          setCommittedVersion(version);
+          setPrepared(null);
+          setEdits({});
+          setDecisions({});
+          setNotice('Word-authored draft activated. Run a fresh recheck before reviewing.');
+        }}
+      />
       <div className="docx-editor-layout">
         <aside className="docx-editor-sidebar" aria-label="Document summary">
           <h2>Source identity</h2>
