@@ -456,9 +456,13 @@ def _exercise() -> None:
             # Renumbering to Stuk 2 would deliberately make its identity
             # unconfirmed, and the reviewer must abstain rather than fabricate
             # visual inspection of a non-existent source page.
+            keep_verified_exhibit = (
+                os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"
+                or os.getenv("CASEPROOF_DOCX_DOCUMENT_WIDE_LIVE") == "YES"
+            )
             replacement = (
                 before.replace("1", "1 ", 1)
-                if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"
+                if keep_verified_exhibit
                 else before.replace("1", "2", 1)
             )
             if replacement == before:
