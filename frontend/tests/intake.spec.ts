@@ -442,7 +442,6 @@ test('Roman printed page and detector miss remain review-needed after durable co
   });
 });
 
-
 test('oversized inventory is refused before any browser write', async ({
   page,
 }) => {
@@ -450,13 +449,10 @@ test('oversized inventory is refused before any browser write', async ({
   await page.route('**/intake/matters/' + caseId, (route) =>
     route.fulfill({ json: intake(false) }),
   );
-  await page.route(
-    '**/intake/matters/' + caseId + '/reservations',
-    (route) => {
-      writes++;
-      return route.fulfill({ json: intake(false) });
-    },
-  );
+  await page.route('**/intake/matters/' + caseId + '/reservations', (route) => {
+    writes++;
+    return route.fulfill({ json: intake(false) });
+  });
   await page.route('**/intake/matters/' + caseId + '/sources', (route) => {
     writes++;
     return route.fulfill({ json: intake() });
