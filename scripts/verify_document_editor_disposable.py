@@ -132,6 +132,10 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30000,'{media}','{role}');
     reviewed = json.loads(call("caseproof_dossier_document_edit_review", review_args))
     assert reviewed["review_request_id"] == review_id and reviewed["state"] == "reviewed"
     assert json.loads(call("caseproof_dossier_document_edit_review", review_args))["replayed"] is True
+    assert json.loads(call(
+        "caseproof_dossier_document_edit_status",
+        [case, request_id, review_id, command_sha],
+    ))["state"] == "absent"
     call("caseproof_dossier_document_edit_review", [
         case, versions[0], snapshot, review_id,
         json.dumps({**review, "candidate_sha256": "e" * 64}),
@@ -169,6 +173,10 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30000,'{media}','{role}');
     # command is the independent authority for this new draft reservation.
     reserved = json.loads(call("caseproof_dossier_document_edit_reserve", reserve_args))
     assert reserved["state"] == "reserved"
+    assert json.loads(call(
+        "caseproof_dossier_document_edit_status",
+        [case, request_id, review_id, command_sha],
+    ))["state"] == "reserved"
     assert reserved["reference_id"] == "doc-edit:" + review_id
     assert reserved["original_sha256"] == candidate_sha
     assert json.loads(call("caseproof_dossier_document_edit_reserve", reserve_args))["replayed"] is True
@@ -208,9 +216,18 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30000,'{media}','{role}');
     changed = json.loads(call("caseproof_dossier", [case, "context", "{}"]))
     assert changed["bundle_signature"] != context["bundle_signature"]
     assert changed["confirmation"] is None
+    assert json.loads(call(
+        "caseproof_dossier_document_edit_status",
+        [case, request_id, review_id, command_sha],
+    ))["state"] == "active"
     # Revocation prevents further status, review and document-reservation use.
     _run(
         f"update caseproof._m1_matter_grants set active=false where case_id='{case}';", env
+    )
+    call(
+        "caseproof_dossier_document_edit_status",
+        [case, request_id, review_id, command_sha],
+        succeeds=False,
     )
     call("caseproof_dossier_document_edit_review", review_args, succeeds=False)
     call("caseproof_dossier_document_edit_reserve", reserve_args, succeeds=False)
