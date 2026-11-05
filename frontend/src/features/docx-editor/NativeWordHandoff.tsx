@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { useNavigate } from 'react-router';
 import type { ApiClient } from '../../shared/api';
 
 const SHA = /^[0-9a-f]{64}$/;
@@ -70,6 +71,7 @@ export function NativeWordHandoff({
   originalByteLength,
   onActivated,
 }: Props) {
+  const navigate = useNavigate();
   const [selectedName, setSelectedName] = useState('');
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [binding, setBinding] = useState<Binding | null>(null);
@@ -372,6 +374,33 @@ export function NativeWordHandoff({
     }
   }
 
+  async function recheckActivatedWordDraft() {
+    if (!activeVersion || busy) return;
+    setBusy(true);
+    setStatus('Rechecking the activated DOCX; prior decisions remain stale…');
+    try {
+      const report = record(
+        await api.post(
+          `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(activeVersion)}/dossier/recheck`,
+          {},
+        ),
+      );
+      if (
+        report.case_id !== caseId ||
+        report.brief_id !== activeVersion ||
+        typeof report.snapshot_hash !== 'string' ||
+        !SHA.test(report.snapshot_hash)
+      ) throw Error('Recheck did not bind to the activated draft.');
+      void navigate(
+        `/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(activeVersion)}?snapshot=${report.snapshot_hash}`,
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Recheck unavailable.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section
       className="docx-word-handoff"
@@ -477,6 +506,14 @@ export function NativeWordHandoff({
               Document-wide approval saved. The candidate has not been activated
               until the commit succeeds.
             </p>
+          )}
+          {activeVersion && (
+            <button
+              disabled={busy}
+              onClick={() => void recheckActivatedWordDraft()}
+            >
+              6. Recheck activated draft
+            </button>
           )}
           {activeVersion && (
             <p className="docx-mono">
