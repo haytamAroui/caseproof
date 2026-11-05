@@ -538,18 +538,20 @@ function FindingInspection({
 }) {
   const [inspected, setInspected] = useState(false);
   return (
-    <>
-      {renderDraft?.(finding, historical)}
-      {renderSource ? (
-        renderSource(finding, historical, () => setInspected(true))
-      ) : (
-        <Notice error>
-          Preserved source viewer unavailable. No human source inspection may be
-          recorded.
-        </Notice>
-      )}
-      {renderReview?.(finding, historical, inspected, onNext)}
-    </>
+    <div className="cockpit-inspection">
+      <div className="cockpit-draft">{renderDraft?.(finding, historical)}</div>
+      <div className="cockpit-evidence">
+        {renderSource ? (
+          renderSource(finding, historical, () => setInspected(true))
+        ) : (
+          <Notice error>
+            Preserved source viewer unavailable. No human source inspection may
+            be recorded.
+          </Notice>
+        )}
+        {renderReview?.(finding, historical, inspected, onNext)}
+      </div>
+    </div>
   );
 }
 

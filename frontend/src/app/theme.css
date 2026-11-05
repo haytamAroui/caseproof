@@ -6,16 +6,16 @@
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #172d38;
-  background: #f4f7f9;
-  --ink: #172d38;
-  --muted: #435e6b;
-  --accent: #103a4b;
+  color: #16181d;
+  background: #f6f6f3;
+  --ink: #16181d;
+  --muted: #555b69;
+  --accent: #16181d;
   --surface: #fff;
-  --line: #c7d4db;
-  --danger: #9a2727;
+  --line: #dcddd6;
+  --danger: #a61b1b;
   --focus: #126a9b;
-  scrollbar-color: var(--muted) #f4f7f9;
+  scrollbar-color: var(--muted) #f6f6f3;
   scrollbar-width: auto;
   font-synthesis: none;
 }
@@ -51,7 +51,7 @@ summary:focus-visible {
 }
 input {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 10px;
   width: 100%;
   min-height: 44px;
@@ -143,19 +143,19 @@ h3 {
   overflow-wrap: anywhere;
 }
 .matter-list a:hover {
-  background: #eaf1f5;
+  background: #edede8;
 }
 .button {
   min-height: 44px;
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--accent);
   color: #fff;
   padding: 8px 18px;
   font-weight: 600;
 }
 .button:hover {
-  background: #205365;
+  background: #363a43;
 }
 .button:disabled {
   opacity: 0.55;
@@ -164,7 +164,7 @@ h3 {
   padding: 14px 18px;
   border: 1px solid #b8cbd6;
   border-left: 4px solid var(--accent);
-  background: #eaf1f5;
+  background: #edede8;
   overflow-wrap: anywhere;
 }
 .notice.error {
@@ -174,7 +174,7 @@ h3 {
 }
 .review-layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   border: 1px solid var(--line);
   background: var(--surface);
   margin-top: 24px;
@@ -203,7 +203,7 @@ h3 {
   width: 100%;
   padding: 14px;
   color: var(--ink);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow-wrap: anywhere;
 }
 .finding small {
@@ -211,10 +211,10 @@ h3 {
   color: var(--muted);
 }
 .finding:hover {
-  background: #f1f5f7;
+  background: #f6f6f3;
 }
 .finding[aria-current='true'] {
-  background: #eaf1f5;
+  background: #edede8;
   border-color: var(--accent);
 }
 .inspection {
@@ -229,7 +229,7 @@ h3 {
 .dimension {
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
 }
 .dimension dt {
   font-size: 12px;
@@ -284,11 +284,11 @@ footer {
   height: 12px;
 }
 ::-webkit-scrollbar-track {
-  background: #f4f7f9;
+  background: #f6f6f3;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--muted);
-  border: 3px solid #f4f7f9;
+  border: 3px solid #f6f6f3;
   border-radius: 8px;
 }
 @media (max-width: 760px) {
@@ -410,7 +410,7 @@ select {
   min-height: 44px;
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
 }
@@ -456,13 +456,13 @@ dialog {
   max-height: calc(100vh - 32px);
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 24px;
   background: var(--surface);
   color: var(--ink);
 }
 dialog::backdrop {
-  background: #172d3880;
+  background: #16181d80;
 }
 
 /* F4 evidence-first panels; no decision colors or inferred machine verdicts. */
@@ -496,7 +496,7 @@ dialog::backdrop {
 .review-panel textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 10px;
   font: inherit;
   color: var(--ink);
@@ -513,4 +513,32 @@ dialog::backdrop {
   background: #e2edf6;
   color: var(--ink);
   font-weight: bold;
+}
+
+/* Independent draft and source reading panes. */
+.cockpit-inspection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  gap: 20px;
+  align-items: start;
+}
+.cockpit-draft,
+.cockpit-evidence {
+  min-width: 0;
+}
+.cockpit-draft .draft-context {
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.75;
+}
+.queue .finding {
+  border-color: var(--line);
+  margin-bottom: 8px;
+}
+.review-layout {
+  border-radius: 12px;
+}
+@media (max-width: 1100px) {
+  .cockpit-inspection {
+    grid-template-columns: 1fr;
+  }
 }
