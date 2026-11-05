@@ -223,7 +223,22 @@ def export_one(
     acceptance.login(page)
     expect(page.get_by_role("heading", name="Reviewed exports and history")).to_be_visible(timeout=90000)
     expect(page.get_by_role("heading", name="Preview release scope")).to_be_visible(timeout=90000)
-    expect(page.get_by_role("button", name="Create frozen reviewed release")).to_be_enabled(timeout=90000)
+    complete_button = page.get_by_role("button", name="Create frozen reviewed release")
+    partial_button = page.get_by_role("button", name="Create explicitly partial reviewed release")
+    if complete_button.count() == 1:
+        expect(complete_button).to_be_enabled(timeout=90000)
+        release_type = "complete_review"
+        action = complete_button
+    elif partial_button.count() == 1:
+        acknowledge = page.get_by_label("I acknowledge this release is partial and some detected findings remain unreviewed.")
+        expect(acknowledge).to_be_visible(timeout=90000)
+        expect(partial_button).to_be_disabled()
+        acknowledge.check()
+        expect(partial_button).to_be_enabled(timeout=90000)
+        release_type = "partial_review"
+        action = partial_button
+    else:
+        raise RuntimeError("F6_NO_ELIGIBLE_REVIEWED_RELEASE_SCOPE")
     previous = page.url
     writes = [0]
     captured: dict[str, Any] = {}
@@ -244,7 +259,7 @@ def export_one(
         route.abort("failed")
 
     page.route("**/dossier/releases", lost_release_ack)
-    page.get_by_role("button", name="Create frozen reviewed release").click()
+    action.click()
     expect(page.get_by_role("button", name="Reconcile previous release")).to_be_visible(timeout=90000)
     page.get_by_role("button", name="Reconcile previous release").click()
     expect(page.get_by_text("The previously submitted release was found and recovered.")).to_be_visible(timeout=90000)
@@ -257,6 +272,16 @@ def export_one(
             or manifest.get("review_count", 0) < 1 or len(manifest.get("server_receipt", "")) != 64
             or manifest.get("sources") is None):
         raise RuntimeError("F6_MANIFEST_SCOPE_OR_REVIEW_INVALID")
+    completeness = manifest.get("review_completeness", {})
+    if (completeness.get("policy_version") != "caseproof-release-completeness-v1"
+            or completeness.get("release_type") != release_type
+            or completeness.get("total_findings") != manifest.get("finding_count")
+            or completeness.get("reviewed_findings") != manifest.get("review_count")
+            or completeness.get("partial_acknowledged") != (release_type == "partial_review")
+            or (release_type == "complete_review" and not completeness.get("review_complete"))
+            or (release_type == "partial_review" and completeness.get("review_complete"))):
+        raise RuntimeError("F6_SIGNED_RELEASE_COMPLETENESS_SCOPE_INVALID")
+    print("F6_GENUINE_SIGNED_RELEASE_" + release_type.upper() + "_SCOPE_PASSED", flush=True)
     source_links = manifest.get("source_links", [])
     original_destination = (
         f"/v2/matters/{case}/briefs/{brief}/dossier/history/{snapshot}"
