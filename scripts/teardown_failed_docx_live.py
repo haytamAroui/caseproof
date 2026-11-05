@@ -8,7 +8,7 @@ No production/user matters or unregistered identities are touched.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 
 from scripts.m05_registry import rows, stale_runs
 from scripts.teardown_test_run import teardown
