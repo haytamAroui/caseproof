@@ -3,6 +3,7 @@
 Run with CASEPROOF_OCR_SANDBOX=docker and the pinned isolated OCR image.
 Only synthetic, raster-only Dutch/French exhibits; never print document text.
 """
+
 from __future__ import annotations
 
 import base64
@@ -52,7 +53,12 @@ def main() -> None:
     b = io.BytesIO()
     doc.save(b)
     originals = [
-        ("draft", "draft.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", b.getvalue()),
+        (
+            "draft",
+            "draft.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            b.getvalue(),
+        ),
         ("inventory", "inventory.txt", "text/plain", b"Stuk 1 factuur\nPiece 2 facture\n"),
         ("exhibit", "nl-scan.pdf", "application/pdf", make_scan("STUK 1 NEDERLANDS")),
         ("exhibit", "fr-scan.pdf", "application/pdf", make_scan("PIECE 2 FRANCAIS")),
@@ -61,8 +67,11 @@ def main() -> None:
         request_id=str(uuid4()),
         files=[
             {
-                "role": role, "filename": filename, "media_type": media,
-                "byte_length": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
+                "role": role,
+                "filename": filename,
+                "media_type": media,
+                "byte_length": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
                 "content_base64": base64.b64encode(raw).decode("ascii"),
             }
             for role, filename, media, raw in originals
@@ -77,15 +86,20 @@ def main() -> None:
         raw = row[3]
         geometry: list[bytes] = []
         source = SourceVersion(
-            f"synthetic-{language}", f"version-{language}",
-            hashlib.sha256(raw).hexdigest(), raw,
-            datetime.now(UTC), "application/pdf",
+            f"synthetic-{language}",
+            f"version-{language}",
+            hashlib.sha256(raw).hexdigest(),
+            raw,
+            datetime.now(UTC),
+            "application/pdf",
         )
         _, manifest = parse_verified_original(
             document_id=source.document_id,
             version_id=source.version_id,
-            data=raw, media_type="application/pdf",
-            ocr=ocr, ocr_languages=(language,),
+            data=raw,
+            media_type="application/pdf",
+            ocr=ocr,
+            ocr_languages=(language,),
             persist_geometry=lambda ref, payload, destination=geometry: destination.append(payload),
         )
         candidate = manifest.get("ocr_candidates", [])
@@ -101,27 +115,33 @@ def main() -> None:
     reopened = Document(io.BytesIO(artifacts["docx"]))
     assert reopened.paragraphs
     end = monotonic()
-    print("CAPACITY_LOCAL_MEASUREMENT " + json.dumps({
-        "schema": "caseproof-local-capacity-measurement-v1",
-        "policy_version": CAPACITY_POLICY["schema"],
-        "approval": CAPACITY_POLICY["approval"],
-        "input_sources": len(originals),
-        "input_bytes": sum(len(item[3]) for item in originals),
-        "raster_only_pdf_pages": 2,
-        "ocr_languages": sorted(counts),
-        "ocr_word_counts": counts,
-        "output_bytes": {name: len(value) for name, value in artifacts.items()},
-        "intake_validation_seconds": round(intake_time - started, 3),
-        "isolated_ocr_seconds": round(ocr_time - intake_time, 3),
-        "scoped_artifact_seconds": round(end - ocr_time, 3),
-        "total_seconds": round(end - started, 3),
-        "parent_peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
-        "child_max_rss_kib": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
-        "python": platform.python_version(),
-        "signed_live": False,
-        "full_envelope_measured": False,
-        "accuracy_established": False,
-    }, sort_keys=True))
+    print(
+        "CAPACITY_LOCAL_MEASUREMENT "
+        + json.dumps(
+            {
+                "schema": "caseproof-local-capacity-measurement-v1",
+                "policy_version": CAPACITY_POLICY["schema"],
+                "approval": CAPACITY_POLICY["approval"],
+                "input_sources": len(originals),
+                "input_bytes": sum(len(item[3]) for item in originals),
+                "raster_only_pdf_pages": 2,
+                "ocr_languages": sorted(counts),
+                "ocr_word_counts": counts,
+                "output_bytes": {name: len(value) for name, value in artifacts.items()},
+                "intake_validation_seconds": round(intake_time - started, 3),
+                "isolated_ocr_seconds": round(ocr_time - intake_time, 3),
+                "scoped_artifact_seconds": round(end - ocr_time, 3),
+                "total_seconds": round(end - started, 3),
+                "parent_peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                "child_max_rss_kib": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
+                "python": platform.python_version(),
+                "signed_live": False,
+                "full_envelope_measured": False,
+                "accuracy_established": False,
+            },
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":

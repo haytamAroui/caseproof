@@ -4,6 +4,7 @@ This module does not authenticate or promote evidence. The caller must verify
 the signed user with GoTrue, match the original's SHA-256 against the signed
 source record and invoke a service-only transaction. No OCR success is invented.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -26,7 +27,11 @@ MAX_MANIFEST_BYTES = 300000
 
 
 def parse_verified_original(
-    *, document_id: str, version_id: str, data: bytes, media_type: str,
+    *,
+    document_id: str,
+    version_id: str,
+    data: bytes,
+    media_type: str,
     parser: LimitedDocumentParser | None = None,
     ocr: LocalPDFOCR | None = None,
     ocr_languages: tuple[str, ...] = ("nl", "fr"),
@@ -37,8 +42,12 @@ def parse_verified_original(
         raise ExtractionError("unsupported_bounded_binary_original")
     digest = sha256(data).hexdigest()
     source = SourceVersion(
-        document_id=document_id, version_id=version_id, sha256_hex=digest,
-        content=data, ingested_at=datetime.now(UTC), media_type=media_type,
+        document_id=document_id,
+        version_id=version_id,
+        sha256_hex=digest,
+        content=data,
+        ingested_at=datetime.now(UTC),
+        media_type=media_type,
     )
     artifact = (parser or LimitedDocumentParser()).parse(source)
     text = artifact.get("text")
@@ -46,12 +55,16 @@ def parse_verified_original(
     warnings = artifact.get("warnings")
     parser_id = artifact.get("parser_id")
     if (
-        artifact.get("schema") != PARSER_SCHEMA or not isinstance(text, str)
-        or len(text) > MAX_TEXT_CHARS or len(text.encode("utf-8")) > 480000
-        or not isinstance(blocks, list) or len(blocks) > MAX_BLOCKS
+        artifact.get("schema") != PARSER_SCHEMA
+        or not isinstance(text, str)
+        or len(text) > MAX_TEXT_CHARS
+        or len(text.encode("utf-8")) > 480000
+        or not isinstance(blocks, list)
+        or len(blocks) > MAX_BLOCKS
         or not isinstance(warnings, list)
         or any(not isinstance(w, str) or len(w) > 200 for w in warnings)
-        or not isinstance(parser_id, str) or not 0 < len(parser_id) <= 256
+        or not isinstance(parser_id, str)
+        or not 0 < len(parser_id) <= 256
         or artifact.get("complete") not in (True, False)
     ):
         raise ExtractionError("untrusted_parser_artifact")
@@ -64,19 +77,31 @@ def parse_verified_original(
         start, end = block.get("start"), block.get("end")
         locator, kind, page = block.get("locator"), block.get("kind"), block.get("page_index")
         if (
-            type(start) is not int or type(end) is not int or start != expected_start
-            or end <= start or end > len(text) or
-            not isinstance(locator, str) or not 0 < len(locator) <= 4096 or
-            kind not in {"pdf_page", "docx_paragraph", "docx_note"} or
-            (media_type == "application/pdf" and (kind != "pdf_page"
-                or type(page) is not int or not 0 <= page < MAX_PDF_PAGES)) or
-            (media_type == DOCX_MIME and (page is not None or kind == "pdf_page"))
+            type(start) is not int
+            or type(end) is not int
+            or start != expected_start
+            or end <= start
+            or end > len(text)
+            or not isinstance(locator, str)
+            or not 0 < len(locator) <= 4096
+            or kind not in {"pdf_page", "docx_paragraph", "docx_note"}
+            or (
+                media_type == "application/pdf"
+                and (kind != "pdf_page" or type(page) is not int or not 0 <= page < MAX_PDF_PAGES)
+            )
+            or (media_type == DOCX_MIME and (page is not None or kind == "pdf_page"))
         ):
             raise ExtractionError("unmapped_parser_block")
-        public_blocks.append({
-            "block_id": f"block:{index}", "start": start, "end": end,
-            "locator": locator, "kind": kind, "page_index": page,
-        })
+        public_blocks.append(
+            {
+                "block_id": f"block:{index}",
+                "start": start,
+                "end": end,
+                "locator": locator,
+                "kind": kind,
+                "page_index": page,
+            }
+        )
         if page is not None:
             page_blocks[page] = page_blocks.get(page, 0) + 1
         expected_start = end + 2
@@ -101,7 +126,7 @@ def parse_verified_original(
                 "pdf_annotations_unprocessed:page:",
             ):
                 if warning.startswith(prefix):
-                    suffix = warning[len(prefix):]
+                    suffix = warning[len(prefix) :]
                     if not suffix.isdigit() or int(suffix) >= MAX_PDF_PAGES:
                         raise ExtractionError("malformed_page_status")
                     indexes.add(int(suffix))
@@ -111,20 +136,34 @@ def parse_verified_original(
             raise ExtractionError("pdf_page_inventory_gap")
         for page in sorted(indexes):
             scanned = f"pdf_page_needs_ocr_or_review:page:{page}" in warnings
-            visual = (f"pdf_visual_objects_require_review:page:{page}" in warnings or
-                      f"pdf_annotations_unprocessed:page:{page}" in warnings)
-            pages.append({"pdf_page": page + 1,
-                          "status": "needs_ocr" if scanned else
-                                    "needs_visual_review" if visual else "text_extracted",
-                          "text_blocks": page_blocks.get(page, 0)})
+            visual = (
+                f"pdf_visual_objects_require_review:page:{page}" in warnings
+                or f"pdf_annotations_unprocessed:page:{page}" in warnings
+            )
+            pages.append(
+                {
+                    "pdf_page": page + 1,
+                    "status": "needs_ocr"
+                    if scanned
+                    else "needs_visual_review"
+                    if visual
+                    else "text_extracted",
+                    "text_blocks": page_blocks.get(page, 0),
+                }
+            )
     complete = bool(artifact["complete"]) and not warnings and bool(text)
     manifest: dict[str, Any] = {
-        "schema": "dev-document-parse-v1", "media_type": media_type,
-        "original_sha256": digest, "representation_sha256": sha256(text.encode("utf-8")).hexdigest(),
-        "parser_id": parser_id, "complete": complete,
+        "schema": "dev-document-parse-v1",
+        "media_type": media_type,
+        "original_sha256": digest,
+        "representation_sha256": sha256(text.encode("utf-8")).hexdigest(),
+        "parser_id": parser_id,
+        "complete": complete,
         "coverage": "complete" if complete else "partial",
         "page_mapping": "pdf_physical_page" if media_type == "application/pdf" else "unverified",
-        "pages": pages, "blocks": public_blocks, "warnings": sorted(set(warnings)),
+        "pages": pages,
+        "blocks": public_blocks,
+        "warnings": sorted(set(warnings)),
     }
     # OCR is a review-only candidate and never changes extraction completeness.
     # The caller must explicitly opt in to a locally isolated OCR worker.
@@ -142,18 +181,21 @@ def parse_verified_original(
                     raise ExtractionError("ocr_geometry_persistence_required")
                 reference, encoded = encode_page_geometry(result)
                 persist_geometry(reference, encoded)
-                candidates.append({
-                    "pdf_page": number, "status": "OCR_UNRELIABLE",
-                    "original_sha256": result.original_sha256,
-                    "image_sha256": result.image_sha256,
-                    "image_width_px": result.image_width_px,
-                    "image_height_px": result.image_height_px,
-                    "image_dpi": result.image_dpi,
-                    "coordinate_basis": result.coordinate_basis,
-                    "engine": result.engine,
-                    "geometry_sha256": reference.geometry_sha256,
-                    "word_count": reference.word_count,
-                })
+                candidates.append(
+                    {
+                        "pdf_page": number,
+                        "status": "OCR_UNRELIABLE",
+                        "original_sha256": result.original_sha256,
+                        "image_sha256": result.image_sha256,
+                        "image_width_px": result.image_width_px,
+                        "image_height_px": result.image_height_px,
+                        "image_dpi": result.image_dpi,
+                        "coordinate_basis": result.coordinate_basis,
+                        "engine": result.engine,
+                        "geometry_sha256": reference.geometry_sha256,
+                        "word_count": reference.word_count,
+                    }
+                )
             except OCRUnavailable as exc:
                 # Expose only the stable reason code, never OCR text or paths.
                 reason = str(exc).split(":", 1)[0][:80]
@@ -163,6 +205,7 @@ def parse_verified_original(
                         diagnostic.write(f"page={number} reason={reason}\n")
         manifest["ocr_candidates"] = candidates
     import json
+
     if len(json.dumps(manifest, ensure_ascii=False).encode("utf-8")) > MAX_MANIFEST_BYTES:
         raise ExtractionError("parser_manifest_limit")
     return text, manifest

@@ -32,11 +32,18 @@ def _stage(name: str) -> None:
         raise ValueError("invalid acceptance stage")
     now = monotonic()
     if os.getenv("CASEPROOF_CAPACITY_METRICS") == "YES":
-        print("CAPACITY_SIGNED_STAGE " + json.dumps({
-            "previous_stage": _LIVE_STAGE,
-            "next_stage": name,
-            "elapsed_seconds": round(now - _STAGE_CLOCK, 3),
-        }, sort_keys=True), flush=True)
+        print(
+            "CAPACITY_SIGNED_STAGE "
+            + json.dumps(
+                {
+                    "previous_stage": _LIVE_STAGE,
+                    "next_stage": name,
+                    "elapsed_seconds": round(now - _STAGE_CLOCK, 3),
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
     _STAGE_CLOCK = now
     _LIVE_STAGE = name
     print("F5_STAGE_" + name, flush=True)
@@ -48,10 +55,17 @@ def _exercise() -> None:
         "refs/heads/main",
         "refs/pull/175/merge",
         "refs/pull/176/merge",
-        "refs/pull/177/merge", "refs/heads/feat/f5-correction-recheck-workspace",
-        "refs/pull/178/merge", "refs/pull/182/merge", "refs/pull/183/merge", "refs/pull/184/merge",
+        "refs/pull/177/merge",
+        "refs/heads/feat/f5-correction-recheck-workspace",
+        "refs/pull/178/merge",
+        "refs/pull/182/merge",
+        "refs/pull/183/merge",
+        "refs/pull/184/merge",
         "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
-        "refs/heads/feat/p5-p6-readability-drift-pilot", "refs/pull/185/merge", "refs/pull/187/merge", "refs/pull/189/merge",
+        "refs/heads/feat/p5-p6-readability-drift-pilot",
+        "refs/pull/185/merge",
+        "refs/pull/187/merge",
+        "refs/pull/189/merge",
         "refs/pull/190/merge",
         "refs/pull/191/merge",
         "refs/pull/197/merge",
@@ -115,6 +129,7 @@ def _exercise() -> None:
         _stage("SELECT_ORGANIZATION")
         page.get_by_label("Organization", exact=True).select_option(org)
         page.get_by_label("Matter title").fill("Owned synthetic F3 dossier")
+
         def own_created_matter(route: Route) -> None:
             nonlocal case
             response = route.fetch(timeout=90000)
@@ -129,6 +144,7 @@ def _exercise() -> None:
             _stage("REGISTER_CREATED_MATTER")
             record(key, run, "matter", case, "CREATED")
             route.fulfill(response=response)
+
         page.route("**/v2/workspace/intake/matters", own_created_matter)
         _stage("CREATE_MATTER_REQUEST")
         with page.expect_response(lambda r: r.url.endswith("/intake/matters")) as created:
@@ -252,22 +268,23 @@ def _exercise() -> None:
             coverage = page.get_by_role("region", name="Verification and processing coverage")
             coverage.get_by_text("DOCX region coverage", exact=True).click()
             with page.expect_download(timeout=90000) as original_draft:
-                coverage.get_by_role(
-                    "button", name="Download preserved original DOCX"
-                ).click()
+                coverage.get_by_role("button", name="Download preserved original DOCX").click()
             received = original_draft.value
-            if (received.suggested_filename != "caseproof-preserved-original.docx"
-                    or received.failure() is not None):
+            if (
+                received.suggested_filename != "caseproof-preserved-original.docx"
+                or received.failure() is not None
+            ):
                 raise RuntimeError("P2_SIGNED_DOCX_DOWNLOAD_FAILED")
             from pathlib import Path
+
             if Path(received.path()).read_bytes() != bundle[0].content:
                 raise RuntimeError("P2_SIGNED_DOCX_DOWNLOAD_HASH_MISMATCH")
 
             coverage.get_by_text("Source-page processing", exact=True).click()
-            unmatched = coverage.get_by_role(
-                "list", name="Source-page processing ledger"
-            ).locator("li").filter(
-                has_text="No mapped reference is available for this source page."
+            unmatched = (
+                coverage.get_by_role("list", name="Source-page processing ledger")
+                .locator("li")
+                .filter(has_text="No mapped reference is available for this source page.")
             )
             open_page = unmatched.first.get_by_role(
                 "button", name=re.compile(r"^Open preserved PDF page [0-9]+$")
@@ -281,20 +298,18 @@ def _exercise() -> None:
             open_page.click()
             preserved = coverage.get_by_role("region", name="Coverage original source")
             expect(
-                preserved.get_by_text(
-                    f"Original PDF page {physical_page} rendered.", exact=False
-                )
+                preserved.get_by_text(f"Original PDF page {physical_page} rendered.", exact=False)
             ).to_be_visible(timeout=90000)
             expect(
-                preserved.get_by_role(
-                    "img", name=f"Preserved original PDF page {physical_page}"
-                )
+                preserved.get_by_role("img", name=f"Preserved original PDF page {physical_page}")
             ).to_be_visible()
             preserved.get_by_role("button", name="Close coverage original").click()
             print("P2_GENUINE_SIGNED_UNMATCHED_COVERAGE_PDF_AND_DOCX_PASSED", flush=True)
 
             reviewer = page.get_by_role("region", name="Human review")
-            expect(reviewer.get_by_role("heading", name="Human decision and durable receipt")).to_be_visible(timeout=60000)
+            expect(reviewer.get_by_role("heading", name="Human decision and durable receipt")).to_be_visible(
+                timeout=60000
+            )
             expect(page.get_by_role("heading", name="Preserved DOCX reference context")).to_be_visible()
             for checkbox in reviewer.get_by_role("checkbox").all():
                 checkbox.check()
@@ -302,19 +317,23 @@ def _exercise() -> None:
                 "Reviewed original synthetic page and draft context"
             )
             requests = [0]
+
             def lost_review_ack(route) -> None:
                 requests[0] += 1
                 response = route.fetch(timeout=90000)
                 if response.status != 200:
                     raise RuntimeError("F4_REVIEW_WRITE_REJECTED")
                 route.abort("failed")
+
             page.route("**/dossier/reviews", lost_review_ack)
             reviewer.get_by_role("button", name="Save human decision").click()
-            expect(reviewer.get_by_role("button", name="Reconcile durable receipt")).to_be_visible(timeout=90000)
+            expect(reviewer.get_by_role("button", name="Reconcile durable receipt")).to_be_visible(
+                timeout=90000
+            )
             reviewer.get_by_role("button", name="Reconcile durable receipt").click()
-            expect(reviewer.get_by_text(
-                "The exact decision is persisted in the authorized review ledger."
-            )).to_be_visible(timeout=90000)
+            expect(
+                reviewer.get_by_text("The exact decision is persisted in the authorized review ledger.")
+            ).to_be_visible(timeout=90000)
             page.unroute("**/dossier/reviews", lost_review_ack)
             if requests[0] != 1:
                 raise RuntimeError("F4_REVIEW_NOT_EXACTLY_ONCE")
@@ -333,10 +352,13 @@ def _exercise() -> None:
         f6_old = None
         f6_new = None
         if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES":
-            if (os.getenv("CASEPROOF_F4_BROWSER_LIVE") != "YES"
-                    or os.getenv("CASEPROOF_F5_BROWSER_LIVE") != "YES"):
+            if (
+                os.getenv("CASEPROOF_F4_BROWSER_LIVE") != "YES"
+                or os.getenv("CASEPROOF_F5_BROWSER_LIVE") != "YES"
+            ):
                 raise RuntimeError("F6_REQUIRES_REAL_F4_F5")
             from scripts.workspace_f6_live import binding, export_one, fixture_export_grant
+
             owner = next(
                 r["resource_id"].split(":", 1)[1]
                 for r in rows(key, run)
@@ -349,9 +371,14 @@ def _exercise() -> None:
             old_brief, old_snapshot = binding(page)
             _stage("OLD_REVIEWED_RELEASE")
             f6_old = export_one(
-                page, acceptance, case=case, brief=old_brief,
-                snapshot=old_snapshot, pdf_version=registered[2]["version_id"],
-                pdf_original=bundle[2].content, expect_reference="Stuk 1",
+                page,
+                acceptance,
+                case=case,
+                brief=old_brief,
+                snapshot=old_snapshot,
+                pdf_version=registered[2]["version_id"],
+                pdf_original=bundle[2].content,
+                expect_reference="Stuk 1",
             )
             page.goto(report_url)
             acceptance.login(page)
@@ -360,36 +387,22 @@ def _exercise() -> None:
         if os.getenv("CASEPROOF_DOCX_EDITOR_BROWSER_LIVE") == "YES":
             _stage("SIGNED_DOCX_EDITOR_UNCOMMITTED_CANDIDATE")
             editor_origin = page.url
-            page.get_by_role(
-                "link", name="Edit current DOCX candidate (not committed)"
-            ).click()
-            editor = page.get_by_role(
-                "region", name="Structured Word candidate editor", exact=True
+            page.get_by_role("link", name="Edit current DOCX candidate (not committed)").click()
+            editor = page.get_by_role("region", name="Structured Word candidate editor", exact=True)
+            expect(editor.get_by_role("heading", name="Edit the preserved draft")).to_be_visible(
+                timeout=90000
             )
-            expect(editor.get_by_role(
-                "heading", name="Edit the preserved draft"
-            )).to_be_visible(timeout=90000)
             # python-docx paragraph.text reflects accepted plain text, not
             # unresolved w:ins revisions. Test the explicit direct-replacement
             # mode here; native tracked revisions have separate OOXML tests.
-            editor.get_by_role(
-                "checkbox", name="Track changes in Word"
-            ).uncheck()
-            source_block = editor.locator(".docx-block").filter(
-                has_text="Unrelated introductory text"
-            ).first
+            editor.get_by_role("checkbox", name="Track changes in Word").uncheck()
+            source_block = editor.locator(".docx-block").filter(has_text="Unrelated introductory text").first
             expect(source_block).to_be_visible(timeout=90000)
-            source_block.get_by_role(
-                "textbox", name="Source-bound paragraph"
-            ).fill("Reviewed unrelated text")
+            source_block.get_by_role("textbox", name="Source-bound paragraph").fill("Reviewed unrelated text")
             editor.get_by_role("button", name="Preview edits").click()
             print("F5_EDITOR_SIGNED_PREVIEW_SUBMITTED", flush=True)
-            receipt = editor.get_by_role(
-                "region", name="Candidate preview receipt"
-            )
-            expect(receipt.get_by_role(
-                "heading", name="Prepared derivative"
-            )).to_be_visible(timeout=90000)
+            receipt = editor.get_by_role("region", name="Candidate preview receipt")
+            expect(receipt.get_by_role("heading", name="Prepared derivative")).to_be_visible(timeout=90000)
             with page.expect_download(timeout=90000) as download:
                 editor.get_by_role("button", name="Download DOCX candidate").click()
             from pathlib import Path
@@ -417,30 +430,26 @@ def _exercise() -> None:
             native_document.tables[0].cell(0, 0).text = "Native Word table edited"
             native_bytes = io.BytesIO()
             native_document.save(native_bytes)
-            native_panel = editor.get_by_role(
-                "region", name="Full Microsoft Word editing and signed import"
-            )
+            native_panel = editor.get_by_role("region", name="Full Microsoft Word editing and signed import")
             with page.expect_download(timeout=90000) as source_download:
-                native_panel.get_by_role(
-                    "button", name="1. Download preserved DOCX for Word"
-                ).click()
+                native_panel.get_by_role("button", name="1. Download preserved DOCX for Word").click()
             source_bytes = Path(source_download.value.path()).read_bytes()
             if hashlib.sha256(source_bytes).hexdigest() != hashlib.sha256(bundle[0].content).hexdigest():
                 raise RuntimeError("F5_WORD_NATIVE_SOURCE_DIGEST_CHANGED")
-            native_panel.locator('input[type="file"]').set_input_files({
-                "name": "word-native-synthetic.docx",
-                "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "buffer": native_bytes.getvalue(),
-            })
-            expect(native_panel.get_by_text(
-                "DOCX staged in browser memory", exact=False
-            )).to_be_visible(timeout=90000)
-            native_panel.get_by_role(
-                "button", name="3. Inspect imported Word document"
-            ).click()
-            expect(native_panel.get_by_text(
-                "Word-native candidate validated", exact=False
-            )).to_be_visible(timeout=90000)
+            native_panel.locator('input[type="file"]').set_input_files(
+                {
+                    "name": "word-native-synthetic.docx",
+                    "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "buffer": native_bytes.getvalue(),
+                }
+            )
+            expect(native_panel.get_by_text("DOCX staged in browser memory", exact=False)).to_be_visible(
+                timeout=90000
+            )
+            native_panel.get_by_role("button", name="3. Inspect imported Word document").click()
+            expect(native_panel.get_by_text("Word-native candidate validated", exact=False)).to_be_visible(
+                timeout=90000
+            )
             if hashlib.sha256(bundle[0].content).hexdigest() != hashlib.sha256(source_bytes).hexdigest():
                 raise RuntimeError("F5_WORD_NATIVE_ORIGINAL_MUTATED")
             print(
@@ -449,9 +458,7 @@ def _exercise() -> None:
             )
             page.goto(editor_origin)
             acceptance.login(page)
-            expect(page.get_by_role(
-                "heading", name="Review the evidence"
-            )).to_be_visible(timeout=90000)
+            expect(page.get_by_role("heading", name="Review the evidence")).to_be_visible(timeout=90000)
 
         if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
             previous_url = page.url
@@ -460,7 +467,9 @@ def _exercise() -> None:
             before = correction.get_by_label("Exact original text").input_value()
             if "1" not in before:
                 raise RuntimeError("F5_SYNTHETIC_REFERENCE_DIFFERS")
-            expect(page.get_by_role("region", name="Read-only draft reference").locator("mark")).to_have_text(before)
+            expect(page.get_by_role("region", name="Read-only draft reference").locator("mark")).to_have_text(
+                before
+            )
             print("F5_UNICODE_EXCERPT_REFERENCE_MATCHED_PASSED", flush=True)
             _stage("EXACT_REFERENCE_PREVIEW")
             # F6's second release needs a newly checked *mapped* reference:
@@ -474,37 +483,41 @@ def _exercise() -> None:
                 or os.getenv("CASEPROOF_DOCX_DOCUMENT_WIDE_LIVE") == "YES"
             )
             replacement = (
-                before.replace("1", "1 ", 1)
-                if keep_verified_exhibit
-                else before.replace("1", "2", 1)
+                before.replace("1", "1 ", 1) if keep_verified_exhibit else before.replace("1", "2", 1)
             )
             if replacement == before:
                 raise RuntimeError("F6_CORRECTION_NOT_CHANGED")
             correction.get_by_label("Replacement text").fill(replacement)
             correction.get_by_role("button", name="Validate exact preview").click()
-            expect(correction.get_by_text("Proposed change (not committed)", exact=True)).to_be_visible(timeout=90000)
+            expect(correction.get_by_text("Proposed change (not committed)", exact=True)).to_be_visible(
+                timeout=90000
+            )
             writes = [0]
             correction_request = {}
             correction_headers = {}
             correction_base = [""]
+
             def lose_correction_ack(route: Route) -> None:
                 writes[0] += 1
                 correction_request.update(route.request.post_data_json)
                 if table_correction and correction_request.get("paragraph_index") != 50_000:
                     raise RuntimeError("F5_SIGNED_TABLE_TARGET_NOT_BOUND")
-                for name in ('authorization', 'if-match', 'idempotency-key'):
+                for name in ("authorization", "if-match", "idempotency-key"):
                     correction_headers[name] = route.request.headers[name]
-                correction_base[0] = route.request.url.removesuffix('/corrections/commit')
+                correction_base[0] = route.request.url.removesuffix("/corrections/commit")
                 response = route.fetch(timeout=180000)
                 if response.status != 200:
                     raise RuntimeError("F5_COMMIT_REJECTED")
                 route.abort("failed")
+
             stale_context = acceptance.browser.new_context()
             try:
                 stale_page = stale_context.new_page()
                 stale_page.goto(previous_url)
                 acceptance.login(stale_page)
-                stale_panel = stale_page.get_by_role("region", name="Correction preview and recheck", exact=True)
+                stale_panel = stale_page.get_by_role(
+                    "region", name="Correction preview and recheck", exact=True
+                )
                 stale_panel.get_by_label("Replacement text").fill(replacement, timeout=90000)
                 stale_preview = stale_panel.get_by_role("button", name="Validate exact preview")
                 expect(stale_preview).to_be_enabled(timeout=90000)
@@ -516,22 +529,37 @@ def _exercise() -> None:
                     stale_preview.click()
                 if response.value.status != 412:
                     raise RuntimeError("F5_SIGNED_SECOND_SESSION_EXPECTED_412")
-                expect(stale_panel.get_by_role("alert")).to_have_text("Stale draft. Reopen the current report.")
+                expect(stale_panel.get_by_role("alert")).to_have_text(
+                    "Stale draft. Reopen the current report."
+                )
                 expect(stale_preview).to_be_disabled()
                 print("F5_SIGNED_SECOND_SESSION_STALE_RECOVERY_PASSED", flush=True)
             finally:
                 stale_context.close()
             _stage("RECHECK_COMPARE")
             correction.get_by_role("button", name="Recheck activated draft", exact=True).click(timeout=90000)
-            expect(correction.get_by_role("heading", name="Previous report", exact=True)).to_be_visible(timeout=180000)
-            expect(correction.get_by_role("heading", name="Rechecked report", exact=True)).to_be_visible(timeout=180000)
+            expect(correction.get_by_role("heading", name="Previous report", exact=True)).to_be_visible(
+                timeout=180000
+            )
+            expect(correction.get_by_role("heading", name="Rechecked report", exact=True)).to_be_visible(
+                timeout=180000
+            )
             if writes[0] != 1:
                 raise RuntimeError("F5_DUPLICATE_COMMIT")
             old_original = page.request.get(
-                correction_base[0] + '/history/' + correction_request['snapshot_hash'] +
-                '/sources/' + registered[0]['version_id'] + '/original', headers=correction_headers,
+                correction_base[0]
+                + "/history/"
+                + correction_request["snapshot_hash"]
+                + "/sources/"
+                + registered[0]["version_id"]
+                + "/original",
+                headers=correction_headers,
             )
-            if old_original.status != 200 or hashlib.sha256(old_original.body()).hexdigest() != hashlib.sha256(bundle[0].content).hexdigest():
+            if (
+                old_original.status != 200
+                or hashlib.sha256(old_original.body()).hexdigest()
+                != hashlib.sha256(bundle[0].content).hexdigest()
+            ):
                 raise RuntimeError("F5_ORIGINAL_CHANGED_OR_UNAVAILABLE")
             print("F5_SIGNED_ORIGINAL_SHA256_UNCHANGED_PASSED", flush=True)
             if table_correction:
@@ -540,20 +568,22 @@ def _exercise() -> None:
                 print("F5_SPLIT_FORMATTED_REFERENCE_AND_UNRELATED_TABLE_CORRECTION_PASSED", flush=True)
             page.unroute("**/corrections/commit", lose_correction_ack)
             replay = page.request.post(
-                correction_base[0] + '/corrections/commit', data=correction_request, headers=correction_headers,
+                correction_base[0] + "/corrections/commit",
+                data=correction_request,
+                headers=correction_headers,
             )
-            if replay.status != 200 or replay.json().get('replayed') is not True:
+            if replay.status != 200 or replay.json().get("replayed") is not True:
                 raise RuntimeError("F5_SIGNED_DURABLE_REPLAY_FAILED")
             changed = page.request.post(
-                correction_base[0] + '/corrections/commit',
-                data={**correction_request, 'after': correction_request['after'] + ' changed'},
+                correction_base[0] + "/corrections/commit",
+                data={**correction_request, "after": correction_request["after"] + " changed"},
                 headers=correction_headers,
             )
             if changed.status != 409:
                 raise RuntimeError("F5_SIGNED_DIFFERENT_COMMAND_REPLAY_NOT_REJECTED")
             stale = page.request.post(
-                correction_base[0] + '/corrections/preview',
-                data={key: value for key, value in correction_request.items() if key != 'request_id'},
+                correction_base[0] + "/corrections/preview",
+                data={key: value for key, value in correction_request.items() if key != "request_id"},
                 headers=correction_headers,
             )
             if stale.status != 412:
@@ -568,7 +598,9 @@ def _exercise() -> None:
             recovery = page.get_by_role("region", name="Correction operation recovery", exact=True)
             recovery.get_by_role("button", name="Recheck activated draft", exact=True).click(timeout=90000)
             expect(page.get_by_role("heading", name="Review the evidence")).to_be_visible(timeout=180000)
-            expect(page.get_by_text("No recorded human decision for this reference.", exact=True)).to_be_visible(timeout=90000)
+            expect(
+                page.get_by_text("No recorded human decision for this reference.", exact=True)
+            ).to_be_visible(timeout=90000)
             print("F5_SIGNED_COLD_REOPEN_ACTIVATED_DRAFT_INDEPENDENT_REVIEW_PASSED", flush=True)
 
             if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES":
@@ -580,6 +612,7 @@ def _exercise() -> None:
                     reconfirm_corrected_bundle,
                     reopen_old,
                 )
+
                 if not f6_old:
                     raise RuntimeError("F6_OLD_RELEASE_MISSING")
                 # Correction changed the bundle signature. Under the
@@ -587,20 +620,20 @@ def _exercise() -> None:
                 # confirmation is stale: neither prior mapping nor human
                 # review may be silently inherited by the new draft.
                 _stage("RECONFIRM_CORRECTED_BUNDLE")
-                reconfirm_corrected_bundle(
-                    page, case=case, registered=registered
-                )
+                reconfirm_corrected_bundle(page, case=case, registered=registered)
                 # Rechecking under the newly confirmed bundle creates a
                 # new report; the reviewer must inspect the preserved source
                 # and save an independent disposition before another release.
                 _stage("NEW_DRAFT_INDEPENDENT_REVIEW")
                 reviewer = page.get_by_role("region", name="Human review")
-                expect(reviewer.get_by_role("button", name="Save human decision")).to_be_visible(timeout=120000)
+                expect(reviewer.get_by_role("button", name="Save human decision")).to_be_visible(
+                    timeout=120000
+                )
                 for checkbox in reviewer.get_by_role("checkbox").all():
                     checkbox.check()
-                reviewer.get_by_label(
-                    "Rationale (required, visible to authorized reviewers)"
-                ).fill("Independent review of new synthetic draft after correction")
+                reviewer.get_by_label("Rationale (required, visible to authorized reviewers)").fill(
+                    "Independent review of new synthetic draft after correction"
+                )
                 reviewer.get_by_role("button", name="Save human decision").click()
                 expect(page.get_by_role("list", name="Saved review history")).to_contain_text(
                     "Independent review of new synthetic draft after correction", timeout=90000
@@ -608,9 +641,14 @@ def _exercise() -> None:
                 new_brief, new_snapshot = binding(page)
                 _stage("NEW_RECHECKED_RELEASE")
                 f6_new = export_one(
-                    page, acceptance, case=case, brief=new_brief,
-                    snapshot=new_snapshot, pdf_version=registered[2]["version_id"],
-                    pdf_original=bundle[2].content, expect_reference="Stuk 1",
+                    page,
+                    acceptance,
+                    case=case,
+                    brief=new_brief,
+                    snapshot=new_snapshot,
+                    pdf_version=registered[2]["version_id"],
+                    pdf_original=bundle[2].content,
+                    expect_reference="Stuk 1",
                 )
                 _server_stop(proc)
                 proc = _server_start()
@@ -622,9 +660,9 @@ def _exercise() -> None:
                 deny_after_revocation(page, case=case, old=f6_old)
                 page.goto(f6_old["page"])
                 acceptance.login(page)
-                expect(page.get_by_text("Release history is unavailable or access was revoked.")).to_be_visible(
-                    timeout=90000
-                )
+                expect(
+                    page.get_by_text("Release history is unavailable or access was revoked.")
+                ).to_be_visible(timeout=90000)
                 expect(page.get_by_role("button", name="End session")).to_be_visible()
                 print("F6_SIGNED_EXPORT_ONLY_REVOKE_READER_SESSION_PRESERVED_PASSED", flush=True)
                 # Restore the ephemeral export grant for the later whole-matter
@@ -633,8 +671,10 @@ def _exercise() -> None:
                 print("F6_REAL_SIGNED_OLD_NEW_RELEASE_COLD_REOPEN_PASSED", flush=True)
 
         if os.getenv("CASEPROOF_DOCX_DOCUMENT_WIDE_LIVE") == "YES":
-            if (os.getenv("CASEPROOF_F5_BROWSER_LIVE") != "YES"
-                    or os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"):
+            if (
+                os.getenv("CASEPROOF_F5_BROWSER_LIVE") != "YES"
+                or os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"
+            ):
                 raise RuntimeError("F5_DOCX_SIGNED_STAGE_ORDER_INVALID")
             _stage("SIGNED_DOCX_DOCUMENT_WIDE_ACTIVATION")
             from scripts.workspace_docx_live import signed_docx_activation
@@ -647,8 +687,14 @@ def _exercise() -> None:
                 and "@" not in r["resource_id"]
             )
             signed_docx_activation(
-                page, key=key, run=run, owner=owner, case=case,
-                org=org, registered=registered, login=acceptance.login,
+                page,
+                key=key,
+                run=run,
+                owner=owner,
+                case=case,
+                org=org,
+                registered=registered,
+                login=acceptance.login,
             )
 
         print("F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_EXPLICIT_CHECK_PASSED", flush=True)
@@ -676,17 +722,24 @@ def _exercise() -> None:
         admin_rpc(key, "revoke", {"p_run": run, "p_owner": owner, "p_case": case})
         if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES" and f6_old:
             from scripts.workspace_f6_live import deny_after_revocation
+
             deny_after_revocation(page, case=case, old=f6_old)
         if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
             denied_recovery = page.request.get(
-                correction_base[0] + '/snapshots/' + correction_request['snapshot_hash'] +
-                '/references/' + correction_request['reference_id'] + '/correction-operations',
+                correction_base[0]
+                + "/snapshots/"
+                + correction_request["snapshot_hash"]
+                + "/references/"
+                + correction_request["reference_id"]
+                + "/correction-operations",
                 headers=correction_headers,
             )
             if denied_recovery.status not in (403, 404):
                 raise RuntimeError("F5_REVOKED_RECOVERY_NOT_DENIED")
             denied_replay = page.request.post(
-                correction_base[0] + '/corrections/commit', data=correction_request, headers=correction_headers,
+                correction_base[0] + "/corrections/commit",
+                data=correction_request,
+                headers=correction_headers,
             )
             if denied_replay.status not in (403, 404):
                 raise RuntimeError("F5_REVOKED_REPLAY_NOT_DENIED")

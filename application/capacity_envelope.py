@@ -3,6 +3,7 @@
 These are the already-enforced four-source intake and export boundaries.
 Do not infer signed full-journey support from a standalone 200-page worker test.
 """
+
 from __future__ import annotations
 
 from typing import Final
@@ -32,7 +33,10 @@ CAPACITY_POLICY: Final[dict[str, int | str]] = {
 
 
 def refusal_reason(
-    *, source_count: int, byte_lengths: list[int], inventory_bytes: int,
+    *,
+    source_count: int,
+    byte_lengths: list[int],
+    inventory_bytes: int,
     pdf_page_counts: list[int],
 ) -> str | None:
     """Typed refusal independent of file content; never grants authorization."""

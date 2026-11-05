@@ -1,4 +1,5 @@
 """Capacity T20–T29: no unsafe promotion of a worker benchmark to pilot."""
+
 from __future__ import annotations
 
 import base64
@@ -87,12 +88,15 @@ def test_stable_refusal_reason(kwargs, reason):
 
 
 def test_exact_capacity_boundary_is_admissible_before_format_validation():
-    assert refusal_reason(
-        source_count=4,
-        byte_lengths=[MAX_SOURCE_BYTES, 1, 1, 1],
-        inventory_bytes=MAX_INVENTORY_BYTES,
-        pdf_page_counts=[MAX_PDF_PAGES],
-    ) is None
+    assert (
+        refusal_reason(
+            source_count=4,
+            byte_lengths=[MAX_SOURCE_BYTES, 1, 1, 1],
+            inventory_bytes=MAX_INVENTORY_BYTES,
+            pdf_page_counts=[MAX_PDF_PAGES],
+        )
+        is None
+    )
 
 
 def test_inventory_over_limit_rejected_before_register_or_any_write():

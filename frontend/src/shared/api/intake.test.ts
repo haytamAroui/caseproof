@@ -39,7 +39,6 @@ it('rejects foreign, nil, duplicate and unknown intake contracts', () => {
   ).toThrow();
 });
 
-
 it('shares conservative intake and export caps from the generated Python policy', () => {
   expect(capacity.schema).toBe('caseproof-capacity-envelope-v1');
   expect(capacity.approval).toBe('development_only_not_pilot_approved');

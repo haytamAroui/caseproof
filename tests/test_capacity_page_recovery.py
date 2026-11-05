@@ -1,4 +1,5 @@
 """64-page bounded local recovery; signed SQL leases have separate CI coverage."""
+
 from __future__ import annotations
 
 from uuid import uuid4
@@ -33,16 +34,23 @@ def test_bounded_64_page_interruption_resume_and_no_duplicate_checkpoints():
     cancelled["value"] = False
     resumed = PageCoordinator(journal, authorize=lambda: None, cancelled=lambda: False)
     result = resumed.run(
-        scope, "capacity-recovery", plan,
+        scope,
+        "capacity-recovery",
+        plan,
         lambda p: (calls.append(p.pdf_page), {"artifact_sha256": "b" * 64, "uncertain": True})[1],
     )
     assert result["completed"] == MAX_PDF_PAGES
     assert result["failed"] == 0 and result["coverage_complete"] is True
     assert all(calls.count(p) == (2 if p == 12 else 1) for p in range(1, MAX_PDF_PAGES + 1))
-    assert resumed.run(
-        scope, "capacity-recovery", plan,
-        lambda p: pytest.fail("replayed completed worker page"),
-    ) == result
+    assert (
+        resumed.run(
+            scope,
+            "capacity-recovery",
+            plan,
+            lambda p: pytest.fail("replayed completed worker page"),
+        )
+        == result
+    )
 
 
 def test_no_unbounded_parallel_plan_disguised_as_supported_envelope():
