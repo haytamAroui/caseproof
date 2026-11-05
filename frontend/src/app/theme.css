@@ -542,3 +542,81 @@ dialog::backdrop {
     grid-template-columns: 1fr;
   }
 }
+
+/* Shared Storyteller surfaces for the existing workflow. */
+.intake,
+.export-workspace,
+.open-report {
+  max-width: 1000px;
+}
+.intake fieldset,
+.export-workspace .draft-context {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.intake fieldset fieldset {
+  background: #f6f6f3;
+}
+.intake input[type='file'] {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+.intake input[type='file']::file-selector-button {
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-right: 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.matter-list {
+  border: 0;
+  display: grid;
+  gap: 8px;
+}
+.matter-list li {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.matter-list a {
+  border-radius: inherit;
+}
+.button[aria-pressed='false'] {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+}
+.button[aria-pressed='true'] {
+  color: var(--surface);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.source-viewer .dimensions {
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+}
+.source-viewer .dimension,
+.dimension {
+  background: var(--surface);
+  border-radius: 8px;
+}
+.source-viewer .viewer-scroll {
+  background: #edede8;
+  border-radius: 8px;
+}
+.export-workspace .draft-context,
+.review-panel,
+.draft-context {
+  border-radius: 12px;
+}
+@media (forced-colors: active) {
+  .button[aria-pressed='true'] {
+    color: HighlightText;
+    background: Highlight;
+    border-color: Highlight;
+  }
+}
