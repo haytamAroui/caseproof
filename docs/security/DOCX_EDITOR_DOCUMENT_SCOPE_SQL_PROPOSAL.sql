@@ -9,6 +9,28 @@
 -- _m1_matter_grants, retention_write_guard, audit_events and draft activation RPC.
 -- Tests must install this in a disposable database before caseproof-dev review.
 
+-- This new permission must be explicitly admitted by both existing
+-- tenant/matter grant whitelists. Preserve all existing action names and
+-- reject any unspecified action. Do not drop the constraints without
+-- restoring their exact original restrictions.
+alter table caseproof.organization_members
+  drop constraint organization_members_actions_check,
+  add constraint organization_members_actions_check
+  check (actions <@ array[
+    'case:read','coverage:read','evidence:read','finding:write',
+    'review:request','conclusion:request_approval','exception:request',
+    'draft:edit'
+  ]::text[]);
+
+alter table caseproof._m1_matter_grants
+  drop constraint _m1_matter_grants_permissions_check,
+  add constraint _m1_matter_grants_permissions_check
+  check (permissions <@ array[
+    'case:read','coverage:read','evidence:read','review:request',
+    'finding:write','evidence:upload','evidence:index',
+    'exhibit:confirm','draft:check','draft:edit'
+  ]::text[]);
+
 create table caseproof.dossier_document_edit_reviews (
   org_id uuid not null,
   case_id uuid not null,
