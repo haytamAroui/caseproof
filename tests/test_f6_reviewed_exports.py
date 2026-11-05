@@ -543,3 +543,47 @@ def test_t30_qualified_and_contradicted_reviews_count_as_human_dispositions():
     assert result.status_code == 200, result.text
     assert result.json()["manifest"]["review_completeness"]["release_type"] == "complete_review"
     assert result.json()["manifest"]["coverage"]["text_coverage_complete"] is False
+
+
+def test_t34_same_operation_cannot_change_saved_release_type_or_acknowledgement():
+    api, store = client()
+    store.report["findings"].append({"reference_id": "ref-2", "visual_assessment": {"regions": []}})
+    request = {
+        "release_id": str(uuid4()), "snapshot_hash": SNAPSHOT,
+        "release_type": "partial_review", "partial_acknowledged": True,
+    }
+    saved = api.post(base(), headers=header(), json=request)
+    assert saved.status_code == 200
+    assert api.post(base(), headers=header(), json=request).json() == saved.json()
+    for changed in (
+        {"release_type": "complete_review", "partial_acknowledged": False},
+        {"release_type": "partial_review", "partial_acknowledged": False},
+    ):
+        response = api.post(base(), headers=header(), json={**request, **changed})
+        assert response.status_code == 409
+    assert len(store.saved) == 1
+
+
+def test_t34_completeness_manifest_tamper_is_denied_on_historical_reads():
+    api, store = client()
+    operation = str(uuid4())
+    request = {"release_id": operation, "snapshot_hash": SNAPSHOT}
+    assert api.post(base(), headers=header(), json=request).status_code == 200
+    scope = store.saved[operation]["status"]["manifest"]["review_completeness"]
+    scope["reviewed_findings"] = 999
+    assert api.get(base() + "/" + operation, headers=header()).status_code in (403, 404, 503)
+    assert api.get(base(), headers=header()).status_code in (403, 404, 503)
+
+
+def test_t30_duplicate_finding_identity_cannot_be_complete():
+    api, store = client()
+    store.report["findings"].append({
+        "reference_id": "ref-1", "visual_assessment": {"regions": []},
+    })
+    assert api.get(base() + "/preview", headers=header(), params={
+        "snapshot_hash": SNAPSHOT,
+    }).status_code == 503
+    assert api.post(base(), headers=header(), json={
+        "release_id": str(uuid4()), "snapshot_hash": SNAPSHOT,
+    }).status_code == 503
+    assert not store.saved

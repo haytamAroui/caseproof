@@ -316,6 +316,15 @@ def create_release_router(store: Any) -> APIRouter:
             validated = checked_manifest(existing.get("manifest"), case_id, brief_id, str(body.release_id))
             if validated["snapshot_hash"] != body.snapshot_hash:
                 raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+            frozen_scope = validated.get("review_completeness")
+            if frozen_scope is not None:
+                if not isinstance(frozen_scope, dict):
+                    raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+                if (
+                    frozen_scope.get("release_type") != body.release_type
+                    or frozen_scope.get("partial_acknowledged") != body.partial_acknowledged
+                ):
+                    raise HTTPException(409, "release request identity already bound to another review scope")
             return cast(dict[str, Any], existing)
         if existing.get("state") != "absent":
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
