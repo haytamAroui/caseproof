@@ -38,6 +38,9 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
   const requestId = useRef<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
+  useEffect(() => {
+    setPartialAcknowledged(false);
+  }, [caseId, briefId, snapshot, session.epoch]);
   const base = exportsPath(scope);
   const preview = useQuery({
     queryKey: ['release-preview', session.epoch, caseId, briefId, snapshot],
@@ -88,6 +91,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       setSelected(parsed);
       requestId.current = null;
       setUnknown(false);
+      setPartialAcknowledged(false);
       setMessage(
         'Frozen reviewed release saved. Verify and download the selected artifact.',
       );

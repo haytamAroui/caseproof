@@ -25,7 +25,8 @@ def render_dossier_export(report: dict[str, Any], format: str) -> str:
     if format != 'markdown':
         raise ValueError('unsupported dossier export format')
     text = '# CaseProof scoped dossier report\n\n'
-    text += _section('Review completeness and release scope', report.get('review_completeness', {}))
+    if 'review_completeness' in report:
+        text += _section('Review completeness and release scope', report['review_completeness'])
     text += _section('Coverage', report['coverage'])
     text += _section('Verification contract', report.get('verification_contract', {}))
     text += _section('Abstentions', report.get('abstentions', []))
