@@ -635,7 +635,7 @@ def _exercise() -> None:
             )
             signed_docx_activation(
                 page, key=key, run=run, owner=owner, case=case,
-                org=org, registered=registered,
+                org=org, registered=registered, login=acceptance.login,
             )
 
         print("F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_EXPLICIT_CHECK_PASSED", flush=True)
