@@ -424,12 +424,25 @@ def test_t32_legacy_manifest_without_policy_keeps_exact_historical_bytes():
         "release_id": operation, "snapshot_hash": SNAPSHOT,
     }).status_code == 200
     saved = store.saved[operation]
-    original_bytes = saved["contents"]["docx"]
-    # A legacy frozen receipt can legitimately lack new additive fields.
+    # Construct genuine legacy-v1-style bytes with no completeness field.
+    old_report = {**store.report, "human_decisions": store.decisions}
+    artifacts = _checked_artifacts(old_report, store.original)
     old = saved["status"]["manifest"]
     old.pop("release_policy")
-    old["limitations"] = old["limitations"][:-1] if old["limitations"][-1].startswith(
-        "Review completeness counts") else old["limitations"]
+    old["limitations"] = [
+        item for item in old["limitations"]
+        if not item.startswith("Review completeness counts")
+    ]
+    old["artifacts"] = {
+        kind: {
+            "sha256": sha(raw), "byte_length": len(raw),
+            "media_type": old["artifacts"][kind]["media_type"],
+        } for kind, raw in artifacts.items()
+    }
+    saved["contents"] = {
+        kind: base64.b64encode(raw).decode("ascii") for kind, raw in artifacts.items()
+    }
+    original_bytes = saved["contents"]["docx"]
     old["manifest_sha256"] = sha(canonical({
         k: v for k, v in old.items() if k not in ("manifest_sha256", "server_receipt")
     }).encode())
