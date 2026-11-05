@@ -189,6 +189,19 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
         line('Derivative notice',
              'Annotated copy only. The preserved source is unchanged; no legal, '
              'authenticity, filing or fidelity certificate is issued.')
+        policy = report.get('release_policy')
+        if policy is not None:
+            if not isinstance(policy, dict) or policy.get('scope') not in ('partial', 'complete'):
+                raise ValueError('invalid release review policy')
+            line('Human finding-review scope (not legal verification)',
+                 str(policy['scope']).upper(), heading=True)
+            line('Detected findings requiring review', policy['required_findings'])
+            line('Distinct findings reviewed by a human', policy['reviewed_findings'])
+            line('Unreviewed detected findings', policy['unreviewed_findings'])
+            if policy['scope'] == 'partial':
+                line('PARTIAL RELEASE WARNING',
+                     'Some detected findings have no saved human disposition. '
+                     'This document is not a complete review or filing certificate.')
         line('Snapshot SHA-256', report['snapshot_hash'])
         for key, label in (
             ('case_id', 'Matter'), ('brief_id', 'Draft source version'),

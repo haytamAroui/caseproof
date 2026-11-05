@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from application.litigation.report_projection import canonical as canonical_report
 from application.litigation.report_projection import render_dossier_export
 from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.release_completeness import release_policy
 from infrastructure.parsers.dossier_docx_export import annotated_docx
 
 HEX64 = r"^[0-9a-f]{64}$"
@@ -33,6 +34,7 @@ class ReleaseCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     release_id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     snapshot_hash: str = Field(pattern=HEX64)
+    acknowledge_partial: bool = False
 
 
 def _hash(value: bytes) -> str:
@@ -99,6 +101,9 @@ def _validate_frozen_report(report: dict[str, Any]) -> None:
 def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dict[str, Any]:
     """No general VERIFIED flag: scopes, abstentions and decisions remain separate."""
     _validate_frozen_report(report)
+    policy = release_policy(report)
+    if not policy["can_release"]:
+        raise HTTPException(409, "no applicable reviewed finding; no release created")
     sources = report["sources"]
     decisions = report["human_decisions"]
     selected = []
@@ -160,6 +165,7 @@ def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dic
         "coverage": report["coverage"],
         "finding_count": len(report["findings"]),
         "review_count": len(decisions),
+        "release_policy": policy,
         "review_request_ids": [d["request_id"] for d in decisions],
         "review_sha256": _hash(canonical_report(decisions).encode()),
         "artifacts": {
@@ -170,6 +176,11 @@ def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dic
             "Machine checks are not semantic legal support or filing approval.",
             "Unchecked, incomplete and OCR-unreliable regions remain explicitly unresolved.",
             "This release is a frozen historical artifact, not a statement of currentness.",
+            "Review completeness counts detected findings, not semantic validity, OCR or full-document coverage.",
+            *(
+                ["PARTIAL REVIEW: unreviewed detected findings remain; explicit reviewer acknowledgement required."]
+                if policy["scope"] == "partial" else []
+            ),
         ],
     }
 
@@ -211,6 +222,23 @@ def create_release_router(store: Any) -> APIRouter:
             or len(raw["snapshot_hash"]) != 64
         ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        # Old v1 receipts have no completeness field. Never infer historical
+        # completeness or rewrite their signed manifests or artifact bytes.
+        if "release_policy" in raw:
+            p = raw["release_policy"]
+            if (
+                not isinstance(p, dict) or p.get("version") != 1
+                or p.get("scope") not in ("partial", "complete")
+                or type(p.get("total_findings")) is not int
+                or type(p.get("reviewed_findings")) is not int
+                or type(p.get("unreviewed_findings")) is not int
+                or p["total_findings"] != raw.get("finding_count")
+                or p["reviewed_findings"] < 1
+                or p["reviewed_findings"] + p["unreviewed_findings"] != p["total_findings"]
+                or p.get("review_complete") is not (p["scope"] == "complete")
+                or (p["unreviewed_findings"] == 0) != (p["scope"] == "complete")
+            ):
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         receipt = raw.get("server_receipt")
         unsigned = {key: value for key, value in raw.items() if key != "server_receipt"}
         claimed_hash = unsigned.get("manifest_sha256")
@@ -242,6 +270,7 @@ def create_release_router(store: Any) -> APIRouter:
         status = store.export_rpc(bearer, case_id, "authorize", None, {})
         if not status.get("authorized"):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        policy = release_policy(report)
         return {
             "schema": "caseproof-release-preview-v1",
             "case_id": case_id, "brief_id": brief_id, "snapshot_hash": snapshot_hash,
@@ -249,7 +278,10 @@ def create_release_router(store: Any) -> APIRouter:
             "review_count": len(report["human_decisions"]),
             "coverage": report["coverage"],
             "formats": list(FORMATS),
-            "release_ready": len(report["human_decisions"]) > 0,
+            "release_ready": policy["can_release"],
+            "can_release": policy["can_release"],
+            "release_policy": policy,
+            "currentness": "current",
             "limitations": ["Human review is not a legal certificate.", "Scope and abstentions remain visible."],
         }
 
@@ -277,9 +309,15 @@ def create_release_router(store: Any) -> APIRouter:
             store, bearer, case_id, brief_id, body.snapshot_hash, decisions=True
         )
         _validate_frozen_report(report)
-        if not report["human_decisions"]:
-            raise HTTPException(409, "persisted human review required for reviewed release")
-        artifacts = _checked_artifacts(report, original)
+        policy = release_policy(report)
+        if not policy["can_release"]:
+            raise HTTPException(409, "at least one applicable persisted finding review required")
+        if policy["scope"] == "partial" and not body.acknowledge_partial:
+            raise HTTPException(409, "partial release requires explicit acknowledgement")
+        # Each downloaded derivative must itself say PARTIAL or COMPLETE;
+        # a detached DOCX must not rely solely on the sidecar manifest.
+        export_report = {**report, "release_policy": policy}
+        artifacts = _checked_artifacts(export_report, original)
         manifest = release_manifest(report, artifacts)
         manifest["release_id"] = str(body.release_id)
         manifest["manifest_sha256"] = _hash(canonical(manifest).encode())

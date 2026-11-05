@@ -21,6 +21,22 @@ const preview = {
   finding_count: 2,
   review_count: 1,
   release_ready: true,
+  can_release: true,
+  currentness: 'current',
+  release_policy: {
+    version: 1,
+    scope: 'partial',
+    can_release: true,
+    total_findings: 2,
+    required_findings: 2,
+    reviewed_findings: 1,
+    unreviewed_findings: 1,
+    review_complete: false,
+    reviewed_reference_ids: ['ref-one'],
+    unreviewed_reference_ids: ['ref-two'],
+    references_truncated: false,
+    reason_codes: ['UNREVIEWED_FINDINGS'],
+  },
   formats: ['json', 'markdown', 'docx'],
   coverage: {
     unprocessed_regions: 1,
@@ -47,6 +63,7 @@ function record(releaseId: string, frozen = snapshot) {
       bundle_signature: 'b'.repeat(64),
       review_count: 1,
       finding_count: 2,
+      release_policy: preview.release_policy,
       coverage: preview.coverage,
       sources: [
         { role: 'draft', version_id: briefId, sha256: 'c'.repeat(64) },
@@ -154,8 +171,10 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
     const command = route.request().postDataJSON() as {
       release_id: string;
       snapshot_hash: string;
+      acknowledge_partial: boolean;
     };
     expect(command.snapshot_hash).toBe(snapshot);
+    expect(command.acknowledge_partial).toBe(true);
     const next = record(command.release_id);
     saved.push(next);
     return route.fulfill({ json: next });
@@ -173,6 +192,14 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
   );
   await open(page);
   await expect(page.getByText('Partial OCR remains unassessed.')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Create frozen reviewed release' }),
+  ).toBeDisabled();
+  await page
+    .getByRole('checkbox', {
+      name: /I understand this is a partial reviewed release/,
+    })
+    .check();
   await page
     .getByRole('button', { name: 'Create frozen reviewed release' })
     .click();
@@ -243,6 +270,11 @@ test('F6 lost POST acknowledgment reconciles without repeating the write', async
     return route.fulfill({ json: committed });
   });
   await open(page);
+  await page
+    .getByRole('checkbox', {
+      name: /I understand this is a partial reviewed release/,
+    })
+    .check();
   await page
     .getByRole('button', { name: 'Create frozen reviewed release' })
     .click();
