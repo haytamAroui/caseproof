@@ -151,8 +151,8 @@ values('{version}','{org}','{doc}',1,repeat('a',64),30000,'{media}','{role}');
     )
     _run(
         "create function caseproof.fail_document_reserve_audit() returns trigger"
-        " language plpgsql as $ begin if new.action='dossier_document_edit_reserved'"
-        " then raise exception 'forced edit reserve audit denial'; end if; return new; end $;"
+        " language plpgsql as $$ begin if new.action='dossier_document_edit_reserved'"
+        " then raise exception 'forced edit reserve audit denial'; end if; return new; end $$;"
         "create trigger fail_document_reserve_audit before insert on caseproof.audit_events"
         " for each row execute function caseproof.fail_document_reserve_audit();",
         env,
