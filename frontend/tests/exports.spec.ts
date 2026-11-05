@@ -24,12 +24,18 @@ const preview = {
   can_release: true,
   currentness: 'current',
   release_policy: {
-    version: 1, scope: 'partial', can_release: true,
-    total_findings: 2, required_findings: 2,
-    reviewed_findings: 1, unreviewed_findings: 1,
+    version: 1,
+    scope: 'partial',
+    can_release: true,
+    total_findings: 2,
+    required_findings: 2,
+    reviewed_findings: 1,
+    unreviewed_findings: 1,
     review_complete: false,
-    reviewed_reference_ids: ['ref-one'], unreviewed_reference_ids: ['ref-two'],
-    references_truncated: false, reason_codes: ['UNREVIEWED_FINDINGS'],
+    reviewed_reference_ids: ['ref-one'],
+    unreviewed_reference_ids: ['ref-two'],
+    references_truncated: false,
+    reason_codes: ['UNREVIEWED_FINDINGS'],
   },
   formats: ['json', 'markdown', 'docx'],
   coverage: {
@@ -186,9 +192,17 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
   );
   await open(page);
   await expect(page.getByText('Partial OCR remains unassessed.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create frozen reviewed release' })).toBeDisabled();
-  await page.getByRole('checkbox', { name: /I understand this is a partial reviewed release/ }).check();
-  await page.getByRole('button', { name: 'Create frozen reviewed release' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Create frozen reviewed release' }),
+  ).toBeDisabled();
+  await page
+    .getByRole('checkbox', {
+      name: /I understand this is a partial reviewed release/,
+    })
+    .check();
+  await page
+    .getByRole('button', { name: 'Create frozen reviewed release' })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Selected frozen release' }),
   ).toBeVisible();
@@ -256,8 +270,14 @@ test('F6 lost POST acknowledgment reconciles without repeating the write', async
     return route.fulfill({ json: committed });
   });
   await open(page);
-  await page.getByRole('checkbox', { name: /I understand this is a partial reviewed release/ }).check();
-  await page.getByRole('button', { name: 'Create frozen reviewed release' }).click();
+  await page
+    .getByRole('checkbox', {
+      name: /I understand this is a partial reviewed release/,
+    })
+    .check();
+  await page
+    .getByRole('button', { name: 'Create frozen reviewed release' })
+    .click();
   await expect(page.getByText(/Release outcome unknown/)).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Create frozen reviewed release' }),

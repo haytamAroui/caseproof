@@ -32,7 +32,9 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState('');
   const [unknown, setUnknown] = useState(false);
-  const [partialConsentKey, setPartialConsentKey] = useState<string | null>(null);
+  const [partialConsentKey, setPartialConsentKey] = useState<string | null>(
+    null,
+  );
   // The same operation id survives a lost POST acknowledgement within this
   // screen. We never silently mint a new id and retry a consequential write.
   const requestId = useRef<string | null>(null);
@@ -60,8 +62,13 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
   });
 
   async function commitRelease() {
-    if (!valid || !preview.data?.can_release || working ||
-        (preview.data.release_policy.scope === 'partial' && !partialAcknowledged)) return;
+    if (
+      !valid ||
+      !preview.data?.can_release ||
+      working ||
+      (preview.data.release_policy.scope === 'partial' && !partialAcknowledged)
+    )
+      return;
     const id = requestId.current ?? crypto.randomUUID();
     requestId.current = id;
     const controller = new AbortController();
@@ -72,8 +79,13 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       // One exact snapshot command; POST is deliberately never retried.
       const response = await api.post(
         base,
-        { release_id: id, snapshot_hash: snapshot,
-          acknowledge_partial: preview.data.release_policy.scope === 'partial' && partialAcknowledged },
+        {
+          release_id: id,
+          snapshot_hash: snapshot,
+          acknowledge_partial:
+            preview.data.release_policy.scope === 'partial' &&
+            partialAcknowledged,
+        },
         controller.signal,
       );
       const parsed = parseRelease(response, scope);
@@ -88,11 +100,15 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       if (error instanceof ApiError && [409, 412, 422].includes(error.status)) {
         requestId.current = null;
         setUnknown(false);
-        setMessage('Release rejected: current review, snapshot or output is no longer eligible. Recheck the preview; no release was confirmed.');
+        setMessage(
+          'Release rejected: current review, snapshot or output is no longer eligible. Recheck the preview; no release was confirmed.',
+        );
         void preview.refetch();
       } else {
         setUnknown(true);
-        setMessage('Release outcome unknown. Reconcile this operation before starting a new release.');
+        setMessage(
+          'Release outcome unknown. Reconcile this operation before starting a new release.',
+        );
       }
     } finally {
       setWorking(false);
@@ -211,40 +227,72 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
               <h2>Preview release scope</h2>
               <p>
                 {preview.data.release_policy.total_findings} detected findings;{' '}
-                {preview.data.release_policy.reviewed_findings} individually reviewed;{' '}
-                {preview.data.release_policy.unreviewed_findings} awaiting review.
-                ({preview.data.review_count} persisted decision rows.)
+                {preview.data.release_policy.reviewed_findings} individually
+                reviewed; {preview.data.release_policy.unreviewed_findings}{' '}
+                awaiting review. ({preview.data.review_count} persisted decision
+                rows.)
               </p>
               <p aria-live="polite">
-                Review scope: <strong>{preview.data.release_policy.scope === 'complete'
-                  ? 'Complete finding review (not legal verification)'
-                  : preview.data.release_policy.scope === 'partial'
-                    ? 'Partial finding review'
-                    : 'Blocked — no applicable finding review'}</strong>.
+                Review scope:{' '}
+                <strong>
+                  {preview.data.release_policy.scope === 'complete'
+                    ? 'Complete finding review (not legal verification)'
+                    : preview.data.release_policy.scope === 'partial'
+                      ? 'Partial finding review'
+                      : 'Blocked — no applicable finding review'}
+                </strong>
+                .
               </p>
               <h3>Release checklist</h3>
               <ul>
-                <li>Export authorization and current snapshot: checked by server</li>
-                <li>Review completeness: {preview.data.release_policy.review_complete
-                  ? 'Every detected finding has a human disposition'
-                  : preview.data.release_policy.unreviewed_findings + ' detected findings need review'}</li>
-                <li>Coverage and accuracy: assessed independently below; not certified</li>
+                <li>
+                  Export authorization and current snapshot: checked by server
+                </li>
+                <li>
+                  Review completeness:{' '}
+                  {preview.data.release_policy.review_complete
+                    ? 'Every detected finding has a human disposition'
+                    : preview.data.release_policy.unreviewed_findings +
+                      ' detected findings need review'}
+                </li>
+                <li>
+                  Coverage and accuracy: assessed independently below; not
+                  certified
+                </li>
               </ul>
-              {preview.data.release_policy.unreviewed_reference_ids.length > 0 && (
+              {preview.data.release_policy.unreviewed_reference_ids.length >
+                0 && (
                 <>
                   <h3>Findings awaiting review</h3>
                   <ul aria-label="Findings awaiting review">
-                    {preview.data.release_policy.unreviewed_reference_ids.map((ref) => (
-                      <li key={ref}>
-                        <Link to={'/matters/' + caseId + '/briefs/' + briefId
-                          + '?snapshot=' + snapshot + '&finding=' + encodeURIComponent(ref)}>
-                          Inspect and review finding {ref}
-                        </Link>
-                      </li>
-                    ))}
+                    {preview.data.release_policy.unreviewed_reference_ids.map(
+                      (ref) => (
+                        <li key={ref}>
+                          <Link
+                            to={
+                              '/matters/' +
+                              caseId +
+                              '/briefs/' +
+                              briefId +
+                              '?snapshot=' +
+                              snapshot +
+                              '&finding=' +
+                              encodeURIComponent(ref)
+                            }
+                          >
+                            Inspect and review finding {ref}
+                          </Link>
+                        </li>
+                      ),
+                    )}
                   </ul>
-                  {preview.data.release_policy.unreviewed_findings > preview.data.release_policy.unreviewed_reference_ids.length && (
-                    <Notice>Only the first 128 pending links are shown; reopen the full findings workspace for the remaining items.</Notice>
+                  {preview.data.release_policy.unreviewed_findings >
+                    preview.data.release_policy.unreviewed_reference_ids
+                      .length && (
+                    <Notice>
+                      Only the first 128 pending links are shown; reopen the
+                      full findings workspace for the remaining items.
+                    </Notice>
                   )}
                 </>
               )}
@@ -264,9 +312,10 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
               ))}
               {!preview.data.can_release && (
                 <Notice error>
-                  No applicable saved finding review exists, or there are no detected findings.
-                  This reviewed-release operation is unavailable. Inspect the findings workspace.
-                  Reason: {preview.data.release_policy.reason_codes.join(', ')}.
+                  No applicable saved finding review exists, or there are no
+                  detected findings. This reviewed-release operation is
+                  unavailable. Inspect the findings workspace. Reason:{' '}
+                  {preview.data.release_policy.reason_codes.join(', ')}.
                 </Notice>
               )}
               {preview.data.release_policy.scope === 'partial' && (
@@ -275,17 +324,26 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                     type="checkbox"
                     checked={partialAcknowledged}
                     onChange={(event) =>
-                      setPartialConsentKey(event.target.checked ? consentKey : null)}
+                      setPartialConsentKey(
+                        event.target.checked ? consentKey : null,
+                      )
+                    }
                   />
                   I understand this is a partial reviewed release with{' '}
-                  {preview.data.release_policy.unreviewed_findings} unreviewed detected findings,
-                  and not a filing or legal verification certificate.
+                  {preview.data.release_policy.unreviewed_findings} unreviewed
+                  detected findings, and not a filing or legal verification
+                  certificate.
                 </label>
               )}
               <Button
                 onClick={() => void commitRelease()}
-                disabled={!preview.data.can_release || working || unknown ||
-                  (preview.data.release_policy.scope === 'partial' && !partialAcknowledged)}
+                disabled={
+                  !preview.data.can_release ||
+                  working ||
+                  unknown ||
+                  (preview.data.release_policy.scope === 'partial' &&
+                    !partialAcknowledged)
+                }
               >
                 {working ? 'Processing…' : 'Create frozen reviewed release'}
               </Button>
@@ -363,7 +421,8 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
             {selected.manifest.release_policy?.scope === 'complete'
               ? 'Complete finding review at release time. This does not certify coverage or legal support.'
               : selected.manifest.release_policy?.scope === 'partial'
-                ? 'PARTIAL REVIEW: ' + selected.manifest.release_policy.unreviewed_findings +
+                ? 'PARTIAL REVIEW: ' +
+                  selected.manifest.release_policy.unreviewed_findings +
                   ' detected findings had no human disposition at release time.'
                 : 'Legacy release: finding-review completeness was not recorded. Do not infer completeness.'}
           </Notice>

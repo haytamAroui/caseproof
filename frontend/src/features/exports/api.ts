@@ -97,7 +97,10 @@ const limits: Record<ExportFormat, number> = {
   docx: 5_242_880,
 };
 
-function validPolicy(value: unknown, allowBlocked: boolean): value is ReleasePolicy {
+function validPolicy(
+  value: unknown,
+  allowBlocked: boolean,
+): value is ReleasePolicy {
   if (!plain(value)) return false;
   const p = value;
   if (
@@ -117,10 +120,14 @@ function validPolicy(value: unknown, allowBlocked: boolean): value is ReleasePol
     ![p.reviewed_reference_ids, p.unreviewed_reference_ids].every(
       (values) =>
         values.length <= 128 &&
-        values.every((ref: unknown) => typeof ref === 'string' && ref.length > 0 && ref.length <= 256) &&
+        values.every(
+          (ref: unknown) =>
+            typeof ref === 'string' && ref.length > 0 && ref.length <= 256,
+        ) &&
         new Set(values).size === values.length,
     )
-  ) return false;
+  )
+    return false;
   if (
     p.total_findings !== p.required_findings ||
     p.reviewed_findings + p.unreviewed_findings !== p.total_findings ||
@@ -128,11 +135,14 @@ function validPolicy(value: unknown, allowBlocked: boolean): value is ReleasePol
     p.unreviewed_reference_ids.length > p.unreviewed_findings ||
     p.can_release !== (p.scope !== 'blocked') ||
     p.review_complete !== (p.scope === 'complete') ||
-    (p.scope === 'complete' && (p.total_findings === 0 || p.unreviewed_findings !== 0)) ||
-    (p.scope === 'partial' && (p.reviewed_findings === 0 || p.unreviewed_findings === 0)) ||
+    (p.scope === 'complete' &&
+      (p.total_findings === 0 || p.unreviewed_findings !== 0)) ||
+    (p.scope === 'partial' &&
+      (p.reviewed_findings === 0 || p.unreviewed_findings === 0)) ||
     (p.scope === 'blocked' && p.reviewed_findings !== 0) ||
     (!allowBlocked && p.scope === 'blocked')
-  ) return false;
+  )
+    return false;
   return true;
 }
 
@@ -190,11 +200,10 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
     !number(manifest.review_count) ||
     manifest.review_count < 1 ||
     !number(manifest.finding_count) ||
-    (manifest.release_policy !== undefined && (
-      !validPolicy(manifest.release_policy, false) ||
-      manifest.release_policy.total_findings !== manifest.finding_count ||
-      manifest.release_policy.reviewed_findings > manifest.review_count
-    )) ||
+    (manifest.release_policy !== undefined &&
+      (!validPolicy(manifest.release_policy, false) ||
+        manifest.release_policy.total_findings !== manifest.finding_count ||
+        manifest.release_policy.reviewed_findings > manifest.review_count)) ||
     !plain(manifest.coverage) ||
     !digest.test(String(manifest.manifest_sha256)) ||
     !digest.test(String(manifest.server_receipt)) ||
