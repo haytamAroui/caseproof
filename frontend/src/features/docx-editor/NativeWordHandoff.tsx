@@ -390,12 +390,15 @@ export function NativeWordHandoff({
         report.brief_id !== activeVersion ||
         typeof report.snapshot_hash !== 'string' ||
         !SHA.test(report.snapshot_hash)
-      ) throw Error('Recheck did not bind to the activated draft.');
+      )
+        throw Error('Recheck did not bind to the activated draft.');
       void navigate(
         `/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(activeVersion)}?snapshot=${report.snapshot_hash}`,
       );
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Recheck unavailable.');
+      setStatus(
+        error instanceof Error ? error.message : 'Recheck unavailable.',
+      );
     } finally {
       setBusy(false);
     }
