@@ -33,6 +33,20 @@ const manifest = {
   snapshot_hash: scope.snapshot,
   review_count: 1,
   finding_count: 1,
+  release_policy: {
+    version: 1,
+    scope: 'complete',
+    can_release: true,
+    total_findings: 1,
+    required_findings: 1,
+    reviewed_findings: 1,
+    unreviewed_findings: 0,
+    review_complete: true,
+    reviewed_reference_ids: ['ref-one'],
+    unreviewed_reference_ids: [],
+    references_truncated: false,
+    reason_codes: [],
+  },
   coverage: { reference_recall_measured: false },
   sources: [
     { role: 'draft', version_id: scope.briefId, sha256: 'c'.repeat(64) },
@@ -200,6 +214,22 @@ describe('F6 reviewed export contracts', () => {
       finding_count: 1,
       review_count: 0,
       release_ready: false,
+      can_release: false,
+      currentness: 'current',
+      release_policy: {
+        version: 1,
+        scope: 'blocked',
+        can_release: false,
+        total_findings: 1,
+        required_findings: 1,
+        reviewed_findings: 0,
+        unreviewed_findings: 1,
+        review_complete: false,
+        reviewed_reference_ids: [],
+        unreviewed_reference_ids: ['ref-one'],
+        references_truncated: false,
+        reason_codes: ['NO_APPLICABLE_REVIEWS'],
+      },
       coverage: {},
       formats: ['json', 'markdown', 'docx'],
       limitations: ['Not certified'],
@@ -313,5 +343,45 @@ describe('F6 authenticated binary downloads', () => {
       ),
     ).rejects.toThrow();
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('T30–T34 review completeness contracts', () => {
+  it('accepts a signed partial release only with consistent unique-finding counts', () => {
+    const partial = {
+      ...manifest,
+      finding_count: 2,
+      release_policy: {
+        ...manifest.release_policy,
+        scope: 'partial',
+        total_findings: 2,
+        required_findings: 2,
+        reviewed_findings: 1,
+        unreviewed_findings: 1,
+        review_complete: false,
+        unreviewed_reference_ids: ['ref-two'],
+        reason_codes: ['UNREVIEWED_FINDINGS'],
+      },
+    };
+    expect(parseRelease({ ...record, manifest: partial }, scope).manifest.release_policy?.scope).toBe('partial');
+    expect(() => parseRelease({
+      ...record, manifest: { ...partial, release_policy: {
+        ...partial.release_policy, reviewed_findings: 2,
+      } },
+    }, scope)).toThrow();
+    expect(() => parseRelease({
+      ...record, manifest: { ...partial, release_policy: {
+        ...partial.release_policy, scope: 'complete',
+      } },
+    }, scope)).toThrow();
+  });
+  it('retains immutable legacy v1 records without inventing completeness', () => {
+    const { release_policy: removed, ...old } = manifest;
+    expect(removed).toBeDefined();
+    expect(parseRelease({ ...record, manifest: old }, scope).manifest.release_policy).toBeUndefined();
+    expect(() => parseRelease({
+      ...record, manifest: { ...manifest, release_policy: { ...manifest.release_policy, version: 9 } },
+    }, scope)).toThrow();
   });
 });

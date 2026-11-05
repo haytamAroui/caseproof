@@ -11,6 +11,20 @@ export interface ArtifactInfo {
   byte_length: number;
   media_type: string;
 }
+export interface ReleasePolicy {
+  version: 1;
+  scope: 'blocked' | 'partial' | 'complete';
+  can_release: boolean;
+  total_findings: number;
+  required_findings: number;
+  reviewed_findings: number;
+  unreviewed_findings: number;
+  review_complete: boolean;
+  reviewed_reference_ids: string[];
+  unreviewed_reference_ids: string[];
+  references_truncated: boolean;
+  reason_codes: string[];
+}
 export interface ReleaseManifest {
   schema: 'caseproof-reviewed-release-v1';
   release_id: string;
@@ -19,6 +33,7 @@ export interface ReleaseManifest {
   snapshot_hash: string;
   review_count: number;
   finding_count: number;
+  release_policy?: ReleasePolicy; // absent for immutable legacy v1 releases
   coverage: Record<string, unknown>;
   sources: { role: string; version_id: string; sha256: string }[];
   source_links: {
@@ -56,6 +71,9 @@ export interface ReleasePreview {
   finding_count: number;
   review_count: number;
   release_ready: boolean;
+  can_release: boolean;
+  currentness: 'current';
+  release_policy: ReleasePolicy;
   formats: ExportFormat[];
   coverage: Record<string, unknown>;
   limitations: string[];
@@ -79,6 +97,45 @@ const limits: Record<ExportFormat, number> = {
   docx: 5_242_880,
 };
 
+function validPolicy(value: unknown, allowBlocked: boolean): value is ReleasePolicy {
+  if (!plain(value)) return false;
+  const p = value;
+  if (
+    p.version !== 1 ||
+    !['blocked', 'partial', 'complete'].includes(String(p.scope)) ||
+    typeof p.can_release !== 'boolean' ||
+    !number(p.total_findings) ||
+    !number(p.required_findings) ||
+    !number(p.reviewed_findings) ||
+    !number(p.unreviewed_findings) ||
+    typeof p.review_complete !== 'boolean' ||
+    typeof p.references_truncated !== 'boolean' ||
+    !Array.isArray(p.reviewed_reference_ids) ||
+    !Array.isArray(p.unreviewed_reference_ids) ||
+    !Array.isArray(p.reason_codes) ||
+    !p.reason_codes.every((r: unknown) => typeof r === 'string') ||
+    ![p.reviewed_reference_ids, p.unreviewed_reference_ids].every(
+      (values) =>
+        values.length <= 128 &&
+        values.every((ref: unknown) => typeof ref === 'string' && ref.length > 0 && ref.length <= 256) &&
+        new Set(values).size === values.length,
+    )
+  ) return false;
+  if (
+    p.total_findings !== p.required_findings ||
+    p.reviewed_findings + p.unreviewed_findings !== p.total_findings ||
+    p.reviewed_reference_ids.length > p.reviewed_findings ||
+    p.unreviewed_reference_ids.length > p.unreviewed_findings ||
+    p.can_release !== (p.scope !== 'blocked') ||
+    p.review_complete !== (p.scope === 'complete') ||
+    (p.scope === 'complete' && (p.total_findings === 0 || p.unreviewed_findings !== 0)) ||
+    (p.scope === 'partial' && (p.reviewed_findings === 0 || p.unreviewed_findings === 0)) ||
+    (p.scope === 'blocked' && p.reviewed_findings !== 0) ||
+    (!allowBlocked && p.scope === 'blocked')
+  ) return false;
+  return true;
+}
+
 export function exportsPath(scope: ReleaseScope): string {
   return `/v2/matters/${encodeURIComponent(scope.caseId)}/briefs/${encodeURIComponent(scope.briefId)}/dossier/releases`;
 }
@@ -95,7 +152,12 @@ export function parseReleasePreview(
     !number(raw.finding_count) ||
     !number(raw.review_count) ||
     typeof raw.release_ready !== 'boolean' ||
-    raw.release_ready !== raw.review_count > 0 ||
+    !validPolicy(raw.release_policy, true) ||
+    raw.can_release !== raw.release_policy.can_release ||
+    raw.release_ready !== raw.release_policy.can_release ||
+    raw.release_policy.total_findings !== raw.finding_count ||
+    raw.release_policy.reviewed_findings > raw.review_count ||
+    raw.currentness !== 'current' ||
     !plain(raw.coverage) ||
     !Array.isArray(raw.formats) ||
     raw.formats.length !== 3 ||
@@ -128,6 +190,11 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
     !number(manifest.review_count) ||
     manifest.review_count < 1 ||
     !number(manifest.finding_count) ||
+    (manifest.release_policy !== undefined && (
+      !validPolicy(manifest.release_policy, false) ||
+      manifest.release_policy.total_findings !== manifest.finding_count ||
+      manifest.release_policy.reviewed_findings > manifest.review_count
+    )) ||
     !plain(manifest.coverage) ||
     !digest.test(String(manifest.manifest_sha256)) ||
     !digest.test(String(manifest.server_receipt)) ||
