@@ -7,12 +7,14 @@ from datetime import datetime
 from hashlib import sha256
 from typing import Any, Protocol
 
-from application.capacity_envelope import MAX_PDF_PAGES, MAX_SOURCE_BYTES
+from application.capacity_envelope import MAX_PDF_PAGES, MAX_SOURCE_BYTES as CAPACITY_SOURCE_BYTES
 from application.extraction.contracts import ExtractionError, ExtractionSource, digest, text
 from packages.evidence_kernel.domain.anchors import TEXT_BASIS
 from packages.evidence_kernel.domain.source_versions import DerivedRepresentation, SourceVersion
 
 PARSER_SCHEMA = "caseproof-normalization-v1"
+# Public compatibility alias for existing isolated parser imports.
+MAX_SOURCE_BYTES = CAPACITY_SOURCE_BYTES
 MAX_TEXT_CHARS = 120_000
 MAX_BLOCKS = 2048
 
