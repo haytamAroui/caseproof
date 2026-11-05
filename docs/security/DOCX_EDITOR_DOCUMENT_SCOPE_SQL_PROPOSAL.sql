@@ -9,27 +9,51 @@
 -- _m1_matter_grants, retention_write_guard, audit_events and draft activation RPC.
 -- Tests must install this in a disposable database before caseproof-dev review.
 
--- This new permission must be explicitly admitted by both existing
--- tenant/matter grant whitelists. Preserve all existing action names and
--- reject any unspecified action. Do not drop the constraints without
--- restoring their exact original restrictions.
-alter table caseproof.organization_members
-  drop constraint organization_members_actions_check,
-  add constraint organization_members_actions_check
-  check (actions <@ array[
-    'case:read','coverage:read','evidence:read','finding:write',
-    'review:request','conclusion:request_approval','exception:request',
-    'draft:edit'
-  ]::text[]);
+-- Add only draft:edit while preserving the exact current permission
+-- whitelist from all previously applied migrations. Do not replace it with an
+-- older baseline: doing so would invalidate valid membership rows.
+do $doc_edit_permissions$
+declare
+  org_definition text;
+  matter_definition text;
+begin
+  select pg_get_constraintdef(c.oid) into org_definition
+  from pg_constraint c
+  join pg_class t on t.oid=c.conrelid
+  join pg_namespace n on n.oid=t.relnamespace
+  where n.nspname='caseproof' and t.relname='organization_members'
+    and c.conname='organization_members_actions_check'
+    and c.contype='c';
 
-alter table caseproof._m1_matter_grants
-  drop constraint _m1_matter_grants_permissions_check,
-  add constraint _m1_matter_grants_permissions_check
-  check (permissions <@ array[
-    'case:read','coverage:read','evidence:read','review:request',
-    'finding:write','evidence:upload','evidence:index',
-    'exhibit:confirm','draft:check','draft:edit'
-  ]::text[]);
+  select pg_get_constraintdef(c.oid) into matter_definition
+  from pg_constraint c
+  join pg_class t on t.oid=c.conrelid
+  join pg_namespace n on n.oid=t.relnamespace
+  where n.nspname='caseproof' and t.relname='_m1_matter_grants'
+    and c.conname='_m1_matter_grants_permissions_check'
+    and c.contype='c';
+
+  if org_definition is null or position('actions <@' in org_definition)=0
+    or position('draft:edit' in org_definition)>0
+    or matter_definition is null
+    or position('permissions <@' in matter_definition)=0
+    or position('draft:edit' in matter_definition)>0
+  then raise exception 'unreviewed membership permission constraint'
+    using errcode='55000'; end if;
+
+  execute 'alter table caseproof.organization_members
+    drop constraint organization_members_actions_check,
+    add constraint organization_members_actions_check ' ||
+    replace(org_definition, 'actions <@',
+      'array_remove(actions, ''draft:edit'') <@');
+
+  execute 'alter table caseproof._m1_matter_grants
+    drop constraint _m1_matter_grants_permissions_check,
+    add constraint _m1_matter_grants_permissions_check ' ||
+    replace(matter_definition, 'permissions <@',
+      'array_remove(permissions, ''draft:edit'') <@');
+end;
+$doc_edit_permissions$;
 
 create table caseproof.dossier_document_edit_reviews (
   org_id uuid not null,
