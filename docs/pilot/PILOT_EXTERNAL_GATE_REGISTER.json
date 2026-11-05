@@ -21,11 +21,11 @@
       "independent_receipt_sha256": null
     },
     "T70": {
-      "status": "OPEN",
+      "status": "EVIDENCED",
       "owner_role": "Independent security reviewer",
       "reviewer": null,
       "reviewed_at": null,
-      "evidence_ref": null,
+      "evidence_ref": "docs/security/T70_READONLY_LIVE_CATALOG_AUDIT_2026-11-05.md",
       "independent_receipt_sha256": null
     },
     "T72": {
@@ -37,11 +37,11 @@
       "independent_receipt_sha256": null
     },
     "T73": {
-      "status": "OPEN",
+      "status": "EVIDENCED",
       "owner_role": "Privacy officer / authorized law-firm controller",
       "reviewer": null,
       "reviewed_at": null,
-      "evidence_ref": null,
+      "evidence_ref": "docs/security/PILOT_DATA_FLOW.md",
       "independent_receipt_sha256": null
     },
     "T74": {

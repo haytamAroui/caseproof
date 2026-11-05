@@ -26,12 +26,32 @@ hosted, hybrid, firm-controlled or offline. Pin build+configuration hashes,
 operator, region(s), subprocessors, contractual terms/DPA, processing lawfulness,
 client privilege/professional-secrecy, legal hold, access roles, telemetry,
 backups, OCR/worker and support egress. Re-run a whole-perimeter scoped
-network/retention assessment for that configuration. A project region alone
+network/retention assessment for that configuration.
+Read-only Supabase MCP confirmed the **development project's** reported
+region \`eu-central-1\`, one non-public original Storage bucket, and
+signed/matter-scoped Storage RLS. It did not establish provider-wide
+data residency, subprocessors, traffic destinations, backup schedules,
+secure deletion, or the law firm's processor agreements. This is
+**partial T73 evidence only**.
+ A project region alone
 does not establish where all services, backups or support data reside. Use
 [SEC-01–16](../security/PILOT_DATA_SECURITY_GATE.md) and
 [deployment assessment runbook](../security/DEPLOYMENT_EVIDENCE_RUNBOOK.md).
 In signed dev, **originals do travel to Supabase private Storage**. Do not
 claim local-only/zero egress.
+
+**T74 (first):** **Do not confuse database backup recovery with
+original-file recovery.** Supabase's
+[backup documentation](https://supabase.com/docs/guides/platform/backups)
+states that database backups contain Storage object metadata, **not
+the uploaded object bytes**. The operational exercise must prove
+independent recovery of the original Storage objects and the database
+metadata, SHA-256 parity, historical read authorization, and deletion
+replay across both. The connected Supabase MCP does not expose a
+non-destructive database+Storage clone/restore operation and no backup
+schedule, backup-region or authorized isolated restore has been verified.
+Do not use `restore_project` on the running development project to
+satisfy this test.
 
 **T74 (first):** The disposable PostgreSQL 17 restore and erasure replay
 already passed, but do an **authorized operational restore test** for the

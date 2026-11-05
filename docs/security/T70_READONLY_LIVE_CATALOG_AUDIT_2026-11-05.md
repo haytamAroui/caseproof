@@ -76,3 +76,68 @@ Official Supabase references:
 [authenticated-callable definer functions](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable),
 [RLS without policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy),
 [leaked-password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+
+## Supabase MCP continuation — actual function and Storage policy examination
+
+**Evidence:** Read-only \`execute_sql\`, project metadata and Security
+Advisor through the connected Supabase MCP on the same development project,
+5 November 2026. Reproduction: [catalog SQL](T70_SUPABASE_MCP_CATALOG_RECHECK.sql).
+No table rows, object bodies, user credentials or customer data were read.
+No migrations, writes or changes to grants or authentication settings.
+
+All **19** authenticated-callable privileged CaseProof RPCs have a pinned
+empty \`search_path\`. A code-shape scan found **17** referencing
+\`auth.uid()\` directly and two wrappers that delegate checks:
+
+- \`caseproof_dev_bundle_manifest\` calls
+  \`caseproof_dev_bundle_manifest_original\`. That callee's live body
+  checks \`auth.uid()\`, authenticated/non-anonymous role, active
+  organization membership, active matter grants and evidence-read action,
+  before fetching the matter's source manifest.
+- \`caseproof_dossier_snapshot_read\` calls
+  \`caseproof_dossier(p_case, 'decisions', ...)\` first. The callee's
+  live body checks \`auth.uid()\`, role, active membership and matter
+  grants, a non-deleted case, bundle signature and snapshot before
+  reading frozen data.
+
+No dynamic SQL pattern was detected by the limited static scan. This
+**does not** prove the 19 function bodies or their delegates safe:
+the independent reviewer must inspect the complete call graph,
+operation authorization, race conditions, impersonation, stale sessions
+and actual cross-matter/revocation behavior.
+
+The seven directly readable CaseProof tables have authenticated-only
+\`SELECT\` policies and no anonymous \`SELECT\` grants in the observed
+catalog. In particular, the soft-delete guard policies
+\`retention_case_deny\` and \`retention_document_deny\` are **RESTRICTIVE**,
+rather than extra PERMISSIVE conditions that could inadvertently broaden
+access. Re-run this assertion after any policy migration. The 33
+RLS-with-no-policy private tables still require case-by-case review;
+their state must not be "fixed" by adding unrestricted policies.
+
+**Storage-specific observations:**
+
+- Bucket \`caseproof-originals-dev\`: \`public=false\`; configured
+  \`file_size_limit=20971520\` (20 MiB); accepted MIME types PDF,
+  DOCX, text/plain, PNG and JPEG. The application still enforces
+  a **5 MiB per-original development intake ceiling**; the larger
+  Storage limit is **not** a product promise.
+- \`storage.objects\` has the scoped \`caseproof_m1_original_put_once\`
+  \`INSERT\` policy and \`caseproof_m1_original_read\` \`SELECT\`
+  policy for authenticated identities. Both include active membership
+  and active matter-grant predicates, a private bucket ID, and structured
+  object keys tied to the registered source version.
+- No CaseProof-specific \`UPDATE\` or \`DELETE\` Storage policy was
+  observed. Storage operation-specific RLS and effective cross-tenant
+  revocation still require signed-client negative tests.
+  [Supabase Storage access controls](https://supabase.com/docs/guides/storage/security/access-control).
+
+**Supabase Security Advisor remains unresolved:** 19 callable definer
+warnings, 33 private no-policy notices and leaked-password-protection
+configuration warning. Advisor output is an observation, not
+an independent exploit finding or a certification.
+
+**Disposition:** \`T70=EVIDENCED\` (preliminary live catalog, external
+independent reviewer still **OPEN**). No claim of production-ready
+security or permission for actual confidential legal records.

@@ -33,6 +33,18 @@ def _register():
     return json.loads(Path(REGISTER).read_text())
 
 
+def test_t70_t73_preliminary_mcp_evidence_cannot_approve_pilot():
+    r = _register()
+    for gate in ("T70", "T73"):
+        assert r["gates"][gate]["status"] == "EVIDENCED"
+        assert r["gates"][gate]["evidence_ref"]
+    result = validate_register(r)
+    assert {"T70", "T73"} <= set(result["gates_requiring_external_review"])
+    assert result["ready_for_human_final_decision"] is False
+    assert result["machine_approves_pilot"] is False
+    assert result["machine_authorizes_client_data"] is False
+
+
 def test_evidence_reference_does_not_approve_external_security_gate():
     r = _register()
     r["gates"]["T70"]["status"] = "EVIDENCED"
