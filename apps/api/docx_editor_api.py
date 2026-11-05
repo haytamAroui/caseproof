@@ -346,9 +346,8 @@ def create_document_editor_router(store: DossierStore | None) -> APIRouter:
         body: EditorCommitBody,
     ) -> tuple[dict[str, Any], str]:
         fingerprint = editor_command_sha256(case_id, brief_id, body)
-        status = s.revisions.reserve(
-            bearer, case_id, body.request_id, "status",
-            {"command_sha256": fingerprint},
+        status = s.revisions.editor_status(
+            bearer, case_id, body.request_id, body.review_request_id, fingerprint,
         )
         if status.get("state") not in ("absent", "reserved", "active"):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -478,4 +477,7 @@ def create_document_editor_router(store: DossierStore | None) -> APIRouter:
             "reconciled": False,
         }
 
+    from apps.api.docx_native_workflow import create_native_word_router
+
+    router.include_router(create_native_word_router(store, bound))
     return router

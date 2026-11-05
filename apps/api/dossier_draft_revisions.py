@@ -104,6 +104,19 @@ class DraftRevisionClient:
             key=self.key, bearer=bearer,
         )
 
+    def editor_status(
+        self, bearer: str, case: str, request: str, review_request: str,
+        fingerprint: str,
+    ) -> dict[str, Any]:
+        """Always recheck fresh draft:edit scope even for an active operation."""
+        return self._rpc(
+            "caseproof_dossier_document_edit_status",
+            {
+                "p_case": case, "p_request": request,
+                "p_review": review_request, "p_command": fingerprint,
+            }, key=self.key, bearer=bearer,
+        )
+
     def editor_activate(
         self, bearer: str, case: str, request: str,
         review_request: str, digest: str, size: int,

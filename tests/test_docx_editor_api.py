@@ -276,6 +276,11 @@ def test_document_wide_review_commit_replay_and_integrity_with_disposable_adapte
                 "candidate_sha256": values["candidate_sha256"],
             }
 
+        def editor_status(self, bearer, case, request, review, fingerprint):
+            assert review == REVIEW_ID
+            return self.reserve(bearer, case, request, "status",
+                                {"command_sha256": fingerprint})
+
         def reserve(self, bearer, case, request, action, values):
             assert bearer == "signed" and case == "matter"
             assert action == "status" and request == COMMIT_ID
