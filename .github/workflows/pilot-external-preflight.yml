@@ -1,0 +1,24 @@
+name: Pilot independent evidence preflight (no client data)
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pilot-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Validate mandatory independent acceptance register stays blocked without sign-off
+        run: uv run --locked python -m scripts.check_pilot_readiness
+      - name: Reject fabricated approvals, invalid corpus observations and misleading denominators
+        run: uv run --locked pytest -q tests/test_pilot_readiness.py
+      - name: Lint the evidence preflight (not a security certification)
+        run: uv run --locked ruff check application/pilot_readiness.py application/pilot_study.py scripts/check_pilot_readiness.py tests/test_pilot_readiness.py

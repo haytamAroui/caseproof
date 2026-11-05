@@ -1,0 +1,7 @@
+{
+  "schema": "caseproof-practitioner-study-v1",
+  "data_class": "authorized_pilot",
+  "build_sha": "FILL_VERIFIED_RELEASE_COMMIT_IN_PRIVATE_COPY",
+  "dossiers": [],
+  "sessions": []
+}

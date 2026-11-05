@@ -1,0 +1,123 @@
+# CaseProof — external pilot acceptance handoff (T61, T70, T72–T79)
+
+**State: NOT PILOT APPROVED.** Created 5 November 2026 on the signed
+engineering baseline [PR #198](https://github.com/haytamAroui/caseproof/pull/198).
+This is the prioritized handoff for outside reviewers. It does not contain
+a fictitious security sign-off, a Microsoft Word host run, a real client
+authorization or a lawyer's result.
+
+Use [the structured gate register](PILOT_EXTERNAL_GATE_REGISTER.json)
+for status only; its validator cannot verify signers, legal rights, real
+deployment behavior or operator authority. Keep actual sensitive evidence
+in approved, access-controlled storage, never in GitHub/Actions.
+
+## Stage 1 — independent security, privacy and recoverability
+
+**T70 (first):** Provide [read-only live dev catalog observation](../security/T70_READONLY_LIVE_CATALOG_AUDIT_2026-11-05.md)
+to an independent application/database security reviewer. Inspect the 19
+authenticated-callable privileged functions, seven RLS-protected read tables,
+33 no-policy private tables, auth leaked-password warning, cross-matter
+revocation, stale grants, storage shares and signed source/release retrieval.
+Capture defects, severities, remediation, independent rerun and decision.
+Do not automatically change SECURITY DEFINER functions or RLS in production.
+
+**T73 (first):** Have the actual deployment controller/privacy officer select
+hosted, hybrid, firm-controlled or offline. Pin build+configuration hashes,
+operator, region(s), subprocessors, contractual terms/DPA, processing lawfulness,
+client privilege/professional-secrecy, legal hold, access roles, telemetry,
+backups, OCR/worker and support egress. Re-run a whole-perimeter scoped
+network/retention assessment for that configuration. A project region alone
+does not establish where all services, backups or support data reside. Use
+[SEC-01–16](../security/PILOT_DATA_SECURITY_GATE.md) and
+[deployment assessment runbook](../security/DEPLOYMENT_EVIDENCE_RUNBOOK.md).
+In signed dev, **originals do travel to Supabase private Storage**. Do not
+claim local-only/zero egress.
+
+**T74 (first):** The disposable PostgreSQL 17 restore and erasure replay
+already passed, but do an **authorized operational restore test** for the
+selected Supabase backup and Storage snapshot into an isolated/quarantined
+target. Record RPO/RTO, version/region, snapshot identity, backup retention,
+original SHA-256 readback, OCR/crop/snapshot/review/release authorizations,
+legal holds, and **re-deletion of pre-backup erased content before access**.
+Re-run revoked-user and cross-matter read tests after restore. Never test
+destructive restore by modifying the existing live \`caseproof-dev\` data.
+Operations/privacy owners must review both successful recovery and failures.
+
+**T72 (alongside):** Inspect exact production and developer dependency
+advisories, pinned lockfiles, SBOM, provenance, update and incident cadence.
+A supply-chain CI pass does not authorize known advisories.
+
+## Stage 2 — actual document hosts and manual accessibility
+
+**T61 (after engineering gates):** Test with real **Microsoft Word desktop**
+(on recorded OS, Office version and settings) and LibreOffice Writer.
+Use rights-cleared DOCX originals, corrected derivatives and annotated exports.
+Check paragraph styles/runs, numbered legal headings, tables, nested elements,
+footnotes/endnotes, comments, tracked revisions, fields, links, images, page
+breaks, print layout and saving/reopening. Compare original and derivative
+hashes and expected changes. Record screenshots and defects in private
+storage. The existing LibreOffice CI smoke is not a Word desktop test.
+Reviewer and practitioner must approve the defined support matrix or record
+unsupported constructs.
+
+**T75 (after final frontend design):** Run keyboard-only and human AT checks:
+NVDA/JAWS on Windows plus VoiceOver where the supported matrix calls for it;
+browser/OS/screen-reader versions; Dutch/French/English text; 320px and real
+200% zoom; forced colors/reduced motion; accessible authentication; modal
+focus/restore; error announcements; upload, pages/crops, finding decisions,
+correction, release and history. Log WCAG 2.2 A/AA criteria, findings,
+severities, retests and independent accessibility reviewer decision.
+Automated axe and Playwright are prerequisite evidence, not human sign-off.
+References: [W3C WCAG 2.2](https://www.w3.org/TR/WCAG22/) and
+[UK government manual AT testing](https://www.gov.uk/service-manual/helping-people-to-use-your-service/testing-for-accessibility).
+
+## Stage 3 — permitted corpus and two-lawyer study
+
+**T76:** Collect **3–5 representative** NL/FR (and supported EN/manual
+cases) rights-cleared DOCX/inventory/text PDF/scanned PDF dossiers.
+Obtain written rights-holder authorization, controller processing permission,
+approved processors/regions, data class, access policy, legal hold and
+deletion schedule **before any client bytes enter CaseProof**. Hash and
+inventory sources only inside approved private custody. Independently label
+reference identity, physical/printed/bundle pages, fidelity, OCR abstentions
+and seeded/source-known errors. Keep disagreements and third adjudication
+explicit. Use [existing corpus protocol](P6_PRACTITIONER_AND_CORPUS_PROTOCOL.md).
+
+**T78:** Two different practicing reviewers (codes only in metrics) review
+counterbalanced manual versus CaseProof conditions on the same adjudicated
+corpus **without seeing each other's results**. Each reviewer uses both
+conditions, but not both conditions on the same dossier. Capture actual
+seconds, independently measured gold denominators, errors found,
+false-verification outcomes, page/source mistakes, abstentions and usability.
+\`application.pilot_study.assess_study\` checks metadata and yields aggregate
+metrics, **not validated legal accuracy**. A zero-error denominator gives
+\`null\` recall, not 100%. Stop on wrong-source verified claims,
+unauthorized access, irreversible correction or unknown permission.
+
+**T79:** Only a named law firm, security/privacy owner, operations owner,
+accessibility/document reviewer and pilot sponsor can make the scoped,
+dated final decision. Record approval for **specific environment, capacity,
+client data class, legal purposes, permitted dates and rollback conditions**.
+Engineering merge and synthetic CI remain separate.
+
+## Capacity dependency D01 / T20–T29
+
+The merged [development policy](../adr/0035-pilot-capacity-envelope.md) is
+not a 150–200-page accepted product envelope. See
+[capacity expansion decision matrix](CAPACITY_EXPANSION_DECISION.md).
+Do not enroll client dossiers larger than the independently measured/approved
+profile; use synthetic data to benchmark candidate configurations before
+any extension.
+
+## Evidence package format
+
+For each external gate, use a private immutable receipt covering:
+\`gate_id\`, exact \`build_sha\`, \`configuration_sha256\`,
+\`environment\`, \`data_class\`, \`evidence_uri\`, reviewer,
+reviewer independence, date, findings/severity, unresolved conditions,
+stop/rollback action, expiry/validity and signed reviewer decision.
+The public register contains only non-sensitive references and digest values.
+An unverified reviewer string is not authentication. No client secrets,
+files, personal names or sensitive case metadata in CI.
+
+Current decision: **BLOCKED for real client material and pilot release.**
