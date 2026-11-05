@@ -9,6 +9,7 @@ import http.client
 import io
 import json
 from pathlib import Path
+from collections.abc import Callable
 from uuid import UUID
 
 from docx import Document
@@ -52,7 +53,7 @@ def fixture_editor_grant(
 
 def signed_docx_activation(
     page: Page, *, key: str, run: str, owner: str, case: str,
-    org: str, registered: list[dict],
+    org: str, registered: list[dict], login: Callable[[Page], None],
 ) -> None:
     # A preceding F5 correction invalidates inventory mappings. Re-attest,
     # then check the fresh bundle before granting document-wide edit access.
@@ -208,7 +209,14 @@ def signed_docx_activation(
         )).to_be_visible(timeout=90000)
         print("F5_DOCX_NATIVE_SIGNED_EDIT_PERMISSION_REVOKE_DENIED_PASSED", flush=True)
 
+        # A full page reload intentionally clears the in-memory bearer.
+        # Sign in again before inspecting historical data; a missing session
+        # is not evidence that the historical report is unavailable.
         page.goto(old_report)
+        login(page)
+        expect(page.get_by_role(
+            "heading", name="Review the evidence"
+        )).to_be_visible(timeout=90000)
         expect(page.get_by_text(
             "Historical report · read-only", exact=True
         )).to_be_visible(timeout=90000)
