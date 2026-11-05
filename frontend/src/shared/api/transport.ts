@@ -142,7 +142,9 @@ export class ApiClient {
     mutation?: { requestId: string; reviewId: string },
   ): Promise<unknown> {
     if (
-      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/editor\/native\/(preview|commit)$/.test(path) ||
+      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/editor\/native\/(preview|commit)$/.test(
+        path,
+      ) ||
       path.includes('://') ||
       /[\\\r\n?#]/.test(path) ||
       (mutation !== undefined && !path.endsWith('/commit')) ||
@@ -162,7 +164,9 @@ export class ApiClient {
       throw new ApiError(422);
 
     const ownDigest = Array.from(
-      new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes))),
+      new Uint8Array(
+        await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)),
+      ),
       (b) => b.toString(16).padStart(2, '0'),
     ).join('');
     if (ownDigest !== binding.candidate_sha256) throw new ApiError(422);
@@ -170,7 +174,9 @@ export class ApiClient {
     const epoch = this.session.getSnapshot().epoch;
     const { controller, release } = this.session.requestController();
     const combined = AbortSignal.any([
-      signal, controller.signal, AbortSignal.timeout(180000),
+      signal,
+      controller.signal,
+      AbortSignal.timeout(180000),
     ]);
     try {
       const token = await this.session.bearer(epoch);
@@ -180,7 +186,8 @@ export class ApiClient {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'Content-Type':
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'If-Match': `snapshot_id:${binding.snapshot_hash}`,
           'X-CaseProof-Snapshot-Hash': binding.snapshot_hash,
           'X-CaseProof-Original-SHA256': binding.original_sha256,
@@ -206,8 +213,11 @@ export class ApiClient {
         if (response.status === 401) this.session.clear();
         throw new ApiError(response.status);
       }
-      if (!response.headers.get('content-type')?.includes('application/json') ||
-          !response.body) throw new ApiError(502);
+      if (
+        !response.headers.get('content-type')?.includes('application/json') ||
+        !response.body
+      )
+        throw new ApiError(502);
       const reader = response.body.getReader();
       let size = 0;
       const chunks: Uint8Array[] = [];
@@ -229,9 +239,14 @@ export class ApiClient {
       }
       const result = new Uint8Array(size);
       let cursor = 0;
-      for (const chunk of chunks) { result.set(chunk, cursor); cursor += chunk.length; }
+      for (const chunk of chunks) {
+        result.set(chunk, cursor);
+        cursor += chunk.length;
+      }
       this.session.assert(epoch);
-      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(result)) as unknown;
+      return JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(result),
+      ) as unknown;
     } finally {
       release();
     }

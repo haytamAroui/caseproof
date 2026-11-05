@@ -670,7 +670,9 @@ export function DocxEditor({ api }: { api: ApiClient }) {
           setPrepared(null);
           setEdits({});
           setDecisions({});
-          setNotice('Word-authored draft activated. Run a fresh recheck before reviewing.');
+          setNotice(
+            'Word-authored draft activated. Run a fresh recheck before reviewing.',
+          );
         }}
       />
       <div className="docx-editor-layout">
