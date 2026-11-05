@@ -615,6 +615,25 @@ def _exercise() -> None:
                 fixture_export_grant(key, run, owner, case, True)
                 print("F6_REAL_SIGNED_OLD_NEW_RELEASE_COLD_REOPEN_PASSED", flush=True)
 
+        if os.getenv("CASEPROOF_DOCX_DOCUMENT_WIDE_LIVE") == "YES":
+            if (os.getenv("CASEPROOF_F5_BROWSER_LIVE") != "YES"
+                    or os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"):
+                raise RuntimeError("F5_DOCX_SIGNED_STAGE_ORDER_INVALID")
+            _stage("SIGNED_DOCX_DOCUMENT_WIDE_ACTIVATION")
+            from scripts.workspace_docx_live import signed_docx_activation
+
+            owner = next(
+                r["resource_id"].split(":", 1)[1]
+                for r in rows(key, run)
+                if r["resource_type"] == "auth_user"
+                and r["resource_id"].startswith("owner:")
+                and "@" not in r["resource_id"]
+            )
+            signed_docx_activation(
+                page, key=key, run=run, owner=owner, case=case,
+                org=org, registered=registered,
+            )
+
         print("F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_EXPLICIT_CHECK_PASSED", flush=True)
         for role in ("ungranted", "foreign"):
             context = acceptance.browser.new_context()
