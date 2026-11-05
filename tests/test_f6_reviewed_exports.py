@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.dossier_export_release import _checked_artifacts, release_manifest
+from apps.api.release_completeness import release_policy
 from apps.api.dossier_journey import canonical, create_dossier_router
 
 SNAPSHOT = "a" * 64
@@ -43,7 +44,7 @@ class SignedReleaseStore:
             ],
             "coverage": {"checked": 0, "unresolved": 1,
                          "text_coverage_complete": False, "reference_recall_measured": False},
-            "findings": [],
+            "findings": [{"reference_id": "ref-1", "literal": "Pièce 1"}],
         }
         self.decisions = [{
             "reference_id": "ref-1", "decision": "CONFIRMED_QUALIFIED",
@@ -281,6 +282,7 @@ def test_f6_release_manifest_links_exact_preserved_pdf_and_physical_page():
     artifacts = _checked_artifacts(
         {**store.report, "human_decisions": store.decisions}, store.original
     )
+    report["human_decisions"] = [{**store.decisions[0], "reference_id": "ref-0001"}]
     manifest = release_manifest(report, artifacts)
     links = manifest["reference_links"]
     assert len(links) == 2
@@ -334,3 +336,91 @@ def test_release_preview_and_commit_fail_closed_for_malformed_frozen_report():
     })
     assert release.status_code == 503
     assert not store.saved
+
+
+def test_t30_t34_policy_counts_unique_findings_not_duplicate_review_rows():
+    _, store = client()
+    report = {**store.report, "human_decisions": [store.decisions[0], dict(store.decisions[0])]}
+    report["findings"] = [
+        {"reference_id": "ref-1"}, {"reference_id": "ref-2"}, {"reference_id": "ref-3"}
+    ]
+    policy = release_policy(report)
+    assert policy["scope"] == "partial"
+    assert (policy["total_findings"], policy["required_findings"],
+            policy["reviewed_findings"], policy["unreviewed_findings"]) == (3, 3, 1, 2)
+    assert policy["unreviewed_reference_ids"] == ["ref-2", "ref-3"]
+    assert policy["reason_codes"] == ["UNREVIEWED_FINDINGS"]
+    assert not policy["review_complete"]
+
+
+def test_t30_no_findings_or_orphan_reviews_never_look_complete():
+    import pytest
+
+    _, store = client()
+    empty = {**store.report, "findings": [], "human_decisions": []}
+    assert release_policy(empty)["reason_codes"] == ["NO_FINDINGS"]
+    assert not release_policy(empty)["can_release"]
+    with pytest.raises(AccessRejected):
+        release_policy({**empty, "human_decisions": store.decisions})
+    with pytest.raises(AccessRejected):
+        release_policy({**store.report, "human_decisions": [
+            store.decisions[0], {**store.decisions[0], "reference_id": "ref-2"}
+        ]})
+
+
+def test_t31_partial_preview_requires_acknowledged_commit_and_rechecks():
+    api, store = client()
+    store.report["findings"].append({"reference_id": "ref-2", "literal": "Pièce 2"})
+    p = api.get(base() + "/preview", headers=header(), params={"snapshot_hash": SNAPSHOT})
+    assert p.status_code == 200
+    assert p.json()["release_policy"]["scope"] == "partial"
+    assert p.json()["release_policy"]["unreviewed_findings"] == 1
+    assert p.json()["can_release"] is True
+    command = {"release_id": str(uuid4()), "snapshot_hash": SNAPSHOT}
+    assert api.post(base(), headers=header(), json=command).status_code == 409
+    assert not store.saved
+    command["acknowledge_partial"] = True
+    result = api.post(base(), headers=header(), json=command)
+    assert result.status_code == 200
+    assert result.json()["manifest"]["release_policy"]["scope"] == "partial"
+    assert api.get(base() + "/" + command["release_id"], headers=header()).status_code == 200
+
+
+def test_t31_preview_is_not_a_commit_authorization_after_ledger_changes():
+    api, store = client()
+    p = api.get(base() + "/preview", headers=header(), params={"snapshot_hash": SNAPSHOT})
+    assert p.json()["release_policy"]["scope"] == "complete"
+    store.decisions = []
+    command = {"release_id": str(uuid4()), "snapshot_hash": SNAPSHOT}
+    assert api.post(base(), headers=header(), json=command).status_code == 409
+    assert not store.saved
+    store.decisions = [{**store.report.get("human_decisions", [{}])[0],
+                        "reference_id": "ref-1"}] if store.report.get("human_decisions") else []
+    store.permitted = False
+    assert api.post(base(), headers=header(), json=command).status_code in (403, 404)
+    assert not store.saved
+
+
+def test_t32_legacy_manifest_without_policy_keeps_exact_historical_bytes():
+    api, store = client()
+    operation = str(uuid4())
+    assert api.post(base(), headers=header(), json={
+        "release_id": operation, "snapshot_hash": SNAPSHOT,
+    }).status_code == 200
+    saved = store.saved[operation]
+    original_bytes = saved["contents"]["docx"]
+    # A legacy frozen receipt can legitimately lack new additive fields.
+    old = saved["status"]["manifest"]
+    old.pop("release_policy")
+    old["limitations"] = old["limitations"][:-1] if old["limitations"][-1].startswith(
+        "Review completeness counts") else old["limitations"]
+    old["manifest_sha256"] = sha(canonical({
+        k: v for k, v in old.items() if k not in ("manifest_sha256", "server_receipt")
+    }).encode())
+    old["server_receipt"] = store.receipt({
+        k: v for k, v in old.items() if k != "server_receipt"
+    })
+    assert api.get(base() + "/" + operation, headers=header()).status_code == 200
+    response = api.get(base() + "/" + operation + "/artifacts/docx", headers=header())
+    assert response.status_code == 200
+    assert base64.b64encode(response.content).decode() == original_bytes
