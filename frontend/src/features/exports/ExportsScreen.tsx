@@ -32,15 +32,18 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState('');
   const [unknown, setUnknown] = useState(false);
-  const [partialAcknowledged, setPartialAcknowledged] = useState(false);
+  const policyScope = `${session.epoch}:${caseId}:${briefId}:${snapshot}`;
+  const [partialConsent, setPartialConsent] = useState({
+    scope: '',
+    acknowledged: false,
+  });
+  const partialAcknowledged =
+    partialConsent.scope === policyScope && partialConsent.acknowledged;
   // The same operation id survives a lost POST acknowledgement within this
   // screen. We never silently mint a new id and retry a consequential write.
   const requestId = useRef<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
-  useEffect(() => {
-    setPartialAcknowledged(false);
-  }, [caseId, briefId, snapshot, session.epoch]);
   const base = exportsPath(scope);
   const preview = useQuery({
     queryKey: ['release-preview', session.epoch, caseId, briefId, snapshot],
@@ -96,7 +99,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       setSelected(parsed);
       requestId.current = null;
       setUnknown(false);
-      setPartialAcknowledged(false);
+      setPartialConsent({ scope: policyScope, acknowledged: false });
       setMessage(
         'Frozen reviewed release saved. Verify and download the selected artifact.',
       );
@@ -299,7 +302,10 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                       type="checkbox"
                       checked={partialAcknowledged}
                       onChange={(event) =>
-                        setPartialAcknowledged(event.target.checked)
+                        setPartialConsent({
+                          scope: policyScope,
+                          acknowledged: event.target.checked,
+                        })
                       }
                     />
                     I acknowledge this release is partial and some detected
