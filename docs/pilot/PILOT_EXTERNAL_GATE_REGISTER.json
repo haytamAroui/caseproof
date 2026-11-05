@@ -45,11 +45,11 @@
       "independent_receipt_sha256": null
     },
     "T74": {
-      "status": "OPEN",
+      "status": "BLOCKED",
       "owner_role": "Operations and retention owner",
       "reviewer": null,
       "reviewed_at": null,
-      "evidence_ref": null,
+      "evidence_ref": "docs/pilot/PILOT_EXTERNAL_ACCEPTANCE_RUNBOOK.md",
       "independent_receipt_sha256": null
     },
     "T75": {

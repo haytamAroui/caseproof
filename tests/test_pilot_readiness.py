@@ -33,6 +33,16 @@ def _register():
     return json.loads(Path(REGISTER).read_text())
 
 
+def test_t74_is_blocked_until_database_and_storage_restore_is_approved():
+    r = _register()
+    assert r["gates"]["T74"]["status"] == "BLOCKED"
+    assert r["gates"]["T74"]["evidence_ref"]
+    result = validate_register(r)
+    assert "T74" in result["gates_requiring_external_review"]
+    assert result["machine_approves_pilot"] is False
+    assert result["machine_authorizes_client_data"] is False
+
+
 def test_t70_t73_preliminary_mcp_evidence_cannot_approve_pilot():
     r = _register()
     for gate in ("T70", "T73"):

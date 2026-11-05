@@ -28,3 +28,15 @@ The public gate validator explicitly returns
 \`machine_authorizes_client_data=false\`, regardless of submitted
 metadata. Actual reviewer signatures, environment approvals and permission
 must be checked outside CI by authorized humans.
+
+
+## Supabase MCP 5 November 2026 — T74 operational constraint
+
+The development organization's Supabase plan is **Free** (verified through
+connected project + organization metadata). Managed daily backups cannot
+be presumed present; operational restore has not been tested. Supabase
+database backups do **not** contain private Storage object bytes. T74 is
+**BLOCKED** pending a funded/approved database **and Storage** backup
+strategy, independent signed access and hash validation after isolated
+restore, re-erasure and retention policy verification. No plan change,
+backup export or restore was performed.

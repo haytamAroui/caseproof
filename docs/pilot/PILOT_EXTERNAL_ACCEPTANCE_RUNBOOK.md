@@ -67,6 +67,38 @@ Operations/privacy owners must review both successful recovery and failures.
 advisories, pinned lockfiles, SBOM, provenance, update and incident cadence.
 A supply-chain CI pass does not authorize known advisories.
 
+### Live Supabase Free-tier recovery constraint (MCP observation, 5 November 2026)
+
+The connected Supabase MCP returned organization plan \`free\` for the
+organization currently hosting \`caseproof-dev\`. According to the
+[official database-backups guide](https://supabase.com/docs/guides/platform/backups),
+Supabase's **managed daily backups are provided on paid plans**, while
+Free-tier operators must arrange and maintain their own backup copies.
+The project was not upgraded; managed daily backup/PITR availability and
+retention **have not been established**. The available MCP tools do not
+offer an approved isolated database+Storage clone/restore workflow.
+
+**Crucially, even managed database backups back up Storage metadata but NOT
+object bytes.** The lawful operator must choose and test **both**:
+(1) encrypted, version-pinned PostgreSQL backup/restore with documented RPO,
+RTO, access roles, re-erasure and legal hold; and (2) independently
+authorized, encrypted backup/recovery of private Storage originals and
+derivatives, with SHA-256 parity and post-restore signed-user isolation.
+A database-only dump is inadequate for CaseProof's source provenance.
+
+Two possible operator decisions (neither taken here): a paid provider
+backup/isolated clone **plus separate Storage-object recovery**, or
+operator-maintained encrypted database dumps **plus separate Storage-object
+backups**. Any plan upgrade or new resources may have costs and require an
+explicit owner decision before provisioning. Supabase CLI v3, announced
+4 November 2026, runs database operations locally by default;
+hosted CLI runbooks must verify \`--remote\` behavior before use
+([release note](https://supabase.com/changelog?types=breaking-change)).
+No production data, private object or backup bytes were accessed in this
+audit.
+
+**T74 disposition: BLOCKED — no approved operational end-to-end restore.**
+
 ## Stage 2 — actual document hosts and manual accessibility
 
 **T61 (after engineering gates):** Test with real **Microsoft Word desktop**
