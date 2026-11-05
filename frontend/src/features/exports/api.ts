@@ -11,6 +11,24 @@ export interface ArtifactInfo {
   byte_length: number;
   media_type: string;
 }
+export interface ReviewCompleteness {
+  policy_version: 'caseproof-release-completeness-v1';
+  total_findings: number;
+  required_reviews: number;
+  reviewed_findings: number;
+  unreviewed_findings: number;
+  unreviewed_reference_ids: string[];
+  review_complete: boolean;
+  can_release_complete: boolean;
+  can_release_partial: boolean;
+  text_coverage_complete: boolean;
+  reference_recall_measured: boolean;
+  reason_codes: string[];
+}
+export interface ReleaseScopePolicy extends ReviewCompleteness {
+  release_type: 'complete_review' | 'partial_review';
+  partial_acknowledged: boolean;
+}
 export interface ReleaseManifest {
   schema: 'caseproof-reviewed-release-v1';
   release_id: string;
@@ -19,6 +37,8 @@ export interface ReleaseManifest {
   snapshot_hash: string;
   review_count: number;
   finding_count: number;
+  // Absent only on immutable releases issued before completeness policy v1.
+  review_completeness?: ReleaseScopePolicy;
   coverage: Record<string, unknown>;
   sources: { role: string; version_id: string; sha256: string }[];
   source_links: {
@@ -56,6 +76,8 @@ export interface ReleasePreview {
   finding_count: number;
   review_count: number;
   release_ready: boolean;
+  can_release: boolean;
+  review_completeness: ReviewCompleteness;
   formats: ExportFormat[];
   coverage: Record<string, unknown>;
   limitations: string[];
@@ -68,6 +90,46 @@ const plain = (v: unknown): v is Record<string, unknown> =>
 const number = (v: unknown): v is number =>
   typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
 const formats: ExportFormat[] = ['json', 'markdown', 'docx'];
+function validPolicy(raw: unknown): raw is ReviewCompleteness {
+  if (!plain(raw)) return false;
+  if (
+    raw.policy_version !== 'caseproof-release-completeness-v1' ||
+    !number(raw.total_findings) ||
+    !number(raw.required_reviews) ||
+    !number(raw.reviewed_findings) ||
+    !number(raw.unreviewed_findings) ||
+    raw.total_findings !== raw.required_reviews ||
+    raw.reviewed_findings + raw.unreviewed_findings !== raw.total_findings ||
+    typeof raw.review_complete !== 'boolean' ||
+    raw.review_complete !==
+      (raw.total_findings > 0 && raw.unreviewed_findings === 0) ||
+    raw.can_release_complete !== raw.review_complete ||
+    raw.can_release_partial !==
+      (raw.reviewed_findings > 0 && !raw.review_complete) ||
+    typeof raw.text_coverage_complete !== 'boolean' ||
+    typeof raw.reference_recall_measured !== 'boolean' ||
+    !Array.isArray(raw.unreviewed_reference_ids) ||
+    raw.unreviewed_reference_ids.length !== raw.unreviewed_findings ||
+    !raw.unreviewed_reference_ids.every(
+      (ref: unknown) => typeof ref === 'string' && ref.length > 0 && ref.length <= 256,
+    ) ||
+    new Set(raw.unreviewed_reference_ids).size !== raw.unreviewed_reference_ids.length ||
+    !Array.isArray(raw.reason_codes) ||
+    !raw.reason_codes.every((v: unknown) => typeof v === 'string')
+  ) return false;
+  return true;
+}
+function validReleaseScope(raw: unknown): raw is ReleaseScopePolicy {
+  if (!validPolicy(raw) || !plain(raw)) return false;
+  return (
+    (raw.release_type === 'complete_review' &&
+      raw.review_complete === true &&
+      raw.partial_acknowledged === false) ||
+    (raw.release_type === 'partial_review' &&
+      raw.can_release_partial === true &&
+      raw.partial_acknowledged === true)
+  );
+}
 const medias: Record<ExportFormat, string> = {
   json: 'application/json',
   markdown: 'text/markdown',
@@ -95,7 +157,13 @@ export function parseReleasePreview(
     !number(raw.finding_count) ||
     !number(raw.review_count) ||
     typeof raw.release_ready !== 'boolean' ||
-    raw.release_ready !== raw.review_count > 0 ||
+    !validPolicy(raw.review_completeness) ||
+    raw.review_count !== raw.review_completeness.reviewed_findings ||
+    raw.finding_count !== raw.review_completeness.total_findings ||
+    raw.release_ready !== raw.review_completeness.can_release_complete ||
+    raw.can_release !==
+      (raw.review_completeness.can_release_complete ||
+        raw.review_completeness.can_release_partial) ||
     !plain(raw.coverage) ||
     !Array.isArray(raw.formats) ||
     raw.formats.length !== 3 ||
@@ -128,6 +196,10 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
     !number(manifest.review_count) ||
     manifest.review_count < 1 ||
     !number(manifest.finding_count) ||
+    (manifest.review_completeness !== undefined &&
+      (!validReleaseScope(manifest.review_completeness) ||
+        manifest.review_count !== manifest.review_completeness.reviewed_findings ||
+        manifest.finding_count !== manifest.review_completeness.total_findings)) ||
     !plain(manifest.coverage) ||
     !digest.test(String(manifest.manifest_sha256)) ||
     !digest.test(String(manifest.server_receipt)) ||

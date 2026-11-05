@@ -190,6 +190,14 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
              'Annotated copy only. The preserved source is unchanged; no legal, '
              'authenticity, filing or fidelity certificate is issued.')
         line('Snapshot SHA-256', report['snapshot_hash'])
+        scope = report.get('review_completeness')
+        if isinstance(scope, dict):
+            line('Reviewed release scope', scope.get('release_type', 'unknown'))
+            line('Reviewed detected findings', scope.get('reviewed_findings'))
+            line('Total detected findings', scope.get('total_findings'))
+            line('Unreviewed detected findings', scope.get('unreviewed_findings'))
+            line('Partial release expressly acknowledged', scope.get('partial_acknowledged'))
+            line('Scope warning', 'Review completeness is not evidence of full document coverage.')
         for key, label in (
             ('case_id', 'Matter'), ('brief_id', 'Draft source version'),
             ('bundle_signature', 'Bundle signature'), ('confirmation_id', 'Inventory confirmation'),

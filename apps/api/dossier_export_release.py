@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import io
 import re
-from typing import Any, cast
+from typing import Any, Literal, cast
 from urllib.parse import quote
 from uuid import UUID
 
@@ -14,6 +14,9 @@ from docx import Document
 from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from application.litigation.release_completeness import (
+    ReleaseIntegrityError, release_completeness as evaluate_completeness, select_release_scope,
+)
 from application.litigation.report_projection import canonical as canonical_report
 from application.litigation.report_projection import render_dossier_export
 from apps.api.access_control import AccessFailure, AccessRejected
@@ -33,6 +36,8 @@ class ReleaseCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     release_id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     snapshot_hash: str = Field(pattern=HEX64)
+    release_type: Literal["complete_review", "partial_review"] = "complete_review"
+    partial_acknowledged: bool = False
 
 
 def _hash(value: bytes) -> str:
@@ -96,9 +101,31 @@ def _validate_frozen_report(report: dict[str, Any]) -> None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
 
 
-def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dict[str, Any]:
+def release_completeness(report: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return evaluate_completeness(report)
+    except ReleaseIntegrityError:
+        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+
+
+def release_manifest(
+    report: dict[str, Any], artifacts: dict[str, bytes],
+    *, release_scope: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """No general VERIFIED flag: scopes, abstentions and decisions remain separate."""
     _validate_frozen_report(report)
+    policy = release_completeness(report)
+    if release_scope is None:
+        release_scope = select_release_scope(policy, "complete_review", False)
+    else:
+        try:
+            expected = select_release_scope(
+                policy, release_scope["release_type"], release_scope["partial_acknowledged"]
+            )
+        except (KeyError, ValueError, TypeError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if release_scope != expected:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
     sources = report["sources"]
     decisions = report["human_decisions"]
     selected = []
@@ -160,6 +187,7 @@ def release_manifest(report: dict[str, Any], artifacts: dict[str, bytes]) -> dic
         "coverage": report["coverage"],
         "finding_count": len(report["findings"]),
         "review_count": len(decisions),
+        "review_completeness": release_scope,
         "review_request_ids": [d["request_id"] for d in decisions],
         "review_sha256": _hash(canonical_report(decisions).encode()),
         "artifacts": {
@@ -239,6 +267,7 @@ def create_release_router(store: Any) -> APIRouter:
             raise HTTPException(409, "historical draft cannot be released as current")
         report, _ = read_dossier_report(store, bearer, case_id, brief_id, snapshot_hash, decisions=True)
         _validate_frozen_report(report)
+        policy = release_completeness(report)
         status = store.export_rpc(bearer, case_id, "authorize", None, {})
         if not status.get("authorized"):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
@@ -249,7 +278,9 @@ def create_release_router(store: Any) -> APIRouter:
             "review_count": len(report["human_decisions"]),
             "coverage": report["coverage"],
             "formats": list(FORMATS),
-            "release_ready": len(report["human_decisions"]) > 0,
+            "release_ready": policy["can_release_complete"],
+            "can_release": policy["can_release_complete"] or policy["can_release_partial"],
+            "review_completeness": policy,
             "limitations": ["Human review is not a legal certificate.", "Scope and abstentions remain visible."],
         }
 
@@ -277,10 +308,16 @@ def create_release_router(store: Any) -> APIRouter:
             store, bearer, case_id, brief_id, body.snapshot_hash, decisions=True
         )
         _validate_frozen_report(report)
-        if not report["human_decisions"]:
-            raise HTTPException(409, "persisted human review required for reviewed release")
-        artifacts = _checked_artifacts(report, original)
-        manifest = release_manifest(report, artifacts)
+        policy = release_completeness(report)
+        try:
+            scope = select_release_scope(policy, body.release_type, body.partial_acknowledged)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        # Export derivatives disclose the same release scope signed in the
+        # manifest, without changing or reassessing the frozen source report.
+        export_report = {**report, "review_completeness": scope}
+        artifacts = _checked_artifacts(export_report, original)
+        manifest = release_manifest(report, artifacts, release_scope=scope)
         manifest["release_id"] = str(body.release_id)
         manifest["manifest_sha256"] = _hash(canonical(manifest).encode())
         # The existing server-only snapshot receipt key attests the entire
