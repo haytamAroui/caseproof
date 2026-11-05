@@ -39,6 +39,23 @@ remain visible, not counted as verified.
 | New signed F3–F6 harness | See final-head live run with stage durations, restart, revocation, zero-residual cleanup | 150/200-page signed envelope, production rollout |
 | 100 OCR pages and 50 MB source | **UNMEASURED / UNSUPPORTED** | Cannot promote to admitted pilot limits |
 
+## Recorded measurements — 5 November 2026, synthetic only
+
+These measurements were run on PR #198 at an earlier development commit
+\`4b152d0\`. Re-run at the final accepted head before citing them for a release.
+
+| Measurement | Observation | Provenance |
+|---|---|---|
+| Four-original local admission, two raster-only PDFs (one NL, one FR), Docker-network-isolated OCR, JSON/Markdown/DOCX output | 84,023 input bytes; 4.271 seconds total: admission 0.569, OCR 3.559, output 0.143; OCR 10 words NL + 10 words FR | [Local OCR measurement](https://github.com/haytamAroui/caseproof/actions/runs/42088213606/job/127458956924) |
+| Same local test output bytes | JSON 955; Markdown 1,044; DOCX 37,523. Parent peak RSS 104,260 KiB; child maximum RSS 104,260 KiB (not summed and not Docker/browser peak) | Same run |
+| Four-original signed F3–F6 development workflow with a scanned exhibit, independent review, correction/recheck, two partial releases, historical retrieval, grant revocation and zero-residual teardown | 322.712 seconds wall time including setup and cleanup; wrapper peak RSS 95,116 KiB. The web/browser and OCR subprocess peak memory was **not** measured. | [Signed journey measurement](https://github.com/haytamAroui/caseproof/actions/runs/42088213454/job/127458955579) |
+
+The signed scenario is not a two-scanned-PDF NL/FR high-load scenario.
+No throughput confidence interval, repeated-run distribution or safe
+concurrent workload is established. These measurements cannot approve a
+150-page or 200-page full-product limit. Only the limits already enforced in
+the versioned development profile are currently admitted.
+
 ## Exit criteria before raising limits (T20–T29)
 
 1. Capture exact commit, host/worker versions, staged durations and peak
