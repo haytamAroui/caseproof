@@ -24,7 +24,7 @@ from application.capacity_envelope import (
     refusal_reason,
 )
 from apps.api.dossier_export_release import LIMITS, _checked_artifacts
-from apps.api.workspace_intake import IntakeCommand, WorkspaceIntake, preflight
+from apps.api.workspace_intake import IntakeCommand, WorkspaceIntake
 from tests.fixtures.dossier_journey import dossier_bundle
 from tests.test_f6_reviewed_exports import SignedReleaseStore
 

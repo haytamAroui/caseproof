@@ -9,7 +9,6 @@ from time import monotonic
 from uuid import UUID
 
 from application.capacity_envelope import CAPACITY_POLICY
-
 from scripts.m05_registry import call, forget, record
 from scripts.teardown_test_run import teardown
 from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin

@@ -86,7 +86,7 @@ def main() -> None:
             version_id=source.version_id,
             data=raw, media_type="application/pdf",
             ocr=ocr, ocr_languages=(language,),
-            persist_geometry=lambda ref, payload: geometry.append(payload),
+            persist_geometry=lambda ref, payload, destination=geometry: destination.append(payload),
         )
         candidate = manifest.get("ocr_candidates", [])
         assert len(candidate) == 1 and candidate[0]["status"] == "OCR_UNRELIABLE", candidate
