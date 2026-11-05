@@ -169,19 +169,19 @@ The reviewer should feel they are inspecting a preserved dossier, not conversing
 
 Canonical token owner: `src/app/theme.css`. Keep this table and runtime values synchronized when changing the design; do not create a parallel theme in copied components.
 
-| Token/role              | Baseline value                                                                      |
-| ----------------------- | ----------------------------------------------------------------------------------- |
-| Accent / primary action | `--accent: #16181d`                                                                 |
-| Primary text            | `--ink: #16181d`                                                                    |
-| Secondary text          | `--muted: #555b69`                                                                  |
-| Reading surface         | `--surface: #ffffff`                                                                |
-| Dividers                | `--line: #dcddd6`                                                                   |
-| Error                   | `--danger: #a61b1b` plus text                                                       |
-| Focus                   | `--focus: #126a9b`                                                                  |
-| Canvas                  | `#f6f6f3`                                                                           |
-| Typography              | Local system sans; local serif draft context and monospace for technical provenance |
-| Scale                   | 16px body; 12px metadata; 20–38px headings in the foundation                        |
-| Shape / targets         | 8px controls/cells; minimum 44px foundation controls                                |
+| Token/role              | Baseline value                                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Accent / primary action | `--accent: #16181d`                                                                                                   |
+| Primary text            | `--ink: #16181d`                                                                                                      |
+| Secondary text          | `--muted: #555b69`                                                                                                    |
+| Reading surface         | `--surface: #ffffff`                                                                                                  |
+| Dividers                | `--line: #dcddd6`                                                                                                     |
+| Error                   | `--danger: #a61b1b` plus text                                                                                         |
+| Focus                   | `--focus: #126a9b`                                                                                                    |
+| Canvas                  | `#f6f6f3`                                                                                                             |
+| Typography              | Self-hosted Inter for UI, Source Serif 4 for draft context, JetBrains Mono for technical provenance; system fallbacks |
+| Scale                   | 16px body; 12px metadata; 20–38px headings in the foundation                                                          |
+| Shape / targets         | 8px controls/cells; minimum 44px foundation controls                                                                  |
 
 Header/content/footer; bounded finding queue beside draft and evidence panes on wide screens. Foundation stacks below 760px. A later brief/source split uses accessible resizable panels and preserves reading space rather than squeezing three unusable columns. Natural document scroll remains available; each bounded panel owns its scrolling. Reserve image geometry and error/loading footprints; no layout jumps or hidden scrollbars. Global standards-based scrollbar styling includes engine fallback and forced-colors behavior. Avoid decorative motion; respect reduced motion. Shared primitives own consistent labels, spacing, intent and feedback.
 

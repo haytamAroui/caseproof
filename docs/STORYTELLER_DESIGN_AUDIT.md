@@ -5,10 +5,10 @@ Reference: owner-provided CaseProof-Storyteller-Demo.html and app.js; inspected 
 | Surface | Reference | Current frontend | Disposition |
 | --- | --- | --- | --- |
 | Palette | Paper #f6f6f3, ink #16181d, neutral borders | Blue-grey and petrol | Adopt neutral theme while keeping explicit status text. |
-| Typography | Inter, Source Serif 4, JetBrains Mono from Google Fonts | System sans and monospace | Use system fonts and local serif fallback. Exact self-hosted fonts remain open. |
+| Typography | Inter, Source Serif 4, JetBrains Mono from Google Fonts | System sans and monospace | Self-host the reference fonts with their OFL licenses and system fallbacks. |
 | Workspace | Findings, draft, evidence | Findings and stacked inspection | Split existing draft and source/review into responsive panes. |
 | Findings | Bordered cards and selection | Functional queue with filtering and pagination | Restyle existing buttons; retain navigation and states. |
-| Inspection | Scan/OCR/diff tabs | Existing source viewer and correction/review | Keep real modes; exact tab parity requires further design work. |
+| Inspection | Scan/OCR/diff tabs | Existing source viewer and correction/review | Offer a compact native-button switch between original pixels and available OCR positions. Keep the original visible. Source-text and correction-diff views remain separate and are not represented as a fabricated mode. |
 | Intake and inventory | Cards and staged progress | Working forms | Inherit shared theme; complete layout redesign remains open. |
 | Export and history | Simulated modal and timeline | Real artifact and history flows | Preserve real behavior; further visual alignment remains open. |
 | Motion and dark mode | Animated transitions and dark mode | Light theme and reduced-motion support | No dark mode or decorative motion added. |
@@ -28,4 +28,4 @@ The implementation updates the theme and reading layout and applies shared surfa
 
 ## Remaining design decisions and validation
 
-The uploaded prototype requests remote Google Fonts, whereas the frontend blueprint prohibits remote font services. System sans, serif and monospace fallbacks are in place; exact font files require licensed, reviewed self-hosted assets. The reference also has dark mode and animated simulated transitions; neither is a current acceptance claim. A measured browser comparison, manual accessibility and practitioner review, and the signed workflow must precede claims of full visual parity or production readiness.
+The uploaded prototype requests remote Google Fonts, whereas the frontend blueprint prohibits remote font services. Inter, Source Serif 4 and JetBrains Mono are served locally with their OFL licenses and system fallbacks. The reference also has dark mode and animated simulated transitions; neither is implemented in this increment. A measured browser comparison, manual accessibility and practitioner review, and the signed workflow must precede claims of full visual parity or production readiness.

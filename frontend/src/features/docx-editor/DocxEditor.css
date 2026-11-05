@@ -134,7 +134,7 @@ no fake page-fidelity. */
   overflow-wrap: anywhere;
 }
 .docx-mono {
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace;
   font-size: 0.7rem !important;
   overflow-wrap: anywhere;
 }

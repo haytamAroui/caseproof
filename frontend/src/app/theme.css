@@ -1,6 +1,29 @@
+/* Self-hosted variable fonts from Google Fonts, SIL OFL 1.1. */
+@font-face {
+  font-family: 'CaseProof Inter';
+  src: url('/fonts/inter.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'CaseProof Source Serif';
+  src: url('/fonts/source-serif-4.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'CaseProof JetBrains Mono';
+  src: url('/fonts/jetbrains-mono.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+}
 /* Canonical client tokens, mapped in DESIGN.md. */
 :root {
   font-family:
+    'CaseProof Inter',
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
@@ -260,7 +283,7 @@ pre {
   font-size: 12px;
 }
 code {
-  font-family: ui-monospace, monospace;
+  font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace;
 }
 .skip {
   position: absolute;
@@ -527,7 +550,7 @@ dialog::backdrop {
   min-width: 0;
 }
 .cockpit-draft .draft-context {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: 'CaseProof Source Serif', Georgia, serif;
   line-height: 1.75;
 }
 .queue .finding {
@@ -619,4 +642,19 @@ dialog::backdrop {
     background: Highlight;
     border-color: Highlight;
   }
+}
+
+/* Mode controls retain native button semantics and do not hide source pixels. */
+.inspection-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 4px;
+  margin-block: 16px;
+}
+.inspection-modes .button {
+  min-height: 44px;
 }

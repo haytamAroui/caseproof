@@ -715,7 +715,13 @@ test('OCR word positions are opt-in, source bound and exposed as accessible text
   await expect(
     page.getByText('Source page rendered.', { exact: true }),
   ).toBeVisible();
+  const originalMode = page.getByRole('button', { name: 'Original pixels' });
+  await expect(originalMode).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Show OCR word positions' }).click();
+  await expect(originalMode).toHaveAttribute('aria-pressed', 'false');
+  await expect(
+    page.getByRole('img', { name: 'Preserved PDF page pixels' }),
+  ).toBeVisible();
   await expect(
     page.getByRole('list', { name: 'OCR words on this page' }),
   ).toContainText('<synthetic>');
@@ -739,7 +745,8 @@ test('OCR word positions are opt-in, source bound and exposed as accessible text
       );
     });
   expect(overlayHasWord).toBe(true);
-  await page.getByRole('button', { name: 'Hide OCR word positions' }).click();
+  await originalMode.click();
+  await expect(originalMode).toHaveAttribute('aria-pressed', 'true');
   await expect(
     page.getByRole('list', { name: 'OCR words on this page' }),
   ).toHaveCount(0);
