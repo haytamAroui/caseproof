@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import os
 import re
+from time import monotonic
 
 from playwright.sync_api import Route, expect
 
@@ -21,12 +23,21 @@ from tests.fixtures.dossier_journey import dossier_bundle
 from tests.fixtures.factory import SyntheticSource
 
 _LIVE_STAGE = "START"
+_STAGE_CLOCK = monotonic()
 
 
 def _stage(name: str) -> None:
-    global _LIVE_STAGE
+    global _LIVE_STAGE, _STAGE_CLOCK
     if not re.fullmatch(r"[A-Z0-9_]+", name):
         raise ValueError("invalid acceptance stage")
+    now = monotonic()
+    if os.getenv("CASEPROOF_CAPACITY_METRICS") == "YES":
+        print("CAPACITY_SIGNED_STAGE " + json.dumps({
+            "previous_stage": _LIVE_STAGE,
+            "next_stage": name,
+            "elapsed_seconds": round(now - _STAGE_CLOCK, 3),
+        }, sort_keys=True), flush=True)
+    _STAGE_CLOCK = now
     _LIVE_STAGE = name
     print("F5_STAGE_" + name, flush=True)
 

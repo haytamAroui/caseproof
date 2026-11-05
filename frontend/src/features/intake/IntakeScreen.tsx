@@ -5,6 +5,7 @@ import { ApiClient, parseIntake } from '../../shared/api';
 import type { IntakeView } from '../../shared/api';
 import { useSessionController } from '../../shared/session';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
+import capacity from '../../shared/api/capacity-policy.json';
 import { slots, prepareFiles } from './files';
 export function IntakeScreen({ api }: { api: ApiClient }) {
   const { caseId = '' } = useParams();
@@ -44,11 +45,15 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
       <h1>Preserve the source bundle</h1>
       <Notice>
         Development intake accepts one DOCX draft, one UTF-8 text inventory and
-        two PDF exhibits, including scans. Maximum 5 MiB per file, 12 MB
-        combined and 64 pages per PDF. The inventory is limited to 1 MiB and 512
-        distinct Stuk/Pièce identities. All four files are checked before any
-        original is written. Preservation does not confirm inventory or verify
-        claims.
+        two PDF exhibits, including scans. Development policy{' '}
+        {capacity.schema}: maximum {Math.floor(capacity.max_source_bytes / 1048576)}
+        {' '}MiB per file, {capacity.max_intake_bytes.toLocaleString('en-GB')} bytes
+        combined and {capacity.max_pdf_pages_per_source} physical pages per PDF.
+        Inventory: {Math.floor(capacity.max_inventory_bytes / 1048576)} MiB
+        and {capacity.max_inventory_identities} distinct Stuk/Pièce identities.
+        This is not an approved 150- or 200-page full-journey pilot limit.
+        All four files are checked before any originals are written.
+        Preservation does not confirm inventory or verify claims.
       </Notice>
       <Notice>
         Signed development mode sends original document bytes and review/source

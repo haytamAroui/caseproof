@@ -1,0 +1,14 @@
+{
+  "approval": "development_only_not_pilot_approved",
+  "max_export_docx_bytes": 5242880,
+  "max_export_json_bytes": 2000000,
+  "max_export_markdown_bytes": 2000000,
+  "max_intake_bytes": 12000000,
+  "max_inventory_bytes": 1048576,
+  "max_inventory_identities": 512,
+  "max_ocr_original_bytes": 3145728,
+  "max_pdf_pages_per_source": 64,
+  "max_source_bytes": 5242880,
+  "schema": "caseproof-capacity-envelope-v1",
+  "source_count": 4
+}

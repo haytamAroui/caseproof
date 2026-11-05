@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any
 
+from application.capacity_envelope import MAX_PDF_PAGES, MAX_SOURCE_BYTES
 from application.documents.contracts import MAX_BLOCKS, MAX_TEXT_CHARS, PARSER_SCHEMA
 from application.extraction.contracts import ExtractionError
 from infrastructure.parsers.engines import DOCX_MIME
@@ -20,7 +21,7 @@ from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
 BINARY_MEDIA = frozenset({"application/pdf", DOCX_MIME})
-MAX_BINARY_BYTES = 5 * 1024 * 1024
+MAX_BINARY_BYTES = MAX_SOURCE_BYTES
 MAX_MANIFEST_BYTES = 300000
 
 
@@ -68,7 +69,7 @@ def parse_verified_original(
             not isinstance(locator, str) or not 0 < len(locator) <= 4096 or
             kind not in {"pdf_page", "docx_paragraph", "docx_note"} or
             (media_type == "application/pdf" and (kind != "pdf_page"
-                or type(page) is not int or not 0 <= page < 64)) or
+                or type(page) is not int or not 0 <= page < MAX_PDF_PAGES)) or
             (media_type == DOCX_MIME and (page is not None or kind == "pdf_page"))
         ):
             raise ExtractionError("unmapped_parser_block")
@@ -101,7 +102,7 @@ def parse_verified_original(
             ):
                 if warning.startswith(prefix):
                     suffix = warning[len(prefix):]
-                    if not suffix.isdigit() or int(suffix) >= 64:
+                    if not suffix.isdigit() or int(suffix) >= MAX_PDF_PAGES:
                         raise ExtractionError("malformed_page_status")
                     indexes.add(int(suffix))
         if not indexes:

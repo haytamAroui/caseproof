@@ -1,0 +1,48 @@
+name: Pilot capacity development-envelope evidence
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capacity-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Fail on backend-to-frontend capacity-policy drift
+        run: uv run --locked python -m scripts.generate_frontend_contract --check
+      - name: Exact-boundary refusal, exports and 64-page cancellation/resume
+        run: uv run --locked pytest -q tests/test_capacity_envelope.py tests/test_capacity_page_recovery.py tests/test_workspace_intake.py tests/test_f6_reviewed_exports.py tests/test_page_coordinator.py
+      - name: Check capacity implementation types and lint
+        run: |
+          uv run --locked ruff check application/capacity_envelope.py apps/api/workspace_intake.py apps/api/signed_document_parse.py apps/api/dossier_journey.py apps/api/dossier_export_release.py scripts/measure_pilot_envelope.py scripts/dossier_live.py scripts/workspace_intake_live.py tests/test_capacity_envelope.py tests/test_capacity_page_recovery.py
+          uv run --locked mypy --explicit-package-bases application/capacity_envelope.py apps/api/workspace_intake.py apps/api/signed_document_parse.py apps/api/dossier_export_release.py
+
+  scanned-nl-fr-observation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Build network-isolated OCR image
+        run: docker build -f docker/ocr-worker.Dockerfile -t caseproof-ocr-worker:ci .
+      - name: Install raster and OCR binaries with Dutch and French languages
+        run: sudo apt-get update -qq && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-nld tesseract-ocr-fra fonts-dejavu-core
+      - name: Measure synthetic Dutch/French scanned intake, isolated OCR and bounded exports
+        env:
+          CASEPROOF_OCR_SANDBOX: docker
+          CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
+        run: uv run --locked python -m scripts.measure_pilot_envelope

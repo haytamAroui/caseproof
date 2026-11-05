@@ -15,6 +15,7 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from pypdf import PdfReader, PdfWriter
 
+from application.capacity_envelope import MAX_PDF_PAGES
 from application.extraction.contracts import ExtractionError
 from application.litigation.dossier_contracts import add_report_contract, assess_fidelity, quotation_context
 from application.litigation.regional_fidelity import select_visual_assessment
@@ -51,7 +52,7 @@ class PageConfirmation(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     space: Literal["printed", "bundle"]
     label: str = Field(min_length=1, max_length=12, pattern=PAGE_LABEL_PATTERN)
-    pdf_page: int = Field(ge=1, le=64)
+    pdf_page: int = Field(ge=1, le=MAX_PDF_PAGES)
     rationale: str = Field(min_length=3, max_length=500)
 
 

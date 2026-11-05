@@ -1,3 +1,5 @@
+import capacity from '../../shared/api/capacity-policy.json';
+
 const DOCX =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 export const slots = [
@@ -23,17 +25,20 @@ export const slots = [
 ] as const;
 export async function prepareFiles(files: File[], signal: AbortSignal) {
   if (
-    files.length !== 4 ||
+    files.length !== capacity.source_count ||
     new Set(files.map((f) => f.name)).size !== 4 ||
-    files.reduce((n, f) => n + f.size, 0) > 12_000_000
+    files.reduce((n, f) => n + f.size, 0) > capacity.max_intake_bytes
   )
-    throw Error('Choose four uniquely named files, up to 12 MB combined.');
+    throw Error(
+      `Choose ${capacity.source_count} uniquely named files, up to ${capacity.max_intake_bytes} bytes combined.`,
+    );
   const result = [];
   for (const [index, file] of files.entries()) {
     const slot = slots[index]!;
     if (
       file.size < 1 ||
-      file.size > 5_242_880 ||
+      file.size > capacity.max_source_bytes ||
+      (slot.role === 'inventory' && file.size > capacity.max_inventory_bytes) ||
       file.name.length > 128 ||
       /[\\/:]/.test(file.name) ||
       Array.from(file.name).some(
@@ -44,7 +49,7 @@ export async function prepareFiles(files: File[], signal: AbortSignal) {
       !file.name.toLowerCase().endsWith(slot.accept)
     )
       throw Error(
-        `Replace ${slot.label}: invalid name, type or size (5 MiB maximum).`,
+        `Replace ${slot.label}: invalid name, type or size under the versioned intake policy.`,
       );
     const bytes = new Uint8Array(await file.arrayBuffer());
     signal.throwIfAborted();
