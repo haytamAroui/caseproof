@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f6-reviewed-export-and-historical-reopen' || (github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/f6-reviewed-export-and-historical-reopen' || github.head_ref == 'feat/p1-parser-acceptance' || github.head_ref == 'feat/p0-p1-security-intake-evidence' || github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.head_ref == 'feat/release-completeness-policy-t30-t31')))
+    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f6-reviewed-export-and-historical-reopen' || (github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/f6-reviewed-export-and-historical-reopen' || github.head_ref == 'feat/p1-parser-acceptance' || github.head_ref == 'feat/p0-p1-security-intake-evidence' || github.head_ref == 'feat/pilot-capacity-envelope' || github.head_ref == 'feat/p5-p6-readability-drift-pilot' || github.head_ref == 'feat/release-completeness-policy-t30-t31')))
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 20
@@ -21,6 +21,7 @@ jobs:
       CASEPROOF_F4_BROWSER_LIVE: "YES"
       CASEPROOF_F5_BROWSER_LIVE: "YES"
       CASEPROOF_F6_BROWSER_LIVE: "YES"
+      CASEPROOF_CAPACITY_METRICS: "YES"
       CASEPROOF_OCR_SANDBOX: docker
       CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
     steps:
