@@ -43,6 +43,7 @@ def _exercise() -> None:
         "refs/heads/feat/p5-p6-readability-drift-pilot", "refs/pull/185/merge", "refs/pull/187/merge", "refs/pull/189/merge",
         "refs/pull/190/merge",
         "refs/pull/191/merge",
+        "refs/pull/197/merge",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
     key, run, org = (
