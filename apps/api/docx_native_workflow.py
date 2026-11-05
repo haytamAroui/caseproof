@@ -11,7 +11,8 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from zipfile import ZipFile
 
 from fastapi import APIRouter, Header, HTTPException, Request
