@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type { ApiClient } from '../../shared/api';
-import { Notice } from '../../shared/ui';
 
 const SHA = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -39,7 +38,7 @@ function record(value: unknown): Record<string, unknown> {
 const hex = (data: Uint8Array) =>
   Array.from(data, (b) => b.toString(16).padStart(2, '0')).join('');
 async function sha256(bytes: Uint8Array) {
-  return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+  return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes))));
 }
 function saveLocal(bytes: Uint8Array, name: string) {
   const url = URL.createObjectURL(

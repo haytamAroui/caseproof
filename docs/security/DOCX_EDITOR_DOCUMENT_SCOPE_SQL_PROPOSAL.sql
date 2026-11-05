@@ -280,12 +280,11 @@ grant execute on function public.caseproof_dossier_document_edit_reserve(
 ) to authenticated;
 
 
--- Separate recovery authorization: a previously approved or reserved edit
--- does not permit status or replay after the actor loses draft:edit.
+-- Only an actor with fresh draft:edit rights may reconcile an edit.
 create function public.caseproof_dossier_document_edit_status(
   p_case uuid, p_request uuid, p_review uuid, p_command text
 )
-returns jsonb language plpgsql security definer set search_path='' as $
+returns jsonb language plpgsql security definer set search_path='' as $$
 declare
   a uuid := auth.uid();
   o uuid;
@@ -295,59 +294,7 @@ begin
   if a is null or coalesce(auth.jwt()->>'role','') <> 'authenticated'
     or coalesce(auth.jwt()->>'is_anonymous','false') = 'true'
     or p_case is null or p_request is null or p_review is null
-    or coalesce(p_command,'') !~ '^[0-9a-f]{64} without broadening its
--- caller rights. Full-document derivatives use this separate trusted wrapper:
--- it rechecks *fresh* document-wide grants even after a review/reservation.
-create function public.caseproof_dossier_document_edit_activate(
-  p_actor uuid, p_case uuid, p_request uuid, p_review uuid,
-  p_sha256 text, p_length bigint
-)
-returns jsonb language plpgsql security definer set search_path='' as $$
-declare
-  o uuid;
-  r caseproof.dossier_draft_revisions%rowtype;
-begin
-  if coalesce(auth.jwt()->>'role','') <> 'service_role'
-    or p_actor is null or p_case is null or p_request is null or p_review is null
-    or p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$'
-    or p_length is null or p_length not between 1 and 5242880
-  then raise exception 'trusted document activation required' using errcode='42501'; end if;
-  select c.org_id into o from caseproof.cases c
-  join caseproof.organization_members m
-    on m.org_id=c.org_id and m.user_id=p_actor and m.active
-    and m.actions @> array['case:read','evidence:read','draft:edit']::text[]
-  join caseproof._m1_matter_grants g
-    on g.org_id=c.org_id and g.case_id=c.id and g.user_id=p_actor
-    and g.active and g.role='reviewer'
-    and g.permissions @> array['case:read','evidence:read','draft:edit']::text[]
-  where c.id=p_case and c.deleted_at is null for update of c;
-  if o is null then raise exception 'document editing permission revoked'
-    using errcode='42501'; end if;
-  select * into strict r from caseproof.dossier_draft_revisions
-  where org_id=o and case_id=p_case and actor_id=p_actor and request_id=p_request
-    and reference_id='doc-edit:' || p_review::text for update;
-  if not exists (
-    select 1 from caseproof.dossier_document_edit_reviews d
-    where d.org_id=o and d.case_id=p_case and d.actor_id=p_actor
-      and d.request_id=p_review and d.parent_version_id=r.parent_version_id
-      and d.snapshot_hash=r.parent_snapshot_hash
-      and d.command_sha256=r.command_sha256
-      and d.candidate_sha256=r.original_sha256
-  ) then raise exception 'review receipt unavailable' using errcode='42501'; end if;
-  return public.caseproof_dossier_draft_activate(
-    p_actor,p_case,p_request,p_sha256,p_length
-  );
-end $$;
-revoke all on function public.caseproof_dossier_document_edit_activate(
-  uuid,uuid,uuid,uuid,text,bigint
-) from public,anon,authenticated;
-grant execute on function public.caseproof_dossier_document_edit_activate(
-  uuid,uuid,uuid,uuid,text,bigint
-) to service_role;
-
--- P1/F5's generic activation RPC must not be selected by the document editor.
--- These functions remain review proposals until signed security sign-off.
-
+    or coalesce(p_command,'') !~ '^[0-9a-f]{64}$'
   then raise exception 'document edit status unavailable' using errcode='42501'; end if;
   select c.org_id into o from caseproof.cases c
   join caseproof.organization_members m on m.org_id=c.org_id
@@ -374,7 +321,7 @@ grant execute on function public.caseproof_dossier_document_edit_activate(
   return public.caseproof_dossier_draft_reserve(
     p_case,p_request,'status',jsonb_build_object('command_sha256',p_command)
   );
-end $;
+end $$;
 revoke all on function public.caseproof_dossier_document_edit_status(
   uuid,uuid,uuid,text
 ) from public,anon,authenticated;

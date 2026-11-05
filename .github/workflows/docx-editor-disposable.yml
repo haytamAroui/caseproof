@@ -38,8 +38,8 @@ jobs:
       - name: Disposable document-scope review/reserve SQL adversarial acceptance
         run: uv run --locked python -m scripts.verify_document_editor_disposable
       - name: Signed-transport API review/commit regression
-        run: uv run --locked pytest -q tests/test_docx_editor_api.py tests/test_docx_structured_editing.py
+        run: uv run --locked pytest -q tests/test_docx_editor_api.py tests/test_docx_native_workflow.py tests/test_docx_structured_editing.py
       - name: Ruff and mypy for new document editor boundary
         run: |
-          uv run --locked ruff check apps/api/docx_editor_api.py apps/api/dossier_draft_revisions.py scripts/verify_document_editor_disposable.py
-          uv run --locked mypy --explicit-package-bases apps/api/docx_editor_api.py apps/api/dossier_draft_revisions.py
+          uv run --locked ruff check apps/api/docx_editor_api.py apps/api/docx_native_workflow.py apps/api/dossier_draft_revisions.py scripts/verify_document_editor_disposable.py tests/test_docx_native_workflow.py
+          uv run --locked mypy --explicit-package-bases apps/api/docx_editor_api.py apps/api/docx_native_workflow.py apps/api/dossier_draft_revisions.py

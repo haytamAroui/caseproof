@@ -162,7 +162,7 @@ export class ApiClient {
       throw new ApiError(422);
 
     const ownDigest = Array.from(
-      new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+      new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes))),
       (b) => b.toString(16).padStart(2, '0'),
     ).join('');
     if (ownDigest !== binding.candidate_sha256) throw new ApiError(422);
