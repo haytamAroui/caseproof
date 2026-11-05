@@ -6,8 +6,8 @@ from copy import deepcopy
 import pytest
 
 from application.pilot_readiness import (
-    PilotEvidenceError,
     REQUIRED_GATES,
+    PilotEvidenceError,
     load_and_validate,
     validate_register,
 )
