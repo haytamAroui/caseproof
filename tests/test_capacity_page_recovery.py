@@ -59,3 +59,48 @@ def test_no_unbounded_parallel_plan_disguised_as_supported_envelope():
         PagePlan((page,) * 2, "duplicate")
     with pytest.raises(ExtractionError):
         PagePlan((page,), "synthetic", concurrency=5)
+
+
+
+def test_full_current_page_plan_bounded_four_worker_concurrency_and_replay():
+    """A current-boundary local processor never exceeds the configured workers."""
+    from threading import Lock
+    from time import sleep
+
+    pages = tuple(
+        PageInput("synthetic-v2", "c" * 64, i)
+        for i in range(1, MAX_PDF_PAGES + 1)
+    )
+    plan = PagePlan(pages, "synthetic-capacity-v2", concurrency=4)
+    scope = Scope(uuid4(), uuid4())
+    journal = MemoryJournal()
+    counts = {"in_flight": 0, "max_in_flight": 0, "processed": 0}
+    lock = Lock()
+
+    def work(page):
+        with lock:
+            counts["in_flight"] += 1
+            counts["processed"] += 1
+            counts["max_in_flight"] = max(
+                counts["max_in_flight"], counts["in_flight"]
+            )
+        sleep(0.002)
+        with lock:
+            counts["in_flight"] -= 1
+        return {"artifact_sha256": "d" * 64, "uncertain": True}
+
+    coordinator = PageCoordinator(
+        journal, authorize=lambda: None, cancelled=lambda: False
+    )
+    result = coordinator.run(scope, "capacity-concurrency", plan, work)
+    assert result["completed"] == MAX_PDF_PAGES
+    assert result["failed"] == 0
+    assert counts["processed"] == MAX_PDF_PAGES
+    assert 1 < counts["max_in_flight"] <= 4
+    second = PageCoordinator(
+        journal, authorize=lambda: None, cancelled=lambda: False
+    )
+    assert second.run(
+        scope, "capacity-concurrency", plan,
+        lambda page: pytest.fail("duplicate processor work after restart"),
+    ) == result
