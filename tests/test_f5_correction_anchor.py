@@ -37,15 +37,14 @@ def test_stale_or_wrong_reference_rejected(selection):
         correction_anchor(docx('First Stuk 1'), selection)
 
 
-def test_table_content_is_not_guessed():
+def test_simple_table_cell_reference_uses_distinct_bound_index():
     document = Document()
     document.add_paragraph('Stuk 1')
     document.add_table(rows=1, cols=1).cell(0, 0).text = 'Other'
     output = io.BytesIO()
     document.save(output)
     assert correction_anchor(output.getvalue(), finding(0, 6)) == 0
-    with pytest.raises(ValueError, match='direct body'):
-        correction_anchor(output.getvalue(), finding(7, 12, 'Other'))
+    assert correction_anchor(output.getvalue(), finding(7, 12, 'Other')) == 50_000
 
 
 def test_tracked_format_change_abstains():
@@ -100,8 +99,7 @@ def test_table_target_is_not_confused_with_identical_direct_paragraph():
     output = io.BytesIO()
     document.save(output)
     original = output.getvalue()
-    with pytest.raises(ValueError, match='direct body'):
-        correction_anchor(original, finding(0, 6))
+    assert correction_anchor(original, finding(0, 6)) == 50_000
     assert correction_anchor(original, finding(7, 13)) == 0
 
 
@@ -206,3 +204,67 @@ def test_locator_exact_text_matches_before_in_contract():
         CorrectionPreviewBody.model_validate({**base, 'locator_identity': {**identity, 'exact_text': 'Stuk 9'}})
     with pytest.raises(ValueError):
         CorrectionPreviewBody.model_validate({**base, 'locator_identity': {**identity, 'content_hash': 'z' * 64}})
+
+
+def test_table_cell_locator_identity_and_version_are_bound():
+    from hashlib import sha256
+
+    from infrastructure.parsers.docx_correction_anchor import bound_locator
+
+    document = Document()
+    document.add_table(rows=1, cols=1).cell(0, 0).text = 'Before Stuk 1 after'
+    output = io.BytesIO()
+    document.save(output)
+    source = output.getvalue()
+    target = finding(7, 13)
+    identity = bound_locator(source, target, 'version-1')
+    assert identity['content_hash'] == sha256(b'Before Stuk 1 after').hexdigest()
+    assert identity['source_version_id'] == 'version-1'
+    assert correction_anchor(source, {**target, 'locator_identity': identity}) == 50_000
+    with pytest.raises(ValueError, match='stale'):
+        correction_anchor(source, {**target, 'locator_identity': {**identity, 'content_hash': '0' * 64}})
+
+
+def test_nested_table_target_abstains_without_guessing_a_parent_cell():
+    document = Document()
+    outer = document.add_table(rows=1, cols=1)
+    outer.cell(0, 0).text = 'Plain first'
+    inner = outer.cell(0, 0).add_table(rows=1, cols=1)
+    inner.cell(0, 0).text = 'Stuk 1'
+    output = io.BytesIO()
+    document.save(output)
+    source = output.getvalue()
+    from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
+
+    main = next(r.text for r in extract_docx_text_regions(source).regions if r.part == 'word/document.xml')
+    at = main.index('Stuk 1')
+    with pytest.raises(ValueError, match='not an editable'):
+        correction_anchor(source, finding(at, at + 6))
+
+
+def test_table_cell_writer_preserves_other_cells_and_source_bytes():
+    from hashlib import sha256
+    from zipfile import ZipFile
+
+    from infrastructure.parsers.dossier_docx_export import corrected_docx_preview
+
+    document = Document()
+    table = document.add_table(rows=1, cols=2)
+    table.cell(0, 0).text = 'Stuk 1'
+    table.cell(0, 1).text = 'Other'
+    output = io.BytesIO()
+    document.save(output)
+    source = output.getvalue()
+    index = correction_anchor(source, finding(0, 6))
+    assert index == 50_000
+    changed = corrected_docx_preview(source, expected_sha256=sha256(source).hexdigest(),
+                                     paragraph_index=index, before='Stuk 1', after='Pièce 2')
+    reopened = Document(io.BytesIO(changed))
+    assert reopened.tables[0].cell(0, 0).text == 'Pièce 2'
+    assert reopened.tables[0].cell(0, 1).text == 'Other'
+    assert Document(io.BytesIO(source)).tables[0].cell(0, 0).text == 'Stuk 1'
+    with ZipFile(io.BytesIO(source)) as old, ZipFile(io.BytesIO(changed)) as new:
+        assert old.namelist() == new.namelist()
+        for name in old.namelist():
+            if name != 'word/document.xml':
+                assert old.read(name) == new.read(name)

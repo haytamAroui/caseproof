@@ -9,6 +9,8 @@ type BinaryBinding = {
     | 'text/markdown'
     | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   export?: true;
+  editorCandidate?: true;
+  originalSha256?: string;
 };
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -93,6 +95,162 @@ export class ApiClient {
       throw new ApiError(502);
     return (await this.read(path, signal, binding)) as Uint8Array;
   }
+  async editorCandidate(
+    path: string,
+    command: { snapshot_hash: string; original_sha256: string },
+    receipt: { sha256: string; byte_length: number },
+    signal: AbortSignal,
+  ): Promise<Uint8Array> {
+    if (
+      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/editor\/candidate$/.test(
+        new URL(path, 'https://caseproof.invalid').pathname,
+      ) ||
+      !/^[0-9a-f]{64}$/.test(receipt.sha256) ||
+      !/^[0-9a-f]{64}$/.test(command.original_sha256) ||
+      !/^[0-9a-f]{64}$/.test(command.snapshot_hash) ||
+      !Number.isInteger(receipt.byte_length) ||
+      receipt.byte_length < 1 ||
+      receipt.byte_length > 5_242_880
+    )
+      throw new ApiError(502);
+    return (await this.read(
+      path,
+      signal,
+      {
+        sha256: receipt.sha256,
+        snapshot: command.snapshot_hash,
+        length: receipt.byte_length,
+        media:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        editorCandidate: true,
+        originalSha256: command.original_sha256,
+      },
+      command,
+      { snapshot: command.snapshot_hash },
+    )) as Uint8Array;
+  }
+  async nativeWordUpload(
+    path: string,
+    binding: {
+      snapshot_hash: string;
+      original_sha256: string;
+      candidate_sha256: string;
+      byte_length: number;
+    },
+    bytes: Uint8Array,
+    signal: AbortSignal,
+    mutation?: { requestId: string; reviewId: string },
+  ): Promise<unknown> {
+    if (
+      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/editor\/native\/(preview|commit)$/.test(
+        path,
+      ) ||
+      path.includes('://') ||
+      /[\\\r\n?#]/.test(path) ||
+      (mutation !== undefined && !path.endsWith('/commit')) ||
+      (!mutation && !path.endsWith('/preview')) ||
+      !/^[0-9a-f]{64}$/.test(binding.snapshot_hash) ||
+      !/^[0-9a-f]{64}$/.test(binding.original_sha256) ||
+      !/^[0-9a-f]{64}$/.test(binding.candidate_sha256) ||
+      binding.candidate_sha256 === binding.original_sha256 ||
+      !Number.isInteger(binding.byte_length) ||
+      binding.byte_length !== bytes.byteLength ||
+      bytes.byteLength < 1 ||
+      bytes.byteLength > 5_242_880 ||
+      (mutation !== undefined &&
+        (!/^[0-9a-f-]{36}$/.test(mutation.requestId) ||
+          !/^[0-9a-f-]{36}$/.test(mutation.reviewId)))
+    )
+      throw new ApiError(422);
+
+    const ownDigest = Array.from(
+      new Uint8Array(
+        await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)),
+      ),
+      (b) => b.toString(16).padStart(2, '0'),
+    ).join('');
+    if (ownDigest !== binding.candidate_sha256) throw new ApiError(422);
+
+    const epoch = this.session.getSnapshot().epoch;
+    const { controller, release } = this.session.requestController();
+    const combined = AbortSignal.any([
+      signal,
+      controller.signal,
+      AbortSignal.timeout(180000),
+    ]);
+    try {
+      const token = await this.session.bearer(epoch);
+      this.session.assert(epoch);
+      combined.throwIfAborted();
+      const response = await this.send(path, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type':
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'If-Match': `snapshot_id:${binding.snapshot_hash}`,
+          'X-CaseProof-Snapshot-Hash': binding.snapshot_hash,
+          'X-CaseProof-Original-SHA256': binding.original_sha256,
+          'X-CaseProof-Candidate-SHA256': binding.candidate_sha256,
+          'X-CaseProof-Byte-Length': String(binding.byte_length),
+          ...(mutation
+            ? {
+                'Idempotency-Key': mutation.requestId,
+                'X-CaseProof-Review-Request-ID': mutation.reviewId,
+              }
+            : {}),
+        },
+        body: new Uint8Array(bytes),
+        signal: combined,
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'error',
+        referrerPolicy: 'no-referrer',
+      });
+      this.session.assert(epoch);
+      combined.throwIfAborted();
+      if (!response.ok) {
+        if (response.status === 401) this.session.clear();
+        throw new ApiError(response.status);
+      }
+      if (
+        !response.headers.get('content-type')?.includes('application/json') ||
+        !response.body
+      )
+        throw new ApiError(502);
+      const reader = response.body.getReader();
+      let size = 0;
+      const chunks: Uint8Array[] = [];
+      try {
+        while (true) {
+          const next = await reader.read();
+          this.session.assert(epoch);
+          combined.throwIfAborted();
+          if (next.done) break;
+          size += next.value.byteLength;
+          if (size > 20000) throw new ApiError(502);
+          chunks.push(next.value);
+        }
+      } catch (error) {
+        await reader.cancel();
+        throw error;
+      } finally {
+        reader.releaseLock();
+      }
+      const result = new Uint8Array(size);
+      let cursor = 0;
+      for (const chunk of chunks) {
+        result.set(chunk, cursor);
+        cursor += chunk.length;
+      }
+      this.session.assert(epoch);
+      return JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(result),
+      ) as unknown;
+    } finally {
+      release();
+    }
+  }
   private async read(
     path: string,
     signal?: AbortSignal,
@@ -121,6 +279,7 @@ export class ApiClient {
       AbortSignal.timeout(
         path.startsWith('/v2/workspace/intake/') ||
           path.includes('/dossier/releases') ||
+          path.includes('/dossier/editor/') ||
           /\/dossier\/(confirmation|checks|recheck|corrections\/(preview|commit))$/.test(
             path,
           )
@@ -168,11 +327,16 @@ export class ApiClient {
         const exportGrantBoundary = /\/dossier\/releases(?:\/|$)/.test(
           new URL(path, 'https://caseproof.invalid').pathname,
         );
+        // Editing permissions do not imply the source-reading session is revoked.
+        const editorBoundary = /\/dossier\/editor(?:\/|$)/.test(
+          new URL(path, 'https://caseproof.invalid').pathname,
+        );
         if (
           response.status === 401 ||
           ((response.status === 403 || response.status === 404) &&
             !recoveryRead &&
-            !exportGrantBoundary)
+            !exportGrantBoundary &&
+            !editorBoundary)
         )
           this.session.clear();
         throw new ApiError(response.status);
@@ -220,11 +384,16 @@ export class ApiClient {
           response.headers.get(
             binding.export
               ? 'X-CaseProof-Export-SHA256'
-              : 'X-CaseProof-Original-SHA256',
+              : binding.editorCandidate
+                ? 'X-CaseProof-Edit-Candidate-SHA256'
+                : 'X-CaseProof-Original-SHA256',
           ) !== binding.sha256 ||
           (binding.export &&
             response.headers.get('X-CaseProof-Export-Size') !==
-              String(binding.length))
+              String(binding.length)) ||
+          (binding.editorCandidate &&
+            response.headers.get('X-CaseProof-Original-SHA256') !==
+              binding.originalSha256)
         )
           throw new ApiError(502);
         const digest = new Uint8Array(

@@ -1,5 +1,64 @@
 # CaseProof — engineering state and dated evidence
 
+## 5 November 2026 — Phase A/B signed document-wide DOCX engineering acceptance
+
+[PR #191](https://github.com/haytamAroui/caseproof/pull/191) adds
+a structured paragraph/table/textbox editor plus *native Microsoft Word*
+DOCX authoring/import (not a browser-hosted full Word clone). The exact
+document-wide authorization was deployed to **caseproof-dev only** under
+Supabase migration `20261105081249`, with RLS enabled, no direct
+anon/authenticated table reads or writes, actor-bound review/reservation,
+separate fresh `draft:edit` status, and trusted readback activation.
+The dev-only fixture cleanup function was amended to admit the new
+document-edit audit actions only with matching run ownership/receipts and
+the existing empty-Storage guard. Both changes have source records in
+`docs/security/`, outside production's automatic migrations.
+
+**Live signed engineering result PASSED:** [run 42008220354](https://github.com/haytamAroui/caseproof/actions/runs/42008220354)
+verified document-wide review, lost-acknowledgment reconciliation, signed
+activation, mandatory fresh recheck, historical original integrity,
+`draft:edit` revocation, and zero residual fixture cleanup.
+See [Phase A/B acceptance matrix](pilot/PHASE_AB_DOCX_EDITOR_ACCEPTANCE_MATRIX.md).
+
+**Not pilot-approved:** Independent Security and actual Microsoft Word /
+LibreOffice compatibility are **PENDING — Pilot Partner**. The earlier
+local LibreOffice smoke used a synthetic sample only. Full Word-style
+editing *inside* CaseProof's browser remains unimplemented. No production
+SQL migration has been approved or applied. A green exact-HEAD CI remains
+required for merge; CI is not a lawyer's final document approval.
+
+## 4 November 2026 — PR #191 optional DOCX editor integration in review
+
+[Draft PR #191](https://github.com/haytamAroui/caseproof/pull/191)
+(stacked on [PR #190](https://github.com/haytamAroui/caseproof/pull/190))
+adds source-hash-bound OOXML paragraph/table/textbox plain-text editing,
+native `w:ins`/`w:del` revision creation and textual accept/reject,
+an offline candidate CLI, a local Microsoft Word candidate handoff,
+plus a signed **current-version** FastAPI/React editor to inspect blocks,
+stage replacements, preview derivative hashes and download strictly bounded
+uncommitted DOCX bytes. Signed browser fixture checks were added; final-head
+results remain to be confirmed. New editor work does **not** use or weaken
+the reference-scoped F5 reservation authority.
+
+**ADDITIONAL CODE (not deployed):** `apps/api/docx_editor_api.py`
+now provides signed document-wide review/commit/status routes using an
+explicit `draft:edit` permission in the
+[uninstalled SQL proposal](security/DOCX_EDITOR_DOCUMENT_SCOPE_SQL_PROPOSAL.sql),
+audited actor-scoped reservation, trusted Storage readback and a distinct
+freshly authorized activation RPC. The React UI has review rationale,
+durable request ID reconciliation and required recheck navigation.
+[Disposable PostgreSQL suite](../scripts/verify_document_editor_disposable.py)
+now includes audit rollback and permission-revocation cases; **final-head
+CI is not yet verified**, and no approval or live SQL installation occurred.
+
+**NOT complete/NOT merged:** real signed full-document activation, independent
+SQL/RLS and Office compatibility approval, loss-aware full-document Word editing
+parity, a pixel-faithful embedded OOXML renderer, desktop Word/LibreOffice
+round-trip acceptance, generated editor TS/AJV contracts, manual accessibility
+and pilot authorization. A local candidate is not an activated/rechecked
+CaseProof draft until signed review/activation and fresh verification pass. See
+[ADR 0033](adr/0033-optional-word-editor-and-review-boundaries.md).
+
 ## 4 November 2026 — PR #185 merged; PR #186 housekeeping and outstanding pilot gates
 
 [PR #185](https://github.com/haytamAroui/caseproof/pull/185) was **squash merged** to `main` as `b162a5f7a08975949a32671cbea774b7f0a7bb09`. Last tested PR head `3c6058a054ffd5172413cba5b90eb9af4bb44586` has **19 succeeded, 4 intentionally skipped, 0 failed** workflow conclusions. [Final signed F6](https://github.com/haytamAroui/caseproof/actions/runs/41829162860), [P6 host/restore/dependency/corpus](https://github.com/haytamAroui/caseproof/actions/runs/41829163280), [frontend](https://github.com/haytamAroui/caseproof/actions/runs/41829163384) and [kernel](https://github.com/haytamAroui/caseproof/actions/runs/41829163374) all succeeded on that head. The combined F6 genuinely exercises F3/F4/F5 paths; their separately skipped jobs are not claimed as passes.

@@ -1,0 +1,349 @@
+/* CaseProof DOCX candidate editor. Native semantic controls;
+no fake page-fidelity. */
+.docx-editor {
+  max-width: 1660px;
+  margin: 0 auto;
+  padding: 24px 28px 56px;
+  color: #243043;
+}
+.docx-editor-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+.docx-editor-heading h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.65rem, 2vw, 2.25rem);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+.docx-editor-heading p {
+  max-width: 850px;
+}
+.docx-eyebrow {
+  color: #4f627b;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.docx-editor a {
+  color: #1c4e7f;
+  text-underline-offset: 3px;
+}
+.docx-ribbon {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 13px 18px;
+  border: 1px solid #ccd6e0;
+  border-radius: 10px;
+  background: #f6f8fb;
+}
+.docx-ribbon label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  margin-right: 6px;
+}
+.docx-ribbon input {
+  width: 16px;
+  height: 16px;
+  accent-color: #305e86;
+}
+.docx-editor button {
+  border-radius: 7px;
+  border: 1px solid #aec0d1;
+  background: white;
+  padding: 9px 13px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #253b55;
+  cursor: pointer;
+}
+.docx-editor button:hover:not(:disabled) {
+  background: #e9f0f6;
+  border-color: #728ea9;
+}
+.docx-editor button:focus-visible,
+.docx-editor textarea:focus-visible,
+.docx-editor select:focus-visible {
+  outline: 3px solid #34709f;
+  outline-offset: 2px;
+}
+.docx-editor button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+.docx-ribbon button:nth-of-type(1) {
+  background: #294d72;
+  color: white;
+  border-color: #294d72;
+}
+.docx-ribbon button:nth-of-type(1):hover:not(:disabled) {
+  background: #173b60;
+}
+.docx-scope-note {
+  color: #4d5c6c;
+  font-size: 0.88rem;
+  padding: 13px 0;
+}
+.docx-editor-status {
+  border-left: 3px solid #44759a;
+  padding: 9px 14px;
+  color: #263f5a;
+  background: #f1f5fa;
+}
+.docx-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(205px, 250px) minmax(340px, 1fr) minmax(
+      220px,
+      285px
+    );
+  gap: 18px;
+  align-items: start;
+  margin-top: 18px;
+}
+.docx-editor-sidebar,
+.docx-editor-revisions,
+.docx-editor-document {
+  border: 1px solid #d3dbe4;
+  border-radius: 10px;
+  min-width: 0;
+  background: white;
+}
+.docx-editor-sidebar,
+.docx-editor-revisions {
+  padding: 19px;
+}
+.docx-editor-sidebar h2,
+.docx-editor-revisions h2,
+.docx-editor-document h2 {
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 13px;
+}
+.docx-editor-sidebar p,
+.docx-editor-revisions p {
+  font-size: 0.83rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.docx-mono {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.7rem !important;
+  overflow-wrap: anywhere;
+}
+.docx-editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #dce3ea;
+  padding: 16px 22px;
+}
+.docx-editor-toolbar h2 {
+  margin: 0;
+}
+.docx-editor-toolbar span {
+  font-size: 0.8rem;
+  color: #627288;
+}
+.docx-block {
+  padding: 19px 22px;
+  border-bottom: 1px solid #e4e9ee;
+}
+.docx-block:last-of-type {
+  border-bottom: 0;
+}
+.docx-block header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+.docx-block header small {
+  color: #67778b;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+.docx-kind {
+  text-transform: capitalize;
+  background: #eaf0f6;
+  color: #2e536f;
+  border-radius: 5px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+.docx-unsupported {
+  font-size: 0.72rem;
+  color: #7a6045;
+}
+.docx-block label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 7px;
+}
+.docx-block textarea {
+  resize: vertical;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #c7d3df;
+  border-radius: 7px;
+  padding: 12px 14px;
+  line-height: 1.6;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: #1b2c43;
+  min-height: 70px;
+}
+.docx-block textarea:disabled {
+  border-color: #edf0f3;
+  background: #f6f7f9;
+  color: #667589;
+}
+.docx-changed {
+  font-size: 0.77rem;
+  color: #1e597d;
+  margin: 8px 0 0;
+}
+.docx-page-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+}
+.docx-page-nav span {
+  color: #54677f;
+  font-size: 0.78rem;
+  text-align: center;
+}
+.docx-revision {
+  border-top: 1px solid #e5ebef;
+  padding: 14px 0;
+  display: grid;
+  gap: 8px;
+}
+.docx-revision strong {
+  font-size: 0.84rem;
+}
+.docx-revision small {
+  display: block;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+  color: #607187;
+}
+.docx-revision label {
+  display: grid;
+  gap: 5px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.docx-revision select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #b9c9d7;
+  background: white;
+}
+.docx-preview-receipt {
+  padding: 20px;
+  border-top: 1px solid #d8e0e8;
+  margin-top: 24px;
+}
+.docx-preview-receipt h2 {
+  font-size: 1rem;
+}
+@media (max-width: 1120px) {
+  .docx-editor-layout {
+    grid-template-columns: minmax(190px, 240px) minmax(330px, 1fr);
+  }
+  .docx-editor-revisions {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 720px) {
+  .docx-editor {
+    padding: 16px;
+  }
+  .docx-editor-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  .docx-editor-layout > * {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .docx-ribbon {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .docx-block {
+    padding: 16px;
+  }
+  .docx-editor-toolbar {
+    padding: 16px;
+  }
+}
+
+.docx-word-handoff {
+  border: 1px solid #b5c9d8;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 22px;
+  margin: 22px 0;
+}
+.docx-word-handoff h2 {
+  font-size: 1.23rem;
+  margin: 6px 0 12px;
+}
+.docx-word-handoff p {
+  line-height: 1.6;
+  max-width: 100ch;
+}
+.docx-word-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.docx-word-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+}
+.docx-word-actions label,
+.docx-word-review label {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.docx-word-actions input[type='file'] {
+  max-width: 100%;
+}
+.docx-word-review {
+  border-top: 1px solid #d5e0e8;
+  padding-top: 18px;
+}
+.docx-word-review textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px;
+  border: 1px solid #b6c7d8;
+  border-radius: 7px;
+  margin-top: 8px;
+}
+.docx-word-note {
+  font-size: 0.82rem;
+  color: #5a6b7d;
+}

@@ -1,4 +1,5 @@
 import { CorrectionPanel, CorrectionRecovery } from '../features/corrections';
+import { ScopedDocxEditor } from '../features/docx-editor';
 import { ExportsScreen } from '../features/exports';
 import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -256,6 +257,10 @@ function Workspace({ api }: { api: ApiClient }) {
             <Route
               path="/matters/:caseId/exports"
               element={<ExportsScreen api={api} />}
+            />
+            <Route
+              path="/matters/:caseId/briefs/:briefId/edit"
+              element={<ScopedDocxEditor api={api} />}
             />
             <Route
               path="/matters/:caseId/briefs/:briefId"

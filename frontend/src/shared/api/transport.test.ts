@@ -227,3 +227,214 @@ describe('cancelled matter reads', () => {
     expect(s.getSnapshot().connected).toBe(true);
   });
 });
+
+describe('signed DOCX candidate transport', () => {
+  const snapshot = 'a'.repeat(64);
+  const original = 'b'.repeat(64);
+  const path = '/v2/matters/case/briefs/brief/dossier/editor/candidate';
+
+  it('downloads only a SHA-bound, snapshot-bound binary candidate', async () => {
+    const bytes = new TextEncoder().encode('PK safe derivative');
+    const hash = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+      (b) => b.toString(16).padStart(2, '0'),
+    ).join('');
+    const send = vi.fn<typeof fetch>(
+      async () =>
+        new Response(new Blob([new Uint8Array(bytes)]), {
+          headers: {
+            'Content-Type':
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'X-CaseProof-Snapshot': snapshot,
+            'X-CaseProof-Original-SHA256': original,
+            'X-CaseProof-Edit-Candidate-SHA256': hash,
+          },
+        }),
+    );
+    const api = new ApiClient(session(), send);
+    const command = { snapshot_hash: snapshot, original_sha256: original };
+    const result = await api.editorCandidate(
+      path,
+      command,
+      { sha256: hash, byte_length: bytes.length },
+      new AbortController().signal,
+    );
+    expect(Array.from(result)).toEqual(Array.from(bytes));
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[1]).toMatchObject({
+      method: 'POST',
+      credentials: 'omit',
+      cache: 'no-store',
+      redirect: 'error',
+      headers: {
+        'If-Match': `snapshot_id:${snapshot}`,
+      },
+    });
+  });
+
+  it('rejects non-matching candidate digest, bytes, and external paths', async () => {
+    const bytes = new TextEncoder().encode('PK untrusted bytes');
+    const send = vi.fn<typeof fetch>(
+      async () =>
+        new Response(new Blob([new Uint8Array(bytes)]), {
+          headers: {
+            'Content-Type':
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'X-CaseProof-Snapshot': snapshot,
+            'X-CaseProof-Original-SHA256': original,
+            'X-CaseProof-Edit-Candidate-SHA256': 'c'.repeat(64),
+          },
+        }),
+    );
+    const api = new ApiClient(session(), send);
+    const command = { snapshot_hash: snapshot, original_sha256: original };
+    await expect(
+      api.editorCandidate(
+        path,
+        command,
+        { sha256: 'c'.repeat(64), byte_length: bytes.length },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      api.editorCandidate(
+        '/v2/matters/case/briefs/brief/dossier/corrections/commit',
+        command,
+        { sha256: 'c'.repeat(64), byte_length: bytes.length },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it.each([403, 404])(
+    'does not sign out report readers on editor denial %s',
+    async (status) => {
+      const s = session();
+      const clear = vi.fn();
+      s.onClear(clear);
+      const send = vi.fn<typeof fetch>(
+        async () => new Response(null, { status }),
+      );
+      await expect(
+        new ApiClient(s, send).get(
+          `/v2/matters/case/briefs/brief/dossier/editor/blocks?snapshot_hash=${snapshot}`,
+        ),
+      ).rejects.toThrow();
+      expect(clear).not.toHaveBeenCalled();
+      expect(s.getSnapshot().connected).toBe(true);
+    },
+  );
+});
+
+describe('native Word binary upload security and signed session boundary', () => {
+  const snapshot = 'a'.repeat(64);
+  const original = 'b'.repeat(64);
+  const root = '/v2/matters/case/briefs/brief/dossier/editor/native/';
+  async function binding(bytes: Uint8Array) {
+    const sha = Array.from(
+      new Uint8Array(
+        await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)),
+      ),
+      (n) => n.toString(16).padStart(2, '0'),
+    ).join('');
+    return {
+      snapshot_hash: snapshot,
+      original_sha256: original,
+      candidate_sha256: sha,
+      byte_length: bytes.byteLength,
+    };
+  }
+  it('uses bounded signed raw DOCX without cookies, query parameters or external egress', async () => {
+    const bytes = new TextEncoder().encode('PK original and Word-edited text');
+    const bound = await binding(bytes);
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        schema: 'caseproof-native-docx-preview-v1',
+        candidate_sha256: bound.candidate_sha256,
+      }),
+    );
+    const api = new ApiClient(session(), fetcher);
+    const result = await api.nativeWordUpload(
+      root + 'preview',
+      bound,
+      bytes,
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({
+      schema: 'caseproof-native-docx-preview-v1',
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher.mock.calls[0]?.[0]).toBe(root + 'preview');
+    const init = fetcher.mock.calls[0]?.[1];
+    expect(init).toMatchObject({
+      method: 'POST',
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'error',
+      referrerPolicy: 'no-referrer',
+      headers: {
+        Authorization: 'Bearer synthetic-only',
+        'If-Match': `snapshot_id:${snapshot}`,
+        'Content-Type':
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'X-CaseProof-Original-SHA256': original,
+        'X-CaseProof-Candidate-SHA256': bound.candidate_sha256,
+      },
+    });
+    expect(init?.body).toBeInstanceOf(Uint8Array);
+  });
+  it('refuses spoofed binary digests and off-domain destinations before sending', async () => {
+    const bytes = new TextEncoder().encode('PK Word candidate');
+    const bound = await binding(bytes);
+    const send = vi.fn<typeof fetch>();
+    const api = new ApiClient(session(), send);
+    const abort = new AbortController();
+    await expect(
+      api.nativeWordUpload(
+        root + 'preview',
+        { ...bound, candidate_sha256: 'f'.repeat(64) },
+        bytes,
+        abort.signal,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      api.nativeWordUpload(
+        'https://attacker.invalid/v2/matters/case/briefs/brief/dossier/editor/native/preview',
+        bound,
+        bytes,
+        abort.signal,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      api.nativeWordUpload(root + 'commit', bound, bytes, abort.signal),
+    ).rejects.toThrow();
+    expect(send).not.toHaveBeenCalled();
+  });
+  it('reuses the exact commit request ID and does not sign out on scoped denial', async () => {
+    const bytes = new TextEncoder().encode('PK candidate');
+    const bound = await binding(bytes);
+    const s = session();
+    const clear = vi.fn();
+    s.onClear(clear);
+    const send = vi.fn<typeof fetch>(
+      async () => new Response(null, { status: 403 }),
+    );
+    const requestId = '7a602888-fce9-48f0-8aa1-2ce30d81bc98';
+    const reviewId = '5adf4a99-ac2a-44ee-8bce-00d417ef19fe';
+    await expect(
+      new ApiClient(s, send).nativeWordUpload(
+        root + 'commit',
+        bound,
+        bytes,
+        new AbortController().signal,
+        { requestId, reviewId },
+      ),
+    ).rejects.toThrow();
+    const h = send.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(h['Idempotency-Key']).toBe(requestId);
+    expect(h['X-CaseProof-Review-Request-ID']).toBe(reviewId);
+    expect(clear).not.toHaveBeenCalled();
+    expect(s.getSnapshot().connected).toBe(true);
+  });
+});

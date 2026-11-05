@@ -10,6 +10,8 @@
   <script defer src="demo-session.js"></script>
   <script defer src="dist/live-auth.js"></script>
   <script defer src="auth/live-ui.js"></script>
+  <script defer src="office/read-docx.js"></script>
+  <script defer src="office/candidate-handoff.js"></script>
   <script defer src="taskpane.js"></script>
 </head>
 <body>
@@ -30,6 +32,12 @@
     <input id="query" type="search" maxlength="120" autocomplete="off">
     <button id="inspect" disabled>Search evidence</button>
     <p id="status" role="status" aria-live="polite">Waiting for Word…</p>
+    <section aria-labelledby="word-candidate-heading">
+      <h2 id="word-candidate-heading">Edited Word document</h2>
+      <p class="notice">Use Word's own paragraphs, tables, textboxes and Track Changes tools. Capture a local DOCX candidate only after you have checked the edits. This is not a CaseProof commit or a reviewed draft version.</p>
+      <button id="capture-candidate" disabled>Download edited DOCX candidate</button>
+      <p id="candidate-status" role="status" aria-live="polite">No edited document captured.</p>
+    </section>
     <section id="result" hidden aria-labelledby="result-title">
       <h2 id="result-title">Selected assertion</h2>
       <blockquote id="selection"></blockquote>

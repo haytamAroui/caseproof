@@ -41,6 +41,8 @@ def _exercise() -> None:
         "refs/pull/178/merge", "refs/pull/182/merge", "refs/pull/183/merge", "refs/pull/184/merge",
         "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
         "refs/heads/feat/p5-p6-readability-drift-pilot", "refs/pull/185/merge", "refs/pull/187/merge", "refs/pull/189/merge",
+        "refs/pull/190/merge",
+        "refs/pull/191/merge",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
     key, run, org = (
@@ -53,16 +55,25 @@ def _exercise() -> None:
     from reportlab.pdfgen import canvas
 
     document = Document()
-    if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
+    table_correction = os.getenv("CASEPROOF_F5_TABLE_CORRECTION") == "YES"
+    if table_correction and os.getenv("CASEPROOF_F5_BROWSER_LIVE") != "YES":
+        raise RuntimeError("TABLE_CORRECTION_REQUIRES_SIGNED_F5")
+    if table_correction:
+        document.add_paragraph("Unrelated introductory text")
+        cell = document.add_table(rows=1, cols=1).cell(0, 0)
+        target = cell.paragraphs[0]
+        target.add_run("😀 Zie Stu")
+        target.add_run("k 1, printed p. 4.").italic = True
+    elif os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
         target = document.add_paragraph("😀 Zie Stu")
         target.add_run("k 1, printed p. 4.").italic = True
     else:
         document.add_paragraph("Zie Stuk 1, printed p. 4.")
     document.add_paragraph("Voir Pièce 2, printed p. 7.")
     if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
-        # Unrelated structures must not prevent a simple exact target. Keep the
-        # table free of references so existing source mappings stay unchanged.
-        document.add_table(rows=1, cols=1).cell(0, 0).text = "Synthetic background table"
+        if not table_correction:
+            # Unrelated structures must not prevent a plain exact target.
+            document.add_table(rows=1, cols=1).cell(0, 0).text = "Synthetic background table"
         background = document.add_paragraph("Unrelated ")
         background.add_run("formatted text").bold = True
     draft = io.BytesIO()
@@ -333,6 +344,102 @@ def _exercise() -> None:
             acceptance.login(page)
             expect(page.get_by_role("heading", name="Review the evidence")).to_be_visible(timeout=90000)
 
+        if os.getenv("CASEPROOF_DOCX_EDITOR_BROWSER_LIVE") == "YES":
+            _stage("SIGNED_DOCX_EDITOR_UNCOMMITTED_CANDIDATE")
+            editor_origin = page.url
+            page.get_by_role(
+                "link", name="Edit current DOCX candidate (not committed)"
+            ).click()
+            editor = page.get_by_role(
+                "region", name="Structured Word candidate editor", exact=True
+            )
+            expect(editor.get_by_role(
+                "heading", name="Edit the preserved draft"
+            )).to_be_visible(timeout=90000)
+            # python-docx paragraph.text reflects accepted plain text, not
+            # unresolved w:ins revisions. Test the explicit direct-replacement
+            # mode here; native tracked revisions have separate OOXML tests.
+            editor.get_by_role(
+                "checkbox", name="Track changes in Word"
+            ).uncheck()
+            source_block = editor.locator(".docx-block").filter(
+                has_text="Unrelated introductory text"
+            ).first
+            expect(source_block).to_be_visible(timeout=90000)
+            source_block.get_by_role(
+                "textbox", name="Source-bound paragraph"
+            ).fill("Reviewed unrelated text")
+            editor.get_by_role("button", name="Preview edits").click()
+            print("F5_EDITOR_SIGNED_PREVIEW_SUBMITTED", flush=True)
+            receipt = editor.get_by_role(
+                "region", name="Candidate preview receipt"
+            )
+            expect(receipt.get_by_role(
+                "heading", name="Prepared derivative"
+            )).to_be_visible(timeout=90000)
+            with page.expect_download(timeout=90000) as download:
+                editor.get_by_role("button", name="Download DOCX candidate").click()
+            from pathlib import Path
+
+            received = download.value
+            if received.failure() is not None:
+                raise RuntimeError("F5_EDITOR_SIGNED_DOWNLOAD_FAILED")
+            candidate = Path(received.path()).read_bytes()
+            print("F5_EDITOR_SIGNED_BINARY_RECEIVED", flush=True)
+            digest = hashlib.sha256(candidate).hexdigest()
+            if receipt.locator(".docx-mono").inner_text().strip() != digest:
+                raise RuntimeError("F5_EDITOR_SIGNED_BINARY_RECEIPT_MISMATCH")
+            if Document(io.BytesIO(candidate)).paragraphs[0].text != "Reviewed unrelated text":
+                raise RuntimeError("F5_EDITOR_SIGNED_TEXT_NOT_APPLIED")
+            if hashlib.sha256(bundle[0].content).hexdigest() == digest:
+                raise RuntimeError("F5_EDITOR_SIGNED_CANDIDATE_NOT_CHANGED")
+            print("DOCX_EDITOR_GENUINE_SIGNED_PREVIEW_BINARY_AND_ORIGINAL_IMMUTABLE_PASSED", flush=True)
+
+            _stage("SIGNED_WORD_NATIVE_IMPORT_PREVIEW")
+            # Browser receives a *real DOCX* authored by python-docx, as a
+            # synthetic stand-in for Word's own save. It must pass through
+            # the signed, bounded raw-upload API, not a fixture response.
+            native_document = Document(io.BytesIO(bundle[0].content))
+            native_document.paragraphs[0].text = "Word native imported source text"
+            native_document.tables[0].cell(0, 0).text = "Native Word table edited"
+            native_bytes = io.BytesIO()
+            native_document.save(native_bytes)
+            native_panel = editor.get_by_role(
+                "region", name="Full Microsoft Word editing and signed import"
+            )
+            with page.expect_download(timeout=90000) as source_download:
+                native_panel.get_by_role(
+                    "button", name="1. Download preserved DOCX for Word"
+                ).click()
+            source_bytes = Path(source_download.value.path()).read_bytes()
+            if hashlib.sha256(source_bytes).hexdigest() != hashlib.sha256(bundle[0].content).hexdigest():
+                raise RuntimeError("F5_WORD_NATIVE_SOURCE_DIGEST_CHANGED")
+            native_panel.locator('input[type="file"]').set_input_files({
+                "name": "word-native-synthetic.docx",
+                "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "buffer": native_bytes.getvalue(),
+            })
+            expect(native_panel.get_by_text(
+                "DOCX staged in browser memory", exact=False
+            )).to_be_visible(timeout=90000)
+            native_panel.get_by_role(
+                "button", name="3. Inspect imported Word document"
+            ).click()
+            expect(native_panel.get_by_text(
+                "Word-native candidate validated", exact=False
+            )).to_be_visible(timeout=90000)
+            if hashlib.sha256(bundle[0].content).hexdigest() != hashlib.sha256(source_bytes).hexdigest():
+                raise RuntimeError("F5_WORD_NATIVE_ORIGINAL_MUTATED")
+            print(
+                "DOCX_NATIVE_WORD_GENUINE_SIGNED_SOURCE_DOWNLOAD_EDIT_IMPORT_AND_PREVIEW_PASSED",
+                flush=True,
+            )
+            page.goto(editor_origin)
+            acceptance.login(page)
+            expect(page.get_by_role(
+                "heading", name="Review the evidence"
+            )).to_be_visible(timeout=90000)
+
         if os.getenv("CASEPROOF_F5_BROWSER_LIVE") == "YES":
             previous_url = page.url
             correction = page.get_by_role("region", name="Correction preview and recheck", exact=True)
@@ -349,9 +456,13 @@ def _exercise() -> None:
             # Renumbering to Stuk 2 would deliberately make its identity
             # unconfirmed, and the reviewer must abstain rather than fabricate
             # visual inspection of a non-existent source page.
+            keep_verified_exhibit = (
+                os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"
+                or os.getenv("CASEPROOF_DOCX_DOCUMENT_WIDE_LIVE") == "YES"
+            )
             replacement = (
                 before.replace("1", "1 ", 1)
-                if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"
+                if keep_verified_exhibit
                 else before.replace("1", "2", 1)
             )
             if replacement == before:
@@ -366,6 +477,8 @@ def _exercise() -> None:
             def lose_correction_ack(route: Route) -> None:
                 writes[0] += 1
                 correction_request.update(route.request.post_data_json)
+                if table_correction and correction_request.get("paragraph_index") != 50_000:
+                    raise RuntimeError("F5_SIGNED_TABLE_TARGET_NOT_BOUND")
                 for name in ('authorization', 'if-match', 'idempotency-key'):
                     correction_headers[name] = route.request.headers[name]
                 correction_base[0] = route.request.url.removesuffix('/corrections/commit')
@@ -408,7 +521,10 @@ def _exercise() -> None:
             if old_original.status != 200 or hashlib.sha256(old_original.body()).hexdigest() != hashlib.sha256(bundle[0].content).hexdigest():
                 raise RuntimeError("F5_ORIGINAL_CHANGED_OR_UNAVAILABLE")
             print("F5_SIGNED_ORIGINAL_SHA256_UNCHANGED_PASSED", flush=True)
-            print("F5_SPLIT_FORMATTED_REFERENCE_AND_UNRELATED_TABLE_CORRECTION_PASSED", flush=True)
+            if table_correction:
+                print("F5_GENUINE_SIGNED_TABLE_CELL_PREVIEW_COMMIT_RECHECK_PASSED", flush=True)
+            else:
+                print("F5_SPLIT_FORMATTED_REFERENCE_AND_UNRELATED_TABLE_CORRECTION_PASSED", flush=True)
             page.unroute("**/corrections/commit", lose_correction_ack)
             replay = page.request.post(
                 correction_base[0] + '/corrections/commit', data=correction_request, headers=correction_headers,
@@ -502,6 +618,25 @@ def _exercise() -> None:
                 # revoke test; the outer fixture teardown always destroys it.
                 fixture_export_grant(key, run, owner, case, True)
                 print("F6_REAL_SIGNED_OLD_NEW_RELEASE_COLD_REOPEN_PASSED", flush=True)
+
+        if os.getenv("CASEPROOF_DOCX_DOCUMENT_WIDE_LIVE") == "YES":
+            if (os.getenv("CASEPROOF_F5_BROWSER_LIVE") != "YES"
+                    or os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES"):
+                raise RuntimeError("F5_DOCX_SIGNED_STAGE_ORDER_INVALID")
+            _stage("SIGNED_DOCX_DOCUMENT_WIDE_ACTIVATION")
+            from scripts.workspace_docx_live import signed_docx_activation
+
+            owner = next(
+                r["resource_id"].split(":", 1)[1]
+                for r in rows(key, run)
+                if r["resource_type"] == "auth_user"
+                and r["resource_id"].startswith("owner:")
+                and "@" not in r["resource_id"]
+            )
+            signed_docx_activation(
+                page, key=key, run=run, owner=owner, case=case,
+                org=org, registered=registered, login=acceptance.login,
+            )
 
         print("F3_BROWSER_COLD_PROCESS_SIGNIN_INVENTORY_RECEIPT_REOPEN_EXPLICIT_CHECK_PASSED", flush=True)
         for role in ("ungranted", "foreign"):

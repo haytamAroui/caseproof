@@ -1,0 +1,1 @@
+export { ScopedDocxEditor } from './DocxEditor';

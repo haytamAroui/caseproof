@@ -1,0 +1,45 @@
+name: PR191 document-wide edit SQL adversarial acceptance
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  disposable:
+    if: github.repository == 'haytamAroui/caseproof' && github.head_ref == 'feat/word-document-editor-tracked-changes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: caseproof_s2_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: caseproof_ephemeral_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caseproof_s2_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 8
+    env:
+      CASEPROOF_DISPOSABLE_DB: "YES"
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: caseproof_s2_ci
+      PGUSER: postgres
+      PGPASSWORD: caseproof_ephemeral_ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Disposable document-scope review/reserve SQL adversarial acceptance
+        run: uv run --locked python -m scripts.verify_document_editor_disposable
+      - name: Signed-transport API review/commit regression
+        run: uv run --locked pytest -q tests/test_docx_editor_api.py tests/test_docx_native_workflow.py tests/test_docx_structured_editing.py
+      - name: Ruff and mypy for new document editor boundary
+        run: |
+          uv run --locked ruff check apps/api/docx_editor_api.py apps/api/docx_native_workflow.py apps/api/dossier_draft_revisions.py scripts/verify_document_editor_disposable.py tests/test_docx_native_workflow.py
+          uv run --locked mypy --explicit-package-bases apps/api/docx_editor_api.py apps/api/docx_native_workflow.py apps/api/dossier_draft_revisions.py

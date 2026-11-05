@@ -7,6 +7,8 @@
   const selectionView = document.getElementById('selection');
   const coverage = document.getElementById('coverage');
   const hitsView = document.getElementById('hits');
+  const candidateButton = document.getElementById('capture-candidate');
+  const candidateStatus = document.getElementById('candidate-status');
   let busy = false;
   let uncertain = false;
   let generation = 0;
@@ -16,6 +18,7 @@
     hitsView.replaceChildren();
     selectionView.textContent = '';
     status.textContent = 'Signed out. Sign in again to search.';
+    if (candidateStatus) candidateStatus.textContent = 'Session ended. Any local DOCX candidate must be checked again.';
   });
 
   // Supplied in memory by an authenticated host composition, not document XML.
@@ -221,7 +224,47 @@
       return;
     }
     button.disabled = false;
+    if (candidateButton) candidateButton.disabled = false;
     status.textContent = 'Select a passage and search your matter.';
+  });
+  if (candidateButton && candidateStatus) candidateButton.addEventListener('click', async () => {
+    if (busy || uncertain || candidateButton.disabled) return;
+    busy = true;
+    candidateButton.disabled = true;
+    const activeGeneration = generation;
+    let objectUrl = null;
+    try {
+      candidateStatus.textContent = 'Reading edited Word document locally…';
+      if (!window.CaseProofWordFile || !window.CaseProofWordCandidate) {
+        throw new Error('Word candidate exporter is unavailable.');
+      }
+      const receipt = await window.CaseProofWordCandidate.capture(
+        Office, window.CaseProofWordFile, crypto
+      );
+      if (activeGeneration !== generation) {
+        throw new Error('The session changed during capture; no file was downloaded.');
+      }
+      objectUrl = URL.createObjectURL(new Blob([receipt.bytes], {
+        type: 'application/octet-stream'
+      }));
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = 'caseproof-edited-candidate.docx';
+      link.click();
+      candidateStatus.textContent =
+        'Edited DOCX downloaded locally. Digest: ' + receipt.sha256 +
+        '. No CaseProof draft was activated. A separate signed import, review and recheck are required.';
+    } catch (error) {
+      candidateStatus.textContent = error instanceof Error
+        ? error.message : 'Edited Word candidate could not be captured.';
+    } finally {
+      if (objectUrl) {
+        const revoked = objectUrl;
+        setTimeout(() => URL.revokeObjectURL(revoked), 1000);
+      }
+      busy = false;
+      candidateButton.disabled = false;
+    }
   });
   button.addEventListener('click', async () => {
     if (busy || uncertain) return;

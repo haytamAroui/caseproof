@@ -75,6 +75,72 @@ class DraftRevisionClient:
                          {'p_case': case, 'p_parent': parent, 'p_snapshot': snapshot, 'p_reference': reference},
                          key=self.key, bearer=bearer)
 
+    def editor_review(
+        self, bearer: str, case: str, parent: str, snapshot: str,
+        review_request: str, values: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Separate actor-scoped whole-DOCX review, never a synthetic finding."""
+        return self._rpc(
+            'caseproof_dossier_document_edit_review',
+            {
+                'p_case': case, 'p_parent': parent, 'p_snapshot': snapshot,
+                'p_request': review_request, 'p_data': values,
+            },
+            key=self.key, bearer=bearer,
+        )
+
+    def editor_reserve(
+        self, bearer: str, case: str, parent: str, snapshot: str,
+        request: str, review_request: str, values: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Atomically require a separately saved, actor-bound review receipt."""
+        return self._rpc(
+            'caseproof_dossier_document_edit_reserve',
+            {
+                'p_case': case, 'p_parent': parent, 'p_snapshot': snapshot,
+                'p_request': request, 'p_review': review_request,
+                'p_data': values,
+            },
+            key=self.key, bearer=bearer,
+        )
+
+    def editor_status(
+        self, bearer: str, case: str, request: str, review_request: str,
+        fingerprint: str,
+    ) -> dict[str, Any]:
+        """Always recheck fresh draft:edit scope even for an active operation."""
+        return self._rpc(
+            "caseproof_dossier_document_edit_status",
+            {
+                "p_case": case, "p_request": request,
+                "p_review": review_request, "p_command": fingerprint,
+            }, key=self.key, bearer=bearer,
+        )
+
+    def editor_activate(
+        self, bearer: str, case: str, request: str,
+        review_request: str, digest: str, size: int,
+    ) -> dict[str, Any]:
+        """Recheck fresh document-edit scope in a separate trusted activation RPC."""
+        key = self.trusted_key
+        if not key:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            actor = self.verifier.verify_bearer(bearer)
+        except InvalidBearer:
+            raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+        except IdentityServiceUnavailable:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return self._rpc(
+            "caseproof_dossier_document_edit_activate",
+            {
+                "p_actor": actor.subject_id, "p_case": case,
+                "p_request": request, "p_review": review_request,
+                "p_sha256": digest, "p_length": size,
+            },
+            key=key, bearer=key if key.startswith("eyJ") else None,
+        )
+
     def activate(self, bearer: str, case: str, request: str, digest: str, size: int) -> dict[str, Any]:
         key = self.trusted_key
         if not key:
