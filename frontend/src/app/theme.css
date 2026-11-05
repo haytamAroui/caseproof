@@ -1,21 +1,21 @@
 /* Self-hosted variable fonts from Google Fonts, SIL OFL 1.1. */
 @font-face {
   font-family: 'CaseProof Inter';
-  src: url('/fonts/inter.woff2') format('woff2');
+  src: url('./fonts/inter.woff2') format('woff2');
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
   font-family: 'CaseProof Source Serif';
-  src: url('/fonts/source-serif-4.woff2') format('woff2');
+  src: url('./fonts/source-serif-4.woff2') format('woff2');
   font-style: normal;
   font-weight: 200 900;
   font-display: swap;
 }
 @font-face {
   font-family: 'CaseProof JetBrains Mono';
-  src: url('/fonts/jetbrains-mono.woff2') format('woff2');
+  src: url('./fonts/jetbrains-mono.woff2') format('woff2');
   font-style: normal;
   font-weight: 100 800;
   font-display: swap;
