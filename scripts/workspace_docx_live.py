@@ -8,8 +8,8 @@ import hashlib
 import http.client
 import io
 import json
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 from uuid import UUID
 
 from docx import Document
