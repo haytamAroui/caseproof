@@ -24,13 +24,19 @@ const preview = {
   can_release: true,
   review_completeness: {
     policy_version: 'caseproof-release-completeness-v1',
-    total_findings: 2, required_reviews: 2, reviewed_findings: 1,
-    unreviewed_findings: 1, unreviewed_reference_ids: ['ref-two'],
-    review_complete: false, can_release_complete: false,
-    can_release_partial: true, text_coverage_complete: false,
+    total_findings: 2,
+    required_reviews: 2,
+    reviewed_findings: 1,
+    unreviewed_findings: 1,
+    unreviewed_reference_ids: ['ref-two'],
+    review_complete: false,
+    can_release_complete: false,
+    can_release_partial: true,
+    text_coverage_complete: false,
     reference_recall_measured: false,
     reason_codes: [
-      'UNREVIEWED_FINDINGS', 'TEXT_COVERAGE_INCOMPLETE_OR_UNKNOWN',
+      'UNREVIEWED_FINDINGS',
+      'TEXT_COVERAGE_INCOMPLETE_OR_UNKNOWN',
       'REFERENCE_RECALL_UNMEASURED',
     ],
   },
@@ -62,7 +68,8 @@ function record(releaseId: string, frozen = snapshot) {
       finding_count: 2,
       review_completeness: {
         ...preview.review_completeness,
-        release_type: 'partial_review', partial_acknowledged: true,
+        release_type: 'partial_review',
+        partial_acknowledged: true,
       },
       coverage: preview.coverage,
       sources: [
@@ -194,7 +201,9 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
   );
   await open(page);
   await expect(page.getByText('Partial OCR remains unassessed.')).toBeVisible();
-  await expect(page.getByText(/1 of 2 detected findings reviewed/)).toBeVisible();
+  await expect(
+    page.getByText(/1 of 2 detected findings reviewed/),
+  ).toBeVisible();
   await page.getByLabel(/I acknowledge this release is partial/).check();
   await page
     .getByRole('button', { name: 'Create explicitly partial reviewed release' })
@@ -266,14 +275,18 @@ test('F6 lost POST acknowledgment reconciles without repeating the write', async
     return route.fulfill({ json: committed });
   });
   await open(page);
-  await expect(page.getByText(/1 of 2 detected findings reviewed/)).toBeVisible();
+  await expect(
+    page.getByText(/1 of 2 detected findings reviewed/),
+  ).toBeVisible();
   await page.getByLabel(/I acknowledge this release is partial/).check();
   await page
     .getByRole('button', { name: 'Create explicitly partial reviewed release' })
     .click();
   await expect(page.getByText(/Release outcome unknown/)).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Create explicitly partial reviewed release' }),
+    page.getByRole('button', {
+      name: 'Create explicitly partial reviewed release',
+    }),
   ).toBeDisabled();
   await page
     .getByRole('button', { name: 'Reconcile previous release' })

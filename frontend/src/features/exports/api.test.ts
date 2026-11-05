@@ -37,7 +37,10 @@ const complete = {
   can_release_partial: false,
   text_coverage_complete: false,
   reference_recall_measured: false,
-  reason_codes: ['TEXT_COVERAGE_INCOMPLETE_OR_UNKNOWN', 'REFERENCE_RECALL_UNMEASURED'],
+  reason_codes: [
+    'TEXT_COVERAGE_INCOMPLETE_OR_UNKNOWN',
+    'REFERENCE_RECALL_UNMEASURED',
+  ],
 } as const;
 const manifest = {
   schema: 'caseproof-reviewed-release-v1',
@@ -48,7 +51,9 @@ const manifest = {
   review_count: 1,
   finding_count: 1,
   review_completeness: {
-    ...complete, release_type: 'complete_review', partial_acknowledged: false,
+    ...complete,
+    release_type: 'complete_review',
+    partial_acknowledged: false,
   },
   coverage: { reference_recall_measured: false },
   sources: [
@@ -219,9 +224,13 @@ describe('F6 reviewed export contracts', () => {
       release_ready: false,
       can_release: false,
       review_completeness: {
-        ...complete, reviewed_findings: 0, unreviewed_findings: 1,
-        unreviewed_reference_ids: ['ref-one'], review_complete: false,
-        can_release_complete: false, can_release_partial: false,
+        ...complete,
+        reviewed_findings: 0,
+        unreviewed_findings: 1,
+        unreviewed_reference_ids: ['ref-one'],
+        review_complete: false,
+        can_release_complete: false,
+        can_release_partial: false,
         reason_codes: ['NO_SAVED_REVIEWS', 'UNREVIEWED_FINDINGS'],
       },
       coverage: {},
@@ -233,27 +242,41 @@ describe('F6 reviewed export contracts', () => {
       parseReleasePreview({ ...preview, release_ready: true }, scope),
     ).toThrow();
     expect(() =>
-      parseReleasePreview({
-        ...preview, review_count: 1, release_ready: true,
-      }, scope),
+      parseReleasePreview(
+        {
+          ...preview,
+          review_count: 1,
+          release_ready: true,
+        },
+        scope,
+      ),
     ).toThrow();
     expect(() =>
-      parseRelease({
-        ...record,
-        manifest: {
-          ...manifest,
-          review_completeness: {
-            ...manifest.review_completeness,
-            release_type: 'partial_review',
+      parseRelease(
+        {
+          ...record,
+          manifest: {
+            ...manifest,
+            review_completeness: {
+              ...manifest.review_completeness,
+              release_type: 'partial_review',
+            },
           },
         },
-      }, scope),
+        scope,
+      ),
     ).toThrow();
     // Existing immutable v1 artifacts without the new policy remain readable,
     // but their review completeness must not be inferred.
-    expect(parseRelease({
-      ...record, manifest: { ...manifest, review_completeness: undefined },
-    }, scope).manifest.review_completeness).toBeUndefined();
+    expect(
+      parseRelease(
+        {
+          ...record,
+          manifest: { ...manifest, review_completeness: undefined },
+        },
+        scope,
+      ).manifest.review_completeness,
+    ).toBeUndefined();
     expect(() =>
       parseReleasePreview(
         { ...preview, formats: ['json', 'markdown', 'pdf'] },

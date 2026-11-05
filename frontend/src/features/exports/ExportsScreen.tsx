@@ -66,10 +66,13 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       ? 'complete_review'
       : 'partial_review';
     if (
-      !valid || !review || working ||
+      !valid ||
+      !review ||
+      working ||
       (!review.can_release_complete &&
         !(review.can_release_partial && partialAcknowledged))
-    ) return;
+    )
+      return;
     const id = requestId.current ?? crypto.randomUUID();
     requestId.current = id;
     const controller = new AbortController();
@@ -81,9 +84,11 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       const response = await api.post(
         base,
         {
-          release_id: id, snapshot_hash: snapshot,
+          release_id: id,
+          snapshot_hash: snapshot,
           release_type: releaseType,
-          partial_acknowledged: releaseType === 'partial_review' && partialAcknowledged,
+          partial_acknowledged:
+            releaseType === 'partial_review' && partialAcknowledged,
         },
         controller.signal,
       );
@@ -227,26 +232,37 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                   ? 'Review complete for detected findings only; this is not complete dossier coverage.'
                   : 'Review incomplete. A complete-reviewed release is blocked.'}
               </p>
-              {preview.data.review_completeness.unreviewed_reference_ids.length > 0 && (
+              {preview.data.review_completeness.unreviewed_reference_ids
+                .length > 0 && (
                 <div aria-label="Unreviewed findings">
                   <p>Inspect and review pending findings:</p>
                   <ul>
                     {preview.data.review_completeness.unreviewed_reference_ids
-                      .slice(0, 12).map((reference) => (
+                      .slice(0, 12)
+                      .map((reference) => (
                         <li key={reference}>
-                          <Link to={
-                            '/matters/' + caseId + '/briefs/' + briefId +
-                            '?snapshot=' + snapshot + '&finding=' +
-                            encodeURIComponent(reference)
-                          }>
+                          <Link
+                            to={
+                              '/matters/' +
+                              caseId +
+                              '/briefs/' +
+                              briefId +
+                              '?snapshot=' +
+                              snapshot +
+                              '&finding=' +
+                              encodeURIComponent(reference)
+                            }
+                          >
                             Review {reference}
                           </Link>
                         </li>
                       ))}
                   </ul>
-                  {preview.data.review_completeness.unreviewed_findings > 12 && (
+                  {preview.data.review_completeness.unreviewed_findings >
+                    12 && (
                     <p className="small">
-                      Additional findings are available in the reviewer workspace.
+                      Additional findings are available in the reviewer
+                      workspace.
                     </p>
                   )}
                 </div>
@@ -282,24 +298,32 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                     <input
                       type="checkbox"
                       checked={partialAcknowledged}
-                      onChange={(event) => setPartialAcknowledged(event.target.checked)}
+                      onChange={(event) =>
+                        setPartialAcknowledged(event.target.checked)
+                      }
                     />
-                    I acknowledge this release is partial and some detected findings
-                    remain unreviewed.
+                    I acknowledge this release is partial and some detected
+                    findings remain unreviewed.
                   </label>
                 </div>
               )}
               <Button
                 onClick={() => void commitRelease()}
                 disabled={
-                  working || unknown ||
+                  working ||
+                  unknown ||
                   (!preview.data.review_completeness.can_release_complete &&
-                    !(preview.data.review_completeness.can_release_partial && partialAcknowledged))
+                    !(
+                      preview.data.review_completeness.can_release_partial &&
+                      partialAcknowledged
+                    ))
                 }
               >
-                {working ? 'Processing…' : preview.data.release_ready
-                  ? 'Create frozen reviewed release'
-                  : 'Create explicitly partial reviewed release'}
+                {working
+                  ? 'Processing…'
+                  : preview.data.release_ready
+                    ? 'Create frozen reviewed release'
+                    : 'Create explicitly partial reviewed release'}
               </Button>
             </section>
           )}
@@ -345,7 +369,8 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                   Snapshot {release.snapshot_hash.slice(0, 12)}… ·{' '}
                   {release.manifest.review_count} decisions ·{' '}
                   {release.manifest.review_completeness
-                    ? release.manifest.review_completeness.release_type === 'partial_review'
+                    ? release.manifest.review_completeness.release_type ===
+                      'partial_review'
                       ? 'partial review'
                       : 'all detected findings reviewed'
                     : 'legacy scope unclassified'}
@@ -375,12 +400,13 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
             <p>
               Frozen release type:{' '}
               <strong>
-                {selected.manifest.review_completeness.release_type === 'partial_review'
+                {selected.manifest.review_completeness.release_type ===
+                'partial_review'
                   ? 'Partial review — incomplete'
                   : 'All detected findings reviewed'}
               </strong>
-              . {selected.manifest.review_completeness.unreviewed_findings} findings
-              remained unreviewed at release.
+              . {selected.manifest.review_completeness.unreviewed_findings}{' '}
+              findings remained unreviewed at release.
             </p>
           ) : (
             <Notice>

@@ -1,4 +1,5 @@
 """Bounded, version-bound reviewed delivery. A release is not a legal certificate."""
+
 from __future__ import annotations
 
 import base64
@@ -15,7 +16,11 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.litigation.release_completeness import (
-    ReleaseIntegrityError, release_completeness as evaluate_completeness, select_release_scope,
+    ReleaseIntegrityError,
+    select_release_scope,
+)
+from application.litigation.release_completeness import (
+    release_completeness as evaluate_completeness,
 )
 from application.litigation.report_projection import canonical as canonical_report
 from application.litigation.report_projection import render_dossier_export
@@ -71,11 +76,15 @@ def _validate_frozen_report(report: dict[str, Any]) -> None:
     decisions = report.get("human_decisions")
     findings = report.get("findings")
     if (
-        not all(isinstance(report.get(key), str) and report[key] for key in
-                ("case_id", "brief_id", "snapshot_hash", "bundle_signature"))
+        not all(
+            isinstance(report.get(key), str) and report[key]
+            for key in ("case_id", "brief_id", "snapshot_hash", "bundle_signature")
+        )
         or not isinstance(report.get("coverage"), dict)
-        or not isinstance(sources, list) or not sources
-        or not isinstance(decisions, list) or not isinstance(findings, list)
+        or not isinstance(sources, list)
+        or not sources
+        or not isinstance(decisions, list)
+        or not isinstance(findings, list)
         or not all(isinstance(finding, dict) for finding in findings)
     ):
         raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -96,8 +105,11 @@ def _validate_frozen_report(report: dict[str, Any]) -> None:
         if finding.get("version_id") is not None and not isinstance(finding["version_id"], str):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         visual = finding.get("visual_assessment", {})
-        if (not isinstance(visual, dict) or not isinstance(visual.get("regions", []), list)
-                or not all(isinstance(region, dict) for region in visual.get("regions", []))):
+        if (
+            not isinstance(visual, dict)
+            or not isinstance(visual.get("regions", []), list)
+            or not all(isinstance(region, dict) for region in visual.get("regions", []))
+        ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
 
 
@@ -109,8 +121,10 @@ def release_completeness(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def release_manifest(
-    report: dict[str, Any], artifacts: dict[str, bytes],
-    *, release_scope: dict[str, Any] | None = None,
+    report: dict[str, Any],
+    artifacts: dict[str, bytes],
+    *,
+    release_scope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """No general VERIFIED flag: scopes, abstentions and decisions remain separate."""
     _validate_frozen_report(report)
@@ -130,30 +144,31 @@ def release_manifest(
     decisions = report["human_decisions"]
     selected = []
     for row in sources:
-        selected.append({
-            "version_id": row["version_id"],
-            "sha256": row["sha256"],
-            "role": row["role"],
-        })
+        selected.append(
+            {
+                "version_id": row["version_id"],
+                "sha256": row["sha256"],
+                "role": row["role"],
+            }
+        )
     # Link destination paths are derived exclusively from frozen source IDs and
     # the selected finding, not from external URL fields or caller input.
     source_by_id = {
-        row["version_id"]: row for row in selected
-        if row["role"] in {"exhibit", "draft", "inventory"}
+        row["version_id"]: row for row in selected if row["role"] in {"exhibit", "draft", "inventory"}
     }
     case_path = quote(str(report["case_id"]), safe="")
     brief_path = quote(str(report["brief_id"]), safe="")
     snapshot_path = quote(str(report["snapshot_hash"]), safe="")
-    original_base = (
-        f"/v2/matters/{case_path}/briefs/{brief_path}/dossier"
-        f"/history/{snapshot_path}/sources"
-    )
-    source_links = [{
-        "version_id": row["version_id"],
-        "role": row["role"],
-        "sha256": row["sha256"],
-        "original_path": f"{original_base}/{quote(str(row['version_id']), safe='')}/original",
-    } for row in selected]
+    original_base = f"/v2/matters/{case_path}/briefs/{brief_path}/dossier/history/{snapshot_path}/sources"
+    source_links = [
+        {
+            "version_id": row["version_id"],
+            "role": row["role"],
+            "sha256": row["sha256"],
+            "original_path": f"{original_base}/{quote(str(row['version_id']), safe='')}/original",
+        }
+        for row in selected
+    ]
     reference_links = []
     for finding in report["findings"]:
         reference = finding.get("reference_id")
@@ -163,17 +178,19 @@ def release_manifest(
         page = finding.get("pdf_page")
         mapped = finding.get("page_mapping") == "mapped"
         physical = page if mapped and type(page) is int and page > 0 else None
-        reference_links.append({
-            "reference_id": reference,
-            "source_version_id": version,
-            "original_sha256": source_by_id[version]["sha256"],
-            "pdf_page": physical,
-            "viewer_path": (
-                f"/matters/{case_path}/briefs/{brief_path}"
-                f"?snapshot={snapshot_path}&finding={quote(reference, safe='')}"
-            ),
-            "page_space": "physical_pdf_page" if physical is not None else "unmapped",
-        })
+        reference_links.append(
+            {
+                "reference_id": reference,
+                "source_version_id": version,
+                "original_sha256": source_by_id[version]["sha256"],
+                "pdf_page": physical,
+                "viewer_path": (
+                    f"/matters/{case_path}/briefs/{brief_path}"
+                    f"?snapshot={snapshot_path}&finding={quote(reference, safe='')}"
+                ),
+                "page_space": "physical_pdf_page" if physical is not None else "unmapped",
+            }
+        )
     return {
         "schema": "caseproof-reviewed-release-v1",
         "case_id": report["case_id"],
@@ -224,9 +241,7 @@ def create_release_router(store: Any) -> APIRouter:
             raise HTTPException(422, "invalid release identity")
         return value
 
-    def checked_manifest(
-        raw: Any, case: str, brief: str, release_id: str
-    ) -> dict[str, Any]:
+    def checked_manifest(raw: Any, case: str, brief: str, release_id: str) -> dict[str, Any]:
         """All replay, list, status and binary reads recheck the server receipt."""
         if not isinstance(raw, dict):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -242,10 +257,7 @@ def create_release_router(store: Any) -> APIRouter:
         receipt = raw.get("server_receipt")
         unsigned = {key: value for key, value in raw.items() if key != "server_receipt"}
         claimed_hash = unsigned.get("manifest_sha256")
-        unsigned_without_hash = {
-            key: value for key, value in unsigned.items()
-            if key != "manifest_sha256"
-        }
+        unsigned_without_hash = {key: value for key, value in unsigned.items() if key != "manifest_sha256"}
         if (
             not isinstance(receipt, str)
             or not isinstance(claimed_hash, str)
@@ -258,8 +270,9 @@ def create_release_router(store: Any) -> APIRouter:
         return raw
 
     @router.get(base + "/preview")
-    def preview(case_id: str, brief_id: str, snapshot_hash: str,
-                authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    def preview(
+        case_id: str, brief_id: str, snapshot_hash: str, authorization: str | None = Header(default=None)
+    ) -> dict[str, Any]:
         bearer = active(authorization)
         if len(snapshot_hash) != 64 or any(ch not in "0123456789abcdef" for ch in snapshot_hash):
             raise HTTPException(422, "invalid snapshot")
@@ -273,7 +286,9 @@ def create_release_router(store: Any) -> APIRouter:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return {
             "schema": "caseproof-release-preview-v1",
-            "case_id": case_id, "brief_id": brief_id, "snapshot_hash": snapshot_hash,
+            "case_id": case_id,
+            "brief_id": brief_id,
+            "snapshot_hash": snapshot_hash,
             "finding_count": len(report["findings"]),
             "review_count": len(report["human_decisions"]),
             "coverage": report["coverage"],
@@ -281,12 +296,16 @@ def create_release_router(store: Any) -> APIRouter:
             "release_ready": policy["can_release_complete"],
             "can_release": policy["can_release_complete"] or policy["can_release_partial"],
             "review_completeness": policy,
-            "limitations": ["Human review is not a legal certificate.", "Scope and abstentions remain visible."],
+            "limitations": [
+                "Human review is not a legal certificate.",
+                "Scope and abstentions remain visible.",
+            ],
         }
 
     @router.post(base)
-    def release(case_id: str, brief_id: str, body: ReleaseCommand,
-                authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    def release(
+        case_id: str, brief_id: str, body: ReleaseCommand, authorization: str | None = Header(default=None)
+    ) -> dict[str, Any]:
         bearer = active(authorization)
         # Check idempotent recovery FIRST. This path must not generate new bytes
         # after an acknowledged or lost-response release.
@@ -294,9 +313,7 @@ def create_release_router(store: Any) -> APIRouter:
         if existing.get("state") == "released":
             if existing.get("snapshot_hash") != body.snapshot_hash or existing.get("brief_id") != brief_id:
                 raise HTTPException(409, "release request identity already belongs to another snapshot")
-            validated = checked_manifest(
-                existing.get("manifest"), case_id, brief_id, str(body.release_id)
-            )
+            validated = checked_manifest(existing.get("manifest"), case_id, brief_id, str(body.release_id))
             if validated["snapshot_hash"] != body.snapshot_hash:
                 raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
             return cast(dict[str, Any], existing)
@@ -334,8 +351,9 @@ def create_release_router(store: Any) -> APIRouter:
         return cast(dict[str, Any], result)
 
     @router.get(base)
-    def list_releases(case_id: str, brief_id: str,
-                      authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    def list_releases(
+        case_id: str, brief_id: str, authorization: str | None = Header(default=None)
+    ) -> dict[str, Any]:
         bearer = active(authorization)
         result = store.export_rpc(bearer, case_id, "list", None, {"brief_id": brief_id})
         if not isinstance(result.get("releases"), list):
@@ -354,8 +372,9 @@ def create_release_router(store: Any) -> APIRouter:
         return cast(dict[str, Any], result)
 
     @router.get(base + "/{release_id}")
-    def status(case_id: str, brief_id: str, release_id: str,
-               authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    def status(
+        case_id: str, brief_id: str, release_id: str, authorization: str | None = Header(default=None)
+    ) -> dict[str, Any]:
         bearer = active(authorization)
         result = store.export_rpc(bearer, case_id, "status", check_id(release_id), {})
         if result.get("state") == "absent":
@@ -368,8 +387,13 @@ def create_release_router(store: Any) -> APIRouter:
         return cast(dict[str, Any], result)
 
     @router.get(base + "/{release_id}/artifacts/{kind}")
-    def artifact(case_id: str, brief_id: str, release_id: str, kind: str,
-                 authorization: str | None = Header(default=None)) -> Response:
+    def artifact(
+        case_id: str,
+        brief_id: str,
+        release_id: str,
+        kind: str,
+        authorization: str | None = Header(default=None),
+    ) -> Response:
         if kind not in FORMATS:
             raise HTTPException(404, "unsupported release format")
         bearer = active(authorization)
@@ -380,16 +404,23 @@ def create_release_router(store: Any) -> APIRouter:
             raw = base64.b64decode(record["content_base64"], validate=True)
         except (KeyError, ValueError):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
-        if (not 0 < len(raw) <= LIMITS[kind] or len(raw) != info.get("byte_length")
-                or _hash(raw) != info.get("sha256")):
+        if (
+            not 0 < len(raw) <= LIMITS[kind]
+            or len(raw) != info.get("byte_length")
+            or _hash(raw) != info.get("sha256")
+        ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        return Response(raw, media_type=MEDIA[kind], headers={
-            "Cache-Control": "no-store",
-            "X-Content-Type-Options": "nosniff",
-            "Content-Disposition": f"attachment; filename=caseproof-reviewed-{release_id}.{kind if kind != 'markdown' else 'md'}",
-            "X-CaseProof-Export-SHA256": info["sha256"],
-            "X-CaseProof-Export-Size": str(len(raw)),
-            "X-CaseProof-Snapshot": manifest["snapshot_hash"],
-        })
+        return Response(
+            raw,
+            media_type=MEDIA[kind],
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Disposition": f"attachment; filename=caseproof-reviewed-{release_id}.{kind if kind != 'markdown' else 'md'}",
+                "X-CaseProof-Export-SHA256": info["sha256"],
+                "X-CaseProof-Export-Size": str(len(raw)),
+                "X-CaseProof-Snapshot": manifest["snapshot_hash"],
+            },
+        )
 
     return router

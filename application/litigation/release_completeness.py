@@ -3,18 +3,24 @@
 This module does not infer legal support, filing permission or source accuracy.
 All review counts are based on unique, source-snapshot-bound finding identities.
 """
+
 from __future__ import annotations
 
 from typing import Any
+
 
 class ReleaseIntegrityError(ValueError):
     """An inconsistent frozen review ledger cannot be classified safely."""
 
 
 POLICY_VERSION = "caseproof-release-completeness-v1"
-DECISIONS = frozenset({
-    "CONFIRMED_SUPPORTED", "CONFIRMED_QUALIFIED", "CONFIRMED_CONTRADICTED",
-})
+DECISIONS = frozenset(
+    {
+        "CONFIRMED_SUPPORTED",
+        "CONFIRMED_QUALIFIED",
+        "CONFIRMED_CONTRADICTED",
+    }
+)
 
 
 def release_completeness(report: dict[str, Any]) -> dict[str, Any]:
@@ -30,7 +36,11 @@ def release_completeness(report: dict[str, Any]) -> dict[str, Any]:
         raise ReleaseIntegrityError("invalid frozen review ledger")
     references: list[str] = []
     for finding in findings:
-        if not isinstance(finding, dict) or not isinstance(finding.get("reference_id"), str) or not finding["reference_id"]:
+        if (
+            not isinstance(finding, dict)
+            or not isinstance(finding.get("reference_id"), str)
+            or not finding["reference_id"]
+        ):
             raise ReleaseIntegrityError("invalid frozen review ledger")
         references.append(finding["reference_id"])
     if len(set(references)) != len(references):
@@ -46,10 +56,7 @@ def release_completeness(report: dict[str, Any]) -> dict[str, Any]:
             raise ReleaseIntegrityError("invalid frozen review ledger")
         ref = receipt["reference_id"]
         request = receipt["request_id"]
-        if (
-            receipt["decision"] not in DECISIONS or ref not in valid
-            or ref in reviewed or request in requests
-        ):
+        if receipt["decision"] not in DECISIONS or ref not in valid or ref in reviewed or request in requests:
             raise ReleaseIntegrityError("invalid frozen review ledger")
         reviewed.add(ref)
         requests.add(request)
@@ -88,7 +95,9 @@ def release_completeness(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def select_release_scope(
-    policy: dict[str, Any], release_type: str, partial_acknowledged: bool,
+    policy: dict[str, Any],
+    release_type: str,
+    partial_acknowledged: bool,
 ) -> dict[str, Any]:
     """An explicit partial request is mandatory; preview never authorizes a POST."""
     if release_type == "complete_review":

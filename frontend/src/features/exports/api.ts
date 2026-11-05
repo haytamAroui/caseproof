@@ -111,12 +111,15 @@ function validPolicy(raw: unknown): raw is ReviewCompleteness {
     !Array.isArray(raw.unreviewed_reference_ids) ||
     raw.unreviewed_reference_ids.length !== raw.unreviewed_findings ||
     !raw.unreviewed_reference_ids.every(
-      (ref: unknown) => typeof ref === 'string' && ref.length > 0 && ref.length <= 256,
+      (ref: unknown) =>
+        typeof ref === 'string' && ref.length > 0 && ref.length <= 256,
     ) ||
-    new Set(raw.unreviewed_reference_ids).size !== raw.unreviewed_reference_ids.length ||
+    new Set(raw.unreviewed_reference_ids).size !==
+      raw.unreviewed_reference_ids.length ||
     !Array.isArray(raw.reason_codes) ||
     !raw.reason_codes.every((v: unknown) => typeof v === 'string')
-  ) return false;
+  )
+    return false;
   return true;
 }
 function validReleaseScope(raw: unknown): raw is ReleaseScopePolicy {
@@ -198,8 +201,10 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
     !number(manifest.finding_count) ||
     (manifest.review_completeness !== undefined &&
       (!validReleaseScope(manifest.review_completeness) ||
-        manifest.review_count !== manifest.review_completeness.reviewed_findings ||
-        manifest.finding_count !== manifest.review_completeness.total_findings)) ||
+        manifest.review_count !==
+          manifest.review_completeness.reviewed_findings ||
+        manifest.finding_count !==
+          manifest.review_completeness.total_findings)) ||
     !plain(manifest.coverage) ||
     !digest.test(String(manifest.manifest_sha256)) ||
     !digest.test(String(manifest.server_receipt)) ||

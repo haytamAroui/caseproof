@@ -1,4 +1,5 @@
 """F6 offline route acceptance: immutable output, authorization and actual bytes."""
+
 from __future__ import annotations
 
 import base64
@@ -12,9 +13,9 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
+from application.litigation.release_completeness import release_completeness, select_release_scope
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.dossier_export_release import _checked_artifacts, release_manifest
-from application.litigation.release_completeness import release_completeness, select_release_scope
 from apps.api.dossier_journey import canonical, create_dossier_router
 
 SNAPSHOT = "a" * 64
@@ -39,18 +40,25 @@ class SignedReleaseStore:
             "snapshot_hash": SNAPSHOT,
             "bundle_signature": "b" * 64,
             "confirmation_id": str(uuid4()),
-            "sources": [
-                {"role": "draft", "version_id": BRIEF, "sha256": sha(self.original)}
-            ],
-            "coverage": {"checked": 0, "unresolved": 1,
-                         "text_coverage_complete": False, "reference_recall_measured": False},
+            "sources": [{"role": "draft", "version_id": BRIEF, "sha256": sha(self.original)}],
+            "coverage": {
+                "checked": 0,
+                "unresolved": 1,
+                "text_coverage_complete": False,
+                "reference_recall_measured": False,
+            },
             "findings": [{"reference_id": "ref-1", "visual_assessment": {"regions": []}}],
         }
-        self.decisions = [{
-            "reference_id": "ref-1", "decision": "CONFIRMED_QUALIFIED",
-            "rationale": "Synthetic human reviewer", "reviewer_id": str(uuid4()),
-            "request_id": str(uuid4()), "timestamp": "2026-11-03T07:00:00+00:00",
-        }]
+        self.decisions = [
+            {
+                "reference_id": "ref-1",
+                "decision": "CONFIRMED_QUALIFIED",
+                "rationale": "Synthetic human reviewer",
+                "reviewer_id": str(uuid4()),
+                "request_id": str(uuid4()),
+                "timestamp": "2026-11-03T07:00:00+00:00",
+            }
+        ]
         self.active = BRIEF
         self.permitted = True
         self.saved = {}
@@ -92,8 +100,10 @@ class SignedReleaseStore:
                 raw = base64.b64decode(data["contents"][kind], validate=True)
                 assert sha(raw) == manifest["artifacts"][kind]["sha256"]
             status = {
-                "state": "released", "release_id": release_id,
-                "brief_id": BRIEF, "snapshot_hash": SNAPSHOT,
+                "state": "released",
+                "release_id": release_id,
+                "brief_id": BRIEF,
+                "snapshot_hash": SNAPSHOT,
                 "manifest": manifest,
             }
             self.saved[release_id] = {"status": status, "contents": data["contents"]}
@@ -102,8 +112,10 @@ class SignedReleaseStore:
             return {"releases": [entry["status"] for entry in self.saved.values()]}
         if action == "artifact":
             saved = self.saved[release_id]
-            return {"manifest": saved["status"]["manifest"],
-                    "content_base64": saved["contents"][data["format"]]}
+            return {
+                "manifest": saved["status"]["manifest"],
+                "content_base64": saved["contents"][data["format"]],
+            }
         raise AssertionError(action)
 
 
@@ -157,37 +169,45 @@ def test_f6_preview_release_download_reopen_restart_and_historical():
     # The original release remains immutable and authorized historical output
     # even if later corrections activate another draft.
     store.active = str(uuid4())
-    assert api.get(base() + "/preview?snapshot_hash=" + SNAPSHOT,
-                   headers=header()).status_code == 409
+    assert api.get(base() + "/preview?snapshot_hash=" + SNAPSHOT, headers=header()).status_code == 409
     assert api.get(base() + f"/{operation}/artifacts/docx", headers=header()).status_code == 200
-    assert api.post(base(), json={"release_id": str(uuid4()),
-                                 "snapshot_hash": SNAPSHOT}, headers=header()).status_code == 409
+    assert (
+        api.post(
+            base(), json={"release_id": str(uuid4()), "snapshot_hash": SNAPSHOT}, headers=header()
+        ).status_code
+        == 409
+    )
     # Reconstruct API router from same durable stand-in (simulates app restart).
     new_app = FastAPI()
     new_app.include_router(create_dossier_router(store))
-    assert TestClient(new_app).get(
-        base() + f"/{operation}/artifacts/docx", headers=header()
-    ).content == api.get(base() + f"/{operation}/artifacts/docx", headers=header()).content
+    assert (
+        TestClient(new_app).get(base() + f"/{operation}/artifacts/docx", headers=header()).content
+        == api.get(base() + f"/{operation}/artifacts/docx", headers=header()).content
+    )
 
 
 def test_f6_review_grants_and_absent_receipt_fail_closed():
     api, store = client()
     store.decisions = []
-    assert api.get(base() + "/preview?snapshot_hash=" + SNAPSHOT,
-                   headers=header()).json()["release_ready"] is False
-    assert api.post(base(), json={"release_id": str(uuid4()),
-                                 "snapshot_hash": SNAPSHOT}, headers=header()).status_code == 409
+    assert (
+        api.get(base() + "/preview?snapshot_hash=" + SNAPSHOT, headers=header()).json()["release_ready"]
+        is False
+    )
+    assert (
+        api.post(
+            base(), json={"release_id": str(uuid4()), "snapshot_hash": SNAPSHOT}, headers=header()
+        ).status_code
+        == 409
+    )
     store.permitted = False
-    assert api.get(base() + "/preview?snapshot_hash=" + SNAPSHOT,
-                   headers=header()).status_code in (403, 404)
+    assert api.get(base() + "/preview?snapshot_hash=" + SNAPSHOT, headers=header()).status_code in (403, 404)
     assert api.get(base(), headers=header()).status_code in (403, 404)
 
 
 def test_f6_rejects_tampered_artifact_and_manifest_and_wrong_identity():
     api, store = client()
     operation = str(uuid4())
-    result = api.post(base(), headers=header(),
-                      json={"release_id": operation, "snapshot_hash": SNAPSHOT})
+    result = api.post(base(), headers=header(), json={"release_id": operation, "snapshot_hash": SNAPSHOT})
     assert result.status_code == 200
     saved = store.saved[operation]
     original = saved["contents"]["json"]
@@ -197,19 +217,31 @@ def test_f6_rejects_tampered_artifact_and_manifest_and_wrong_identity():
     saved["contents"]["json"] = original
     saved["status"]["manifest"]["review_count"] = 999
     assert api.get(base() + f"/{operation}", headers=header()).status_code in (403, 404, 503)
-    assert api.post(base(), headers=header(), json={
-        "release_id": operation, "snapshot_hash": "f" * 64,
-    }).status_code == 409
+    assert (
+        api.post(
+            base(),
+            headers=header(),
+            json={
+                "release_id": operation,
+                "snapshot_hash": "f" * 64,
+            },
+        ).status_code
+        == 409
+    )
 
 
 def test_f6_bounded_format_refuses_oversized_artifact(monkeypatch):
     api, store = client()
     import apps.api.dossier_export_release as service
 
-    monkeypatch.setattr(service, "_checked_artifacts", lambda report, raw: (_ for _ in ()).throw(
-        __import__("fastapi").HTTPException(422, "export exceeds supported size")))
-    result = api.post(base(), headers=header(),
-                      json={"release_id": str(uuid4()), "snapshot_hash": SNAPSHOT})
+    monkeypatch.setattr(
+        service,
+        "_checked_artifacts",
+        lambda report, raw: (_ for _ in ()).throw(
+            __import__("fastapi").HTTPException(422, "export exceeds supported size")
+        ),
+    )
+    result = api.post(base(), headers=header(), json={"release_id": str(uuid4()), "snapshot_hash": SNAPSHOT})
     assert result.status_code == 422
     assert not store.saved
 
@@ -243,7 +275,8 @@ def test_f6_replay_and_history_verify_receipt_not_just_new_writes():
     ):
         response = (
             api.post(path, headers=header(), json=request)
-            if method == "POST" else api.get(path, headers=header())
+            if method == "POST"
+            else api.get(path, headers=header())
         )
         assert response.status_code in (403, 404, 503), (method, path, response.text)
 
@@ -272,18 +305,23 @@ def test_f6_release_manifest_links_exact_preserved_pdf_and_physical_page():
         *store.report["sources"],
         {"role": "exhibit", "version_id": exhibit, "sha256": source_hash},
     ]
-    report["findings"] = [{
-        "reference_id": "ref-1", "version_id": exhibit,
-        "page_mapping": "mapped", "pdf_page": 6,
-    }, {
-        "reference_id": "ref-2", "version_id": exhibit,
-        "page_mapping": "unmapped", "pdf_page": None,
-    }]
+    report["findings"] = [
+        {
+            "reference_id": "ref-1",
+            "version_id": exhibit,
+            "page_mapping": "mapped",
+            "pdf_page": 6,
+        },
+        {
+            "reference_id": "ref-2",
+            "version_id": exhibit,
+            "page_mapping": "unmapped",
+            "pdf_page": None,
+        },
+    ]
     # Derivative generation uses the complete canonical findings contract;
     # link projection is separately tested with minimalist synthetic locators.
-    artifacts = _checked_artifacts(
-        {**store.report, "human_decisions": store.decisions}, store.original
-    )
+    artifacts = _checked_artifacts({**store.report, "human_decisions": store.decisions}, store.original)
     policy = release_completeness(report)
     scope = select_release_scope(policy, "partial_review", True)
     manifest = release_manifest(report, artifacts, release_scope=scope)
@@ -299,8 +337,7 @@ def test_f6_release_manifest_links_exact_preserved_pdf_and_physical_page():
     assert links[1]["page_space"] == "unmapped"
     source_links = manifest["source_links"]
     assert source_links[1]["original_path"] == (
-        f"/v2/matters/{CASE}/briefs/{BRIEF}/dossier/history/{SNAPSHOT}"
-        f"/sources/{exhibit}/original"
+        f"/v2/matters/{CASE}/briefs/{BRIEF}/dossier/history/{SNAPSHOT}/sources/{exhibit}/original"
     )
     # No URL supplied by a finding was trusted as a release destination.
     assert all(x["viewer_path"].startswith("/matters/") for x in links)
@@ -334,9 +371,14 @@ def test_release_preview_and_commit_fail_closed_for_malformed_frozen_report():
     store.report["coverage"] = []
     preview = api.get(base() + "/preview", headers=header(), params={"snapshot_hash": SNAPSHOT})
     assert preview.status_code == 503
-    release = api.post(base(), headers=header(), json={
-        "release_id": str(uuid4()), "snapshot_hash": SNAPSHOT,
-    })
+    release = api.post(
+        base(),
+        headers=header(),
+        json={
+            "release_id": str(uuid4()),
+            "snapshot_hash": SNAPSHOT,
+        },
+    )
     assert release.status_code == 503
     assert not store.saved
 
@@ -357,13 +399,27 @@ def test_t30_partial_review_never_looks_complete_and_needs_explicit_acknowledgem
     assert scope["can_release_complete"] is False and scope["can_release_partial"] is True
     request = {"release_id": str(uuid4()), "snapshot_hash": SNAPSHOT}
     assert api.post(base(), headers=header(), json=request).status_code == 409
-    assert api.post(base(), headers=header(), json={
-        **request, "release_type": "partial_review",
-    }).status_code == 409
+    assert (
+        api.post(
+            base(),
+            headers=header(),
+            json={
+                **request,
+                "release_type": "partial_review",
+            },
+        ).status_code
+        == 409
+    )
     assert not store.saved
-    result = api.post(base(), headers=header(), json={
-        **request, "release_type": "partial_review", "partial_acknowledged": True,
-    })
+    result = api.post(
+        base(),
+        headers=header(),
+        json={
+            **request,
+            "release_type": "partial_review",
+            "partial_acknowledged": True,
+        },
+    )
     assert result.status_code == 200, result.text
     manifest = result.json()["manifest"]
     assert manifest["review_completeness"]["release_type"] == "partial_review"
@@ -385,15 +441,25 @@ def test_t30_zero_findings_zero_reviews_and_invalid_ledger_fail_closed():
     assert preview.json()["release_ready"] is False
     assert preview.json()["can_release"] is False
     assert "NO_DETECTED_FINDINGS" in preview.json()["review_completeness"]["reason_codes"]
-    assert api.post(base(), headers=header(), json={
-        "release_id": str(uuid4()), "snapshot_hash": SNAPSHOT,
-        "release_type": "partial_review", "partial_acknowledged": True,
-    }).status_code == 409
+    assert (
+        api.post(
+            base(),
+            headers=header(),
+            json={
+                "release_id": str(uuid4()),
+                "snapshot_hash": SNAPSHOT,
+                "release_type": "partial_review",
+                "partial_acknowledged": True,
+            },
+        ).status_code
+        == 409
+    )
     assert not store.saved
 
 
 def test_t30_duplicate_or_orphan_receipts_never_inflate_reviewed_count():
     import copy
+
     for mutation in ("duplicate_reference", "duplicate_request", "orphan", "invalid_decision"):
         api, store = client()
         store.report["findings"].append({"reference_id": "ref-2", "visual_assessment": {"regions": []}})
@@ -409,13 +475,29 @@ def test_t30_duplicate_or_orphan_receipts_never_inflate_reviewed_count():
         elif mutation == "invalid_decision":
             second["decision"] = "CONFIRMED_SUPPORTED_BY_AI"
         store.decisions.append(second)
-        assert api.get(base() + "/preview", headers=header(), params={
-            "snapshot_hash": SNAPSHOT,
-        }).status_code == 503
-        assert api.post(base(), headers=header(), json={
-            "release_id": str(uuid4()), "snapshot_hash": SNAPSHOT,
-            "release_type": "partial_review", "partial_acknowledged": True,
-        }).status_code == 503
+        assert (
+            api.get(
+                base() + "/preview",
+                headers=header(),
+                params={
+                    "snapshot_hash": SNAPSHOT,
+                },
+            ).status_code
+            == 503
+        )
+        assert (
+            api.post(
+                base(),
+                headers=header(),
+                json={
+                    "release_id": str(uuid4()),
+                    "snapshot_hash": SNAPSHOT,
+                    "release_type": "partial_review",
+                    "partial_acknowledged": True,
+                },
+            ).status_code
+            == 503
+        )
         assert not store.saved
 
 
@@ -424,9 +506,14 @@ def test_t31_preview_is_not_authority_if_reviews_change_before_commit():
     response = api.get(base() + "/preview", headers=header(), params={"snapshot_hash": SNAPSHOT})
     assert response.json()["release_ready"] is True
     store.report["findings"].append({"reference_id": "ref-2", "visual_assessment": {"regions": []}})
-    result = api.post(base(), headers=header(), json={
-        "release_id": str(uuid4()), "snapshot_hash": SNAPSHOT,
-    })
+    result = api.post(
+        base(),
+        headers=header(),
+        json={
+            "release_id": str(uuid4()),
+            "snapshot_hash": SNAPSHOT,
+        },
+    )
     assert result.status_code == 409
     assert not store.saved
 
@@ -434,16 +521,25 @@ def test_t31_preview_is_not_authority_if_reviews_change_before_commit():
 def test_t30_qualified_and_contradicted_reviews_count_as_human_dispositions():
     api, store = client()
     store.report["findings"].append({"reference_id": "ref-2", "visual_assessment": {"regions": []}})
-    store.decisions.append({
-        **store.decisions[0], "reference_id": "ref-2",
-        "decision": "CONFIRMED_CONTRADICTED", "request_id": str(uuid4()),
-    })
+    store.decisions.append(
+        {
+            **store.decisions[0],
+            "reference_id": "ref-2",
+            "decision": "CONFIRMED_CONTRADICTED",
+            "request_id": str(uuid4()),
+        }
+    )
     preview = api.get(base() + "/preview", headers=header(), params={"snapshot_hash": SNAPSHOT})
     assert preview.json()["release_ready"] is True
     assert preview.json()["review_completeness"]["reviewed_findings"] == 2
-    result = api.post(base(), headers=header(), json={
-        "release_id": str(uuid4()), "snapshot_hash": SNAPSHOT,
-    })
+    result = api.post(
+        base(),
+        headers=header(),
+        json={
+            "release_id": str(uuid4()),
+            "snapshot_hash": SNAPSHOT,
+        },
+    )
     assert result.status_code == 200, result.text
     assert result.json()["manifest"]["review_completeness"]["release_type"] == "complete_review"
     assert result.json()["manifest"]["coverage"]["text_coverage_complete"] is False
