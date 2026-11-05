@@ -394,6 +394,46 @@ def _exercise() -> None:
             if hashlib.sha256(bundle[0].content).hexdigest() == digest:
                 raise RuntimeError("F5_EDITOR_SIGNED_CANDIDATE_NOT_CHANGED")
             print("DOCX_EDITOR_GENUINE_SIGNED_PREVIEW_BINARY_AND_ORIGINAL_IMMUTABLE_PASSED", flush=True)
+
+            _stage("SIGNED_WORD_NATIVE_IMPORT_PREVIEW")
+            # Browser receives a *real DOCX* authored by python-docx, as a
+            # synthetic stand-in for Word's own save. It must pass through
+            # the signed, bounded raw-upload API, not a fixture response.
+            native_document = Document(io.BytesIO(bundle[0].content))
+            native_document.paragraphs[0].text = "Word native imported source text"
+            native_document.tables[0].cell(0, 0).text = "Native Word table edited"
+            native_bytes = io.BytesIO()
+            native_document.save(native_bytes)
+            native_panel = editor.get_by_role(
+                "region", name="Full Microsoft Word editing and signed import"
+            )
+            with page.expect_download(timeout=90000) as source_download:
+                native_panel.get_by_role(
+                    "button", name="1. Download preserved DOCX for Word"
+                ).click()
+            source_bytes = Path(source_download.value.path()).read_bytes()
+            if hashlib.sha256(source_bytes).hexdigest() != hashlib.sha256(bundle[0].content).hexdigest():
+                raise RuntimeError("F5_WORD_NATIVE_SOURCE_DIGEST_CHANGED")
+            native_panel.locator('input[type="file"]').set_input_files({
+                "name": "word-native-synthetic.docx",
+                "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "buffer": native_bytes.getvalue(),
+            })
+            expect(native_panel.get_by_text(
+                "DOCX staged in browser memory", exact=False
+            )).to_be_visible(timeout=90000)
+            native_panel.get_by_role(
+                "button", name="3. Inspect imported Word document"
+            ).click()
+            expect(native_panel.get_by_text(
+                "Word-native candidate validated", exact=False
+            )).to_be_visible(timeout=90000)
+            if hashlib.sha256(bundle[0].content).hexdigest() != hashlib.sha256(source_bytes).hexdigest():
+                raise RuntimeError("F5_WORD_NATIVE_ORIGINAL_MUTATED")
+            print(
+                "DOCX_NATIVE_WORD_GENUINE_SIGNED_SOURCE_DOWNLOAD_EDIT_IMPORT_AND_PREVIEW_PASSED",
+                flush=True,
+            )
             page.goto(editor_origin)
             acceptance.login(page)
             expect(page.get_by_role(
