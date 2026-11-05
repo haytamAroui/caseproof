@@ -19,6 +19,9 @@ The frontend imports the generated
 | Inventory text | 1 MiB | Additional limit; 512 unique Stuk/Pièce identities |
 | PDF physical pages | 64 per PDF | Parser/mapping bound; not proof 64 OCR pages complete |
 | Optional OCR original bytes | 3 MiB | Independent isolated OCR budget |
+| OCR extraction | 20,000 words and 1 MiB TSV per page | Bounded engine output; not proof of recognition accuracy |
+| Visual assessment | 4 unique pages per frozen check | Existing fail-closed visual budget; remaining pages may be unassessed |
+| Visual regions and crops | 96 regions per page, 200,000 bytes per crop | Processing ceilings, not comprehensive page coverage |
 | Frozen JSON/Markdown | 2,000,000 bytes each | Precondition for successful release |
 | Frozen DOCX | 5 MiB | Reopen and hash checks still mandatory |
 

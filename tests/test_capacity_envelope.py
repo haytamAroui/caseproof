@@ -56,6 +56,14 @@ def test_capacity_generated_frontend_contract_is_exact_and_not_pilot_approved():
     assert CAPACITY_POLICY["max_intake_bytes"] == MAX_INTAKE_BYTES
     assert CAPACITY_POLICY["max_inventory_bytes"] == MAX_INVENTORY_BYTES
     assert CAPACITY_POLICY["max_pdf_pages_per_source"] == MAX_PDF_PAGES
+    from infrastructure.parsers.pdf_ocr import MAX_OUTPUT, MAX_WORDS, OCR_LIMIT
+    from infrastructure.parsers.pdf_visual_fidelity import MAX_PAGE_CROP_BYTES, MAX_REGIONS
+
+    assert OCR_LIMIT == CAPACITY_POLICY["max_ocr_original_bytes"]
+    assert MAX_OUTPUT == CAPACITY_POLICY["max_ocr_tsv_bytes"]
+    assert MAX_WORDS == CAPACITY_POLICY["max_ocr_words_per_page"]
+    assert MAX_REGIONS == CAPACITY_POLICY["max_visual_regions_per_page"]
+    assert MAX_PAGE_CROP_BYTES == CAPACITY_POLICY["max_visual_crop_bytes"]
     assert LIMITS == {
         "json": CAPACITY_POLICY["max_export_json_bytes"],
         "markdown": CAPACITY_POLICY["max_export_markdown_bytes"],

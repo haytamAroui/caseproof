@@ -15,7 +15,7 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from pypdf import PdfReader, PdfWriter
 
-from application.capacity_envelope import MAX_PDF_PAGES
+from application.capacity_envelope import CAPACITY_POLICY, MAX_PDF_PAGES
 from application.extraction.contracts import ExtractionError
 from application.litigation.dossier_contracts import add_report_contract, assess_fidelity, quotation_context
 from application.litigation.regional_fidelity import select_visual_assessment
@@ -698,7 +698,7 @@ class DossierStore:
         # Both text-layer PDFs and scans take the visual path. Inputs come only
         # from verified private originals; unavailable engines never count as pass.
         visual_pages: dict[tuple[str, int], dict[str, Any]] = {}
-        visual_budget = 4
+        visual_budget = int(CAPACITY_POLICY["max_visual_pages_per_snapshot"])
         for finding in found["findings"]:
             version, page_number = finding["version_id"], finding["pdf_page"]
             tail = regions.get(finding["region"], "")[finding["offsets"]["end"] :]

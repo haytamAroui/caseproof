@@ -7,8 +7,14 @@
   "max_inventory_bytes": 1048576,
   "max_inventory_identities": 512,
   "max_ocr_original_bytes": 3145728,
+  "max_ocr_tsv_bytes": 1048576,
+  "max_ocr_words_per_page": 20000,
   "max_pdf_pages_per_source": 64,
   "max_source_bytes": 5242880,
+  "max_visual_crop_bytes": 200000,
+  "max_visual_original_bytes": 3145728,
+  "max_visual_pages_per_snapshot": 4,
+  "max_visual_regions_per_page": 96,
   "schema": "caseproof-capacity-envelope-v1",
   "source_count": 4
 }

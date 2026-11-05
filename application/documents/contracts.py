@@ -7,12 +7,12 @@ from datetime import datetime
 from hashlib import sha256
 from typing import Any, Protocol
 
+from application.capacity_envelope import MAX_PDF_PAGES, MAX_SOURCE_BYTES
 from application.extraction.contracts import ExtractionError, ExtractionSource, digest, text
 from packages.evidence_kernel.domain.anchors import TEXT_BASIS
 from packages.evidence_kernel.domain.source_versions import DerivedRepresentation, SourceVersion
 
 PARSER_SCHEMA = "caseproof-normalization-v1"
-MAX_SOURCE_BYTES = 5 * 1024 * 1024
 MAX_TEXT_CHARS = 120_000
 MAX_BLOCKS = 2048
 
@@ -34,7 +34,7 @@ class SourceBlock:
         if type(self.start) is not int or type(self.end) is not int or not 0 <= self.start < self.end:
             raise ExtractionError("invalid block text range")
         if self.kind == "pdf_page":
-            if type(self.page_index) is not int or not 0 <= self.page_index < 64:
+            if type(self.page_index) is not int or not 0 <= self.page_index < MAX_PDF_PAGES:
                 raise ExtractionError("physical PDF page identity required")
         elif self.page_index is not None:
             raise ExtractionError("unexpected page identity")

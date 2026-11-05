@@ -23,13 +23,14 @@ from PIL import Image
 from pypdf import PdfReader
 from pypdf.generic import ContentStream
 
+from application.capacity_envelope import CAPACITY_POLICY, MAX_PDF_PAGES
 from application.litigation.representation_normalization import NORMALIZATION, normalize_region
 from infrastructure.parsers.pdf_ocr import RASTER_DPI, OCRUnavailable, _run, parse_tsv
 from infrastructure.parsers.visual_edit_candidates import has_midline_candidate
 
 ENGINE = "caseproof-dual-view-v2"
-MAX_REGIONS = 96
-MAX_PAGE_CROP_BYTES = 200_000
+MAX_REGIONS = int(CAPACITY_POLICY["max_visual_regions_per_page"])
+MAX_PAGE_CROP_BYTES = int(CAPACITY_POLICY["max_visual_crop_bytes"])
 
 
 def digest(raw: bytes) -> str:
@@ -151,7 +152,7 @@ class PDFVisualFidelity:
     def inspect(self, raw: bytes, *, original_sha256: str, page_number: int) -> dict[str, Any]:
         if digest(raw) != original_sha256:
             raise ValueError('visual_original_hash_mismatch')
-        if not raw.startswith(b'%PDF-') or not 0 < len(raw) <= 3*1024*1024 or not 1 <= page_number <= 64:
+        if not raw.startswith(b'%PDF-') or not 0 < len(raw) <= int(CAPACITY_POLICY["max_visual_original_bytes"]) or not 1 <= page_number <= MAX_PDF_PAGES:
             raise OCRUnavailable('visual_input_budget')
         # Capture the exact CropBox basis that the rasterizer uses. A raster
         # without trustworthy origin, rotation and UserUnit is never projected.
