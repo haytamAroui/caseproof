@@ -14,8 +14,8 @@ from fastapi.testclient import TestClient
 
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.dossier_export_release import _checked_artifacts, release_manifest
-from apps.api.release_completeness import release_policy
 from apps.api.dossier_journey import canonical, create_dossier_router
+from apps.api.release_completeness import release_policy
 
 SNAPSHOT = "a" * 64
 CASE, BRIEF = str(uuid4()), str(uuid4())

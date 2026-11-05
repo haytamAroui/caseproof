@@ -223,6 +223,12 @@ def export_one(
     acceptance.login(page)
     expect(page.get_by_role("heading", name="Reviewed exports and history")).to_be_visible(timeout=90000)
     expect(page.get_by_role("heading", name="Preview release scope")).to_be_visible(timeout=90000)
+    # A partial release is a deliberate, separately acknowledged human action.
+    partial = page.get_by_role(
+        "checkbox", name="I understand this is a partial reviewed release"
+    )
+    if partial.count():
+        partial.check()
     expect(page.get_by_role("button", name="Create frozen reviewed release")).to_be_enabled(timeout=90000)
     previous = page.url
     writes = [0]

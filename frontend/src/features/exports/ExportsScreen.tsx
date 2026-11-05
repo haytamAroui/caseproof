@@ -243,7 +243,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                       </li>
                     ))}
                   </ul>
-                  {preview.data.release_policy.references_truncated && (
+                  {preview.data.release_policy.unreviewed_findings > preview.data.release_policy.unreviewed_reference_ids.length && (
                     <Notice>Only the first 128 pending links are shown; reopen the full findings workspace for the remaining items.</Notice>
                   )}
                 </>

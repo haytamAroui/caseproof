@@ -1,0 +1,33 @@
+name: CaseProof temporary release-PR formatter
+on:
+  push:
+    branches: ['feat/t30-t34-release-completeness']
+permissions:
+  contents: write
+jobs:
+  format-release:
+    if: github.repository == 'haytamAroui/caseproof' && github.actor == 'haytamAroui'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: feat/t30-t34-release-completeness
+          persist-credentials: true
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - name: Use repository-pinned Prettier
+        working-directory: frontend
+        run: |
+          npm ci
+          npx --no-install prettier --write src/features/exports/api.ts src/features/exports/api.test.ts src/features/exports/ExportsScreen.tsx tests/exports.spec.ts
+      - name: Commit formatted source to same PR branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/features/exports/api.ts frontend/src/features/exports/api.test.ts frontend/src/features/exports/ExportsScreen.tsx frontend/tests/exports.spec.ts
+          if ! git diff --cached --quiet; then
+            git commit -m 'style(exports): apply pinned Prettier formatting'
+            git push origin HEAD:refs/heads/feat/t30-t34-release-completeness
+          fi
