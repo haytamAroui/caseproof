@@ -15,6 +15,7 @@ from docx import Document
 from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from application.capacity_envelope import CAPACITY_POLICY
 from application.litigation.release_completeness import (
     ReleaseIntegrityError,
     select_release_scope,
@@ -29,7 +30,11 @@ from infrastructure.parsers.dossier_docx_export import annotated_docx
 
 HEX64 = r"^[0-9a-f]{64}$"
 FORMATS = ("json", "markdown", "docx")
-LIMITS = {"json": 2_000_000, "markdown": 2_000_000, "docx": 5_242_880}
+LIMITS = {
+    "json": int(CAPACITY_POLICY["max_export_json_bytes"]),
+    "markdown": int(CAPACITY_POLICY["max_export_markdown_bytes"]),
+    "docx": int(CAPACITY_POLICY["max_export_docx_bytes"]),
+}
 MEDIA = {
     "json": "application/json",
     "markdown": "text/markdown; charset=utf-8",
@@ -55,13 +60,16 @@ def _checked_artifacts(report: dict[str, Any], original: bytes) -> dict[str, byt
         artifacts = {
             "json": render_dossier_export(report, "json").encode("utf-8"),
             "markdown": render_dossier_export(report, "markdown").encode("utf-8"),
-            "docx": annotated_docx(original, report),
         }
+        # Check cheaper output limits before building the DOCX derivative.
+        for kind, raw in artifacts.items():
+            if not 0 < len(raw) <= LIMITS[kind]:
+                raise HTTPException(422, "export exceeds supported size; no release created")
+        artifacts["docx"] = annotated_docx(original, report)
+        if not 0 < len(artifacts["docx"]) <= LIMITS["docx"]:
+            raise HTTPException(422, "export exceeds supported size; no release created")
     except (ValueError, KeyError, TypeError):
         raise HTTPException(422, "unsupported export structure; no release created") from None
-    for kind, raw in artifacts.items():
-        if not 0 < len(raw) <= LIMITS[kind]:
-            raise HTTPException(422, "export exceeds supported size; no release created")
     # Independent parsing of actual output; a ZIP signature is not a DOCX proof.
     try:
         Document(io.BytesIO(artifacts["docx"]))

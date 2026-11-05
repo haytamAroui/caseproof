@@ -1,3 +1,4 @@
+import capacity from './capacity-policy.json';
 import { expect, it } from 'vitest';
 import { parseIntake, parseCreated, parseOrganizations } from './intake';
 const id = '11111111-1111-4111-8111-111111111111';
@@ -36,4 +37,17 @@ it('rejects foreign, nil, duplicate and unknown intake contracts', () => {
       ],
     }),
   ).toThrow();
+});
+
+it('shares conservative intake and export caps from the generated Python policy', () => {
+  expect(capacity.schema).toBe('caseproof-capacity-envelope-v1');
+  expect(capacity.approval).toBe('development_only_not_pilot_approved');
+  expect(capacity.source_count).toBe(4);
+  expect(capacity.max_source_bytes).toBe(5_242_880);
+  expect(capacity.max_intake_bytes).toBe(12_000_000);
+  expect(capacity.max_inventory_bytes).toBe(1_048_576);
+  expect(capacity.max_pdf_pages_per_source).toBe(64);
+  expect(capacity.max_export_json_bytes).toBe(2_000_000);
+  expect(capacity.max_export_markdown_bytes).toBe(2_000_000);
+  expect(capacity.max_export_docx_bytes).toBe(5_242_880);
 });

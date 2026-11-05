@@ -1,10 +1,15 @@
 """Protected M0.5 live wrapper: create, register, execute, always teardown."""
+
 from __future__ import annotations
 
+import json
 import os
+import resource
 import sys
+from time import monotonic
 from uuid import UUID
 
+from application.capacity_envelope import CAPACITY_POLICY
 from scripts.m05_registry import call, forget, record
 from scripts.teardown_test_run import teardown
 from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin
@@ -13,7 +18,41 @@ from tests.fixtures.run_lifecycle import credentials, new_run_id
 
 
 def main() -> int:
-    if os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof" or os.getenv("GITHUB_REF") not in {"refs/heads/fix/m1-multisource-live-acceptance", "refs/heads/feat/canonical-mcp-report-gate-20261031", "refs/heads/feat/verification-contract-report", "refs/heads/feat/complete-representation-gate", "refs/heads/feat/complete-dossier-journey", "refs/heads/fix/dossier-ranges-mixed", "refs/heads/main", "refs/heads/feat/f1-live-acceptance", "refs/heads/feat/f1-v31-session-recovery", "refs/heads/feat/f2-live-acceptance", "refs/heads/feat/f2-v31-evidence-inspection", "refs/heads/feat/f3-complete-intake", "refs/heads/feat/final-hardening-and-verification", "refs/heads/feat/f1-f2-backend-contract-hardening", "refs/pull/174/merge", "refs/pull/175/merge", "refs/pull/176/merge", "refs/pull/177/merge", "refs/heads/feat/f5-correction-recheck-workspace", "refs/pull/178/merge", "refs/pull/182/merge", "refs/pull/183/merge", "refs/pull/184/merge", "refs/heads/feat/f6-reviewed-export-and-historical-reopen", "refs/heads/feat/p5-p6-readability-drift-pilot", "refs/pull/185/merge", "refs/pull/187/merge", "refs/pull/189/merge", "refs/pull/190/merge", "refs/pull/191/merge", "refs/pull/197/merge"}:
+    started = monotonic()
+    if os.getenv("GITHUB_REPOSITORY") != "haytamAroui/caseproof" or os.getenv("GITHUB_REF") not in {
+        "refs/heads/fix/m1-multisource-live-acceptance",
+        "refs/heads/feat/canonical-mcp-report-gate-20261031",
+        "refs/heads/feat/verification-contract-report",
+        "refs/heads/feat/complete-representation-gate",
+        "refs/heads/feat/complete-dossier-journey",
+        "refs/heads/fix/dossier-ranges-mixed",
+        "refs/heads/main",
+        "refs/heads/feat/f1-live-acceptance",
+        "refs/heads/feat/f1-v31-session-recovery",
+        "refs/heads/feat/f2-live-acceptance",
+        "refs/heads/feat/f2-v31-evidence-inspection",
+        "refs/heads/feat/f3-complete-intake",
+        "refs/heads/feat/final-hardening-and-verification",
+        "refs/heads/feat/f1-f2-backend-contract-hardening",
+        "refs/pull/174/merge",
+        "refs/pull/175/merge",
+        "refs/pull/176/merge",
+        "refs/pull/177/merge",
+        "refs/heads/feat/f5-correction-recheck-workspace",
+        "refs/pull/178/merge",
+        "refs/pull/182/merge",
+        "refs/pull/183/merge",
+        "refs/pull/184/merge",
+        "refs/heads/feat/f6-reviewed-export-and-historical-reopen",
+        "refs/heads/feat/p5-p6-readability-drift-pilot",
+        "refs/pull/185/merge",
+        "refs/pull/187/merge",
+        "refs/pull/189/merge",
+        "refs/pull/190/merge",
+        "refs/pull/191/merge",
+        "refs/pull/197/merge",
+        "refs/pull/198/merge",
+    }:
         raise RuntimeError("protected M0.5 branch required")
     key = os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"]
     run = new_run_id()
@@ -33,10 +72,16 @@ def main() -> int:
             forget(key, run, "auth_user", role + ":" + email)
             os.environ[f"CASEPROOF_P3_{role.upper()}_EMAIL"] = email
             os.environ[f"CASEPROOF_P3_{role.upper()}_PASSWORD"] = password
-        setup = admin_rpc(key, "setup", {
-            "p_run": run, "p_owner": actors["owner"],
-            "p_guest": actors["ungranted"], "p_foreign": actors["foreign"],
-        })
+        setup = admin_rpc(
+            key,
+            "setup",
+            {
+                "p_run": run,
+                "p_owner": actors["owner"],
+                "p_guest": actors["ungranted"],
+                "p_foreign": actors["foreign"],
+            },
+        )
         org = str(UUID(setup["org_id"]))
         os.environ["CASEPROOF_P3_ORG_ID"] = org
         os.environ["CASEPROOF_P3_RUN_ID"] = run
@@ -62,6 +107,27 @@ def main() -> int:
         print("M05_EXPECTED_OR_UNEXPECTED_FAILURE:" + failure, file=sys.stderr)
         return 1
     print("DOSSIER_COMPLETE_SIGNED_JOURNEY_AND_TEARDOWN_PASSED")
+    if os.getenv("CASEPROOF_CAPACITY_METRICS") == "YES":
+        # Total elapsed includes auth/setup, browser work and verified teardown.
+        # ru_maxrss is for this Python wrapper, not the Docker OCR child or browser.
+        print(
+            "CAPACITY_SIGNED_MEASUREMENT "
+            + json.dumps(
+                {
+                    "schema": "caseproof-signed-capacity-measurement-v1",
+                    "policy_version": CAPACITY_POLICY["schema"],
+                    "approval": CAPACITY_POLICY["approval"],
+                    "scope": "four-original_owned_synthetic_F3_F6_fixture",
+                    "elapsed_seconds": round(monotonic() - started, 3),
+                    "wrapper_peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                    "includes_signed_auth_upload_review_recheck_release_reopen_revoke_teardown": True,
+                    "ocr_and_browser_process_peak_memory_measured": False,
+                    "full_150_page_envelope_measured": False,
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
     return 0
 
 

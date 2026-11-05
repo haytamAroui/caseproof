@@ -23,6 +23,7 @@ from uuid import uuid4
 
 from pypdf import PdfReader
 
+from application.capacity_envelope import CAPACITY_POLICY, MAX_PDF_PAGES
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
 
@@ -31,9 +32,9 @@ class OCRUnavailable(ValueError):
 
 
 LANGUAGES = {"nl": "nld", "fr": "fra", "en": "eng"}
-OCR_LIMIT = 3 * 1024 * 1024
-MAX_WORDS = 20_000
-MAX_OUTPUT = 1024 * 1024
+OCR_LIMIT = int(CAPACITY_POLICY["max_ocr_original_bytes"])
+MAX_WORDS = int(CAPACITY_POLICY["max_ocr_words_per_page"])
+MAX_OUTPUT = int(CAPACITY_POLICY["max_ocr_tsv_bytes"])
 RASTER_DPI = 150
 
 
@@ -191,7 +192,7 @@ class LocalPDFOCR:
             raise OCRUnavailable("ocr_pdf_only")
         if len(source.content) > OCR_LIMIT or len(source.content) == 0:
             raise OCRUnavailable("ocr_input_budget")
-        if type(page_number) is not int or not 1 <= page_number <= 64:
+        if type(page_number) is not int or not 1 <= page_number <= MAX_PDF_PAGES:
             raise OCRUnavailable("ocr_page_range")
         if (
             type(languages) is not tuple or not languages or len(languages) > 3
@@ -204,7 +205,7 @@ class LocalPDFOCR:
             raise OCRUnavailable("ocr_binaries_not_installed")
         try:
             reader = PdfReader(io.BytesIO(source.content), strict=True)
-            if reader.is_encrypted or not 1 <= len(reader.pages) <= 64:
+            if reader.is_encrypted or not 1 <= len(reader.pages) <= MAX_PDF_PAGES:
                 raise OCRUnavailable("ocr_pdf_unsupported")
             if page_number > len(reader.pages):
                 raise OCRUnavailable("ocr_missing_page")
