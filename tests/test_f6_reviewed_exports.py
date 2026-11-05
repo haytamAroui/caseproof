@@ -383,6 +383,22 @@ def test_t31_partial_preview_requires_acknowledged_commit_and_rechecks():
     result = api.post(base(), headers=header(), json=command)
     assert result.status_code == 200
     assert result.json()["manifest"]["release_policy"]["scope"] == "partial"
+    docx_response = api.get(
+        base() + "/" + command["release_id"] + "/artifacts/docx", headers=header()
+    )
+    assert docx_response.status_code == 200
+    doc = Document(io.BytesIO(docx_response.content))
+    text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
+    assert "PARTIAL RELEASE WARNING" in text
+    assert "Unreviewed detected findings: 1" in text
+    json_response = api.get(
+        base() + "/" + command["release_id"] + "/artifacts/json", headers=header()
+    )
+    assert json_response.json()["release_policy"]["scope"] == "partial"
+    md_response = api.get(
+        base() + "/" + command["release_id"] + "/artifacts/markdown", headers=header()
+    )
+    assert b'Human finding-review completeness' in md_response.content
     assert api.get(base() + "/" + command["release_id"], headers=header()).status_code == 200
 
 

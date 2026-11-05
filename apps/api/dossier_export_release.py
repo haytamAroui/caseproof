@@ -314,7 +314,10 @@ def create_release_router(store: Any) -> APIRouter:
             raise HTTPException(409, "at least one applicable persisted finding review required")
         if policy["scope"] == "partial" and not body.acknowledge_partial:
             raise HTTPException(409, "partial release requires explicit acknowledgement")
-        artifacts = _checked_artifacts(report, original)
+        # Each downloaded derivative must itself say PARTIAL or COMPLETE;
+        # a detached DOCX must not rely solely on the sidecar manifest.
+        export_report = {**report, "release_policy": policy}
+        artifacts = _checked_artifacts(export_report, original)
         manifest = release_manifest(report, artifacts)
         manifest["release_id"] = str(body.release_id)
         manifest["manifest_sha256"] = _hash(canonical(manifest).encode())
