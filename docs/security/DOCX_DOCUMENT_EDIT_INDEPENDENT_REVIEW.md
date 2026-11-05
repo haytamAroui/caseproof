@@ -2,7 +2,7 @@
 
 **Review status:** UNAPPROVED · **Owner:** independent reviewer required · **Date:** 5 November 2026
 
-**Scope:** [PR #191](https://github.com/haytamAroui/caseproof/pull/191), stacked on PR #190. The SQL lives in [DOCX_EDITOR_DOCUMENT_SCOPE_SQL_PROPOSAL.sql](DOCX_EDITOR_DOCUMENT_SCOPE_SQL_PROPOSAL.sql); **it has not been installed**. This file supplies repeatable independent-review criteria, not a substitute for peer/practitioner approval.
+**Scope:** [PR #191](https://github.com/haytamAroui/caseproof/pull/191), stacked on PR #190. The SQL lives in [DOCX_EDITOR_DOCUMENT_SCOPE_SQL_PROPOSAL.sql](DOCX_EDITOR_DOCUMENT_SCOPE_SQL_PROPOSAL.sql); **it has been installed only on the `caseproof-dev` test project (migration `20261105081249`); it is NOT installed in production and is not approved for pilot**. This file supplies repeatable independent-review criteria, not a substitute for peer/practitioner approval.
 
 ## Threat model and trust boundaries
 
@@ -28,9 +28,9 @@
 
 - **Automated:** PR #191 CI depends on latest head; earlier head `323a4cd1` had 20 successful workflows, four expected skips. New commit results MUST be reverified.
 - **Supabase security advisors (5 November 2026):** caseproof-dev reported existing *15* `authenticated_security_definer_function_executable` WARN findings and *29* `rls_enabled_no_policy` INFO findings (primarily private tables). These are not proof of an exploitable issue, but the reviewer must triage intentional RPC exposure and check no new public privilege was introduced. An existing leaked-password-protection WARN is unrelated to editor authorization. [Supabase database lint remediation](https://supabase.com/docs/guides/observability/advisors).
-- **Uninstalled authorization:** SQL remains a proposed file under `docs/security`, NOT a deployed migration. Do not mark review or activation production-ready based on disposable tests.
+- **Dev SQL installation VERIFIED:** On 5 November 2026, migration `20261105081249` was applied to `caseproof-dev` (Supabase project `ldwmocpxwskvhoojndrd`). PostgreSQL confirmed `caseproof.dossier_document_edit_reviews` with RLS enabled, zero direct `anon`/`authenticated` table grants, and no row policies (RPC-only, deny by default); four scoped review/reserve/status/activate RPCs and one service-only ephemeral owner-grant helper exist. `anon` cannot execute any new RPC, and only `service_role` can execute activation and fixture-grant RPCs. The source is retained as [a dev-only migration record](DEV_ONLY_APPLIED_DOCX_AUTH_MIGRATION_20261105081249.sql) outside the canonical migrations folder so it cannot be automatically deployed to production without approval. The signed whole-document live activation must still be verified.
 - **Independent reviewer signature:** **NOT PROVIDED**. No author, AI agent or test runner should self-certify an independent review.
-- **Production rollout:** **BLOCKED** pending approval, safe migration/apply, trusted runtime private Storage policy and a complete signed-live full-document activation journey.
+- **Production/pilot rollout:** **BLOCKED** pending independent approval, explicit production migration, trusted runtime private Storage review, and signed-live full-document activation evidence.
 
 ## Independent reviewer sign-off (intentionally blank)
 
