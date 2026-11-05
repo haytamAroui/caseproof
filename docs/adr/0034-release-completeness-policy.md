@@ -1,6 +1,6 @@
 # ADR 0034 — Review completeness and explicitly partial reviewed releases
 
-**Status:** implementation proposed in PR (5 November 2026); automated and live acceptance must be verified at final head. Supplements [ADR 0032](0032-reviewed-release-and-historical-artifact-boundary.md), does not replace the SQL release ledger or historical receipt schema.
+**Status:** engineering implementation merged in [PR #197](https://github.com/haytamAroui/caseproof/pull/197) on 5 November 2026, with [dedicated F6 CI](https://github.com/haytamAroui/caseproof/actions/runs/42081353655) and [final signed F3–F6 development acceptance](https://github.com/haytamAroui/caseproof/actions/runs/42082133289) green. Independent security and practitioner approval remain OPEN. Supplements [ADR 0032](0032-reviewed-release-and-historical-artifact-boundary.md), does not replace the SQL release ledger or historical receipt schema.
 
 ## Context and scope
 
@@ -27,11 +27,11 @@ The request must explicitly specify partial mode and a true acknowledgement; a s
 
 ## Policy and artifacts
 
-- Shared policy version: \`caseproof-release-completeness-v1\`.
+- Shared policy version: `caseproof-release-completeness-v1`.
 - Count unique findings/receipts; expose total, required, reviewed, unreviewed, review_complete, reason codes and pending reference IDs.
-- Release modes: \`complete_review\` and \`partial_review\`. They describe **detected-finding human review**, not the document's coverage or accuracy.
-- Keep \`text_coverage_complete\` and \`reference_recall_measured\` separate in the preview, frozen manifest and source coverage. Their false/unknown values remain conspicuous limitations even when all detected findings were reviewed.
-- Existing \`caseproof-reviewed-release-v1\` manifests gain an optional, HMAC/digest-covered \`review_completeness\` extension. No new table or SQL schema required. Older signed manifests without this field reopen unchanged, but must be labeled **legacy: completeness unclassified**. Never retrofit or re-sign them.
+- Release modes: `complete_review` and `partial_review`. They describe **detected-finding human review**, not the document's coverage or accuracy.
+- Keep `text_coverage_complete` and `reference_recall_measured` separate in the preview, frozen manifest and source coverage. Their false/unknown values remain conspicuous limitations even when all detected findings were reviewed.
+- Existing `caseproof-reviewed-release-v1` manifests gain an optional, HMAC/digest-covered `review_completeness` extension. No new table or SQL schema required. Older signed manifests without this field reopen unchanged, but must be labeled **legacy: completeness unclassified**. Never retrofit or re-sign them.
 - All newly generated JSON, Markdown and DOCX outputs carry the selected review scope; the manifest carries its signed counts and exact SHA-256 bytes.
 - A partial release never changes the review ledger, verification dimensions or historical source bytes.
 
