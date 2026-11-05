@@ -301,7 +301,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T10 and record its acceptance evidence.
 
-**Status:** IN_PROGRESS. **Depends on:** D05.  
+**Status:** ENGINEERING EVIDENCED; independent security sign-off pending. **Depends on:** D05.  
+**Evidence:** [P1 parser acceptance](p1/PARSER_ACCEPTANCE_2026-11-04.md) records shared defused XML parsing, UTF-8 and UTF-16 variants, DTD/entity rejection, explicit UTF-32 rejection and ordinary extraction coverage. [PR #187](https://github.com/haytamAroui/caseproof/pull/187) merged the hardening. The [independent parser review](security/PARSER_SECURITY_REVIEW.md) remains unsigned.  
 **Build:** Use a shared safe parsing boundary with forbid_dtd/entities/external in inventory and text extraction; raw byte search is only a pre-check. Catch parser-security exceptions into existing controlled outcomes. Preserve omissions and denial semantics.  
 **Done when:** DTD/entity cannot expand in UTF-8 or UTF-16 LE/BE with/without BOM. Unsupported UTF-32 rejects explicitly. Ordinary supported extraction remains unchanged.  
 **Touch points:** infrastructure/parsers/docx_region_inventory.py; docx_text_regions.py. **Trace:** A1–A3; StetDoc S6.
@@ -310,7 +311,8 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T11 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T10.  
+**Status:** PARTIAL — package protections evidenced; complete processing bounds and independent review remain open. **Depends on:** T10.  
+**Evidence:** [P1 parser acceptance](p1/PARSER_ACCEPTANCE_2026-11-04.md) records hostile ZIP cases, decompression limits and 1,024 synthetic mutations under a bounded CI process. This does not establish a production processing deadline or coverage-guided fuzzing. The [capacity profile](pilot/PILOT_CAPACITY_PROFILE.md) leaves 100 OCR pages and 50 MB files for pilot validation.  
 **Build:** Preserve byte/part/count/expanded limits; inspect actual decompression enforcement. Define missing depth/node/time bounds and corrupt-part versus package rejection; avoid pretending all corruption is salvageable.  
 **Done when:** Corrupt/encrypted/duplicate/traversal/oversize packages fail predictably; denominator remains trustworthy. No claim that defusedxml alone provides resource isolation.  
 **Touch points:** Parser adapters; file boundary; tests/test_asvs_file_boundaries.py. **Trace:** A4; StetDoc S6.
