@@ -1,5 +1,11 @@
 # CaseProof — engineering state and dated evidence
 
+## 5 November 2026 — Signed page worker deployment and tracker reconciliation
+
+The signed page-worker SQL was applied to `caseproof-dev` as `20261105104752`. The recorded SQL matches the repository file `supabase/migrations/20261031112127_signed_page_worker.sql`. Catalog checks confirmed RLS on all three worker tables, no direct anonymous or authenticated table grants, and authenticated execution of the scoped RPC. Supabase Advisor flagged the authenticated security-definer function. Independent security review and live signed worker acceptance remain open. See the [Supabase migration history](https://supabase.com/dashboard/project/ldwmocpxwskvhoojndrd/database/migrations) and [master TODO](CASEPROOF_AGENT_MASTER_TODO.md#5-november-2026--engineering-reconciliation).
+
+[PR #190](https://github.com/haytamAroui/caseproof/pull/190) was closed as superseded. Its bounded table-cell correction and test coverage landed through [PR #191](https://github.com/haytamAroui/caseproof/pull/191).
+
 ## 5 November 2026 — Phase A/B signed document-wide DOCX engineering acceptance
 
 [PR #191](https://github.com/haytamAroui/caseproof/pull/191) adds

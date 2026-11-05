@@ -4,6 +4,16 @@
 **Status:** Execution tracker; unchecked items are not claims of missing implementation.  
 **Authority:** CONSTITUTION.md and security ADRs > backend contracts and ROADMAP > frontend/BLUEPRINT.md for UI architecture > workflow v3.1 for stage acceptance. Resolve conflicts explicitly; do not silently rewrite sources.
 
+## 5 November 2026 — Engineering reconciliation
+
+| Area | Verified evidence | Open acceptance |
+| --- | --- | --- |
+| P2 reviewer workspace | [PR #189](https://github.com/haytamAroui/caseproof/pull/189) merged. Its [final-head signed F4 run](https://github.com/haytamAroui/caseproof/actions/runs/41910465683) passed. The PR also added the T52 mixed-size PDF and non-zero CropBox regression. | Independent authorization review, representative corpus and manual accessibility. |
+| P3 / T65 table-cell correction | The changes from [PR #190](https://github.com/haytamAroui/caseproof/pull/190) landed through [PR #191](https://github.com/haytamAroui/caseproof/pull/191) at [`b0e500fc`](https://github.com/haytamAroui/caseproof/commit/b0e500fccf77a875bd4d10e61cd9b09f1d91dff7). The [signed table-cell run](https://github.com/haytamAroui/caseproof/actions/runs/41916090652) passed on the original PR #190 head. PR #190 was closed as superseded. | Independent authorization and provenance review and actual desktop Word compatibility. |
+| P3 document-wide DOCX editing | Dev migrations `20261105081249` and `20261105100916` are applied. The [signed Phase A/B run](https://github.com/haytamAroui/caseproof/actions/runs/42008220354) passed activation, recheck, revocation, and cleanup. | Independent security and actual document-host compatibility remain pending with the pilot partner. |
+| T70 dev migration reconciliation | [Supabase migration history](https://supabase.com/dashboard/project/ldwmocpxwskvhoojndrd/database/migrations) records the signed page worker as `20261105104752`. The recorded SQL matches [the repository migration](https://github.com/haytamAroui/caseproof/blob/b0e500fccf77a875bd4d10e61cd9b09f1d91dff7/supabase/migrations/20261031112127_signed_page_worker.sql), version `20261031112127`. All three tables have RLS enabled and no direct anonymous or authenticated grants. The catalog audit found no additional approved dev SQL to apply. | Migration history has timestamp drift. The authenticated security-definer RPC still needs independent review and live signed worker acceptance. |
+| P6 pilot readiness | T77 signed engineering acceptance passed for its recorded scope. | T61 document hosts, T70 independent security, T72 dependency risk, T73 privacy/egress, T74 operational Supabase restore, T75 manual accessibility, T76 rights-cleared corpus, T78 practitioner evidence and T79 pilot approval remain open. |
+
 ## Agent execution protocol
 1. Before editing, inspect current main, open PRs, docs/STATUS.md, frontend/BLUEPRINT.md, workflow v3.1, and relevant ADRs. Record exact SHA and links.
 2. For every item classify VERIFIED COMPLETE / PARTIAL / MISSING / BLOCKED, with code paths, tests and evidence. Do not infer completion from a PR title or green CI.
