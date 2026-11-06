@@ -16,7 +16,7 @@ from apps.api.supabase_password_signin import PasswordCredentials, SupabasePassw
 from scripts.m05_registry import call, forget, record
 from scripts.rights_signed_live import request
 from scripts.teardown_test_run import teardown
-from scripts.verify_dev_ephemeral_auth import GoTrueDevAdmin, PROJECT_REF
+from scripts.verify_dev_ephemeral_auth import PROJECT_REF, GoTrueDevAdmin
 from scripts.verify_dev_live_review_roundtrip import _request, _server_start, _server_stop
 from scripts.verify_dev_live_txt_journey import admin_rpc
 from tests.fixtures.run_lifecycle import credentials, new_run_id

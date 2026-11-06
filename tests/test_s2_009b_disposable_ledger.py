@@ -99,6 +99,7 @@ def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
         "20261106132316_caseproof_rights_derivative_inheritance.sql",
         "20261106132320_caseproof_rights_signed_fixture_grant.sql",
         "20261106132551_caseproof_rights_effective_parent_projection.sql",
+        "20261106134500_caseproof_rights_m05_cleanup_audit.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",
