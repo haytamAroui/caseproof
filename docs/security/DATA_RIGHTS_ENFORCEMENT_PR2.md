@@ -41,7 +41,8 @@ reclassified as processing/export writes.
    to disabled. The same-transaction triggers require an effective rights row
    for every source before derived representation insertion, dossier snapshot
    insertion or reviewed-release insertion. Case-row locks serialize policy
-   changes against a protected write. CI must prove both opt-in denial and
+   changes against a protected write. A forward-only source-scope migration
+   rejects omissions from the authoritative active matter version set. CI must prove both opt-in denial and
    unchanged disabled behavior. Enablement remains blocked on signed acceptance
    and independent review; do not enable the control on caseproof-dev.
 2. **Complete route inventory:** Audit signed and direct SQL paths for

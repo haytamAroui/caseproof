@@ -52,8 +52,9 @@ grant select,insert on storage.objects to authenticated;
     rights = next(p for p in paths if 'caseproof_data_rights_ledger_shadow' in p.name)
     rights_fence = next(p for p in paths if 'caseproof_rights_grant_revocation_fence' in p.name)
     rights_enforce = next(p for p in paths if 'caseproof_rights_enforcement_gates' in p.name)
+    rights_bundle = next(p for p in paths if 'caseproof_rights_active_bundle_fence' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -73,6 +74,7 @@ grant select,insert on storage.objects to authenticated;
     _run(rights.read_text(), env)
     _run(rights_fence.read_text(), env)
     _run(rights_enforce.read_text(), env)
+    _run(rights_bundle.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -280,6 +282,33 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
             f"where case_id='{case}' and action='source_rights_changed'", env) != '3':
         raise AssertionError('revocation missing atomic audit event')
     print('RIGHTS_SQL_RELEASE_TRIGGER_REVOKED_LATEST_VERSION_PASSED', flush=True)
+    # An attacker must not omit an active matter source from frozen evidence.
+    # Latest version 3 is already revoked: the incomplete-scope error must
+    # be raised BEFORE interpreting individual policy permission flags.
+    second_doc, second_version = str(uuid4()), str(uuid4())
+    _run(f"""
+        insert into caseproof.documents(id,org_id,case_id,source_label)
+          values('{second_doc}','{org}','{case}','second synthetic');
+        insert into caseproof.document_versions(
+          id,org_id,document_id,version_number,original_sha256_hex,byte_length,media_type
+        ) values('{second_version}','{org}','{second_doc}',1,repeat('c',64),10,'application/pdf');
+    """, env)
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    omitted = f"""
+    do $bundle$
+    begin
+      begin
+        perform caseproof._rights_require_bundle(
+          '{org}','{case}','{source_payload}'::jsonb,'export');
+        raise exception 'omitted active source accepted';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'incomplete active rights bundle' then raise; end if;
+      end;
+    end $bundle$;
+    """
+    _run(omitted, env)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    print('RIGHTS_SQL_OMITTED_ACTIVE_SOURCE_DENIED_PASSED', flush=True)
 
     # F6 release grants are independent of ordinary report/review access.
     export_call = f"select (public.caseproof_dossier_export_release('{case}','authorize')->>'authorized')"
