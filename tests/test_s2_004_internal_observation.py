@@ -104,8 +104,7 @@ def test_sql_is_disposable_only_non_approval_without_runtime_grants() -> None:
     assert "and 'case:read' = any(m.actions)" in SQL
     assert "audit" in SQL and "receipt" in SQL
     assert "set state=" not in SQL.lower()
-    assert "approved_conclusion" not in re.sub(r"--[^
-]*", "", SQL.lower())
+    assert "approved_conclusion" not in re.sub(r"--[^\n]*", "", SQL.lower())
 
 
 def test_no_new_live_route_or_staged_migration() -> None:

@@ -49,15 +49,12 @@ def test_privilege_budget_is_read_only_and_has_no_exposed_audit_writes() -> None
     assert "revoke all on all tables in schema caseproof from public, anon, authenticated;" in normalized
     assert "grant usage on schema caseproof to authenticated;" in normalized
     assert "grant select on caseproof.organizations," in normalized
-    assert "caseproof.document_versions
-to authenticated;" in normalized
+    assert "caseproof.document_versions\nto authenticated;" in normalized
     assert re.search(r"\bgrant\s+(insert|update|delete|all)\b", normalized) is None
     assert "grant select on caseproof.audit_events" not in normalized
     assert "grant select on caseproof.idempotency_records" not in normalized
-    assert "security definer" not in re.sub(r"--[^
-]*", "", normalized)
-    assert "service_role" not in re.sub(r"--[^
-]*", "", normalized)
+    assert "security definer" not in re.sub(r"--[^\n]*", "", normalized)
+    assert "service_role" not in re.sub(r"--[^\n]*", "", normalized)
 
 
 def test_membership_comes_from_auth_uid_and_server_owned_active_membership() -> None:
@@ -66,8 +63,7 @@ def test_membership_comes_from_auth_uid_and_server_owned_active_membership() -> 
     assert "using (active and user_id = (select auth.uid()))" in SQL
     assert SQL.count("m.active") >= 4
     assert SQL.count("m.user_id = (select auth.uid())") >= 4
-    assert "user_metadata" not in re.sub(r"--[^
-]*", "", SQL.lower())
+    assert "user_metadata" not in re.sub(r"--[^\n]*", "", SQL.lower())
 
 
 def test_composite_tenant_foreign_keys_guard_cross_org_links() -> None:

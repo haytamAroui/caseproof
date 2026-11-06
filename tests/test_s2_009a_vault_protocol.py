@@ -25,9 +25,7 @@ ORG = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 CASE = UUID("aaaaaaaa-1111-4111-8111-111111111111")
 FOREIGN_ORG = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 FOREIGN_CASE = UUID("aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa")
-ORIGINAL = b"%PDF-1.7
-synthetic invoice # 1
-"
+ORIGINAL = b"%PDF-1.7\nsynthetic invoice # 1\n"
 
 
 class FakePrivateStore:
