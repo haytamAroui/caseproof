@@ -58,7 +58,7 @@ create index source_rights_policy_history_idx
   on caseproof.source_rights_policies
   (org_id,case_id,version_id,policy_version desc);
 alter table caseproof.source_rights_policies enable row level security;
-revoke all on caseproof.source_rights_policies from public,anon,authenticated;
+revoke all on caseproof.source_rights_policies from public,anon,authenticated,service_role;
 -- Existing privileged retention_finalize deletes source versions and cases.
 -- Its transaction-local cleanup flag and service JWT are BOTH required before
 -- the foreign-key cascade may delete rights history. Never permit UPDATE.
@@ -106,6 +106,7 @@ begin
      or p_case is null or p_document is null or p_version is null
      or p_request is null
      or p_expected_version is null or p_expected_version<0
+     or p_expected_version>9223372036854775805
      or p_policy is null or jsonb_typeof(p_policy)<>'object'
   then raise exception 'rights unavailable' using errcode='42501'; end if;
 
