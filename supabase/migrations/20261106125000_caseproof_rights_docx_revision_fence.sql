@@ -49,10 +49,15 @@ end $$;
 revoke all on function caseproof._rights_draft_revision_fence()
   from public,anon,authenticated,service_role;
 
+-- AFTER INSERT: the just-reserved child is excluded from the active
+-- source bundle; a BEFORE INSERT would incorrectly count it as active.
 create trigger rights_draft_revision_reservation
-  before insert on caseproof.dossier_draft_revisions
+  after insert on caseproof.dossier_draft_revisions
   for each row execute function caseproof._rights_draft_revision_fence();
 
+-- BEFORE activation: the parent is still active and rights must be checked
+-- before the child supersedes it. A later recheck of the new source requires
+-- a separately approved derivative-version policy.
 create trigger rights_draft_revision_activation
   before update of state on caseproof.dossier_draft_revisions
   for each row when (new.state='active')
