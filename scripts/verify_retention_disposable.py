@@ -50,8 +50,9 @@ grant select,insert on storage.objects to authenticated;
     f6_release = next(p for p in paths if 'f6_reviewed_release_ledger' in p.name)
     f6_action_guard = next(p for p in paths if 'f6_reject_null_release_action' in p.name)
     rights = next(p for p in paths if 'caseproof_data_rights_ledger_shadow' in p.name)
+    rights_fence = next(p for p in paths if 'caseproof_rights_grant_revocation_fence' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -69,6 +70,7 @@ grant select,insert on storage.objects to authenticated;
     _run(f6_action_guard.read_text(), env)
     # Ledger depends on F6's final typed action constraints and retention guard.
     _run(rights.read_text(), env)
+    _run(rights_fence.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
