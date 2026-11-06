@@ -217,6 +217,52 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
             f"where case_id='{case}' and action='source_rights_changed'", env) != '2':
         raise AssertionError('every policy change must have one atomic audit event')
     print('RIGHTS_SIGNED_SCOPE_REPLAY_CONCURRENCY_APPEND_ONLY_PASSED', flush=True)
+    # Rights revocation is a new immutable policy version, not an update to
+    # earlier approvals. The transactional SQL gate must use latest only.
+    revoked_policy = json.dumps({
+        "origin": "CLIENT_UPLOAD", "classification": "CLIENT_CONFIDENTIAL",
+        "authorization_reference": "synthetic-contract-1",
+        "process": False, "export": False,
+    }, separators=(",", ":"))
+    revoke_rights = (
+        f"select (public.caseproof_rights_manage('{case}','{doc}','{version}',"
+        f"2,'{uuid4()}','{revoked_policy}'::jsonb)->>'policy_version')"
+    )
+    if _run(actor(owner, revoke_rights), env) != '3':
+        raise AssertionError('revoked policy did not append immutable version 3')
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    _run(source_gate + "'process')", env, should_pass=False)
+    _run(source_gate + "'export')", env, should_pass=False)
+    # A privileged direct table write must be fenced in the SQL transaction,
+    # even when a previously allowed snapshot is still in the database.
+    denial = f"""
+    do $rights_trigger$
+    begin
+      begin
+        insert into caseproof.dossier_releases(
+          org_id,case_id,release_id,actor_id,brief_id,
+          snapshot_hash,manifest,artifacts
+        ) values(
+          '{org}','{case}','{uuid4()}','{owner}','{version}',
+          repeat('f',64),'{{}}'::jsonb,'{{}}'::jsonb
+        );
+        raise exception 'protected release inserted after rights revocation';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'source rights denied or unknown' then
+          raise;
+        end if;
+      end;
+    end $rights_trigger$;
+    """
+    _run(denial, env)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    if _run(f"select count(*) from caseproof.source_rights_policies "
+            f"where case_id='{case}'", env) != '3':
+        raise AssertionError('revocation must preserve all three versions')
+    if _run(f"select count(*) from caseproof.audit_events "
+            f"where case_id='{case}' and action='source_rights_changed'", env) != '3':
+        raise AssertionError('revocation missing atomic audit event')
+    print('RIGHTS_SQL_RELEASE_TRIGGER_REVOKED_LATEST_VERSION_PASSED', flush=True)
 
     # F6 release grants are independent of ordinary report/review access.
     export_call = f"select (public.caseproof_dossier_export_release('{case}','authorize')->>'authorized')"
@@ -383,7 +429,7 @@ select public.caseproof_dossier_export_release(
         raise AssertionError('version remains')
     if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != '0':
         raise AssertionError('release bytes remain after matter purge')
-    if _run("select erased_audit_events from caseproof.erasure_receipts", env) != '3':
+    if _run("select erased_audit_events from caseproof.erasure_receipts", env) != '4':
         raise AssertionError('minimal erasure audit missing')
     if _run(f"select count(*) from caseproof.source_rights_policies where case_id='{case}'", env) != '0':
         raise AssertionError('rights policy history survived authorized matter purge')
