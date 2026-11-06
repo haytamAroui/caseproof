@@ -16,7 +16,6 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.capacity_envelope import CAPACITY_POLICY
-from application.data_rights import Action
 from application.litigation.export_rights_manifest import (
     attest_export_rights,
     validate_export_rights,

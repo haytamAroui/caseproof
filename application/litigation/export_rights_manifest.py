@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, NoReturn
 
 from application.data_rights import Action, Decision
 from apps.api.access_control import AccessFailure, AccessRejected
@@ -19,7 +19,7 @@ UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 SCHEMA = "caseproof-export-rights-v1"
 
 
-def _error() -> None:
+def _error() -> NoReturn:
     raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
 
 
