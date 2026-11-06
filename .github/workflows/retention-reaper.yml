@@ -1,7 +1,5 @@
 name: Matter retention dev reaper
 on:
-  schedule:
-    - cron: '43 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read
