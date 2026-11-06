@@ -368,7 +368,10 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                     This account label does not assert professional status or
                     that you personally reviewed every finding.
                   </p>
-                  <Button onClick={() => setReleaseIntent('')} disabled={working}>
+                  <Button
+                    onClick={() => setReleaseIntent('')}
+                    disabled={working}
+                  >
                     Cancel release
                   </Button>
                   <Button
@@ -449,13 +452,16 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
           {selected.manifest.release_acknowledgement ? (
             <p>
               Released by authenticated account:{' '}
-              <strong>{selected.manifest.release_acknowledgement.actor_label}</strong>
-              {' '}on {selected.manifest.release_acknowledgement.acknowledged_at}.
+              <strong>
+                {selected.manifest.release_acknowledgement.actor_label}
+              </strong>{' '}
+              on {selected.manifest.release_acknowledgement.acknowledged_at}.
               This records release intent, not legal certification or signature.
             </p>
           ) : (
             <Notice>
-              Historical release: no explicit release acknowledgement was recorded.
+              Historical release: no explicit release acknowledgement was
+              recorded.
             </Notice>
           )}
           <p>

@@ -194,7 +194,9 @@ export function parseReleasePreview(
     typeof raw.release_actor.actor_label !== 'string' ||
     !raw.release_actor.actor_label ||
     raw.release_actor.actor_label.length > 254 ||
-    !['confirmed_email', 'account_id'].includes(String(raw.release_actor.actor_label_type)) ||
+    !['confirmed_email', 'account_id'].includes(
+      String(raw.release_actor.actor_label_type),
+    ) ||
     raw.acknowledgement_version !== 'caseproof-release-ack-v1' ||
     typeof raw.acknowledgement_notice !== 'string' ||
     !raw.acknowledgement_notice.includes('immutable CaseProof review record') ||
@@ -235,22 +237,29 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
           manifest.review_completeness.reviewed_findings ||
         manifest.finding_count !==
           manifest.review_completeness.total_findings)) ||
-    (manifest.release_acknowledgement !== undefined && (
-      !plain(manifest.release_acknowledgement) ||
-      manifest.release_acknowledgement.schema !== 'caseproof-release-ack-v1' ||
-      manifest.release_acknowledgement.intent !== 'AUTHORIZE_REVIEW_RECORD_RELEASE' ||
-      manifest.release_acknowledgement.release_id !== raw.release_id ||
-      manifest.release_acknowledgement.snapshot_hash !== scope.snapshot ||
-      !uuid.test(String(manifest.release_acknowledgement.actor_id)) ||
-      typeof manifest.release_acknowledgement.actor_label !== 'string' ||
-      !manifest.release_acknowledgement.actor_label ||
-      manifest.release_acknowledgement.actor_label.length > 254 ||
-      !['confirmed_email', 'account_id'].includes(String(manifest.release_acknowledgement.actor_label_type)) ||
-      !['complete_review', 'partial_review'].includes(String(manifest.release_acknowledgement.release_type)) ||
-      typeof manifest.release_acknowledgement.notice !== 'string' ||
-      typeof manifest.release_acknowledgement.acknowledged_at !== 'string' ||
-      Number.isNaN(Date.parse(manifest.release_acknowledgement.acknowledged_at))
-    )) ||
+    (manifest.release_acknowledgement !== undefined &&
+      (!plain(manifest.release_acknowledgement) ||
+        manifest.release_acknowledgement.schema !==
+          'caseproof-release-ack-v1' ||
+        manifest.release_acknowledgement.intent !==
+          'AUTHORIZE_REVIEW_RECORD_RELEASE' ||
+        manifest.release_acknowledgement.release_id !== raw.release_id ||
+        manifest.release_acknowledgement.snapshot_hash !== scope.snapshot ||
+        !uuid.test(String(manifest.release_acknowledgement.actor_id)) ||
+        typeof manifest.release_acknowledgement.actor_label !== 'string' ||
+        !manifest.release_acknowledgement.actor_label ||
+        manifest.release_acknowledgement.actor_label.length > 254 ||
+        !['confirmed_email', 'account_id'].includes(
+          String(manifest.release_acknowledgement.actor_label_type),
+        ) ||
+        !['complete_review', 'partial_review'].includes(
+          String(manifest.release_acknowledgement.release_type),
+        ) ||
+        typeof manifest.release_acknowledgement.notice !== 'string' ||
+        typeof manifest.release_acknowledgement.acknowledged_at !== 'string' ||
+        Number.isNaN(
+          Date.parse(manifest.release_acknowledgement.acknowledged_at),
+        ))) ||
     !plain(manifest.coverage) ||
     !digest.test(String(manifest.manifest_sha256)) ||
     !digest.test(String(manifest.server_receipt)) ||

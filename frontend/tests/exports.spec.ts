@@ -47,7 +47,8 @@ const preview = {
     actor_label_type: 'confirmed_email',
   },
   acknowledgement_version: 'caseproof-release-ack-v1',
-  acknowledgement_notice: 'I authorize creation of this immutable CaseProof review record for the displayed scope. Not a signature.',
+  acknowledgement_notice:
+    'I authorize creation of this immutable CaseProof review record for the displayed scope. Not a signature.',
   coverage: {
     unprocessed_regions: 1,
     text_coverage_complete: false,
@@ -218,7 +219,9 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
   await page.getByLabel(/I acknowledge this release is partial/).check();
   await page.getByRole('button', { name: 'Review release details' }).click();
   await expect(page.getByText('account@example.test')).toBeVisible();
-  await page.getByRole('button', { name: 'Acknowledge and create release' }).click();
+  await page
+    .getByRole('button', { name: 'Acknowledge and create release' })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Selected frozen release' }),
   ).toBeVisible();
@@ -292,7 +295,9 @@ test('F6 lost POST acknowledgment reconciles without repeating the write', async
   await page.getByLabel(/I acknowledge this release is partial/).check();
   await page.getByRole('button', { name: 'Review release details' }).click();
   await expect(page.getByText('account@example.test')).toBeVisible();
-  await page.getByRole('button', { name: 'Acknowledge and create release' }).click();
+  await page
+    .getByRole('button', { name: 'Acknowledge and create release' })
+    .click();
   await expect(page.getByText(/Release outcome unknown/)).toBeVisible();
   await expect(
     page.getByRole('button', {
