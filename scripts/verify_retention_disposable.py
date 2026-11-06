@@ -55,8 +55,10 @@ grant select,insert on storage.objects to authenticated;
     rights_bundle = next(p for p in paths if 'caseproof_rights_active_bundle_fence' in p.name)
     rights_worker = next(p for p in paths if 'caseproof_rights_page_worker_fence' in p.name)
     rights_docx = next(p for p in paths if 'caseproof_rights_docx_revision_fence' in p.name)
+    rights_rpc = next(p for p in paths if 'caseproof_rights_legacy_rpc_fence' in p.name)
+    rights_derivatives = next(p for p in paths if 'caseproof_rights_derivative_inheritance' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -79,6 +81,8 @@ grant select,insert on storage.objects to authenticated;
     _run(rights_bundle.read_text(), env)
     _run(rights_worker.read_text(), env)
     _run(rights_docx.read_text(), env)
+    _run(rights_rpc.read_text(), env)
+    _run(rights_derivatives.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -335,6 +339,52 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
             f"where case_id='{other}'", env) != '0':
         raise AssertionError('unknown-rights DOCX revision persisted')
     print('RIGHTS_SQL_DOCX_REVISION_UNKNOWN_DENIED_PASSED', flush=True)
+    # Restricted parents must produce restricted derivative versions. The
+    # initial test rights seed runs with enforcement OFF; it does NOT infer
+    # approval and must not weaken the copied DENY. Same-case scope only.
+    _run(f"""
+      update caseproof._m1_matter_grants
+       set permissions=array_append(permissions,'rights:manage')
+       where org_id='{org}' and case_id='{other}' and user_id='{owner}';
+    """, env)
+    restricted = json.dumps({
+        "origin": "CLIENT_UPLOAD", "classification": "CLIENT_CONFIDENTIAL",
+        "authorization_reference": "synthetic-restricted-parent",
+        "process": False, "export": False,
+        "indexForSearch": False, "useAcrossMatters": False,
+    }, separators=(",", ":"))
+    _run(actor(owner, f"""
+      select public.caseproof_rights_manage(
+        '{other}','{other_doc}','{other_version}',0,'{uuid4()}',
+        '{restricted}'::jsonb
+      )
+    """), env)
+    _run(revision_denial, env)
+    inherited = _run(f"""
+      select concat_ws(':',process::text,export_same_matter::text,
+        index_for_search::text,use_across_matters::text,
+        inherited_from_version_id::text)
+      from caseproof.source_rights_policies
+      where org_id='{org}' and case_id='{other}' and version_id='{child}'
+    """, env)
+    if inherited != f'false:false:false:false:{other_version}':
+        raise AssertionError('restricted parent policy not copied unchanged to derivative')
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    _run(f"""
+      do $rights_restricted$
+      begin
+        begin
+          perform caseproof._rights_require_source(
+            '{org}','{other}','{other_doc}','{child}','export'
+          );
+          raise exception 'restricted derivative export was accepted';
+        exception when insufficient_privilege then
+          if SQLERRM <> 'source rights denied or unknown' then raise; end if;
+        end;
+      end $rights_restricted$
+    """, env)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    print('RIGHTS_RESTRICTED_PARENT_DERIVATIVE_EXPORT_DENIED_PASSED', flush=True)
     # A prior queued page job may remain after permissions are revoked,
     # but it must not resume processing or emit new OCR artifacts.
     page_request = str(uuid4())
