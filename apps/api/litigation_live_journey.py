@@ -437,7 +437,10 @@ def create_live_journey_router(
     rights_gate: SignedRightsGate | None = None,
 ) -> APIRouter:
     router = APIRouter()
-    client = JourneyClient(publishable_key, trusted_ingest_key, ocr=ocr, rights_gate=rights_gate) if publishable_key else None
+    client = (JourneyClient(
+        publishable_key, trusted_ingest_key, ocr=ocr,
+        **({"rights_gate": rights_gate} if rights_gate is not None else {}),
+    ) if publishable_key else None)
 
     def active(authorization: str | None) -> tuple[JourneyClient, str]:
         if client is None:

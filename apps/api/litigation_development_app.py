@@ -79,7 +79,10 @@ def create_litigation_development_app(
         app.include_router(create_page_job_router(SignedPageJobs(dossier_store, page_worker_secret)))
     app.include_router(create_headless_review_router(headless))
     app.include_router(create_live_review_router(publishable_key))
-    app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key, ocr=ocr, rights_gate=rights_gate))
+    app.include_router(create_live_journey_router(
+        publishable_key, trusted_ingest_key, ocr=ocr,
+        **({"rights_gate": rights_gate} if rights_gate is not None else {}),
+    ))
 
     @app.get("/dev/clearbrief/config", include_in_schema=False)
     def lawyer_config() -> dict[str, str | None]:
