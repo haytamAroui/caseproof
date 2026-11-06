@@ -335,6 +335,11 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     _run(source_gate + "'export')", env, should_pass=False)
     # A privileged direct table write must be fenced in the SQL transaction,
     # even when a previously allowed snapshot is still in the database.
+    revoke_id = str(uuid4())
+    revoke_manifest = json.dumps({
+        "review_completeness": {"release_type": "complete_review"},
+        "release_acknowledgement": ack_fixture(owner, revoke_id, "f" * 64),
+    }, separators=(",", ":"))
     denial = f"""
     do $rights_trigger$
     begin
@@ -343,8 +348,8 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
           org_id,case_id,release_id,actor_id,brief_id,
           snapshot_hash,manifest,artifacts
         ) values(
-          '{org}','{case}','{uuid4()}','{owner}','{version}',
-          repeat('f',64),'{{}}'::jsonb,'{{}}'::jsonb
+          '{org}','{case}','{revoke_id}','{owner}','{version}',
+          repeat('f',64),'{revoke_manifest}'::jsonb,'{{}}'::jsonb
         );
         raise exception 'protected release inserted after rights revocation';
       exception when insufficient_privilege then
