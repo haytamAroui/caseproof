@@ -85,12 +85,11 @@ def create_litigation_development_app(
         from apps.api.signed_page_jobs import SignedPageJobs, create_page_job_router
         app.include_router(create_page_job_router(SignedPageJobs(dossier_store, page_worker_secret)))
     app.include_router(create_headless_review_router(headless))
-    # These older direct review/correction RPCs do not enforce source rights.
-    # Keep their routes available only as sanitized unavailable responses
-    # until they have their own transactional source-version gate.
-    app.include_router(create_live_review_router(
-        publishable_key if rights_gate is None else None,
-    ))
+    # The direct legacy RPCs are now wrapped with transactional rights checks
+    # by the PR2 signed-legacy-RPC migration; preserve their genuine signed
+    # review/correction flow. This remains a no-op when no publishable key is
+    # configured, and never expands the underlying actor's matter grants.
+    app.include_router(create_live_review_router(publishable_key))
     app.include_router(create_live_journey_router(
         publishable_key, trusted_ingest_key, ocr=ocr,
         **({"rights_gate": rights_gate} if rights_gate is not None else {}),
