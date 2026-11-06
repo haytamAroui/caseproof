@@ -34,10 +34,13 @@ reclassified as processing/export writes.
 
 ## Blocking issues before actual enforcement can be enabled
 
-1. **Transactional SQL fence:** Python pre-check and recheck do not protect
-   against direct PostgREST invocation or a revocation between the final API
-   check and privileged SQL commit. Add rights verification inside all relevant
-   service-only mutation RPCs, under the same locked source/rights scope.
+1. **Transactional SQL fence installed (DORMANT):** Private operator control defaults
+   to disabled. The same-transaction triggers require an effective rights row
+   for every source before derived representation insertion, dossier snapshot
+   insertion or reviewed-release insertion. Case-row locks serialize policy
+   changes against a protected write. CI must prove both opt-in denial and
+   unchanged disabled behavior. Enablement remains blocked on signed acceptance
+   and independent review; do not enable the control on caseproof-dev.
 2. **Complete route inventory:** Audit signed and direct SQL paths for
    processing, OCR, indexing, search, correction/recheck, exports and derived
    artifacts; do not assume one Python entry point covers all uses.

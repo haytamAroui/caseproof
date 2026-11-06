@@ -51,8 +51,9 @@ grant select,insert on storage.objects to authenticated;
     f6_action_guard = next(p for p in paths if 'f6_reject_null_release_action' in p.name)
     rights = next(p for p in paths if 'caseproof_data_rights_ledger_shadow' in p.name)
     rights_fence = next(p for p in paths if 'caseproof_rights_grant_revocation_fence' in p.name)
+    rights_enforce = next(p for p in paths if 'caseproof_rights_enforcement_gates' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -71,6 +72,7 @@ grant select,insert on storage.objects to authenticated;
     # Ledger depends on F6's final typed action constraints and retention guard.
     _run(rights.read_text(), env)
     _run(rights_fence.read_text(), env)
+    _run(rights_enforce.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -119,12 +121,44 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     _run(actor(guest, rights_call(uuid4(), 0)), env, should_pass=False)
     _run(actor(owner, rights_call(uuid4(), 0, document=doc, source=uuid4())),
          env, should_pass=False)
+    # PR2 owner switch defaults OFF: no existing workflow regresses.
+    if _run("select enabled from caseproof._rights_enforcement_control", env) != 'f':
+        raise AssertionError('rights enforcement must default to disabled')
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    source_gate = (f"select caseproof._rights_require_source('{org}','{case}',"
+                   f"'{doc}','{version}',")
+    _run(source_gate + "'process')", env, should_pass=False)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
     first_request = uuid4()
     if _run(actor(owner, rights_call(first_request, 0)), env) != '1':
         raise AssertionError('first rights policy version absent')
     if _run(actor(owner, rights_call(first_request, 0)), env) != '1':
         raise AssertionError('identical signed replay must be idempotent')
     _run(actor(owner, rights_call(first_request, 1)), env, should_pass=False)
+    # The database boundary cannot be bypassed through service-only RPCs.
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    if _run(source_gate + "'process')", env) != '1':
+        raise AssertionError('explicit process permission not accepted')
+    if _run(source_gate + "'export')", env) != '1':
+        raise AssertionError('same-matter export permission not accepted')
+    _run(source_gate + "'indexForSearch')", env, should_pass=False)
+    _run(source_gate + "'unrecognized_action')", env, should_pass=False)
+    _run(f"select caseproof._rights_require_source('{org}','{other}',"
+         f"'{doc}','{version}','export')", env, should_pass=False)
+    source_payload = json.dumps({"sources": [{
+        "document_id": doc, "version_id": version, "sha256": "a" * 64,
+    }]}, separators=(",", ":"))
+    _run(f"insert into caseproof.dossier_snapshots("
+         f"org_id,case_id,snapshot_hash,bundle_signature,serialized)"
+         f" values('{org}','{case}',repeat('f',64),'synthetic-rights',"
+         f"'{source_payload}')", env)
+    _run(f"insert into caseproof.dossier_snapshots("
+         f"org_id,case_id,snapshot_hash,bundle_signature,serialized)"
+         f" values('{org}','{other}',repeat('e',64),'synthetic-rights',"
+         f"'{source_payload}')", env, should_pass=False)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    print('RIGHTS_SQL_TRANSACTIONAL_OPT_IN_DENY_ALLOW_SCOPE_PASSED', flush=True)
+
     _run(actor(guest, missing), env, should_pass=False)
     if _run(actor(owner, missing), env) != 'present':
         raise AssertionError('signed policy projection absent after write')
