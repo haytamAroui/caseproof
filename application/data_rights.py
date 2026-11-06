@@ -28,7 +28,8 @@ class RightsPolicy:
     version: int
     authorization_reference: str | None
     permissions: Mapping[str, bool]
-    classification: str = "CLIENT_UPLOAD"
+    classification: str = "CLIENT_CONFIDENTIAL"
+    origin: str = "CLIENT_UPLOAD"
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +48,7 @@ def evaluate_detail(
         return Evaluation(Decision.UNKNOWN, "policy_missing", None)
     if type(policy.version) is not int or policy.version < 1:
         return Evaluation(Decision.DENY, "invalid_policy_version", None)
-    if policy.classification not in {"CLIENT_UPLOAD", "CLIENT_CONFIDENTIAL"}:
+    if policy.origin != "CLIENT_UPLOAD" or policy.classification != "CLIENT_CONFIDENTIAL":
         return Evaluation(Decision.DENY, "invalid_classification", policy.version)
     if not same_matter and action in {"export", "useAcrossMatters"}:
         return Evaluation(Decision.DENY, "cross_matter_prohibited", policy.version)
