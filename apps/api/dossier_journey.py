@@ -290,7 +290,7 @@ class DossierStore:
         )
         return {
             "actor_id": verified.subject_id,
-            "actor_label": email if usable else f"Account {verified.subject_id}",
+            "actor_label": str(email) if usable else f"Account {verified.subject_id}",
             "actor_label_type": "confirmed_email" if usable else "account_id",
         }
 
