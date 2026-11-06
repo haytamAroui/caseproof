@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/signed-export-rights-manifest-pr203'
+    if: github.repository == 'haytamAroui/caseproof' && github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/signed-export-rights-manifest-pr203' || github.head_ref == 'feat/pr204-release-acknowledgement-provenance')
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 30
