@@ -303,9 +303,12 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
         org_id,case_id,snapshot_hash,bundle_signature,serialized
       ) values (
         '{org}','{other}',repeat('d',64),'synthetic-revision',
-        '{{"sources":[{{"document_id":"{other_doc}",'
-        ' "version_id":"{other_version}","sha256":"' || repeat('b',64)
-        || '"}}]}}'
+        jsonb_build_object('sources',jsonb_build_array(
+          jsonb_build_object(
+            'document_id','{other_doc}','version_id','{other_version}',
+            'sha256',repeat('b',64)
+          )
+        ))::text
       );
     """, env)
     revision_denial = f"""
@@ -320,7 +323,13 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
       )
     """
     _run("update caseproof._rights_enforcement_control set enabled=true", env)
-    _run(revision_denial, env, should_pass=False)
+    _run(
+        "do $rights_revision$ begin begin " + revision_denial
+        + "; raise exception 'revoked revision unexpectedly permitted'; "
+        + "exception when insufficient_privilege then "
+        + "if SQLERRM <> 'source rights denied or unknown' then raise; end if; "
+        + "end; end $rights_revision$;", env,
+    )
     _run("update caseproof._rights_enforcement_control set enabled=false", env)
     if _run(f"select count(*) from caseproof.dossier_draft_revisions "
             f"where case_id='{other}'", env) != '0':
