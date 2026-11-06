@@ -71,6 +71,7 @@ def _exercise() -> None:
         "refs/pull/197/merge",
         "refs/pull/198/merge",
         "refs/pull/203/merge",
+        "refs/pull/204/merge",
     }:
         raise RuntimeError("F3_PROTECTED_BRANCH_REQUIRED")
     key, run, org = (

@@ -235,6 +235,14 @@ describe('F6 reviewed export contracts', () => {
       },
       coverage: {},
       formats: ['json', 'markdown', 'docx'],
+      release_actor: {
+        actor_id: id,
+        actor_label: 'reviewer@example.test',
+        actor_label_type: 'confirmed_email',
+      },
+      acknowledgement_version: 'caseproof-release-ack-v1',
+      acknowledgement_notice:
+        'I authorize creation of this immutable CaseProof review record.',
       limitations: ['Not certified'],
     };
     expect(parseReleasePreview(preview, scope).release_ready).toBe(false);

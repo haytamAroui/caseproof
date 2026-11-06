@@ -367,6 +367,23 @@ def annotated_docx(original: bytes, report: dict[str, Any]) -> bytes:
             ):
                 if key in decision:
                     line(label, decision[key], indent=1)
+        ack = report.get("release_acknowledgement")
+        if ack is not None:
+            if not isinstance(ack, dict):
+                raise ValueError("invalid release acknowledgement")
+            line("Release provenance / vrijgave / publication", heading=True)
+            line("Released by authenticated account", ack.get("actor_label"), indent=1)
+            line("Release actor ID", ack.get("actor_id"), indent=1)
+            line("Release operation ID", ack.get("release_id"), indent=1)
+            line("Release snapshot", ack.get("snapshot_hash"), indent=1)
+            line("Review scope", ack.get("release_type"), indent=1)
+            line("Acknowledged (UTC)", ack.get("acknowledged_at"), indent=1)
+            line(
+                "Limitation",
+                "An internal release acknowledgment is not a lawyer's signature, "
+                "confirmation that this actor reviewed every finding, or proof of court filing.",
+                indent=1,
+            )
         output = io.BytesIO()
         with ZipFile(output, "w", ZIP_DEFLATED) as target:
             for entry in source.infolist():

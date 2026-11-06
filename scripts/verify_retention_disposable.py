@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,6 +13,21 @@ import psycopg
 from scripts.verify_s2_002_database import SCHEMA_BOOTSTRAP, _env, _run
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def ack_fixture(actor: str, release_id: str, snapshot: str) -> dict[str, str]:
+    return {
+        "schema": "caseproof-release-ack-v1",
+        "intent": "AUTHORIZE_REVIEW_RECORD_RELEASE",
+        "actor_id": actor,
+        "actor_label": f"Account {actor}",
+        "actor_label_type": "account_id",
+        "release_id": release_id,
+        "snapshot_hash": snapshot,
+        "release_type": "complete_review",
+        "acknowledged_at": datetime.now(UTC).isoformat(),
+        "notice": "Synthetic disposable fixture records release intent, not legal approval.",
+    }
 
 
 def main():
@@ -60,8 +76,9 @@ grant select,insert on storage.objects to authenticated;
     rights_projection = next(p for p in paths if 'caseproof_rights_effective_parent_projection' in p.name)
     rights_fixture = next(p for p in paths if 'caseproof_rights_signed_fixture_grant' in p.name)
     rights_export_manifest = next(p for p in paths if 'caseproof_signed_export_rights_manifest_fence' in p.name)
+    release_ack_fence = next(p for p in paths if 'caseproof_release_acknowledgement_fence' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives, rights_projection, rights_fixture, rights_export_manifest):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives, rights_projection, rights_fixture, rights_export_manifest, release_ack_fence):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -89,6 +106,7 @@ grant select,insert on storage.objects to authenticated;
     _run(rights_projection.read_text(), env)
     _run(rights_fixture.read_text(), env)
     _run(rights_export_manifest.read_text(), env)
+    _run(release_ack_fence.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -204,15 +222,18 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
         "sources": synthetic_scope,
     }
     def insert_rights_manifest(evidence):
+        rid = str(uuid4())
         release_payload = json.dumps({
             "rights_attestation": evidence,
             "sources": [{"version_id": version, "sha256": "a" * 64,
                          "role": "exhibit"}],
+            "review_completeness": {"release_type": "complete_review"},
+            "release_acknowledgement": ack_fixture(owner, rid, "f" * 64),
         }, separators=(",", ":"))
         return (
             "insert into caseproof.dossier_releases("
             "org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts"
-            f") values('{org}','{case}','{uuid4()}','{owner}','{version}',"
+            f") values('{org}','{case}','{rid}','{owner}','{version}',"
             f"repeat('f',64),'{release_payload}'::jsonb,'{{}}'::jsonb)"
         )
     _run("begin; " + insert_rights_manifest(valid_rights_manifest) + "; rollback;", env)
@@ -314,6 +335,11 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     _run(source_gate + "'export')", env, should_pass=False)
     # A privileged direct table write must be fenced in the SQL transaction,
     # even when a previously allowed snapshot is still in the database.
+    revoke_id = str(uuid4())
+    revoke_manifest = json.dumps({
+        "review_completeness": {"release_type": "complete_review"},
+        "release_acknowledgement": ack_fixture(owner, revoke_id, "f" * 64),
+    }, separators=(",", ":"))
     denial = f"""
     do $rights_trigger$
     begin
@@ -322,8 +348,8 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
           org_id,case_id,release_id,actor_id,brief_id,
           snapshot_hash,manifest,artifacts
         ) values(
-          '{org}','{case}','{uuid4()}','{owner}','{version}',
-          repeat('f',64),'{{}}'::jsonb,'{{}}'::jsonb
+          '{org}','{case}','{revoke_id}','{owner}','{version}',
+          repeat('f',64),'{revoke_manifest}'::jsonb,'{{}}'::jsonb
         );
         raise exception 'protected release inserted after rights revocation';
       exception when insufficient_privilege then
@@ -550,17 +576,57 @@ update caseproof._m1_matter_grants set permissions=array_append(permissions,'exp
     _run(actor(owner, export_call), env, should_pass=False)
     _run(f"update caseproof._m1_matter_grants set active=true where org_id='{org}' and case_id='{case}' and user_id='{owner}'", env)
     release_id = str(uuid4())
+    retention_manifest = json.dumps({
+        "scope": "synthetic-retention-only",
+        "review_completeness": {"release_type": "complete_review"},
+        "release_acknowledgement": ack_fixture(owner, release_id, "a" * 64),
+    }, separators=(",", ":"))
     _run(f"""
 insert into caseproof.dossier_releases(
  org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts
 ) values (
  '{org}','{case}','{release_id}','{owner}','{version}',repeat('a',64),
- '{{"scope":"synthetic-retention-only"}}'::jsonb,
+ '{retention_manifest}'::jsonb,
  '{{"json":"eA=="}}'::jsonb
 );
 """, env)
     if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != "1":
         raise AssertionError('fixture release not persisted')
+    # PR204: the database must independently reject forged actor, stale
+    # snapshot and absent release acknowledgment even for privileged INSERTs.
+    for modification in ("actor", "snapshot", "missing"):
+        negative_id = str(uuid4())
+        forged = {
+            "scope": "synthetic-retention-only",
+            "review_completeness": {"release_type": "complete_review"},
+            "release_acknowledgement": ack_fixture(owner, negative_id, "a" * 64),
+        }
+        if modification == "actor":
+            forged["release_acknowledgement"]["actor_id"] = str(uuid4())
+        elif modification == "snapshot":
+            forged["release_acknowledgement"]["snapshot_hash"] = "f" * 64
+        else:
+            forged.pop("release_acknowledgement")
+        forged_json = json.dumps(forged, separators=(",", ":"))
+        _run(f"""
+do $pr204$
+begin
+  begin
+    insert into caseproof.dossier_releases(
+      org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts
+    ) values(
+      '{org}','{case}','{negative_id}','{owner}','{version}',repeat('a',64),
+      '{forged_json}'::jsonb,'{{"json":"eA=="}}'::jsonb
+    );
+    raise exception 'forged acknowledgment INSERT accepted';
+  exception when insufficient_privilege then
+    if SQLERRM <> 'release acknowledgment missing or actor/snapshot mismatch' then
+      raise;
+    end if;
+  end;
+end $pr204$;
+""", env)
+    print("PR204_DISPOSABLE_RELEASE_ACTOR_SNAPSHOT_FENCE_PASSED", flush=True)
     # Fill the bounded per-matter release ledger using synthetic fixture rows.
     # A distinct signed release request must reject capacity before snapshot
     # parsing; a replay of an existing release remains a separate read action.
@@ -568,10 +634,23 @@ insert into caseproof.dossier_releases(
 insert into caseproof.dossier_releases(
  org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts
 )
-select '{org}','{case}',gen_random_uuid(),'{owner}','{version}',repeat('a',64),
- '{{"scope":"synthetic-retention-only"}}'::jsonb,
+select '{org}','{case}',r.rid,'{owner}','{version}',repeat('a',64),
+ jsonb_build_object(
+   'scope','synthetic-retention-only',
+   'review_completeness',jsonb_build_object('release_type','complete_review'),
+   'release_acknowledgement',jsonb_build_object(
+     'schema','caseproof-release-ack-v1',
+     'intent','AUTHORIZE_REVIEW_RECORD_RELEASE',
+     'actor_id','{owner}', 'actor_label','Account {owner}',
+     'actor_label_type','account_id',
+     'release_id',r.rid::text,
+     'snapshot_hash',repeat('a',64), 'release_type','complete_review',
+     'acknowledged_at',clock_timestamp()::text,
+     'notice','Synthetic disposable fixture records release intent, not legal approval.'
+   )
+ ),
  '{{"json":"eA=="}}'::jsonb
-from generate_series(1,49);
+from (select gen_random_uuid() as rid from generate_series(1,49)) r;
 """, env)
     if _run(f"select count(*) from caseproof.dossier_releases where case_id='{case}'", env) != "50":
         raise AssertionError('release capacity fixture incomplete')

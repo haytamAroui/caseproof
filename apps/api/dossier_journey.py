@@ -261,6 +261,39 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def release_actor(self, bearer: str) -> dict[str, str]:
+        """Server-verified release identity; never trust browser-supplied names.
+
+        A confirmed Auth email is an account label, not an attested legal name
+        or a claim that this actor reviewed any particular finding.
+        """
+        try:
+            verified = self.revisions.verifier.verify_bearer(bearer)
+            user = self.revisions.verifier.user_lookup.get_verified_user(bearer)
+        except InvalidBearer:
+            raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+        except IdentityServiceUnavailable:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        except Exception:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if not isinstance(user, dict) or user.get("id") != verified.subject_id:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        email = user.get("email")
+        confirmed = user.get("email_confirmed_at")
+        usable = (
+            isinstance(email, str)
+            and 3 <= len(email) <= 254
+            and "@" in email
+            and not any(ord(char) < 32 for char in email)
+            and isinstance(confirmed, str)
+            and bool(confirmed)
+        )
+        return {
+            "actor_id": verified.subject_id,
+            "actor_label": str(email) if usable else f"Account {verified.subject_id}",
+            "actor_label_type": "confirmed_email" if usable else "account_id",
+        }
+
     def export_rpc(
         self,
         bearer: str,

@@ -41,6 +41,14 @@ const preview = {
     ],
   },
   formats: ['json', 'markdown', 'docx'],
+  release_actor: {
+    actor_id: '77777777-7777-4777-8777-777777777777',
+    actor_label: 'account@example.test',
+    actor_label_type: 'confirmed_email',
+  },
+  acknowledgement_version: 'caseproof-release-ack-v1',
+  acknowledgement_notice:
+    'I authorize creation of this immutable CaseProof review record for the displayed scope. Not a signature.',
   coverage: {
     unprocessed_regions: 1,
     text_coverage_complete: false,
@@ -180,10 +188,14 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
       snapshot_hash: string;
       release_type: string;
       partial_acknowledged: boolean;
+      release_acknowledged: boolean;
+      acknowledgement_version: string;
     };
     expect(command.snapshot_hash).toBe(snapshot);
     expect(command.release_type).toBe('partial_review');
     expect(command.partial_acknowledged).toBe(true);
+    expect(command.release_acknowledged).toBe(true);
+    expect(command.acknowledgement_version).toBe('caseproof-release-ack-v1');
     const next = record(command.release_id);
     saved.push(next);
     return route.fulfill({ json: next });
@@ -205,8 +217,10 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
     page.getByText(/1 of 2 detected findings reviewed/),
   ).toBeVisible();
   await page.getByLabel(/I acknowledge this release is partial/).check();
+  await page.getByRole('button', { name: 'Review release details' }).click();
+  await expect(page.getByText('account@example.test')).toBeVisible();
   await page
-    .getByRole('button', { name: 'Create explicitly partial reviewed release' })
+    .getByRole('button', { name: 'Acknowledge and create release' })
     .click();
   await expect(
     page.getByRole('heading', { name: 'Selected frozen release' }),
@@ -279,13 +293,15 @@ test('F6 lost POST acknowledgment reconciles without repeating the write', async
     page.getByText(/1 of 2 detected findings reviewed/),
   ).toBeVisible();
   await page.getByLabel(/I acknowledge this release is partial/).check();
+  await page.getByRole('button', { name: 'Review release details' }).click();
+  await expect(page.getByText('account@example.test')).toBeVisible();
   await page
-    .getByRole('button', { name: 'Create explicitly partial reviewed release' })
+    .getByRole('button', { name: 'Acknowledge and create release' })
     .click();
   await expect(page.getByText(/Release outcome unknown/)).toBeVisible();
   await expect(
     page.getByRole('button', {
-      name: 'Create explicitly partial reviewed release',
+      name: 'Review release details',
     }),
   ).toBeDisabled();
   await page

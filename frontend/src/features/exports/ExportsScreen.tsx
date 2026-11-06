@@ -33,6 +33,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
   const [message, setMessage] = useState('');
   const [unknown, setUnknown] = useState(false);
   const policyScope = `${session.epoch}:${caseId}:${briefId}:${snapshot}`;
+  const [releaseIntent, setReleaseIntent] = useState('');
   const [partialConsent, setPartialConsent] = useState({
     scope: '',
     acknowledged: false,
@@ -63,6 +64,14 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
     retry: false,
   });
 
+  const intentionScope = [
+    policyScope,
+    preview.data?.review_completeness.reviewed_findings ?? -1,
+    preview.data?.review_completeness.unreviewed_findings ?? -1,
+    preview.data?.review_completeness.can_release_complete ?? false,
+    preview.data?.release_actor.actor_id ?? '',
+  ].join(':');
+
   async function commitRelease() {
     const review = preview.data?.review_completeness;
     const releaseType = review?.can_release_complete
@@ -72,6 +81,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       !valid ||
       !review ||
       working ||
+      releaseIntent !== intentionScope ||
       (!review.can_release_complete &&
         !(review.can_release_partial && partialAcknowledged))
     )
@@ -92,6 +102,8 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
           release_type: releaseType,
           partial_acknowledged:
             releaseType === 'partial_review' && partialAcknowledged,
+          release_acknowledged: true,
+          acknowledgement_version: 'caseproof-release-ack-v1',
         },
         controller.signal,
       );
@@ -100,11 +112,13 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       requestId.current = null;
       setUnknown(false);
       setPartialConsent({ scope: policyScope, acknowledged: false });
+      setReleaseIntent('');
       setMessage(
         'Frozen reviewed release saved. Verify and download the selected artifact.',
       );
       void history.refetch();
     } catch {
+      setReleaseIntent('');
       setUnknown(true);
       setMessage(
         'Release outcome unknown. Reconcile this operation before starting a new release.',
@@ -314,7 +328,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                 </div>
               )}
               <Button
-                onClick={() => void commitRelease()}
+                onClick={() => setReleaseIntent(intentionScope)}
                 disabled={
                   working ||
                   unknown ||
@@ -325,12 +339,49 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                     ))
                 }
               >
-                {working
-                  ? 'Processing…'
-                  : preview.data.release_ready
-                    ? 'Create frozen reviewed release'
-                    : 'Create explicitly partial reviewed release'}
+                Review release details
               </Button>
+              {releaseIntent === intentionScope && (
+                <section
+                  className="draft-context"
+                  aria-label="Release confirmation"
+                >
+                  <h3>Confirm this exact reviewed release</h3>
+                  <p>
+                    Authenticated account:{' '}
+                    <strong>{preview.data.release_actor.actor_label}</strong>
+                  </p>
+                  <p className="small">
+                    Actor ID: <code>{preview.data.release_actor.actor_id}</code>
+                  </p>
+                  <p>
+                    Snapshot <code>{snapshot}</code> ·{' '}
+                    {preview.data.review_completeness.reviewed_findings} of{' '}
+                    {preview.data.review_completeness.required_reviews} detected
+                    findings reviewed ·{' '}
+                    {preview.data.review_completeness.can_release_complete
+                      ? 'Complete detected-findings review'
+                      : 'Partial review with unresolved findings'}
+                  </p>
+                  <Notice>{preview.data.acknowledgement_notice}</Notice>
+                  <p className="small">
+                    This account label does not assert professional status or
+                    that you personally reviewed every finding.
+                  </p>
+                  <Button
+                    onClick={() => setReleaseIntent('')}
+                    disabled={working}
+                  >
+                    Cancel release
+                  </Button>
+                  <Button
+                    onClick={() => void commitRelease()}
+                    disabled={working || unknown}
+                  >
+                    {working ? 'Processing…' : 'Acknowledge and create release'}
+                  </Button>
+                </section>
+              )}
             </section>
           )}
         </>
@@ -398,6 +449,21 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
           <p>
             Manifest <code>{selected.manifest.manifest_sha256}</code>
           </p>
+          {selected.manifest.release_acknowledgement ? (
+            <p>
+              Released by authenticated account:{' '}
+              <strong>
+                {selected.manifest.release_acknowledgement.actor_label}
+              </strong>{' '}
+              on {selected.manifest.release_acknowledgement.acknowledged_at}.
+              This records release intent, not legal certification or signature.
+            </p>
+          ) : (
+            <Notice>
+              Historical release: no explicit release acknowledgement was
+              recorded.
+            </Notice>
+          )}
           <p>
             {selected.manifest.finding_count} references;{' '}
             {selected.manifest.review_count} human decisions.

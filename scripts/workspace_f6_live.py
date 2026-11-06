@@ -224,22 +224,20 @@ def export_one(
     acceptance.login(page)
     expect(page.get_by_role("heading", name="Reviewed exports and history")).to_be_visible(timeout=90000)
     expect(page.get_by_role("heading", name="Preview release scope")).to_be_visible(timeout=90000)
-    complete_button = page.get_by_role("button", name="Create frozen reviewed release")
-    partial_button = page.get_by_role("button", name="Create explicitly partial reviewed release")
-    if complete_button.count() == 1:
-        expect(complete_button).to_be_enabled(timeout=90000)
-        release_type = "complete_review"
-        action = complete_button
-    elif partial_button.count() == 1:
-        acknowledge = page.get_by_label("I acknowledge this release is partial and some detected findings remain unreviewed.")
-        expect(acknowledge).to_be_visible(timeout=90000)
-        expect(partial_button).to_be_disabled()
-        acknowledge.check()
-        expect(partial_button).to_be_enabled(timeout=90000)
+    preview_button = page.get_by_role("button", name="Review release details")
+    expect(preview_button).to_be_visible(timeout=90000)
+    if page.get_by_label("I acknowledge this release is partial and some detected findings remain unreviewed.").count() == 1:
         release_type = "partial_review"
-        action = partial_button
+        acknowledge = page.get_by_label("I acknowledge this release is partial and some detected findings remain unreviewed.")
+        expect(preview_button).to_be_disabled()
+        acknowledge.check()
     else:
-        raise RuntimeError("F6_NO_ELIGIBLE_REVIEWED_RELEASE_SCOPE")
+        release_type = "complete_review"
+    expect(preview_button).to_be_enabled(timeout=90000)
+    preview_button.click()
+    expect(page.get_by_role("heading", name="Confirm this exact reviewed release")).to_be_visible()
+    action = page.get_by_role("button", name="Acknowledge and create release")
+    expect(action).to_be_enabled()
     previous = page.url
     writes = [0]
     captured: dict[str, Any] = {}
@@ -273,6 +271,14 @@ def export_one(
             or manifest.get("review_count", 0) < 1 or len(manifest.get("server_receipt", "")) != 64
             or manifest.get("sources") is None):
         raise RuntimeError("F6_MANIFEST_SCOPE_OR_REVIEW_INVALID")
+    ack = manifest.get("release_acknowledgement", {})
+    if (ack.get("schema") != "caseproof-release-ack-v1"
+            or ack.get("release_id") != receipt.get("release_id")
+            or ack.get("snapshot_hash") != snapshot
+            or not ack.get("actor_id")
+            or ack.get("release_type") != release_type):
+        raise RuntimeError("F6_RELEASE_ACKNOWLEDGEMENT_NOT_FROZEN")
+    print("F6_SIGNED_RELEASE_ACKNOWLEDGEMENT_VERIFIED", flush=True)
     completeness = manifest.get("review_completeness", {})
     if (completeness.get("policy_version") != "caseproof-release-completeness-v1"
             or completeness.get("release_type") != release_type
