@@ -19,6 +19,21 @@ from apps.api.dossier_export_release import _checked_artifacts, release_manifest
 from apps.api.dossier_journey import canonical, create_dossier_router
 
 SNAPSHOT = "a" * 64
+ACTOR = str(uuid4())
+
+
+class AckClient(TestClient):
+    """All existing F6 success tests model an explicit user confirmation."""
+
+    def post(self, url, **kwargs):
+        if url == base() and isinstance(kwargs.get("json"), dict):
+            kwargs["json"] = {
+                "release_acknowledged": True,
+                "acknowledgement_version": "caseproof-release-ack-v1",
+                **kwargs["json"],
+            }
+        return super().post(url, **kwargs)
+
 CASE, BRIEF = str(uuid4()), str(uuid4())
 
 
@@ -62,6 +77,14 @@ class SignedReleaseStore:
         self.active = BRIEF
         self.permitted = True
         self.saved = {}
+
+    def release_actor(self, bearer):
+        assert bearer == "signed"
+        return {
+            "actor_id": ACTOR,
+            "actor_label": "reviewer@example.test",
+            "actor_label_type": "confirmed_email",
+        }
 
     def current_draft_version(self, bearer, case):
         assert bearer == "signed" and case == CASE
@@ -128,7 +151,7 @@ def client():
     def denied(request, error):
         return JSONResponse({"error": error.code.value}, status_code=error.http_status)
 
-    return TestClient(app), store
+    return AckClient(app), store
 
 
 def base():
@@ -154,6 +177,11 @@ def test_f6_preview_release_download_reopen_restart_and_historical():
     receipt = released.json()
     assert receipt["state"] == "released"
     assert receipt["manifest"]["review_count"] == 1
+    acknowledgement = receipt["manifest"]["release_acknowledgement"]
+    assert acknowledgement["actor_id"] == ACTOR
+    assert acknowledgement["actor_label"] == "reviewer@example.test"
+    assert acknowledgement["snapshot_hash"] == SNAPSHOT
+    assert acknowledgement["release_id"] == operation
     assert sha(store.original) == store.report["sources"][0]["sha256"]
     assert api.post(base(), json=request, headers=header()).json() == receipt
     assert api.get(base() + "/" + operation, headers=header()).status_code == 200
@@ -166,6 +194,7 @@ def test_f6_preview_release_download_reopen_restart_and_historical():
         if kind == "docx":
             reopened = Document(io.BytesIO(response.content))
             assert any("scoped review annotations" in p.text for p in reopened.paragraphs)
+            assert any("reviewer@example.test" in p.text for p in reopened.paragraphs)
     # The original release remains immutable and authorized historical output
     # even if later corrections activate another draft.
     store.active = str(uuid4())
@@ -587,3 +616,37 @@ def test_t30_duplicate_finding_identity_cannot_be_complete():
         "release_id": str(uuid4()), "snapshot_hash": SNAPSHOT,
     }).status_code == 503
     assert not store.saved
+
+
+def test_pr204_acknowledgment_mandatory_even_with_valid_review_and_export_rights():
+    api, store = client()
+    # Bypass the test-only explicit-confirmation helper.
+    raw = TestClient(api.app)
+    rid = str(uuid4())
+    command = {"release_id": rid, "snapshot_hash": SNAPSHOT}
+    assert raw.post(base(), json=command, headers=header()).status_code == 422
+    assert raw.post(base(), json={**command, "release_acknowledged": False,
+                                "acknowledgement_version": "caseproof-release-ack-v1"},
+                    headers=header()).status_code == 422
+    assert not store.saved
+
+
+def test_pr204_manifest_tamper_of_actor_is_detected_on_historical_reopen():
+    api, store = client()
+    rid = str(uuid4())
+    assert api.post(base(), json={"release_id": rid, "snapshot_hash": SNAPSHOT},
+                    headers=header()).status_code == 200
+    saved = store.saved[rid]["status"]["manifest"]
+    saved["release_acknowledgement"]["actor_id"] = str(uuid4())
+    assert api.get(base() + "/" + rid, headers=header()).status_code in (403, 404, 503)
+
+
+def test_pr204_replay_requires_same_authenticated_actor():
+    api, store = client()
+    rid = str(uuid4())
+    command = {"release_id": rid, "snapshot_hash": SNAPSHOT}
+    assert api.post(base(), json=command, headers=header()).status_code == 200
+    original = store.release_actor
+    store.release_actor = lambda bearer: {**original(bearer), "actor_id": str(uuid4())}
+    assert api.post(base(), json=command, headers=header()).status_code == 409
+    assert len(store.saved) == 1
