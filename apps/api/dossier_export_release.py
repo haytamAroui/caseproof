@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import io
 import re
+from datetime import UTC, datetime
 from typing import Any, Literal, cast
 from urllib.parse import quote
 from uuid import UUID
@@ -33,6 +34,13 @@ from apps.api.export_rights_manifest import (
 from infrastructure.parsers.dossier_docx_export import annotated_docx
 
 HEX64 = r"^[0-9a-f]{64}$"
+ACK_VERSION = "caseproof-release-ack-v1"
+ACK_INTENT = "AUTHORIZE_REVIEW_RECORD_RELEASE"
+ACK_NOTICE = (
+    "I authorize creation of this immutable CaseProof review record for the "
+    "displayed snapshot, review scope and limitations. This is not a legal "
+    "signature, filing approval or certification of the dossier."
+)
 FORMATS = ("json", "markdown", "docx")
 LIMITS = {
     "json": int(CAPACITY_POLICY["max_export_json_bytes"]),
@@ -52,6 +60,39 @@ class ReleaseCommand(BaseModel):
     snapshot_hash: str = Field(pattern=HEX64)
     release_type: Literal["complete_review", "partial_review"] = "complete_review"
     partial_acknowledged: bool = False
+    release_acknowledged: Literal[True]
+    acknowledgement_version: Literal["caseproof-release-ack-v1"]
+
+
+def checked_acknowledgement(value: object, *, release_id: str, snapshot_hash: str) -> None:
+    """Validate a frozen release acknowledgment without trusting browser identity."""
+    if not isinstance(value, dict) or set(value) != {
+        "schema", "intent", "actor_id", "actor_label", "actor_label_type",
+        "release_id", "snapshot_hash", "release_type", "acknowledged_at",
+        "notice",
+    }:
+        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+    try:
+        actor = str(UUID(value["actor_id"]))
+        timestamp = datetime.fromisoformat(value["acknowledged_at"].replace("Z", "+00:00"))
+    except (ValueError, TypeError, KeyError, AttributeError):
+        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+    if (
+        value["schema"] != ACK_VERSION
+        or value["intent"] != ACK_INTENT
+        or value["notice"] != ACK_NOTICE
+        or actor != value["actor_id"]
+        or not isinstance(value["actor_label"], str)
+        or not 1 <= len(value["actor_label"]) <= 254
+        or any(ord(char) < 32 for char in value["actor_label"])
+        or value["actor_label_type"] not in ("confirmed_email", "account_id")
+        or value["release_id"] != release_id
+        or value["snapshot_hash"] != snapshot_hash
+        or value["release_type"] not in ("complete_review", "partial_review")
+        or timestamp.tzinfo is None
+        or timestamp.utcoffset() is None
+    ):
+        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
 
 
 def _hash(value: bytes) -> str:
@@ -138,6 +179,7 @@ def release_manifest(
     *,
     release_scope: dict[str, Any] | None = None,
     rights_attestation: dict[str, Any] | None = None,
+    release_acknowledgement: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """No general VERIFIED flag: scopes, abstentions and decisions remain separate."""
     _validate_frozen_report(report)
@@ -222,6 +264,11 @@ def release_manifest(
         "review_completeness": release_scope,
         "review_request_ids": [d["request_id"] for d in decisions],
         "review_sha256": _hash(canonical_report(decisions).encode()),
+        "reviewer_ids": sorted({str(d["reviewer_id"]) for d in decisions}),
+        **(
+            {"release_acknowledgement": release_acknowledgement}
+            if release_acknowledgement is not None else {}
+        ),
         **({"rights_attestation": rights_attestation} if rights_attestation is not None else {}),
         "artifacts": {
             kind: {"sha256": _hash(raw), "byte_length": len(raw), "media_type": MEDIA[kind]}
@@ -261,6 +308,12 @@ def create_release_router(store: Any) -> APIRouter:
         """All replay, list, status and binary reads recheck the server receipt."""
         if not isinstance(raw, dict):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if "release_acknowledgement" in raw:
+            checked_acknowledgement(
+                raw["release_acknowledgement"],
+                release_id=release_id,
+                snapshot_hash=raw.get("snapshot_hash", ""),
+            )
         if (
             raw.get("schema") != "caseproof-reviewed-release-v1"
             or raw.get("case_id") != case
@@ -308,6 +361,7 @@ def create_release_router(store: Any) -> APIRouter:
             )
         policy = release_completeness(report)
         status = store.export_rpc(bearer, case_id, "authorize", None, {})
+        actor = store.release_actor(bearer)
         if not status.get("authorized"):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return {
@@ -322,6 +376,9 @@ def create_release_router(store: Any) -> APIRouter:
             "release_ready": policy["can_release_complete"],
             "can_release": policy["can_release_complete"] or policy["can_release_partial"],
             "review_completeness": policy,
+            "release_actor": actor,
+            "acknowledgement_version": ACK_VERSION,
+            "acknowledgement_notice": ACK_NOTICE,
             "limitations": [
                 "Human review is not a legal certificate.",
                 "Scope and abstentions remain visible.",
@@ -335,6 +392,7 @@ def create_release_router(store: Any) -> APIRouter:
         bearer = active(authorization)
         # Check idempotent recovery FIRST. This path must not generate new bytes
         # after an acknowledged or lost-response release.
+        actor = store.release_actor(bearer)
         existing = store.export_rpc(bearer, case_id, "status", str(body.release_id), {})
         if existing.get("state") == "released":
             if existing.get("snapshot_hash") != body.snapshot_hash or existing.get("brief_id") != brief_id:
@@ -342,6 +400,9 @@ def create_release_router(store: Any) -> APIRouter:
             validated = checked_manifest(existing.get("manifest"), case_id, brief_id, str(body.release_id))
             if validated["snapshot_hash"] != body.snapshot_hash:
                 raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+            frozen_ack = validated.get("release_acknowledgement")
+            if not isinstance(frozen_ack, dict) or frozen_ack.get("actor_id") != actor["actor_id"]:
+                raise HTTPException(409, "release identity already bound to another actor")
             frozen_scope = validated.get("review_completeness")
             if frozen_scope is not None:
                 if not isinstance(frozen_scope, dict):
@@ -372,12 +433,32 @@ def create_release_router(store: Any) -> APIRouter:
             )
             if gate is not None else None
         )
+        acknowledgement = {
+            "schema": ACK_VERSION,
+            "intent": ACK_INTENT,
+            "actor_id": actor["actor_id"],
+            "actor_label": actor["actor_label"],
+            "actor_label_type": actor["actor_label_type"],
+            "release_id": str(body.release_id),
+            "snapshot_hash": body.snapshot_hash,
+            "release_type": scope["release_type"],
+            "acknowledged_at": datetime.now(UTC).isoformat(),
+            "notice": ACK_NOTICE,
+        }
+        checked_acknowledgement(
+            acknowledgement, release_id=str(body.release_id),
+            snapshot_hash=body.snapshot_hash,
+        )
         # Export derivatives disclose the same release scope signed in the
         # manifest, without changing or reassessing the frozen source report.
-        export_report = {**report, "review_completeness": scope}
+        export_report = {
+            **report, "review_completeness": scope,
+            "release_acknowledgement": acknowledgement,
+        }
         artifacts = _checked_artifacts(export_report, original)
         manifest = release_manifest(
             report, artifacts, release_scope=scope, rights_attestation=rights,
+            release_acknowledgement=acknowledgement,
         )
         manifest["release_id"] = str(body.release_id)
         manifest["manifest_sha256"] = _hash(canonical(manifest).encode())
