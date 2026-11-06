@@ -59,8 +59,9 @@ grant select,insert on storage.objects to authenticated;
     rights_derivatives = next(p for p in paths if 'caseproof_rights_derivative_inheritance' in p.name)
     rights_projection = next(p for p in paths if 'caseproof_rights_effective_parent_projection' in p.name)
     rights_fixture = next(p for p in paths if 'caseproof_rights_signed_fixture_grant' in p.name)
+    rights_export_manifest = next(p for p in paths if 'caseproof_signed_export_rights_manifest_fence' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives, rights_projection, rights_fixture):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives, rights_projection, rights_fixture, rights_export_manifest):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -87,6 +88,7 @@ grant select,insert on storage.objects to authenticated;
     _run(rights_derivatives.read_text(), env)
     _run(rights_projection.read_text(), env)
     _run(rights_fixture.read_text(), env)
+    _run(rights_export_manifest.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -187,6 +189,51 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
          f"org_id,case_id,snapshot_hash,bundle_signature,serialized)"
          f" values('{org}','{other}',repeat('e',64),'synthetic-rights',"
          f"'{source_payload}')", env, should_pass=False)
+    # PR203: the frozen source scope, exact latest policy version and ALLOW
+    # decision must all be bound by the release record's server HMAC. Exercise
+    # a privileged direct INSERT inside a disposable rollback-only transaction:
+    # PostgreSQL independently rejects forged/missing rights evidence.
+    synthetic_scope = [{
+        "document_id": doc, "version_id": version,
+        "original_sha256": "a" * 64,
+        "decision": "allow", "policy_version": 1,
+    }]
+    valid_rights_manifest = {
+        "schema": "caseproof-export-rights-v1",
+        "action": "export", "scope": "same_matter", "decision": "allow",
+        "sources": synthetic_scope,
+    }
+    def insert_rights_manifest(evidence):
+        release_payload = json.dumps({
+            "rights_attestation": evidence,
+            "sources": [{"version_id": version, "sha256": "a" * 64,
+                         "role": "exhibit"}],
+        }, separators=(",", ":"))
+        return (
+            "insert into caseproof.dossier_releases("
+            "org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts"
+            f") values('{org}','{case}','{uuid4()}','{owner}','{version}',"
+            f"repeat('f',64),'{release_payload}'::jsonb,'{{}}'::jsonb)"
+        )
+    _run("begin; " + insert_rights_manifest(valid_rights_manifest) + "; rollback;", env)
+    for broken in (
+        None,
+        {**valid_rights_manifest, "sources": [{**synthetic_scope[0], "policy_version": 2}]},
+        {**valid_rights_manifest, "sources": [{**synthetic_scope[0], "original_sha256": "b" * 64}]},
+        {**valid_rights_manifest, "sources": [{**synthetic_scope[0], "decision": "deny"}]},
+    ):
+        sql = insert_rights_manifest(broken)
+        _run(f"""
+            do $pr203$ begin
+              begin
+                {sql};
+                raise exception 'forged signed rights release accepted';
+              exception when insufficient_privilege then
+                if SQLERRM not like 'signed export rights%' then raise; end if;
+              end;
+            end $pr203$;
+        """, env)
+    print('RIGHTS_SIGNED_EXPORT_MANIFEST_SQL_VERSION_SCOPE_DENIAL_PASSED', flush=True)
     _run("update caseproof._rights_enforcement_control set enabled=false", env)
     print('RIGHTS_SQL_TRANSACTIONAL_OPT_IN_DENY_ALLOW_SCOPE_PASSED', flush=True)
 
