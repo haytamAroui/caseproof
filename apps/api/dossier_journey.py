@@ -22,7 +22,7 @@ from application.litigation.dossier_contracts import add_report_contract, assess
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
-from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
 from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.dossier_draft_revisions import DraftRevisionClient, stale_snapshot_conflict
 from apps.api.litigation_evidence_app import _token
