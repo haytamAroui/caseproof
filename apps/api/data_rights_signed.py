@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from application.data_rights import RightsPolicy
-from apps.api.signed_supabase_source_library import PROJECT_HOST
+from apps.api.signed_supabase_originals import PROJECT_REF
+
+PROJECT_HOST = PROJECT_REF + ".supabase.co"
 
 MAX_RESPONSE = 4096
 
