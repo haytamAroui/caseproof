@@ -1,6 +1,7 @@
 """Full migration + negative retention SQL tests, disposable PostgreSQL only."""
 from __future__ import annotations
 
+import json
 import threading
 import time
 from pathlib import Path
@@ -48,8 +49,10 @@ grant select,insert on storage.objects to authenticated;
     fixture_ownership = next(p for p in paths if 'f5_correction_fixture_ownership' in p.name)
     f6_release = next(p for p in paths if 'f6_reviewed_release_ledger' in p.name)
     f6_action_guard = next(p for p in paths if 'f6_reject_null_release_action' in p.name)
+    rights = next(p for p in paths if 'caseproof_data_rights_ledger_shadow' in p.name)
+    rights_fence = next(p for p in paths if 'caseproof_rights_grant_revocation_fence' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -65,6 +68,9 @@ grant select,insert on storage.objects to authenticated;
     # F6 depends on retention guards, reviewed snapshot RPC and draft revisions.
     _run(f6_release.read_text(), env)
     _run(f6_action_guard.read_text(), env)
+    # Ledger depends on F6's final typed action constraints and retention guard.
+    _run(rights.read_text(), env)
+    _run(rights_fence.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -85,6 +91,98 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
 
     def actor(user, sql):
         return f"begin; set local role authenticated; set local request.jwt.claim.sub='{user}'; set local request.jwt.claims='{{\"role\":\"authenticated\"}}'; {sql}; commit;"
+
+    # PR 1: signed rights RPC, legacy unknown, cross-matter, concurrency and purge.
+    policy = json.dumps({
+        "origin": "CLIENT_UPLOAD", "classification": "CLIENT_CONFIDENTIAL",
+        "authorization_reference": "synthetic-contract-1",
+        "process": True, "export": True,
+    }, separators=(",", ":"))
+    def rights_call(request, expected, *, document=doc, source=version):
+        return (f"select (public.caseproof_rights_manage('{case}','{document}',"
+                f"'{source}',{expected},'{request}','{policy}'::jsonb)"
+                "->>'policy_version')")
+
+    missing = (f"select (public.caseproof_rights_current('{case}',"
+               f"'{doc}','{version}')->>'policy_status')")
+    if _run(actor(owner, missing), env) != 'missing':
+        raise AssertionError('legacy document must not inherit any rights approval')
+    _run(actor(owner, rights_call(uuid4(), 0)), env, should_pass=False)
+    _run(f"""
+        update caseproof.organization_members
+          set actions=array_append(actions,'rights:manage')
+          where org_id='{org}' and user_id='{owner}';
+        update caseproof._m1_matter_grants
+          set permissions=array_append(permissions,'rights:manage')
+          where org_id='{org}' and case_id='{case}' and user_id='{owner}';
+    """, env)
+    _run(actor(guest, rights_call(uuid4(), 0)), env, should_pass=False)
+    _run(actor(owner, rights_call(uuid4(), 0, document=doc, source=uuid4())),
+         env, should_pass=False)
+    first_request = uuid4()
+    if _run(actor(owner, rights_call(first_request, 0)), env) != '1':
+        raise AssertionError('first rights policy version absent')
+    if _run(actor(owner, rights_call(first_request, 0)), env) != '1':
+        raise AssertionError('identical signed replay must be idempotent')
+    _run(actor(owner, rights_call(first_request, 1)), env, should_pass=False)
+    _run(actor(guest, missing), env, should_pass=False)
+    if _run(actor(owner, missing), env) != 'present':
+        raise AssertionError('signed policy projection absent after write')
+    _run("update caseproof.source_rights_policies set process=false", env,
+         should_pass=False)
+    _run("delete from caseproof.source_rights_policies", env,
+         should_pass=False)
+    # A different matter in the same organization must not be able to
+    # masquerade as this source, even when the user owns both matters.
+    other_doc, other_version = str(uuid4()), str(uuid4())
+    _run(f"""
+        insert into caseproof.documents(id,org_id,case_id,source_label)
+          values('{other_doc}','{org}','{other}','foreign synthetic');
+        insert into caseproof.document_versions(
+          id,org_id,document_id,version_number,original_sha256_hex,byte_length,media_type
+        ) values('{other_version}','{org}','{other_doc}',1,repeat('b',64),10,'application/pdf');
+    """, env)
+    _run(actor(owner, rights_call(uuid4(), 0, document=other_doc, source=other_version)),
+         env, should_pass=False)
+    _run(actor(owner,
+         f"select public.caseproof_rights_current('{case}','{other_doc}','{other_version}')"),
+         env, should_pass=False)
+
+    # Two independent DB connections race to append version 2. The case row
+    # lock forces one writer to observe stale expected_version=1.
+    outcomes: list[str] = []
+    barrier = threading.Barrier(2)
+    def racing_policy_write() -> None:
+        with psycopg.connect() as con:
+            try:
+                con.execute("set local role authenticated")
+                con.execute("select set_config('request.jwt.claim.sub',%s,true)", (owner,))
+                con.execute("select set_config('request.jwt.claims',%s,true)",
+                            ('{"role":"authenticated"}',))
+                barrier.wait(timeout=10)
+                con.execute(
+                    "select public.caseproof_rights_manage(%s,%s,%s,%s,%s,%s::jsonb)",
+                    (case, doc, version, 1, str(uuid4()), policy),
+                )
+                con.commit()
+                outcomes.append('accepted')
+            except psycopg.errors.UniqueViolation:
+                con.rollback()
+                outcomes.append('stale')
+    threads = [threading.Thread(target=racing_policy_write) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15)
+    if any(thread.is_alive() for thread in threads) or sorted(outcomes)!=['accepted','stale']:
+        raise AssertionError(f'concurrent rights writes not serialized: {outcomes}')
+    if _run(f"select count(*) from caseproof.source_rights_policies "
+            f"where case_id='{case}'", env) != '2':
+        raise AssertionError('rights history must append exactly one winning version')
+    if _run(f"select count(*) from caseproof.audit_events "
+            f"where case_id='{case}' and action='source_rights_changed'", env) != '2':
+        raise AssertionError('every policy change must have one atomic audit event')
+    print('RIGHTS_SIGNED_SCOPE_REPLAY_CONCURRENCY_APPEND_ONLY_PASSED', flush=True)
 
     # F6 release grants are independent of ordinary report/review access.
     export_call = f"select (public.caseproof_dossier_export_release('{case}','authorize')->>'authorized')"
@@ -251,8 +349,11 @@ select public.caseproof_dossier_export_release(
         raise AssertionError('version remains')
     if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != '0':
         raise AssertionError('release bytes remain after matter purge')
-    if _run("select erased_audit_events from caseproof.erasure_receipts", env) != '1':
+    if _run("select erased_audit_events from caseproof.erasure_receipts", env) != '3':
         raise AssertionError('minimal erasure audit missing')
+    if _run(f"select count(*) from caseproof.source_rights_policies where case_id='{case}'", env) != '0':
+        raise AssertionError('rights policy history survived authorized matter purge')
+    print('RIGHTS_EXISTING_PURGE_ERASES_POLICY_AND_AUDIT_PASSED', flush=True)
     print('RETENTION_SQL_DENIAL_HOLD_STORAGE_RETRY_SCOPE_AND_RECEIPT_PASSED')
 
 

@@ -167,3 +167,44 @@ def test_invalid_client_identifiers_never_reach_network(
     with pytest.raises(PrivateStorageDenied):
         library().read(**a)
     assert not requests
+
+
+def test_shadow_reads_rights_only_after_verified_bytes_without_mutating_result(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    from apps.api.data_rights_signed import SignedRightsPolicyReader
+
+    observed: list[dict[str, str]] = []
+
+    def lookup(self, **kwargs):
+        observed.append(kwargs)
+        return None
+
+    monkeypatch.setattr(SignedRightsPolicyReader, "read", lookup)
+    requests = fake_http(monkeypatch, [meta(), (200, DATA), meta()])
+    with caplog.at_level("INFO", logger="caseproof.rights.shadow"):
+        value = SignedSourceLibrary(
+            SignedOriginalsStorage(KEY), rights_shadow_enabled=True,
+        ).read(**args())
+    assert value == DATA
+    assert len(requests) == 3
+    assert observed == [args()]
+    assert "policy_missing" in caplog.text
+
+
+def test_shadow_failure_preserves_successful_original(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    from apps.api.data_rights_signed import ShadowLookupUnavailable, SignedRightsPolicyReader
+
+    def unavailable(self, **kwargs):
+        raise ShadowLookupUnavailable("private test-only text")
+
+    monkeypatch.setattr(SignedRightsPolicyReader, "read", unavailable)
+    fake_http(monkeypatch, [meta(), (200, DATA), meta()])
+    with caplog.at_level("WARNING", logger="caseproof.rights.shadow"):
+        assert SignedSourceLibrary(
+            SignedOriginalsStorage(KEY), rights_shadow_enabled=True,
+        ).read(**args()) == DATA
+    assert "evaluation_unavailable" in caplog.text
+    assert "private test-only text" not in caplog.text
