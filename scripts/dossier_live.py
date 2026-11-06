@@ -53,6 +53,7 @@ def main() -> int:
         "refs/pull/197/merge",
         "refs/pull/198/merge",
         "refs/pull/203/merge",
+        "refs/pull/204/merge",
     }:
         raise RuntimeError("protected M0.5 branch required")
     key = os.environ["CASEPROOF_DEV_AUTH_ADMIN_KEY"]
