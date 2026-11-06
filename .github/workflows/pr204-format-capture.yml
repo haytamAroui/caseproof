@@ -1,0 +1,34 @@
+name: PR204 temporary format capture
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  format:
+    if: github.repository == 'haytamAroui/caseproof' && github.head_ref == 'feat/pr204-release-acknowledgement-provenance'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: frontend
+      - name: Format PR204 files and emit transport chunks
+        run: |
+          npx prettier --write src/features/exports/ExportsScreen.tsx src/features/exports/api.ts src/features/exports/api.test.ts tests/exports.spec.ts
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('src/features/exports/ExportsScreen.tsx','src/features/exports/api.ts','src/features/exports/api.test.ts','tests/exports.spec.ts'):
+              content = Path(name).read_text()
+              print('CASEPROOF_FMT_START ' + name, flush=True)
+              for i in range(0, len(content), 3000):
+                  print('CASEPROOF_FMT_CHUNK ' + json.dumps(content[i:i+3000], ensure_ascii=True), flush=True)
+              print('CASEPROOF_FMT_END ' + name, flush=True)
+          PY
+        working-directory: frontend
