@@ -29,6 +29,20 @@ export interface ReleaseScopePolicy extends ReviewCompleteness {
   release_type: 'complete_review' | 'partial_review';
   partial_acknowledged: boolean;
 }
+export interface ReleaseActor {
+  actor_id: string;
+  actor_label: string;
+  actor_label_type: 'confirmed_email' | 'account_id';
+}
+export interface ReleaseAcknowledgement extends ReleaseActor {
+  schema: 'caseproof-release-ack-v1';
+  intent: 'AUTHORIZE_REVIEW_RECORD_RELEASE';
+  release_id: string;
+  snapshot_hash: string;
+  release_type: 'complete_review' | 'partial_review';
+  acknowledged_at: string;
+  notice: string;
+}
 export interface ReleaseManifest {
   schema: 'caseproof-reviewed-release-v1';
   release_id: string;
@@ -37,6 +51,9 @@ export interface ReleaseManifest {
   snapshot_hash: string;
   review_count: number;
   finding_count: number;
+  // Absent for immutable historical releases created before PR204.
+  release_acknowledgement?: ReleaseAcknowledgement;
+  reviewer_ids?: string[];
   // Absent only on immutable releases issued before completeness policy v1.
   review_completeness?: ReleaseScopePolicy;
   coverage: Record<string, unknown>;
@@ -79,6 +96,9 @@ export interface ReleasePreview {
   can_release: boolean;
   review_completeness: ReviewCompleteness;
   formats: ExportFormat[];
+  release_actor: ReleaseActor;
+  acknowledgement_version: 'caseproof-release-ack-v1';
+  acknowledgement_notice: string;
   coverage: Record<string, unknown>;
   limitations: string[];
 }
@@ -168,6 +188,16 @@ export function parseReleasePreview(
       (raw.review_completeness.can_release_complete ||
         raw.review_completeness.can_release_partial) ||
     !plain(raw.coverage) ||
+    !plain(raw.release_actor) ||
+    typeof raw.release_actor.actor_id !== 'string' ||
+    !uuid.test(raw.release_actor.actor_id) ||
+    typeof raw.release_actor.actor_label !== 'string' ||
+    !raw.release_actor.actor_label ||
+    raw.release_actor.actor_label.length > 254 ||
+    !['confirmed_email', 'account_id'].includes(String(raw.release_actor.actor_label_type)) ||
+    raw.acknowledgement_version !== 'caseproof-release-ack-v1' ||
+    typeof raw.acknowledgement_notice !== 'string' ||
+    !raw.acknowledgement_notice.includes('immutable CaseProof review record') ||
     !Array.isArray(raw.formats) ||
     raw.formats.length !== 3 ||
     !formats.every((x) => (raw.formats as unknown[]).includes(x)) ||
@@ -205,6 +235,22 @@ export function parseRelease(raw: unknown, scope: ReleaseScope): ReleaseRecord {
           manifest.review_completeness.reviewed_findings ||
         manifest.finding_count !==
           manifest.review_completeness.total_findings)) ||
+    (manifest.release_acknowledgement !== undefined && (
+      !plain(manifest.release_acknowledgement) ||
+      manifest.release_acknowledgement.schema !== 'caseproof-release-ack-v1' ||
+      manifest.release_acknowledgement.intent !== 'AUTHORIZE_REVIEW_RECORD_RELEASE' ||
+      manifest.release_acknowledgement.release_id !== raw.release_id ||
+      manifest.release_acknowledgement.snapshot_hash !== scope.snapshot ||
+      !uuid.test(String(manifest.release_acknowledgement.actor_id)) ||
+      typeof manifest.release_acknowledgement.actor_label !== 'string' ||
+      !manifest.release_acknowledgement.actor_label ||
+      manifest.release_acknowledgement.actor_label.length > 254 ||
+      !['confirmed_email', 'account_id'].includes(String(manifest.release_acknowledgement.actor_label_type)) ||
+      !['complete_review', 'partial_review'].includes(String(manifest.release_acknowledgement.release_type)) ||
+      typeof manifest.release_acknowledgement.notice !== 'string' ||
+      typeof manifest.release_acknowledgement.acknowledged_at !== 'string' ||
+      Number.isNaN(Date.parse(manifest.release_acknowledgement.acknowledged_at))
+    )) ||
     !plain(manifest.coverage) ||
     !digest.test(String(manifest.manifest_sha256)) ||
     !digest.test(String(manifest.server_receipt)) ||
