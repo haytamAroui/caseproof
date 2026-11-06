@@ -154,8 +154,8 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
         with psycopg.connect() as con:
             try:
                 con.execute("set local role authenticated")
-                con.execute("set local request.jwt.claim.sub=%s", (owner,))
-                con.execute("set local request.jwt.claims=%s",
+                con.execute("select set_config('request.jwt.claim.sub',%s,true)", (owner,))
+                con.execute("select set_config('request.jwt.claims',%s,true)",
                             ('{"role":"authenticated"}',))
                 barrier.wait(timeout=10)
                 con.execute(
