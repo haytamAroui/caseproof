@@ -17,6 +17,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from application.capacity_envelope import CAPACITY_POLICY
 from application.data_rights import Action
+from application.litigation.export_rights_manifest import (
+    attest_export_rights,
+    validate_export_rights,
+)
 from application.litigation.release_completeness import (
     ReleaseIntegrityError,
     select_release_scope,
@@ -134,6 +138,7 @@ def release_manifest(
     artifacts: dict[str, bytes],
     *,
     release_scope: dict[str, Any] | None = None,
+    rights_attestation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """No general VERIFIED flag: scopes, abstentions and decisions remain separate."""
     _validate_frozen_report(report)
@@ -150,6 +155,8 @@ def release_manifest(
         if release_scope != expected:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
     sources = report["sources"]
+    if rights_attestation is not None:
+        validate_export_rights(rights_attestation, sources)
     decisions = report["human_decisions"]
     selected = []
     for row in sources:
@@ -216,6 +223,7 @@ def release_manifest(
         "review_completeness": release_scope,
         "review_request_ids": [d["request_id"] for d in decisions],
         "review_sha256": _hash(canonical_report(decisions).encode()),
+        **({"rights_attestation": rights_attestation} if rights_attestation is not None else {}),
         "artifacts": {
             kind: {"sha256": _hash(raw), "byte_length": len(raw), "media_type": MEDIA[kind]}
             for kind, raw in artifacts.items()
@@ -263,6 +271,11 @@ def create_release_router(store: Any) -> APIRouter:
             or len(raw["snapshot_hash"]) != 64
         ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        # PR203 attestation is covered by the existing full-manifest HMAC.
+        # Historical pre-203 signed releases without this extension remain
+        # readable as legacy receipts, not retroactively rights-approved.
+        if "rights_attestation" in raw:
+            validate_export_rights(raw["rights_attestation"], raw.get("sources", []))
         receipt = raw.get("server_receipt")
         unsigned = {key: value for key, value in raw.items() if key != "server_receipt"}
         claimed_hash = unsigned.get("manifest_sha256")
@@ -291,8 +304,8 @@ def create_release_router(store: Any) -> APIRouter:
         _validate_frozen_report(report)
         gate = getattr(store, "rights_gate", None)
         if gate is not None:
-            gate.require_bundle(
-                bearer=bearer, case_id=case_id, sources=report["sources"], action=Action.EXPORT,
+            attest_export_rights(
+                gate, bearer=bearer, case_id=case_id, sources=report["sources"],
             )
         policy = release_completeness(report)
         status = store.export_rpc(bearer, case_id, "authorize", None, {})
@@ -354,15 +367,19 @@ def create_release_router(store: Any) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from None
         gate = getattr(store, "rights_gate", None)
-        if gate is not None:
-            gate.require_bundle(
-                bearer=bearer, case_id=case_id, sources=report["sources"], action=Action.EXPORT,
+        rights = (
+            attest_export_rights(
+                gate, bearer=bearer, case_id=case_id, sources=report["sources"],
             )
+            if gate is not None else None
+        )
         # Export derivatives disclose the same release scope signed in the
         # manifest, without changing or reassessing the frozen source report.
         export_report = {**report, "review_completeness": scope}
         artifacts = _checked_artifacts(export_report, original)
-        manifest = release_manifest(report, artifacts, release_scope=scope)
+        manifest = release_manifest(
+            report, artifacts, release_scope=scope, rights_attestation=rights,
+        )
         manifest["release_id"] = str(body.release_id)
         manifest["manifest_sha256"] = _hash(canonical(manifest).encode())
         # The existing server-only snapshot receipt key attests the entire
@@ -374,9 +391,14 @@ def create_release_router(store: Any) -> APIRouter:
             "contents": {kind: base64.b64encode(raw).decode("ascii") for kind, raw in artifacts.items()},
         }
         if gate is not None:
-            gate.require_bundle(
-                bearer=bearer, case_id=case_id, sources=report["sources"], action=Action.EXPORT,
+            # Same policy version, not merely the same broad ALLOW, must still
+            # hold before the trusted release write. The SQL trigger repeats
+            # this check under the matter lock in the final transaction.
+            latest = attest_export_rights(
+                gate, bearer=bearer, case_id=case_id, sources=report["sources"],
             )
+            if latest != rights:
+                raise HTTPException(409, "source rights changed before release")
         result = store.export_rpc(bearer, case_id, "release", str(body.release_id), payload)
         if result.get("state") != "released" or result.get("manifest") != manifest:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
