@@ -53,13 +53,20 @@ def create_litigation_development_app(
     workspace_directory: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(title="CaseProof loopback development", docs_url=None, redoc_url=None, openapi_url=None)
-    # One shared checker ensures search and check use the same trust boundary.
-    app.include_router(create_litigation_check_app(checker).router)
-    app.include_router(create_litigation_search_app(AuthorizedEvidenceSearch(checker) if checker else None).router)
-    app.include_router(create_evidence_app(evidence).router)
-    app.include_router(create_clearbrief_sources_router(checker))
+    # When rights enforcement is active, older optional checker ports lack
+    # source-version rights propagation. Disable them fail-closed instead of
+    # allowing an independently injected checker to bypass signed policies.
+    legacy_checker = checker if rights_gate is None else None
+    app.include_router(create_litigation_check_app(legacy_checker).router)
+    app.include_router(create_litigation_search_app(
+        AuthorizedEvidenceSearch(legacy_checker) if legacy_checker else None,
+    ).router)
+    app.include_router(create_evidence_app(evidence if rights_gate is None else None).router)
+    app.include_router(create_clearbrief_sources_router(legacy_checker))
     app.include_router(create_clearbrief_review_router(
-        reviews if checker is not None and reviews is not None and reviews.checker is checker else None,
+        reviews
+        if legacy_checker is not None and reviews is not None and reviews.checker is legacy_checker
+        else None,
     ))
 
     if publishable_key is not None and (
@@ -78,7 +85,12 @@ def create_litigation_development_app(
         from apps.api.signed_page_jobs import SignedPageJobs, create_page_job_router
         app.include_router(create_page_job_router(SignedPageJobs(dossier_store, page_worker_secret)))
     app.include_router(create_headless_review_router(headless))
-    app.include_router(create_live_review_router(publishable_key))
+    # These older direct review/correction RPCs do not enforce source rights.
+    # Keep their routes available only as sanitized unavailable responses
+    # until they have their own transactional source-version gate.
+    app.include_router(create_live_review_router(
+        publishable_key if rights_gate is None else None,
+    ))
     app.include_router(create_live_journey_router(
         publishable_key, trusted_ingest_key, ocr=ocr,
         **({"rights_gate": rights_gate} if rights_gate is not None else {}),
