@@ -9,6 +9,7 @@ import hashlib
 import http.client
 import io
 import json
+import os
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
@@ -281,6 +282,32 @@ def export_one(
             or (release_type == "complete_review" and not completeness.get("review_complete"))
             or (release_type == "partial_review" and completeness.get("review_complete"))):
         raise RuntimeError("F6_SIGNED_RELEASE_COMPLETENESS_SCOPE_INVALID")
+    if os.getenv("CASEPROOF_RIGHTS_SIGNED_LIVE") == "YES":
+        attestation = manifest.get("rights_attestation")
+        sources = manifest.get("sources", [])
+        if not isinstance(attestation, dict) or (
+            attestation.get("schema") != "caseproof-export-rights-v1"
+            or attestation.get("action") != "export"
+            or attestation.get("scope") != "same_matter"
+            or attestation.get("decision") != "allow"
+        ):
+            raise RuntimeError("PR203_SIGNED_RIGHTS_MANIFEST_MISSING")
+        rights_sources = attestation.get("sources")
+        if not isinstance(rights_sources, list) or len(rights_sources) != len(sources):
+            raise RuntimeError("PR203_SIGNED_RIGHTS_SOURCE_COUNT_MISMATCH")
+        for source in sources:
+            evidence = [
+                x for x in rights_sources if isinstance(x, dict)
+                and x.get("version_id") == source.get("version_id")
+            ]
+            if len(evidence) != 1 or (
+                evidence[0].get("original_sha256") != source.get("sha256")
+                or evidence[0].get("decision") != "allow"
+                or type(evidence[0].get("policy_version")) is not int
+                or evidence[0]["policy_version"] < 1
+            ):
+                raise RuntimeError("PR203_SIGNED_RIGHTS_SOURCE_POLICY_MISMATCH")
+        print("PR203_GENUINE_SIGNED_EXPORT_RIGHTS_MANIFEST_PASSED", flush=True)
     print("F6_GENUINE_SIGNED_RELEASE_" + release_type.upper() + "_SCOPE_PASSED", flush=True)
     source_links = manifest.get("source_links", [])
     original_destination = (
