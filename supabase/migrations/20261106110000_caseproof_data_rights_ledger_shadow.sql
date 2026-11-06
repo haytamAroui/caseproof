@@ -8,7 +8,7 @@ begin;
 alter table caseproof.organization_members
   drop constraint organization_members_actions_check;
 alter table caseproof.organization_members
-  add constraint organization_members_actions_check check(actions <@ array[
+  add constraint organization_members_actions_check check(array_remove(actions,'draft:edit') <@ array[
     'case:read','case:create','coverage:read','evidence:read','finding:write',
     'review:request','conclusion:request_approval','exception:request',
     'draft:write','export:request','rights:manage'
@@ -16,7 +16,7 @@ alter table caseproof.organization_members
 alter table caseproof._m1_matter_grants
   drop constraint _m1_matter_grants_permissions_check;
 alter table caseproof._m1_matter_grants
-  add constraint _m1_matter_grants_permissions_check check(permissions <@ array[
+  add constraint _m1_matter_grants_permissions_check check(array_remove(permissions,'draft:edit') <@ array[
     'case:read','coverage:read','evidence:read','review:request','finding:write',
     'evidence:upload','evidence:index','exhibit:confirm','draft:check',
     'draft:write','export:request','rights:manage'
