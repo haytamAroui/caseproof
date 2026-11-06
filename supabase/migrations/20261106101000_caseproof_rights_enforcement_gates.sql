@@ -133,7 +133,13 @@ returns trigger language plpgsql security definer set search_path='' as $$
 declare
   v_document uuid;
   v_sources jsonb;
+  v_enabled boolean;
 begin
+  -- Truly dormant: do not parse, query, or reject even historical/fixture
+  -- writes when the operator has not explicitly enabled enforcement.
+  select enabled into v_enabled from caseproof._rights_enforcement_control
+    where singleton=true;
+  if v_enabled is distinct from true then return new; end if;
   if tg_table_name='_dev_journey_sources' then
     perform caseproof._rights_require_source(
       new.org_id,new.case_id,new.document_id,new.version_id,'process');
