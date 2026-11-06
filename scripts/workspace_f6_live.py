@@ -224,7 +224,6 @@ def export_one(
     acceptance.login(page)
     expect(page.get_by_role("heading", name="Reviewed exports and history")).to_be_visible(timeout=90000)
     expect(page.get_by_role("heading", name="Preview release scope")).to_be_visible(timeout=90000)
-    preview_state = page.locator("section[aria-label='Release readiness']")
     preview_button = page.get_by_role("button", name="Review release details")
     expect(preview_button).to_be_visible(timeout=90000)
     if page.get_by_label("I acknowledge this release is partial and some detected findings remain unreviewed.").count() == 1:
