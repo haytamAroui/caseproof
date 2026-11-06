@@ -8,13 +8,13 @@ from uuid import uuid4
 import pytest
 
 from application.data_rights import RightsPolicy
+from apps.api.access_control import AccessRejected
+from apps.api.data_rights_enforcement import SignedRightsGate
+from apps.api.dossier_journey import canonical
 from apps.api.export_rights_manifest import (
     attest_export_rights,
     validate_export_rights,
 )
-from apps.api.access_control import AccessRejected
-from apps.api.data_rights_enforcement import SignedRightsGate
-from apps.api.dossier_journey import canonical
 from tests.test_f6_reviewed_exports import base, client, header
 
 CASE = str(uuid4())

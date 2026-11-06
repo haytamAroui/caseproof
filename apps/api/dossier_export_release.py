@@ -16,10 +16,6 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.capacity_envelope import CAPACITY_POLICY
-from apps.api.export_rights_manifest import (
-    attest_export_rights,
-    validate_export_rights,
-)
 from application.litigation.release_completeness import (
     ReleaseIntegrityError,
     select_release_scope,
@@ -30,6 +26,10 @@ from application.litigation.release_completeness import (
 from application.litigation.report_projection import canonical as canonical_report
 from application.litigation.report_projection import render_dossier_export
 from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.export_rights_manifest import (
+    attest_export_rights,
+    validate_export_rights,
+)
 from infrastructure.parsers.dossier_docx_export import annotated_docx
 
 HEX64 = r"^[0-9a-f]{64}$"
