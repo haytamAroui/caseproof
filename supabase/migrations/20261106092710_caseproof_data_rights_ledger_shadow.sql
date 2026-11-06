@@ -124,7 +124,7 @@ begin
     and v.document_id=d.id and v.id=p_version
   where c.id=p_case and c.created_by_user=a
     and c.deleted_at is null and c.purge_started_at is null
-  for update of c;
+  for update of c for share of m,g;
   if o is null then
     raise exception 'rights unavailable' using errcode='42501'; end if;
 
