@@ -42,7 +42,7 @@ matter. Unexpected fields and nonboolean permissions are rejected.
 `public.caseproof_rights_current` repeats fresh signed membership and
 matter-grant checks, joins the exact source version, and returns only policy
 version and decision flags. It never returns a firm authorization reference.
-The dev signed-originals endpoint calls this RPC with the **existing bearer
+The dev signed-originals endpoint is enabled only when the explicit\n`CASEPROOF_RIGHTS_SHADOW_DEV=YES` opt-in is configured; without it, the\nexisting development entry point retains its prior disabled behavior. It calls\nthis RPC with the **existing bearer
 and publishable key** only after verified original byte readback. It logs
 action, decision, reason, and policy version; no bearer, content, matter ID or
 authorization reference. Legacy source versions return
