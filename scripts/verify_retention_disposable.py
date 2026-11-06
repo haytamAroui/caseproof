@@ -592,6 +592,41 @@ insert into caseproof.dossier_releases(
 """, env)
     if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != "1":
         raise AssertionError('fixture release not persisted')
+    # PR204: the database must independently reject forged actor, stale
+    # snapshot and absent release acknowledgment even for privileged INSERTs.
+    for modification in ("actor", "snapshot", "missing"):
+        negative_id = str(uuid4())
+        forged = {
+            "scope": "synthetic-retention-only",
+            "review_completeness": {"release_type": "complete_review"},
+            "release_acknowledgement": ack_fixture(owner, negative_id, "a" * 64),
+        }
+        if modification == "actor":
+            forged["release_acknowledgement"]["actor_id"] = str(uuid4())
+        elif modification == "snapshot":
+            forged["release_acknowledgement"]["snapshot_hash"] = "f" * 64
+        else:
+            forged.pop("release_acknowledgement")
+        forged_json = json.dumps(forged, separators=(",", ":"))
+        _run(f"""
+do $pr204$
+begin
+  begin
+    insert into caseproof.dossier_releases(
+      org_id,case_id,release_id,actor_id,brief_id,snapshot_hash,manifest,artifacts
+    ) values(
+      '{org}','{case}','{negative_id}','{owner}','{version}',repeat('a',64),
+      '{forged_json}'::jsonb,'{{"json":"eA=="}}'::jsonb
+    );
+    raise exception 'forged acknowledgment INSERT accepted';
+  exception when insufficient_privilege then
+    if SQLERRM <> 'release acknowledgment missing or actor/snapshot mismatch' then
+      raise;
+    end if;
+  end;
+end $pr204$;
+""", env)
+    print("PR204_DISPOSABLE_RELEASE_ACTOR_SNAPSHOT_FENCE_PASSED", flush=True)
     # Fill the bounded per-matter release ledger using synthetic fixture rows.
     # A distinct signed release request must reject capacity before snapshot
     # parsing; a replay of an existing release remains a separate read action.
