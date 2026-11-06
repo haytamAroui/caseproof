@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from application.data_rights import RightsPolicy
-from application.litigation.export_rights_manifest import (
+from apps.api.export_rights_manifest import (
     attest_export_rights,
     validate_export_rights,
 )
