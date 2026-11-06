@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from application.data_rights import Action
 from apps.api.access_control import (
     AccessFailure,
     AccessRejected,
@@ -132,6 +133,12 @@ def create_document_editor_router(store: DossierStore | None) -> APIRouter:
         report, original = store.reopen(bearer, case_id, brief_id, snapshot)
         if report.get("snapshot_hash") != snapshot or report.get("brief_id") != brief_id:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        gate = getattr(store, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         if store.current_draft_version(bearer, case_id) != brief_id:
             raise HTTPException(412, "draft superseded during editor authorization")
         return store, bearer, original

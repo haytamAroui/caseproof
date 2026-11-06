@@ -225,6 +225,18 @@ def _exercise() -> None:
         if [r["version_id"] for r in registered] != original_ids:
             raise RuntimeError("F3_RETRY_DUPLICATED_ORIGINALS")
         print("F3_REAL_UPLOAD_LOST_ACK_EXACT_READBACK_REPLAY_PASSED", flush=True)
+        if os.getenv("CASEPROOF_RIGHTS_SIGNED_LIVE") == "YES":
+            from scripts.rights_signed_live import approve_owned_bundle
+
+            _stage("SIGNED_RIGHTS_EXPLICIT_APPROVAL")
+            approve_owned_bundle(
+                admin_key=key, publishable=os.environ["CASEPROOF_DEV_PUBLISHABLE_KEY"],
+                run=run, case=case, sources=registered,
+                owner_email=os.environ["CASEPROOF_P3_OWNER_EMAIL"],
+                owner_password=os.environ["CASEPROOF_P3_OWNER_PASSWORD"],
+                ungranted_email=os.environ["CASEPROOF_P3_UNGRANTED_EMAIL"],
+                ungranted_password=os.environ["CASEPROOF_P3_UNGRANTED_PASSWORD"],
+            )
         _server_stop(proc)
         proc = _server_start()
         page.reload()
@@ -720,6 +732,17 @@ def _exercise() -> None:
             and "@" not in r["resource_id"]
         )
         admin_rpc(key, "revoke", {"p_run": run, "p_owner": owner, "p_case": case})
+        if os.getenv("CASEPROOF_RIGHTS_SIGNED_LIVE") == "YES":
+            from scripts.rights_signed_live import assert_revoked_denied
+
+            assert_revoked_denied(
+                publishable=os.environ["CASEPROOF_DEV_PUBLISHABLE_KEY"],
+                case=case,
+                document_id=registered[0]["document_id"],
+                version_id=registered[0]["version_id"],
+                owner_email=os.environ["CASEPROOF_P3_OWNER_EMAIL"],
+                owner_password=os.environ["CASEPROOF_P3_OWNER_PASSWORD"],
+            )
         if os.getenv("CASEPROOF_F6_BROWSER_LIVE") == "YES" and f6_old:
             from scripts.workspace_f6_live import deny_after_revocation
 

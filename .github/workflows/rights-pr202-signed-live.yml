@@ -1,0 +1,35 @@
+name: PR202 genuine signed rights acceptance (owned synthetic source)
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: caseproof-pr202-rights-signed
+  cancel-in-progress: false
+jobs:
+  live:
+    if: >-
+      github.repository == 'haytamAroui/caseproof' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'feat/data-rights-enforcement-pr2'
+    runs-on: ubuntu-latest
+    environment: caseproof-dev
+    timeout-minutes: 20
+    env:
+      CASEPROOF_DEV_AUTH_ADMIN_KEY: ${{ secrets.CASEPROOF_DEV_AUTH_ADMIN_KEY }}
+      CASEPROOF_DEV_PUBLISHABLE_KEY: ${{ secrets.CASEPROOF_DEV_PUBLISHABLE_KEY }}
+      CASEPROOF_RIGHTS_SIGNED_LIVE: "YES"
+      ENFORCE_DOCUMENT_RIGHTS: "true"
+      CASEPROOF_PHASE3_LIVE: "YES"
+      CASEPROOF_WORKSPACE_ENABLED: "NO"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - name: Real signed owner approvals, original ingest, direct SQL-RPC denial, revocation and scoped teardown
+        run: uv run --locked python -m scripts.rights_pr202_signed_acceptance

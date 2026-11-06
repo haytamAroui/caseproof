@@ -51,8 +51,16 @@ grant select,insert on storage.objects to authenticated;
     f6_action_guard = next(p for p in paths if 'f6_reject_null_release_action' in p.name)
     rights = next(p for p in paths if 'caseproof_data_rights_ledger_shadow' in p.name)
     rights_fence = next(p for p in paths if 'caseproof_rights_grant_revocation_fence' in p.name)
+    rights_enforce = next(p for p in paths if 'caseproof_rights_enforcement_gates' in p.name)
+    rights_bundle = next(p for p in paths if 'caseproof_rights_active_bundle_fence' in p.name)
+    rights_worker = next(p for p in paths if 'caseproof_rights_page_worker_fence' in p.name)
+    rights_docx = next(p for p in paths if 'caseproof_rights_docx_revision_fence' in p.name)
+    rights_rpc = next(p for p in paths if 'caseproof_rights_legacy_rpc_fence' in p.name)
+    rights_derivatives = next(p for p in paths if 'caseproof_rights_derivative_inheritance' in p.name)
+    rights_projection = next(p for p in paths if 'caseproof_rights_effective_parent_projection' in p.name)
+    rights_fixture = next(p for p in paths if 'caseproof_rights_signed_fixture_grant' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives, rights_projection, rights_fixture):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -71,6 +79,14 @@ grant select,insert on storage.objects to authenticated;
     # Ledger depends on F6's final typed action constraints and retention guard.
     _run(rights.read_text(), env)
     _run(rights_fence.read_text(), env)
+    _run(rights_enforce.read_text(), env)
+    _run(rights_bundle.read_text(), env)
+    _run(rights_worker.read_text(), env)
+    _run(rights_docx.read_text(), env)
+    _run(rights_rpc.read_text(), env)
+    _run(rights_derivatives.read_text(), env)
+    _run(rights_projection.read_text(), env)
+    _run(rights_fixture.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -119,12 +135,61 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     _run(actor(guest, rights_call(uuid4(), 0)), env, should_pass=False)
     _run(actor(owner, rights_call(uuid4(), 0, document=doc, source=uuid4())),
          env, should_pass=False)
+    # PR2 owner switch defaults OFF: no existing workflow regresses.
+    if _run("select enabled from caseproof._rights_enforcement_control", env) != 'f':
+        raise AssertionError('rights enforcement must default to disabled')
+    # A missing operator control record is NEVER interpreted as disabled.
+    missing_control = f"""
+    begin;
+    delete from caseproof._rights_enforcement_control;
+    do $absent$
+    begin
+      begin
+        perform caseproof._rights_require_source(
+          '{org}','{case}','{doc}','{version}','process');
+        raise exception 'absent rights control was accepted';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'rights enforcement configuration unavailable' then raise; end if;
+      end;
+    end $absent$;
+    rollback;
+    """
+    _run(missing_control, env)
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    source_gate = (f"select caseproof._rights_require_source('{org}','{case}',"
+                   f"'{doc}','{version}',")
+    _run(source_gate + "'process')", env, should_pass=False)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
     first_request = uuid4()
     if _run(actor(owner, rights_call(first_request, 0)), env) != '1':
         raise AssertionError('first rights policy version absent')
     if _run(actor(owner, rights_call(first_request, 0)), env) != '1':
         raise AssertionError('identical signed replay must be idempotent')
     _run(actor(owner, rights_call(first_request, 1)), env, should_pass=False)
+    # The database boundary cannot be bypassed through service-only RPCs.
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    if _run(source_gate + "'process')", env) != '1':
+        raise AssertionError('explicit process permission not accepted')
+    if _run(source_gate + "'export')", env) != '1':
+        raise AssertionError('same-matter export permission not accepted')
+    _run(source_gate + "'indexForSearch')", env, should_pass=False)
+    _run(source_gate + "'unrecognized_action')", env, should_pass=False)
+    _run(f"select caseproof._rights_require_source('{org}','{other}',"
+         f"'{doc}','{version}','export')", env, should_pass=False)
+    source_payload = json.dumps({"sources": [{
+        "document_id": doc, "version_id": version, "sha256": "a" * 64,
+    }]}, separators=(",", ":"))
+    _run(f"insert into caseproof.dossier_snapshots("
+         f"org_id,case_id,snapshot_hash,bundle_signature,serialized)"
+         f" values('{org}','{case}',repeat('f',64),'synthetic-rights',"
+         f"'{source_payload}')", env)
+    _run(f"insert into caseproof.dossier_snapshots("
+         f"org_id,case_id,snapshot_hash,bundle_signature,serialized)"
+         f" values('{org}','{other}',repeat('e',64),'synthetic-rights',"
+         f"'{source_payload}')", env, should_pass=False)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    print('RIGHTS_SQL_TRANSACTIONAL_OPT_IN_DENY_ALLOW_SCOPE_PASSED', flush=True)
+
     _run(actor(guest, missing), env, should_pass=False)
     if _run(actor(owner, missing), env) != 'present':
         raise AssertionError('signed policy projection absent after write')
@@ -183,6 +248,219 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
             f"where case_id='{case}' and action='source_rights_changed'", env) != '2':
         raise AssertionError('every policy change must have one atomic audit event')
     print('RIGHTS_SIGNED_SCOPE_REPLAY_CONCURRENCY_APPEND_ONLY_PASSED', flush=True)
+    # Rights revocation is a new immutable policy version, not an update to
+    # earlier approvals. The transactional SQL gate must use latest only.
+    revoked_policy = json.dumps({
+        "origin": "CLIENT_UPLOAD", "classification": "CLIENT_CONFIDENTIAL",
+        "authorization_reference": "synthetic-contract-1",
+        "process": False, "export": False,
+    }, separators=(",", ":"))
+    revoke_rights = (
+        f"select (public.caseproof_rights_manage('{case}','{doc}','{version}',"
+        f"2,'{uuid4()}','{revoked_policy}'::jsonb)->>'policy_version')"
+    )
+    if _run(actor(owner, revoke_rights), env) != '3':
+        raise AssertionError('revoked policy did not append immutable version 3')
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    _run(source_gate + "'process')", env, should_pass=False)
+    _run(source_gate + "'export')", env, should_pass=False)
+    # A privileged direct table write must be fenced in the SQL transaction,
+    # even when a previously allowed snapshot is still in the database.
+    denial = f"""
+    do $rights_trigger$
+    begin
+      begin
+        insert into caseproof.dossier_releases(
+          org_id,case_id,release_id,actor_id,brief_id,
+          snapshot_hash,manifest,artifacts
+        ) values(
+          '{org}','{case}','{uuid4()}','{owner}','{version}',
+          repeat('f',64),'{{}}'::jsonb,'{{}}'::jsonb
+        );
+        raise exception 'protected release inserted after rights revocation';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'source rights denied or unknown' then
+          raise;
+        end if;
+      end;
+    end $rights_trigger$;
+    """
+    _run(denial, env)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    if _run(f"select count(*) from caseproof.source_rights_policies "
+            f"where case_id='{case}'", env) != '3':
+        raise AssertionError('revocation must preserve all three versions')
+    if _run(f"select count(*) from caseproof.audit_events "
+            f"where case_id='{case}' and action='source_rights_changed'", env) != '3':
+        raise AssertionError('revocation missing atomic audit event')
+    print('RIGHTS_SQL_RELEASE_TRIGGER_REVOKED_LATEST_VERSION_PASSED', flush=True)
+    # Even a privileged direct SQL reservation of a corrected draft must
+    # fail closed when its parent snapshot has no approved source policy.
+    child = str(uuid4())
+    _run(f"""
+      update caseproof.document_versions set bundle_role='draft'
+      where org_id='{org}' and id='{other_version}';
+      insert into caseproof.document_versions(
+        id,org_id,document_id,version_number,original_sha256_hex,
+        byte_length,media_type,bundle_role
+      ) values (
+        '{child}','{org}','{other_doc}',2,repeat('c',64),10,
+        'application/pdf','draft'
+      );
+      insert into caseproof.dossier_snapshots(
+        org_id,case_id,snapshot_hash,bundle_signature,serialized
+      ) values (
+        '{org}','{other}',repeat('d',64),'synthetic-revision',
+        jsonb_build_object('sources',jsonb_build_array(
+          jsonb_build_object(
+            'document_id','{other_doc}','version_id','{other_version}',
+            'sha256',repeat('b',64)
+          )
+        ))::text
+      );
+    """, env)
+    revision_denial = f"""
+      insert into caseproof.dossier_draft_revisions(
+        org_id,case_id,request_id,actor_id,document_id,parent_version_id,
+        version_id,parent_snapshot_hash,reference_id,command_sha256,
+        original_sha256,byte_length
+      ) values (
+        '{org}','{other}','{uuid4()}','{owner}','{other_doc}',
+        '{other_version}','{child}',repeat('d',64),
+        'synthetic-reference',repeat('e',64),repeat('c',64),10
+      )
+    """
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    _run(
+        "do $rights_revision$ begin begin " + revision_denial
+        + "; raise exception 'revoked revision unexpectedly permitted'; "
+        + "exception when insufficient_privilege then "
+        + "if SQLERRM <> 'source rights denied or unknown' then raise; end if; "
+        + "end; end $rights_revision$;", env,
+    )
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    if _run(f"select count(*) from caseproof.dossier_draft_revisions "
+            f"where case_id='{other}'", env) != '0':
+        raise AssertionError('unknown-rights DOCX revision persisted')
+    print('RIGHTS_SQL_DOCX_REVISION_UNKNOWN_DENIED_PASSED', flush=True)
+    # Restricted parents must produce restricted derivative versions. The
+    # initial test rights seed runs with enforcement OFF; it does NOT infer
+    # approval and must not weaken the copied DENY. Same-case scope only.
+    _run(f"""
+      update caseproof._m1_matter_grants
+       set permissions=array_append(permissions,'rights:manage')
+       where org_id='{org}' and case_id='{other}' and user_id='{owner}';
+    """, env)
+    restricted = json.dumps({
+        "origin": "CLIENT_UPLOAD", "classification": "CLIENT_CONFIDENTIAL",
+        "authorization_reference": "synthetic-restricted-parent",
+        "process": False, "export": False,
+        "indexForSearch": False, "useAcrossMatters": False,
+    }, separators=(",", ":"))
+    _run(actor(owner, f"""
+      select public.caseproof_rights_manage(
+        '{other}','{other_doc}','{other_version}',0,'{uuid4()}',
+        '{restricted}'::jsonb
+      )
+    """), env)
+    _run(revision_denial, env)
+    inherited = _run(f"""
+      select concat_ws(':',process::text,export_same_matter::text,
+        index_for_search::text,use_across_matters::text,
+        inherited_from_version_id::text)
+      from caseproof.source_rights_policies
+      where org_id='{org}' and case_id='{other}' and version_id='{child}'
+    """, env)
+    if inherited != f'false:false:false:false:{other_version}':
+        raise AssertionError('restricted parent policy not copied unchanged to derivative')
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    _run(f"""
+      do $rights_restricted$
+      begin
+        begin
+          perform caseproof._rights_require_source(
+            '{org}','{other}','{other_doc}','{child}','export'
+          );
+          raise exception 'restricted derivative export was accepted';
+        exception when insufficient_privilege then
+          if SQLERRM <> 'source rights denied or unknown' then raise; end if;
+        end;
+      end $rights_restricted$
+    """, env)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    print('RIGHTS_RESTRICTED_PARENT_DERIVATIVE_EXPORT_DENIED_PASSED', flush=True)
+    # A prior queued page job may remain after permissions are revoked,
+    # but it must not resume processing or emit new OCR artifacts.
+    page_request = str(uuid4())
+    page_manifest = json.dumps({
+        "schema": "caseproof-page-job-v1", "case_id": case,
+        "request_id": page_request, "bundle_signature": "synthetic",
+        "engine_version": "rights-regression",
+        "pages": [{"document_id": doc, "version_id": version,
+                   "original_sha256": "a" * 64,
+                   "pdf_page": 1, "needs_ocr": False}],
+    }, separators=(",", ":"))
+    _run(f"""
+      insert into caseproof.page_jobs(
+        org_id,case_id,request_id,actor_id,manifest,manifest_hash,bundle_signature
+      ) values(
+        '{org}','{case}','{page_request}','{owner}',
+        '{page_manifest}',repeat('a',64),'synthetic'
+      );
+    """, env)
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    worker_denial = f"""
+    do $worker_denied$
+    begin
+      begin
+        update caseproof.page_jobs set state='running'
+        where case_id='{case}' and request_id='{page_request}';
+        raise exception 'revoked worker resumed';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'source rights denied or unknown' then raise; end if;
+      end;
+      begin
+        insert into caseproof.page_results(
+          org_id,case_id,request_id,page_key,serialized,artifact_hash
+        ) values (
+          '{org}','{case}','{page_request}','{version}:1','{{}}',repeat('b',64)
+        );
+        raise exception 'revoked OCR artifact inserted';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'source rights denied or unknown' then raise; end if;
+      end;
+    end $worker_denied$;
+    """
+    _run(worker_denial, env)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    print('RIGHTS_SQL_REVOKED_PAGE_WORKER_LEASE_AND_RESULT_DENIED_PASSED', flush=True)
+    # An attacker must not omit an active matter source from frozen evidence.
+    # Latest version 3 is already revoked: the incomplete-scope error must
+    # be raised BEFORE interpreting individual policy permission flags.
+    second_doc, second_version = str(uuid4()), str(uuid4())
+    _run(f"""
+        insert into caseproof.documents(id,org_id,case_id,source_label)
+          values('{second_doc}','{org}','{case}','second synthetic');
+        insert into caseproof.document_versions(
+          id,org_id,document_id,version_number,original_sha256_hex,byte_length,media_type
+        ) values('{second_version}','{org}','{second_doc}',1,repeat('c',64),10,'application/pdf');
+    """, env)
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    omitted = f"""
+    do $bundle$
+    begin
+      begin
+        perform caseproof._rights_require_bundle(
+          '{org}','{case}',('{source_payload}'::jsonb)->'sources','export');
+        raise exception 'omitted active source accepted';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'incomplete active rights bundle' then raise; end if;
+      end;
+    end $bundle$;
+    """
+    _run(omitted, env)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    print('RIGHTS_SQL_OMITTED_ACTIVE_SOURCE_DENIED_PASSED', flush=True)
 
     # F6 release grants are independent of ordinary report/review access.
     export_call = f"select (public.caseproof_dossier_export_release('{case}','authorize')->>'authorized')"
@@ -349,7 +627,7 @@ select public.caseproof_dossier_export_release(
         raise AssertionError('version remains')
     if _run(f"select count(*) from caseproof.dossier_releases where release_id='{release_id}'", env) != '0':
         raise AssertionError('release bytes remain after matter purge')
-    if _run("select erased_audit_events from caseproof.erasure_receipts", env) != '3':
+    if _run("select erased_audit_events from caseproof.erasure_receipts", env) != '4':
         raise AssertionError('minimal erasure audit missing')
     if _run(f"select count(*) from caseproof.source_rights_policies where case_id='{case}'", env) != '0':
         raise AssertionError('rights policy history survived authorized matter purge')

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.capacity_envelope import CAPACITY_POLICY
+from application.data_rights import Action
 from application.litigation.release_completeness import (
     ReleaseIntegrityError,
     select_release_scope,
@@ -288,6 +289,11 @@ def create_release_router(store: Any) -> APIRouter:
             raise HTTPException(409, "historical draft cannot be released as current")
         report, _ = read_dossier_report(store, bearer, case_id, brief_id, snapshot_hash, decisions=True)
         _validate_frozen_report(report)
+        gate = getattr(store, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id, sources=report["sources"], action=Action.EXPORT,
+            )
         policy = release_completeness(report)
         status = store.export_rpc(bearer, case_id, "authorize", None, {})
         if not status.get("authorized"):
@@ -347,6 +353,11 @@ def create_release_router(store: Any) -> APIRouter:
             scope = select_release_scope(policy, body.release_type, body.partial_acknowledged)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from None
+        gate = getattr(store, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id, sources=report["sources"], action=Action.EXPORT,
+            )
         # Export derivatives disclose the same release scope signed in the
         # manifest, without changing or reassessing the frozen source report.
         export_report = {**report, "review_completeness": scope}
@@ -362,6 +373,10 @@ def create_release_router(store: Any) -> APIRouter:
             "human_decisions": report["human_decisions"],
             "contents": {kind: base64.b64encode(raw).decode("ascii") for kind, raw in artifacts.items()},
         }
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id, sources=report["sources"], action=Action.EXPORT,
+            )
         result = store.export_rpc(bearer, case_id, "release", str(body.release_id), payload)
         if result.get("state") != "released" or result.get("manifest") != manifest:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)

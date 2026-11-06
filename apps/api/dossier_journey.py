@@ -16,12 +16,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from pypdf import PdfReader, PdfWriter
 
 from application.capacity_envelope import CAPACITY_POLICY, MAX_PDF_PAGES
+from application.data_rights import Action
 from application.extraction.contracts import ExtractionError
 from application.litigation.dossier_contracts import add_report_contract, assess_fidelity, quotation_context
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
 from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
+from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.dossier_draft_revisions import DraftRevisionClient, stale_snapshot_conflict
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
@@ -152,7 +154,14 @@ def reopen_for_mutation(
     store: DossierStore, bearer: str, case: str, brief: str, snapshot: str
 ) -> tuple[dict[str, Any], bytes]:
     try:
-        return store.reopen(bearer, case, brief, snapshot)
+        report, original = store.reopen(bearer, case, brief, snapshot)
+        gate = getattr(store, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
+        return report, original
     except HTTPException as exc:
         if exc.status_code == 409:
             raise HTTPException(412, "snapshot is stale") from None
@@ -186,9 +195,13 @@ class VisualDecisionBody(DecisionBody):
 
 
 class DossierStore:
-    def __init__(self, key: str, receipt_secret: str | None = None):
+    def __init__(
+        self, key: str, receipt_secret: str | None = None, *,
+        rights_gate: SignedRightsGate | None = None,
+    ):
         self.key = key
-        self.client = JourneyClient(key)
+        self.client = JourneyClient(key, rights_gate=rights_gate)
+        self.rights_gate = rights_gate
         self.revisions = DraftRevisionClient(key, receipt_secret)
         self.visual = PDFVisualFidelity()
         # Domain-separated receipt key, never the public client key. No key is
@@ -432,6 +445,12 @@ class DossierStore:
             )
         else:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        gate = getattr(self, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         try:
             validate_correction_target(original, finding, brief, command)
             derivative = corrected_docx_preview(
@@ -467,6 +486,11 @@ class DossierStore:
             or reserved.get("byte_length") != len(derivative)
         ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         params = {
             "bearer": bearer,
             "case_id": case,
@@ -480,6 +504,11 @@ class DossierStore:
         readback = self.client.library.read(**params)
         if len(readback) != len(derivative) or hashlib.sha256(readback).hexdigest() != digest:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         activated = self.revisions.activate(bearer, case, command.request_id, digest, len(readback))
         if activated.get("state") != "active" or activated.get("version_id") != reserved["version_id"]:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -591,6 +620,12 @@ class DossierStore:
         self, bearer: str, case: str, brief: str, *, language_context: dict[str, Any] | None = None
     ) -> tuple[dict[str, Any], bytes]:
         context = self.rpc(bearer, case, "context")
+        rights_gate = getattr(self, "rights_gate", None)
+        if rights_gate is not None:
+            signed_manifest = self.client.bundle_manifest(bearer, case)["sources"]
+            rights_gate.require_bundle(
+                bearer=bearer, case_id=case, sources=signed_manifest, action=Action.PROCESS,
+            )
         sources, originals = self.sources(bearer, case)
         drafts = [s for s in sources if s["role"] == "draft" and s["version_id"] == brief]
         if len(drafts) != 1:
@@ -761,6 +796,10 @@ class DossierStore:
         if len(serialized.encode()) > 1_900_000:
             raise HTTPException(422, "visual snapshot budget exceeded; reduce assessed pages")
         report["snapshot_hash"] = hashlib.sha256(serialized.encode()).hexdigest()
+        if rights_gate is not None:
+            rights_gate.require_bundle(
+                bearer=bearer, case_id=case, sources=sources, action=Action.PROCESS,
+            )
         self.rpc(
             bearer, case, "snapshot", {"serialized": serialized, "snapshot_hash": report["snapshot_hash"]}
         )
@@ -1227,6 +1266,12 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
     ) -> Response:
         s, bearer = active(authorization)
         report, original = read_dossier_report(s, bearer, case_id, brief_id, snapshot_hash, decisions=True)
+        gate = getattr(s, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id,
+                sources=report.get("sources", []), action=Action.EXPORT,
+            )
         headers = {"X-CaseProof-Snapshot": report["snapshot_hash"], "Cache-Control": "no-store"}
         if format == "docx":
             try:
@@ -1404,6 +1449,13 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         source = next((x for x in sources if x["version_id"] == version_id), None)
         if not source or not 1 <= page_number <= source.get("page_count", 0):
             raise HTTPException(404, "source page unavailable")
+        gate = getattr(s, "rights_gate", None)
+        if gate is not None:
+            gate.require(
+                bearer=bearer, case_id=case_id,
+                document_id=source["document_id"], version_id=version_id,
+                action=Action.PROCESS,
+            )
         writer = PdfWriter()
         writer.add_page(PdfReader(io.BytesIO(files[version_id])).pages[page_number - 1])
         out = io.BytesIO()

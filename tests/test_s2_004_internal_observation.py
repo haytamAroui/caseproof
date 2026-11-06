@@ -129,6 +129,16 @@ def test_no_new_live_route_or_staged_migration() -> None:
         # PR 1 Data Rights Ledger: narrowly scoped signed shadow-only migrations.
         "20261106092710_caseproof_data_rights_ledger_shadow.sql",
         "20261106093313_caseproof_rights_grant_revocation_fence.sql",
+        # PR2: dormant SQL triggers, protected only when operator enables.
+        "20261106105558_caseproof_rights_enforcement_gates.sql",
+        "20261106110906_caseproof_rights_active_bundle_fence.sql",
+        "20261106114000_caseproof_rights_page_worker_fence.sql",
+        "20261106130418_caseproof_rights_docx_revision_fence.sql",
+        "20261106132310_caseproof_rights_legacy_rpc_fence.sql",
+        "20261106132316_caseproof_rights_derivative_inheritance.sql",
+        "20261106132320_caseproof_rights_signed_fixture_grant.sql",
+        "20261106132551_caseproof_rights_effective_parent_projection.sql",
+        "20261106133128_caseproof_rights_m05_cleanup_audit.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",
