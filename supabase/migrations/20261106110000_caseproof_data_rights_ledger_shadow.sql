@@ -133,8 +133,8 @@ begin
       'origin','classification','authorization_reference','process',
       'indexForSearch','useAcrossMatters','export'
     )
-  ) or p_policy->>'origin'<>'CLIENT_UPLOAD'
-    or p_policy->>'classification'<>'CLIENT_CONFIDENTIAL'
+  ) or p_policy->>'origin' is distinct from 'CLIENT_UPLOAD'
+    or p_policy->>'classification' is distinct from 'CLIENT_CONFIDENTIAL'
     or jsonb_typeof(p_policy->'process') is distinct from 'boolean'
     or jsonb_typeof(p_policy->'export') is distinct from 'boolean'
     or (p_policy ? 'indexForSearch'
