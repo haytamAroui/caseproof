@@ -154,7 +154,14 @@ def reopen_for_mutation(
     store: DossierStore, bearer: str, case: str, brief: str, snapshot: str
 ) -> tuple[dict[str, Any], bytes]:
     try:
-        return store.reopen(bearer, case, brief, snapshot)
+        report, original = store.reopen(bearer, case, brief, snapshot)
+        gate = getattr(store, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
+        return report, original
     except HTTPException as exc:
         if exc.status_code == 409:
             raise HTTPException(412, "snapshot is stale") from None
@@ -438,6 +445,12 @@ class DossierStore:
             )
         else:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        gate = getattr(self, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         try:
             validate_correction_target(original, finding, brief, command)
             derivative = corrected_docx_preview(
@@ -473,6 +486,11 @@ class DossierStore:
             or reserved.get("byte_length") != len(derivative)
         ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         params = {
             "bearer": bearer,
             "case_id": case,
@@ -486,6 +504,11 @@ class DossierStore:
         readback = self.client.library.read(**params)
         if len(readback) != len(derivative) or hashlib.sha256(readback).hexdigest() != digest:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         activated = self.revisions.activate(bearer, case, command.request_id, digest, len(readback))
         if activated.get("state") != "active" or activated.get("version_id") != reserved["version_id"]:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -1243,6 +1266,12 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
     ) -> Response:
         s, bearer = active(authorization)
         report, original = read_dossier_report(s, bearer, case_id, brief_id, snapshot_hash, decisions=True)
+        gate = getattr(s, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id,
+                sources=report.get("sources", []), action=Action.EXPORT,
+            )
         headers = {"X-CaseProof-Snapshot": report["snapshot_hash"], "Cache-Control": "no-store"}
         if format == "docx":
             try:
@@ -1420,6 +1449,13 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         source = next((x for x in sources if x["version_id"] == version_id), None)
         if not source or not 1 <= page_number <= source.get("page_count", 0):
             raise HTTPException(404, "source page unavailable")
+        gate = getattr(s, "rights_gate", None)
+        if gate is not None:
+            gate.require(
+                bearer=bearer, case_id=case_id,
+                document_id=source["document_id"], version_id=version_id,
+                action=Action.PROCESS,
+            )
         writer = PdfWriter()
         writer.add_page(PdfReader(io.BytesIO(files[version_id])).pages[page_number - 1])
         out = io.BytesIO()

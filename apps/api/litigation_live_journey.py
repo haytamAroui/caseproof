@@ -604,6 +604,12 @@ def create_live_journey_router(
         if len(matching) != 1 or matching[0].get("media_type") != "application/pdf":
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         source = matching[0]
+        if c.rights_gate is not None:
+            c.rights_gate.require(
+                bearer=bearer, case_id=case_id,
+                document_id=document_id, version_id=version_id,
+                action=Action.PROCESS,
+            )
         reference, geometry = c.read_geometry(bearer, version_id, body.page_number)
         if reference.original_sha256 != source.get("original_sha"):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
