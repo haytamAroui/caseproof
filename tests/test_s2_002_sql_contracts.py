@@ -141,7 +141,7 @@ def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> Non
         "20261106105558_caseproof_rights_enforcement_gates.sql",
         "20261106110906_caseproof_rights_active_bundle_fence.sql",
         "20261106114000_caseproof_rights_page_worker_fence.sql",
-        "20261106125000_caseproof_rights_docx_revision_fence.sql",
+        "20261106130418_caseproof_rights_docx_revision_fence.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",
