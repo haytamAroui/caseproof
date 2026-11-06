@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass, field
 from uuid import UUID
 
+from apps.api.data_rights_shadow import observe_authorized_read
 from apps.api.signed_supabase_originals import (
     MAX_BYTES,
     MIME,
@@ -126,6 +127,9 @@ class SignedSourceLibrary:
         )
         if ref != current or length != current_length:
             raise PrivateStorageFailure("Private source changed during read")
+        # PR 1 observes only after signed source and Storage readback succeed.
+        # No policy is inferred for pre-ledger source versions.
+        observe_authorized_read(policy_lookup=lambda: None)
         return data
 
     def put_once(
