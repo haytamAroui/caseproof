@@ -53,8 +53,9 @@ grant select,insert on storage.objects to authenticated;
     rights_fence = next(p for p in paths if 'caseproof_rights_grant_revocation_fence' in p.name)
     rights_enforce = next(p for p in paths if 'caseproof_rights_enforcement_gates' in p.name)
     rights_bundle = next(p for p in paths if 'caseproof_rights_active_bundle_fence' in p.name)
+    rights_worker = next(p for p in paths if 'caseproof_rights_page_worker_fence' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -75,6 +76,7 @@ grant select,insert on storage.objects to authenticated;
     _run(rights_fence.read_text(), env)
     _run(rights_enforce.read_text(), env)
     _run(rights_bundle.read_text(), env)
+    _run(rights_worker.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -282,6 +284,51 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
             f"where case_id='{case}' and action='source_rights_changed'", env) != '3':
         raise AssertionError('revocation missing atomic audit event')
     print('RIGHTS_SQL_RELEASE_TRIGGER_REVOKED_LATEST_VERSION_PASSED', flush=True)
+    # A prior queued page job may remain after permissions are revoked,
+    # but it must not resume processing or emit new OCR artifacts.
+    page_request = str(uuid4())
+    page_manifest = json.dumps({
+        "schema": "caseproof-page-job-v1", "case_id": case,
+        "request_id": page_request, "bundle_signature": "synthetic",
+        "engine_version": "rights-regression",
+        "pages": [{"document_id": doc, "version_id": version,
+                   "original_sha256": "a" * 64,
+                   "pdf_page": 1, "needs_ocr": False}],
+    }, separators=(",", ":"))
+    _run(f"""
+      insert into caseproof.page_jobs(
+        org_id,case_id,request_id,actor_id,manifest,manifest_hash,bundle_signature
+      ) values(
+        '{org}','{case}','{page_request}','{owner}',
+        '{page_manifest}',repeat('a',64),'synthetic'
+      );
+    """, env)
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    worker_denial = f"""
+    do $worker_denied$
+    begin
+      begin
+        update caseproof.page_jobs set state='running'
+        where case_id='{case}' and request_id='{page_request}';
+        raise exception 'revoked worker resumed';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'source rights denied or unknown' then raise; end if;
+      end;
+      begin
+        insert into caseproof.page_results(
+          org_id,case_id,request_id,page_key,serialized,artifact_hash
+        ) values (
+          '{org}','{case}','{page_request}','{version}:1','{{}}',repeat('b',64)
+        );
+        raise exception 'revoked OCR artifact inserted';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'source rights denied or unknown' then raise; end if;
+      end;
+    end $worker_denied$;
+    """
+    _run(worker_denial, env)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    print('RIGHTS_SQL_REVOKED_PAGE_WORKER_LEASE_AND_RESULT_DENIED_PASSED', flush=True)
     # An attacker must not omit an active matter source from frozen evidence.
     # Latest version 3 is already revoked: the incomplete-scope error must
     # be raised BEFORE interpreting individual policy permission flags.

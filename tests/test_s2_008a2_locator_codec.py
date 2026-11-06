@@ -372,6 +372,7 @@ def test_does_not_wire_database_or_enable_approval_api() -> None:
         # PR2: dormant SQL triggers, protected only when operator enables.
         "20261106105558_caseproof_rights_enforcement_gates.sql",
         "20261106110906_caseproof_rights_active_bundle_fence.sql",
+        "20261106114000_caseproof_rights_page_worker_fence.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",
