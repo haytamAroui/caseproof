@@ -57,8 +57,10 @@ grant select,insert on storage.objects to authenticated;
     rights_docx = next(p for p in paths if 'caseproof_rights_docx_revision_fence' in p.name)
     rights_rpc = next(p for p in paths if 'caseproof_rights_legacy_rpc_fence' in p.name)
     rights_derivatives = next(p for p in paths if 'caseproof_rights_derivative_inheritance' in p.name)
+    rights_projection = next(p for p in paths if 'caseproof_rights_effective_parent_projection' in p.name)
+    rights_fixture = next(p for p in paths if 'caseproof_rights_signed_fixture_grant' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives, rights_projection, rights_fixture):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -83,6 +85,8 @@ grant select,insert on storage.objects to authenticated;
     _run(rights_docx.read_text(), env)
     _run(rights_rpc.read_text(), env)
     _run(rights_derivatives.read_text(), env)
+    _run(rights_projection.read_text(), env)
+    _run(rights_fixture.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
