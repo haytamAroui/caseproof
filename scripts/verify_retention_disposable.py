@@ -54,8 +54,9 @@ grant select,insert on storage.objects to authenticated;
     rights_enforce = next(p for p in paths if 'caseproof_rights_enforcement_gates' in p.name)
     rights_bundle = next(p for p in paths if 'caseproof_rights_active_bundle_fence' in p.name)
     rights_worker = next(p for p in paths if 'caseproof_rights_page_worker_fence' in p.name)
+    rights_docx = next(p for p in paths if 'caseproof_rights_docx_revision_fence' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -77,6 +78,7 @@ grant select,insert on storage.objects to authenticated;
     _run(rights_enforce.read_text(), env)
     _run(rights_bundle.read_text(), env)
     _run(rights_worker.read_text(), env)
+    _run(rights_docx.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""
@@ -284,6 +286,46 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
             f"where case_id='{case}' and action='source_rights_changed'", env) != '3':
         raise AssertionError('revocation missing atomic audit event')
     print('RIGHTS_SQL_RELEASE_TRIGGER_REVOKED_LATEST_VERSION_PASSED', flush=True)
+    # Even a privileged direct SQL reservation of a corrected draft must
+    # fail closed when its parent snapshot has no approved source policy.
+    child = str(uuid4())
+    _run(f"""
+      update caseproof.document_versions set bundle_role='draft'
+      where org_id='{org}' and id='{other_version}';
+      insert into caseproof.document_versions(
+        id,org_id,document_id,version_number,original_sha256_hex,
+        byte_length,media_type,bundle_role
+      ) values (
+        '{child}','{org}','{other_doc}',2,repeat('c',64),10,
+        'application/pdf','draft'
+      );
+      insert into caseproof.dossier_snapshots(
+        org_id,case_id,snapshot_hash,bundle_signature,serialized
+      ) values (
+        '{org}','{other}',repeat('d',64),'synthetic-revision',
+        '{{"sources":[{{"document_id":"{other_doc}",'
+        ' "version_id":"{other_version}","sha256":"' || repeat('b',64)
+        || '"}}]}}'
+      );
+    """, env)
+    revision_denial = f"""
+      insert into caseproof.dossier_draft_revisions(
+        org_id,case_id,request_id,actor_id,document_id,parent_version_id,
+        version_id,parent_snapshot_hash,reference_id,command_sha256,
+        original_sha256,byte_length
+      ) values (
+        '{org}','{other}','{uuid4()}','{owner}','{other_doc}',
+        '{other_version}','{child}',repeat('d',64),
+        'synthetic-reference',repeat('e',64),repeat('c',64),10
+      )
+    """
+    _run("update caseproof._rights_enforcement_control set enabled=true", env)
+    _run(revision_denial, env, should_pass=False)
+    _run("update caseproof._rights_enforcement_control set enabled=false", env)
+    if _run(f"select count(*) from caseproof.dossier_draft_revisions "
+            f"where case_id='{other}'", env) != '0':
+        raise AssertionError('unknown-rights DOCX revision persisted')
+    print('RIGHTS_SQL_DOCX_REVISION_UNKNOWN_DENIED_PASSED', flush=True)
     # A prior queued page job may remain after permissions are revoked,
     # but it must not resume processing or emit new OCR artifacts.
     page_request = str(uuid4())
