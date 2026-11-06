@@ -34,6 +34,8 @@ from apps.api.signed_supabase_originals import (
     SignedOriginalsStorage,
 )
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
+from apps.api.data_rights_enforcement import SignedRightsGate
+from application.data_rights import Action
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from infrastructure.parsers.ocr_geometry_sidecar import (
     GeometryReference,
@@ -124,7 +126,8 @@ class AuthoredBrief(BaseModel):
 
 class JourneyClient:
     def __init__(self, publishable_key: str, trusted_ingest_key: str | None = None,
-                 *, ocr: LocalPDFOCR | None = None):
+                 *, ocr: LocalPDFOCR | None = None,
+                  rights_gate: SignedRightsGate | None = None):
         if not publishable_key.startswith("sb_publishable_"):
             raise ValueError("development publishable key required")
         self._key = publishable_key
@@ -134,6 +137,7 @@ class JourneyClient:
             raise ValueError('protected development admin key required')
         self._trusted_ingest_key = trusted_ingest_key
         self._ocr = ocr
+        self.rights_gate = rights_gate
         self._verifier = (
             SupabaseAuthUserVerifier(
                 "ldwmocpxwskvhoojndrd",
@@ -350,6 +354,11 @@ class JourneyClient:
             raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
         except IdentityServiceUnavailable:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if self.rights_gate is not None:
+            self.rights_gate.require(
+                bearer=bearer, case_id=case_id, document_id=doc_id,
+                version_id=version_id, action=Action.PROCESS,
+            )
         data: dict[str, object] = {
             "p_actor": _uuid(actor.subject_id),
             "p_case": _uuid(case_id),
@@ -382,6 +391,13 @@ class JourneyClient:
             data["p_manifest"] = manifest
             data["p_geometry"] = geometry
             rpc = "/rest/v1/rpc/caseproof_dev_ingest_parsed_with_geometry"
+        # Refresh policy immediately before the trusted promotion request.
+        # SQL transactional fencing remains a separate PR2 acceptance gate.
+        if self.rights_gate is not None:
+            self.rights_gate.require(
+                bearer=bearer, case_id=case_id, document_id=doc_id,
+                version_id=version_id, action=Action.PROCESS,
+            )
         admin = self._trusted_ingest_key
         headers = {
             "apikey": admin, "Content-Type": "application/json",
@@ -418,9 +434,10 @@ class JourneyClient:
 def create_live_journey_router(
     publishable_key: str | None, trusted_ingest_key: str | None = None,
     *, ocr: LocalPDFOCR | None = None,
+    rights_gate: SignedRightsGate | None = None,
 ) -> APIRouter:
     router = APIRouter()
-    client = JourneyClient(publishable_key, trusted_ingest_key, ocr=ocr) if publishable_key else None
+    client = JourneyClient(publishable_key, trusted_ingest_key, ocr=ocr, rights_gate=rights_gate) if publishable_key else None
 
     def active(authorization: str | None) -> tuple[JourneyClient, str]:
         if client is None:
@@ -488,6 +505,13 @@ def create_live_journey_router(
         if briefs[0].get("brief_version_id") != _uuid(brief_version_id):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         source = sources[0]
+        if c.rights_gate is not None:
+            c.rights_gate.require(
+                bearer=bearer, case_id=case_id,
+                document_id=str(source.get("document_id", "")),
+                version_id=str(source.get("version_id", "")),
+                action=Action.INDEX_FOR_SEARCH,
+            )
         text = source.get("text")
         manifest = source.get("parse_manifest")
         if not isinstance(text, str) or not isinstance(source.get("original_sha"), str):

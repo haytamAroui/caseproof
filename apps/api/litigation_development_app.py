@@ -30,6 +30,7 @@ from apps.api.litigation_workspace_sources import create_clearbrief_sources_rout
 from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
+from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.workspace_auth import SupabaseWorkspaceAuth, create_workspace_auth_router
 from apps.api.workspace_catalog import create_workspace_catalog_router
 from apps.api.workspace_intake import WorkspaceIntake, create_workspace_intake_router
@@ -48,6 +49,7 @@ def create_litigation_development_app(
     ocr: LocalPDFOCR | None = None,
     headless: HeadlessMatterStore | None = None,
     page_worker_secret: str | None = None,
+    rights_gate: SignedRightsGate | None = None,
     workspace_directory: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(title="CaseProof loopback development", docs_url=None, redoc_url=None, openapi_url=None)
@@ -67,7 +69,7 @@ def create_litigation_development_app(
     ):
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
-    dossier_store = DossierStore(publishable_key, trusted_ingest_key) if publishable_key else None
+    dossier_store = DossierStore(publishable_key, trusted_ingest_key, rights_gate=rights_gate) if publishable_key else None
     app.include_router(create_dossier_router(dossier_store))
     app.include_router(create_workspace_intake_router(
         WorkspaceIntake(dossier_store.client, dossier_store) if dossier_store else None))
@@ -77,7 +79,7 @@ def create_litigation_development_app(
         app.include_router(create_page_job_router(SignedPageJobs(dossier_store, page_worker_secret)))
     app.include_router(create_headless_review_router(headless))
     app.include_router(create_live_review_router(publishable_key))
-    app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key, ocr=ocr))
+    app.include_router(create_live_journey_router(publishable_key, trusted_ingest_key, ocr=ocr, rights_gate=rights_gate))
 
     @app.get("/dev/clearbrief/config", include_in_schema=False)
     def lawyer_config() -> dict[str, str | None]:

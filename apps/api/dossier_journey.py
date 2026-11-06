@@ -26,6 +26,8 @@ from apps.api.dossier_draft_revisions import DraftRevisionClient, stale_snapshot
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
 from apps.api.litigation_live_journey import HOST, JourneyClient
+from apps.api.data_rights_enforcement import SignedRightsGate
+from application.data_rights import Action
 from apps.api.signed_document_parse import parse_verified_original
 from apps.api.signed_supabase_originals import (
     PrivateStorageExists,
@@ -186,9 +188,13 @@ class VisualDecisionBody(DecisionBody):
 
 
 class DossierStore:
-    def __init__(self, key: str, receipt_secret: str | None = None):
+    def __init__(
+        self, key: str, receipt_secret: str | None = None, *,
+        rights_gate: SignedRightsGate | None = None,
+    ):
         self.key = key
-        self.client = JourneyClient(key)
+        self.client = JourneyClient(key, rights_gate=rights_gate)
+        self.rights_gate = rights_gate
         self.revisions = DraftRevisionClient(key, receipt_secret)
         self.visual = PDFVisualFidelity()
         # Domain-separated receipt key, never the public client key. No key is
@@ -591,6 +597,11 @@ class DossierStore:
         self, bearer: str, case: str, brief: str, *, language_context: dict[str, Any] | None = None
     ) -> tuple[dict[str, Any], bytes]:
         context = self.rpc(bearer, case, "context")
+        if self.rights_gate is not None:
+            signed_manifest = self.client.bundle_manifest(bearer, case)["sources"]
+            self.rights_gate.require_bundle(
+                bearer=bearer, case_id=case, sources=signed_manifest, action=Action.PROCESS,
+            )
         sources, originals = self.sources(bearer, case)
         drafts = [s for s in sources if s["role"] == "draft" and s["version_id"] == brief]
         if len(drafts) != 1:
@@ -761,6 +772,10 @@ class DossierStore:
         if len(serialized.encode()) > 1_900_000:
             raise HTTPException(422, "visual snapshot budget exceeded; reduce assessed pages")
         report["snapshot_hash"] = hashlib.sha256(serialized.encode()).hexdigest()
+        if self.rights_gate is not None:
+            self.rights_gate.require_bundle(
+                bearer=bearer, case_id=case, sources=sources, action=Action.PROCESS,
+            )
         self.rpc(
             bearer, case, "snapshot", {"serialized": serialized, "snapshot_hash": report["snapshot_hash"]}
         )

@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 
 from apps.api.litigation_development_app import create_litigation_development_app
+from apps.api.data_rights_enforcement import SignedRightsGate
+from apps.api.data_rights_signed import SignedRightsPolicyReader
 from apps.api.signed_supabase_originals import SignedOriginalsStorage
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.supabase_headless_matter_store import SupabaseHeadlessMatterStore
@@ -12,6 +14,8 @@ key = os.environ.get("CASEPROOF_DEV_PUBLISHABLE_KEY")
 
 app = create_litigation_development_app(
     publishable_key=key,
+    rights_gate=SignedRightsGate(SignedRightsPolicyReader(key))
+    if key and os.environ.get("CASEPROOF_RIGHTS_ENFORCE_DEV") == "YES" else None,
     signed_originals=SignedSourceLibrary(
         SignedOriginalsStorage(key), rights_shadow_enabled=True,
     ) if key and os.environ.get("CASEPROOF_RIGHTS_SHADOW_DEV") == "YES" else None,
