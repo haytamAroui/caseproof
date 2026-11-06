@@ -299,7 +299,7 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     begin
       begin
         perform caseproof._rights_require_bundle(
-          '{org}','{case}','{source_payload}'::jsonb,'export');
+          '{org}','{case}',('{source_payload}'::jsonb)->'sources','export');
         raise exception 'omitted active source accepted';
       exception when insufficient_privilege then
         if SQLERRM <> 'incomplete active rights bundle' then raise; end if;
