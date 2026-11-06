@@ -170,8 +170,10 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
                 con.rollback()
                 outcomes.append('stale')
     threads = [threading.Thread(target=racing_policy_write) for _ in range(2)]
-    for thread in threads: thread.start()
-    for thread in threads: thread.join(timeout=15)
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15)
     if any(thread.is_alive() for thread in threads) or sorted(outcomes)!=['accepted','stale']:
         raise AssertionError(f'concurrent rights writes not serialized: {outcomes}')
     if _run(f"select count(*) from caseproof.source_rights_policies "

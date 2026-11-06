@@ -3,9 +3,9 @@ import os
 from pathlib import Path
 
 from apps.api.litigation_development_app import create_litigation_development_app
-from apps.api.supabase_headless_matter_store import SupabaseHeadlessMatterStore
 from apps.api.signed_supabase_originals import SignedOriginalsStorage
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
+from apps.api.supabase_headless_matter_store import SupabaseHeadlessMatterStore
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 
 key = os.environ.get("CASEPROOF_DEV_PUBLISHABLE_KEY")

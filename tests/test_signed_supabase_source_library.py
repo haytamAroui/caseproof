@@ -195,7 +195,7 @@ def test_shadow_reads_rights_only_after_verified_bytes_without_mutating_result(
 def test_shadow_failure_preserves_successful_original(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    from apps.api.data_rights_signed import SignedRightsPolicyReader, ShadowLookupUnavailable
+    from apps.api.data_rights_signed import ShadowLookupUnavailable, SignedRightsPolicyReader
 
     def unavailable(self, **kwargs):
         raise ShadowLookupUnavailable("private test-only text")

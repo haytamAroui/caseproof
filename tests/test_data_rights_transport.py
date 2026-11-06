@@ -9,8 +9,8 @@ from uuid import uuid4
 import pytest
 
 from application.data_rights import Decision, RightsPolicy, evaluate
-from apps.api.data_rights_signed import ShadowLookupUnavailable, SignedRightsPolicyReader
 from apps.api.data_rights_shadow import observe_authorized_read
+from apps.api.data_rights_signed import ShadowLookupUnavailable, SignedRightsPolicyReader
 
 
 class FakeResponse:
