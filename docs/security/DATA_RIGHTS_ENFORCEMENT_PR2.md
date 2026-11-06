@@ -3,7 +3,8 @@
 **State:** DRAFT. Dormant migration `20261106105558` installed on
 `caseproof-dev` on 6 November 2026 with four triggers, zero persisted
 policies, no authenticated/service grants on the control, and `enabled=false`.
-Based on merged PR #201 and its append-only signed
+The forward source-scope hardening migration `20261106110906` is also installed,
+without activation. Based on merged PR #201 and its append-only signed
 rights policy ledger. No new rights grants, default approvals, automatic
 backfill, production rollout, training or RAG.
 
