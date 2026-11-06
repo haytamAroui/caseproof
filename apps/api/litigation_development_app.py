@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from apps.api.access_control import AccessFailure, AccessRejected
+from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.dossier_journey import DossierStore, create_dossier_router
 from apps.api.dossier_viewer import create_dossier_viewer_router
 from apps.api.litigation_check_app import create_litigation_check_app
@@ -27,7 +28,6 @@ from apps.api.litigation_review_app import create_clearbrief_review_router
 from apps.api.litigation_review_workspace import SignedReviewWorkspace
 from apps.api.litigation_search_app import create_litigation_search_app
 from apps.api.litigation_workspace_sources import create_clearbrief_sources_router
-from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
