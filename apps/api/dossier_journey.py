@@ -597,9 +597,10 @@ class DossierStore:
         self, bearer: str, case: str, brief: str, *, language_context: dict[str, Any] | None = None
     ) -> tuple[dict[str, Any], bytes]:
         context = self.rpc(bearer, case, "context")
-        if self.rights_gate is not None:
+        rights_gate = getattr(self, "rights_gate", None)
+        if rights_gate is not None:
             signed_manifest = self.client.bundle_manifest(bearer, case)["sources"]
-            self.rights_gate.require_bundle(
+            rights_gate.require_bundle(
                 bearer=bearer, case_id=case, sources=signed_manifest, action=Action.PROCESS,
             )
         sources, originals = self.sources(bearer, case)
@@ -772,8 +773,8 @@ class DossierStore:
         if len(serialized.encode()) > 1_900_000:
             raise HTTPException(422, "visual snapshot budget exceeded; reduce assessed pages")
         report["snapshot_hash"] = hashlib.sha256(serialized.encode()).hexdigest()
-        if self.rights_gate is not None:
-            self.rights_gate.require_bundle(
+        if rights_gate is not None:
+            rights_gate.require_bundle(
                 bearer=bearer, case_id=case, sources=sources, action=Action.PROCESS,
             )
         self.rpc(
