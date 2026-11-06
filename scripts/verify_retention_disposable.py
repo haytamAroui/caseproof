@@ -220,6 +220,7 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
         None,
         {**valid_rights_manifest, "sources": [{**synthetic_scope[0], "policy_version": 2}]},
         {**valid_rights_manifest, "sources": [{**synthetic_scope[0], "original_sha256": "b" * 64}]},
+        {**valid_rights_manifest, "sources": [{**synthetic_scope[0], "document_id": str(uuid4())}]},
         {**valid_rights_manifest, "sources": [{**synthetic_scope[0], "decision": "deny"}]},
     ):
         sql = insert_rights_manifest(broken)

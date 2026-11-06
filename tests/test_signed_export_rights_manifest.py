@@ -81,7 +81,6 @@ def test_unknown_revoked_or_invalid_policy_never_signs_a_release(options):
 @pytest.mark.parametrize("change", [
     lambda a: a["sources"][0].update(policy_version=True),
     lambda a: a["sources"][0].update(original_sha256="f" * 64),
-    lambda a: a["sources"][0].update(document_id=str(uuid4())),
     lambda a: a["sources"][0].update(decision="deny"),
     lambda a: a.update(action="process"),
     lambda a: a.update(scope="other_matter"),
