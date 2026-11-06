@@ -25,7 +25,9 @@ ORG = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 CASE = UUID("aaaaaaaa-1111-4111-8111-111111111111")
 FOREIGN_ORG = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 FOREIGN_CASE = UUID("aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa")
-ORIGINAL = b"%PDF-1.7\nsynthetic invoice # 1\n"
+ORIGINAL = b"%PDF-1.7
+synthetic invoice # 1
+"
 
 
 class FakePrivateStore:
@@ -435,7 +437,7 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
         "20261106092710_caseproof_data_rights_ledger_shadow.sql",
         "20261106093313_caseproof_rights_grant_revocation_fence.sql",
         # PR2: dormant SQL triggers, protected only when operator enables.
-        "20261106101000_caseproof_rights_enforcement_gates.sql",
+        "20261106105558_caseproof_rights_enforcement_gates.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",

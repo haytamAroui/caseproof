@@ -1,6 +1,9 @@
 # Data Rights Enforcement — PR 2 (development-only, opt-in)
 
-**State:** DRAFT. Based on merged PR #201 and its append-only signed
+**State:** DRAFT. Dormant migration `20261106105558` installed on
+`caseproof-dev` on 6 November 2026 with four triggers, zero persisted
+policies, no authenticated/service grants on the control, and `enabled=false`.
+Based on merged PR #201 and its append-only signed
 rights policy ledger. No new rights grants, default approvals, automatic
 backfill, production rollout, training or RAG.
 

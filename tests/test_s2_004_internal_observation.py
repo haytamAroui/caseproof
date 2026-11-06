@@ -104,7 +104,8 @@ def test_sql_is_disposable_only_non_approval_without_runtime_grants() -> None:
     assert "and 'case:read' = any(m.actions)" in SQL
     assert "audit" in SQL and "receipt" in SQL
     assert "set state=" not in SQL.lower()
-    assert "approved_conclusion" not in re.sub(r"--[^\n]*", "", SQL.lower())
+    assert "approved_conclusion" not in re.sub(r"--[^
+]*", "", SQL.lower())
 
 
 def test_no_new_live_route_or_staged_migration() -> None:
@@ -130,7 +131,7 @@ def test_no_new_live_route_or_staged_migration() -> None:
         "20261106092710_caseproof_data_rights_ledger_shadow.sql",
         "20261106093313_caseproof_rights_grant_revocation_fence.sql",
         # PR2: dormant SQL triggers, protected only when operator enables.
-        "20261106101000_caseproof_rights_enforcement_gates.sql",
+        "20261106105558_caseproof_rights_enforcement_gates.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",
