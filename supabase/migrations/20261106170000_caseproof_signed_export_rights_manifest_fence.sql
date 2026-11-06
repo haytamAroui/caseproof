@@ -126,7 +126,10 @@ begin
 end $$;
 revoke all on function caseproof._rights_export_manifest_fence()
   from public,anon,authenticated,service_role;
-create trigger rights_export_manifest_fence
+-- PostgreSQL fires triggers by name: run after rights_export_release, so
+-- existing source-denial semantics remain unchanged and the new proof is
+-- validated only for releases that passed the source rights fence.
+create trigger rights_z_export_manifest_fence
   before insert on caseproof.dossier_releases for each row
   execute function caseproof._rights_export_manifest_fence();
 
