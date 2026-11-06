@@ -43,6 +43,7 @@ def _uuid(raw: object) -> UUID:
 class SignedSourceLibrary:
     storage: SignedOriginalsStorage
     timeout_seconds: float = 12.0
+    rights_shadow_enabled: bool = False
     _key: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -127,9 +128,18 @@ class SignedSourceLibrary:
         )
         if ref != current or length != current_length:
             raise PrivateStorageFailure("Private source changed during read")
-        # PR 1 observes only after signed source and Storage readback succeed.
-        # No policy is inferred for pre-ledger source versions.
-        observe_authorized_read(policy_lookup=lambda: None)
+        # PR 1: observational only, AFTER both signed source reads and the
+        # verified Storage bytes. Errors never change the existing API result.
+        if self.rights_shadow_enabled:
+            from apps.api.data_rights_signed import SignedRightsPolicyReader
+
+            observe_authorized_read(
+                policy_lookup=lambda: SignedRightsPolicyReader(self._key).read(
+                    bearer=bearer, case_id=case_id,
+                    document_id=document_id, version_id=version_id,
+                ),
+                action="process", same_matter=True,
+            )
         return data
 
     def put_once(
