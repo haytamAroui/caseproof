@@ -124,6 +124,23 @@ insert into storage.objects values('caseproof-originals-dev','{org}/{case}/lefto
     # PR2 owner switch defaults OFF: no existing workflow regresses.
     if _run("select enabled from caseproof._rights_enforcement_control", env) != 'f':
         raise AssertionError('rights enforcement must default to disabled')
+    # A missing operator control record is NEVER interpreted as disabled.
+    missing_control = f"""
+    begin;
+    delete from caseproof._rights_enforcement_control;
+    do $absent$
+    begin
+      begin
+        perform caseproof._rights_require_source(
+          '{org}','{case}','{doc}','{version}','process');
+        raise exception 'absent rights control was accepted';
+      exception when insufficient_privilege then
+        if SQLERRM <> 'rights enforcement configuration unavailable' then raise; end if;
+      end;
+    end $absent$;
+    rollback;
+    """
+    _run(missing_control, env)
     _run("update caseproof._rights_enforcement_control set enabled=true", env)
     source_gate = (f"select caseproof._rights_require_source('{org}','{case}',"
                    f"'{doc}','{version}',")

@@ -27,7 +27,10 @@ declare
 begin
   select enabled into v_enabled from caseproof._rights_enforcement_control
     where singleton=true;
-  if v_enabled is distinct from true then return 0; end if;
+  if v_enabled is null then
+    raise exception 'rights enforcement configuration unavailable' using errcode='42501';
+  end if;
+  if v_enabled=false then return 0; end if;
   if p_action not in ('process','indexForSearch','export')
     or p_org is null or p_case is null or p_document is null or p_version is null then
     raise exception 'source rights unavailable' using errcode='42501';
@@ -87,7 +90,10 @@ declare
   v_seen uuid[]:='{}'::uuid[];
 begin
   select enabled into v_enabled from caseproof._rights_enforcement_control where singleton;
-  if v_enabled is distinct from true then return; end if;
+  if v_enabled is null then
+    raise exception 'rights enforcement configuration unavailable' using errcode='42501';
+  end if;
+  if v_enabled=false then return; end if;
   if p_sources is null or jsonb_typeof(p_sources)<>'array'
      or jsonb_array_length(p_sources) not between 1 and 32 then
      raise exception 'invalid rights bundle' using errcode='42501';
@@ -139,7 +145,10 @@ begin
   -- writes when the operator has not explicitly enabled enforcement.
   select enabled into v_enabled from caseproof._rights_enforcement_control
     where singleton=true;
-  if v_enabled is distinct from true then return new; end if;
+  if v_enabled is null then
+    raise exception 'rights enforcement configuration unavailable' using errcode='42501';
+  end if;
+  if v_enabled=false then return new; end if;
   if tg_table_name='_dev_journey_sources' then
     perform caseproof._rights_require_source(
       new.org_id,new.case_id,new.document_id,new.version_id,'process');

@@ -55,6 +55,13 @@ reclassified as processing/export writes.
    and right-to-erasure consequences require independent sign-off.
 6. **CI:** Full regression matrix and exact PR head checks must be green.
 
+**Activation order (pilot only):** migrate dormant schema; verify approved
+legacy source rights and signed actor grants; obtain independent approval;
+flip the private SQL control in an owner-controlled migration **before**
+enabling `CASEPROOF_RIGHTS_ENFORCE_DEV=YES` in the loopback API. Never set
+only the API flag and assume direct privileged RPCs are protected. Missing
+control rows fail closed rather than silently switching enforcement off.
+
 **Do not merge or enable this draft until the above gates are met.**
 PR 3 adds rights versions and decisions to the signed reviewed-release
 manifest and must be separately approved.
