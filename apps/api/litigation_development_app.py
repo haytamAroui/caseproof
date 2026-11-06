@@ -27,10 +27,10 @@ from apps.api.litigation_review_app import create_clearbrief_review_router
 from apps.api.litigation_review_workspace import SignedReviewWorkspace
 from apps.api.litigation_search_app import create_litigation_search_app
 from apps.api.litigation_workspace_sources import create_clearbrief_sources_router
+from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
-from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.workspace_auth import SupabaseWorkspaceAuth, create_workspace_auth_router
 from apps.api.workspace_catalog import create_workspace_catalog_router
 from apps.api.workspace_intake import WorkspaceIntake, create_workspace_intake_router

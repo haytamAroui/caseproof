@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from pypdf import PdfReader, PdfWriter
 
 from application.capacity_envelope import CAPACITY_POLICY, MAX_PDF_PAGES
+from application.data_rights import Action
 from application.extraction.contracts import ExtractionError
 from application.litigation.dossier_contracts import add_report_contract, assess_fidelity, quotation_context
 from application.litigation.regional_fidelity import select_visual_assessment
@@ -25,9 +26,8 @@ from apps.api.access_control import AccessFailure, AccessRejected, IdentityServi
 from apps.api.dossier_draft_revisions import DraftRevisionClient, stale_snapshot_conflict
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
-from apps.api.litigation_live_journey import HOST, JourneyClient
 from apps.api.data_rights_enforcement import SignedRightsGate
-from application.data_rights import Action
+from apps.api.litigation_live_journey import HOST, JourneyClient
 from apps.api.signed_document_parse import parse_verified_original
 from apps.api.signed_supabase_originals import (
     PrivateStorageExists,

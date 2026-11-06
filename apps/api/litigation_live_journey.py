@@ -18,6 +18,7 @@ from fastapi import APIRouter, Header
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from application.data_rights import Action
 from application.documents.file_boundary import validate_original_container
 from application.extraction.contracts import ExtractionError
 from apps.api.access_control import (
@@ -26,6 +27,7 @@ from apps.api.access_control import (
     IdentityServiceUnavailable,
     InvalidBearer,
 )
+from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.litigation_evidence_app import _token
 from apps.api.signed_document_parse import BINARY_MEDIA, MAX_BINARY_BYTES, parse_verified_original
 from apps.api.signed_supabase_originals import (
@@ -34,8 +36,6 @@ from apps.api.signed_supabase_originals import (
     SignedOriginalsStorage,
 )
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
-from apps.api.data_rights_enforcement import SignedRightsGate
-from application.data_rights import Action
 from apps.api.supabase_auth_verifier import HttpsSupabaseUserLookup, SupabaseAuthUserVerifier
 from infrastructure.parsers.ocr_geometry_sidecar import (
     GeometryReference,

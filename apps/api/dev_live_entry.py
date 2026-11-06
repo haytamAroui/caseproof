@@ -2,9 +2,9 @@
 import os
 from pathlib import Path
 
-from apps.api.litigation_development_app import create_litigation_development_app
 from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.data_rights_signed import SignedRightsPolicyReader
+from apps.api.litigation_development_app import create_litigation_development_app
 from apps.api.signed_supabase_originals import SignedOriginalsStorage
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.supabase_headless_matter_store import SupabaseHeadlessMatterStore

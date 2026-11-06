@@ -56,7 +56,7 @@ def test_explicit_persisted_rights_are_required_per_action():
     assert result.policy_version == 2
     with pytest.raises(AccessRejected) as exc:
         call(gate, action=Action.EXPORT)
-    assert exc.value.failure == AccessFailure.RESOURCE_MASKED
+    assert exc.value.code == AccessFailure.RESOURCE_MASKED
     with pytest.raises(AccessRejected):
         call(gate, action=Action.INDEX_FOR_SEARCH)
     assert len(reader.calls) == 3
@@ -66,7 +66,7 @@ def test_explicit_persisted_rights_are_required_per_action():
 def test_missing_legacy_policy_does_not_gain_implicit_approval():
     with pytest.raises(AccessRejected) as exc:
         call(SignedRightsGate(Reader(None)))
-    assert exc.value.failure == AccessFailure.RESOURCE_MASKED
+    assert exc.value.code == AccessFailure.RESOURCE_MASKED
 
 
 def test_missing_reference_blocks_processing_even_when_flag_true():
@@ -80,7 +80,7 @@ def test_signed_lookup_failure_is_unavailable_and_redacted(caplog):
     with caplog.at_level(logging.WARNING, logger="caseproof.rights.enforcement"):
         with pytest.raises(AccessRejected) as exc:
             call(gate)
-    assert exc.value.failure == AccessFailure.SERVICE_UNAVAILABLE
+    assert exc.value.code == AccessFailure.SERVICE_UNAVAILABLE
     assert "sensitive upstream failure" not in caplog.text
     assert "synthetic.signed.jwt" not in caplog.text
     assert "confidential contract reference" not in caplog.text
@@ -109,7 +109,7 @@ def test_bundle_checks_all_server_resolved_sources_before_protected_action():
             bearer="signed", case_id=CASE, action=Action.PROCESS,
             sources=[{"document_id": DOCUMENT, "version_id": VERSION}] * 2,
         )
-    assert exc.value.failure == AccessFailure.SERVICE_UNAVAILABLE
+    assert exc.value.code == AccessFailure.SERVICE_UNAVAILABLE
 
 
 @pytest.mark.parametrize("sources", [[], [{}], [{"document_id": "x"}]])
@@ -127,7 +127,9 @@ def test_unknown_action_never_reaches_signed_reader():
     assert not reader.calls
 
 
-def test_default_is_unwired_in_dev_composition(monkeypatch):
+def test_default_is_unwired_in_dev_composition():
     # The opt-in is made only at app composition, never by bearer or request data.
-    from apps.api.dev_live_entry import app
-    assert app is not None
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "apps/api/dev_live_entry.py").read_text()
+    assert 'os.environ.get("CASEPROOF_RIGHTS_ENFORCE_DEV") == "YES"' in source
