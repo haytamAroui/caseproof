@@ -78,4 +78,6 @@ def render_dossier_export(report: dict[str, Any], format: str) -> str:
         ],
     )
     text += _section("Human decisions", report["human_decisions"])
+    if "release_acknowledgement" in report:
+        text += _section("Release acknowledgment (not a legal signature)", report["release_acknowledgement"])
     return text
