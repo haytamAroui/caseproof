@@ -444,6 +444,7 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
         "20261106132320_caseproof_rights_signed_fixture_grant.sql",
         "20261106132551_caseproof_rights_effective_parent_projection.sql",
         "20261106133128_caseproof_rights_m05_cleanup_audit.sql",
+        "20261106172653_caseproof_signed_export_rights_manifest_fence.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",
