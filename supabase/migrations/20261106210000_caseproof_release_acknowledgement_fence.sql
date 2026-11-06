@@ -20,7 +20,7 @@ begin
     or ack->>'snapshot_hash' is distinct from new.snapshot_hash
     or ack->>'release_type' is distinct from
        new.manifest #>> '{review_completeness,release_type}'
-    or ack->>'actor_label_type' not in ('confirmed_email','account_id')
+    or coalesce(ack->>'actor_label_type','') not in ('confirmed_email','account_id')
     or coalesce(length(ack->>'actor_label'),0) not between 1 and 254
     or ack->>'actor_label' ~ '[[:cntrl:]]'
     or coalesce(length(ack->>'notice'),0) < 30
