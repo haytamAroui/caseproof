@@ -11,11 +11,17 @@ from apps.api.supabase_headless_matter_store import SupabaseHeadlessMatterStore
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 
 key = os.environ.get("CASEPROOF_DEV_PUBLISHABLE_KEY")
+enforce_rights = (
+    os.environ.get("ENFORCE_DOCUMENT_RIGHTS") == "true"
+    or os.environ.get("CASEPROOF_RIGHTS_ENFORCE_DEV") == "YES"
+)
+if enforce_rights and not key:
+    raise RuntimeError("Document rights enforcement requires signed Supabase identity")
 
 app = create_litigation_development_app(
     publishable_key=key,
     rights_gate=SignedRightsGate(SignedRightsPolicyReader(key))
-    if key and os.environ.get("CASEPROOF_RIGHTS_ENFORCE_DEV") == "YES" else None,
+    if key and enforce_rights else None,
     signed_originals=SignedSourceLibrary(
         SignedOriginalsStorage(key), rights_shadow_enabled=True,
     ) if key and os.environ.get("CASEPROOF_RIGHTS_SHADOW_DEV") == "YES" else None,
