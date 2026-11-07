@@ -147,6 +147,7 @@ test('review requires rendered original and explicit region inspection; lost ack
   const review = page.getByRole('region', { name: 'Human review' });
   const save = review.getByRole('button', { name: 'Save human decision' });
   await expect(save).toBeDisabled();
+  await expect(review.getByRole('radio', { name: 'Qualify the support' })).not.toBeChecked();
   await expect(
     page.getByText('Source page rendered.', { exact: true }),
   ).toBeVisible();
@@ -156,6 +157,7 @@ test('review requires rendered original and explicit region inspection; lost ack
   await review
     .getByLabel('Rationale (required, visible to authorized reviewers)')
     .fill('Viewed preserved pixels');
+  await review.getByRole('radio', { name: 'Qualify the support' }).check();
   await expect(save).toBeEnabled();
   await save.click();
   await expect(
@@ -475,6 +477,7 @@ test('inspection and unsaved review never carry into another snapshot with the s
     'Rationale (required, visible to authorized reviewers)',
   );
   await rationale.fill('Prior snapshot only');
+  await review.getByRole('radio', { name: 'Qualify the support' }).check();
   await expect(
     review.getByRole('button', { name: 'Save human decision' }),
   ).toBeEnabled();
@@ -872,6 +875,7 @@ test('next saved decision follows the active filtered queue', async ({
   await review
     .getByLabel('Rationale (required, visible to authorized reviewers)')
     .fill('Viewed preserved pixels');
+  await review.getByRole('radio', { name: 'Qualify the support' }).check();
   await review.getByRole('button', { name: 'Save human decision' }).click();
   await review
     .getByRole('button', { name: 'Reconcile durable receipt' })

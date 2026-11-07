@@ -70,9 +70,8 @@ export function ReviewPanel({
       ),
     enabled: session.connected,
   });
-  const [decision, setDecision] = useState<ReviewDecision>(
-    'CONFIRMED_QUALIFIED',
-  );
+  // A reviewer must choose explicitly: no preselected affirmative result.
+  const [decision, setDecision] = useState<ReviewDecision | null>(null);
   const [rationale, setRationale] = useState('');
   const [confirmed, setConfirmed] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -260,7 +259,10 @@ export function ReviewPanel({
         </Notice>
       )}
       <fieldset disabled={busy || Boolean(submitted)}>
-        <legend>Disposition</legend>
+        <legend>Disposition — none selected by default</legend>
+        {decision === null && (
+          <p role="status">Not assessed. Select a disposition only after examining the preserved source and relevant context.</p>
+        )}
         {dispositions.map(({ id, label }) => (
           <label key={id}>
             <input
@@ -299,6 +301,7 @@ export function ReviewPanel({
             regions === null ||
             confirmed.length !== regions.length ||
             !rationale.trim() ||
+            decision === null ||
             Boolean(submitted) ||
             (decision === 'CONFIRMED_SUPPORTED' &&
               (finding.page_mapping !== 'mapped' ||
