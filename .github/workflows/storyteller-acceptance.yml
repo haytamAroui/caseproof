@@ -1,0 +1,56 @@
+name: PR196 Storyteller cockpit browser acceptance
+on:
+  push:
+    branches:
+      - feat/storyteller-cockpit-redesign
+    paths:
+      - .github/workflows/storyteller-acceptance.yml
+      - frontend/src/**
+      - frontend/tests/**
+      - frontend/package*.json
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cockpit:
+    if: github.repository == 'haytamAroui/caseproof' && github.ref == 'refs/heads/feat/storyteller-cockpit-redesign'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: feat/storyteller-cockpit-redesign
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - name: Generate preserved synthetic PDF fixtures
+        run: uv run --locked python -m scripts.generate_viewer_fixtures --out frontend/tests/viewer-comparison/generated/fixtures
+      - run: npm ci
+        working-directory: frontend
+      - name: Contracts and frontend policy
+        run: npm run contracts:check && npm run policy:check && npm run lint
+        working-directory: frontend
+      - name: All unit tests and production typecheck
+        run: npm test && npm run build && npm run test:cockpit
+        working-directory: frontend
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Actual browser: cockpit, source inspection and exports
+        run: npm run test:e2e
+        working-directory: frontend
+      - name: Upload real browser screenshots and failures
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: story-cockpit-synthetic-browser
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+          retention-days: 7
