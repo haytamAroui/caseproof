@@ -467,7 +467,7 @@ function ParaphraseGuardPanel({ finding }: { finding: FindingView }) {
     return (
       <Notice>
         This frozen report has no guarded-term review. Inspect the preserved
-        source and surrounding context before making a semantic decision.
+        source and surrounding context prior to making a semantic decision.
       </Notice>
     );
   }
