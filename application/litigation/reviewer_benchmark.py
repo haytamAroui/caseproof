@@ -272,7 +272,7 @@ def score_completed_trial(
         false = [(d, g) for d, g in unsupported if d["decision"] == "SUPPORTED"]
         missed = [(d, g) for d, g in contradictions if d["decision"] != "CONTRADICTED"]
         by_case: dict[str, list[str]] = defaultdict(list)
-        for row, gold_state in sample:
+        for row, _gold_state in sample:
             by_case[expected[row["assignment_id"]]["case_id"]].append(row["decision"])
         agreement_pairs = [
             left == right for decisions in by_case.values()
