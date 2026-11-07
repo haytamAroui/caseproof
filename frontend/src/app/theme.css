@@ -760,3 +760,62 @@ button:not(:disabled), a, input, select, textarea { touch-action: manipulation; 
 }
 dialog[open] { box-shadow: 0 18px 60px #16181d26; }
 dialog::backdrop { background: #16181d99; }
+
+/* Storyteller dark appearance follows the operating-system preference.
+   Status text, source pixels and machine/human distinctions remain unchanged. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #f1f0ed;
+    --muted: #b5b8bd;
+    --accent: #f1f0ed;
+    --surface: #24272c;
+    --line: #51545a;
+    --danger: #ff9292;
+    --focus: #83c9f1;
+    --paper: #17191d;
+    --paper-raised: #30343a;
+    background: var(--paper);
+    color: var(--ink);
+    scrollbar-color: var(--muted) var(--paper);
+  }
+  body, main { background: var(--paper); color: var(--ink); }
+  .app-header, .review-layout, .matter-list li,
+  .queue, .inspection, .review-panel, .draft-context,
+  .dimension, .intake fieldset, .export-workspace .draft-context,
+  .page-empty, .viewer-page, .docx-editor-sidebar,
+  .docx-editor-revisions, .docx-editor-document {
+    background: var(--surface);
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .finding, .finding small, .queue h2 span { color: var(--ink); }
+  .finding:hover, .finding[aria-current='true'],
+  .matter-list a:hover, .intake fieldset fieldset,
+  .source-viewer .viewer-scroll { background: var(--paper-raised); }
+  .button { color: var(--paper); background: var(--accent); border-color: var(--accent); }
+  .button:hover { background: #d1d5db; }
+  .button[aria-pressed='false'] { background: var(--surface); color: var(--ink); border-color: var(--line); }
+  .button[aria-pressed='true'] { background: var(--accent); color: var(--paper); }
+  .notice { background: var(--paper-raised); border-color: var(--line); color: var(--ink); }
+  .notice.error { background: #40262b; border-color: var(--danger); color: #ffd4d4; }
+  .draft-context mark { background: #66501f; color: #fff0c0; }
+  input, select, textarea, dialog, .intake input[type='file'],
+  .intake input[type='file']::file-selector-button {
+    background: var(--surface);
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  dialog::backdrop { background: #000a; }
+  .skip { background: var(--surface); color: var(--ink); }
+  ::-webkit-scrollbar-track { background: var(--paper); }
+  ::-webkit-scrollbar-thumb { border-color: var(--paper); }
+  .docx-editor button, .docx-ribbon, .docx-word-handoff {
+    background: var(--surface);
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .docx-editor button:hover:not(:disabled) { background: var(--paper-raised); }
+  .docx-ribbon button:nth-of-type(1) { background: var(--accent); color: var(--paper); }
+  .docx-block textarea:disabled { background: var(--paper-raised); color: var(--muted); }
+}
