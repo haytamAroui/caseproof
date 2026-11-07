@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 
 from application.litigation.reviewer_benchmark import (
     SUBMISSIONS_SCHEMA,
@@ -57,7 +58,7 @@ def verify_source_bytes(cases: list[dict[str, Any]], source_root: Path) -> None:
                 raise BenchmarkInvalid("encrypted PDF must be reviewed separately")
             if case["physical_pdf_page"] > len(reader.pages):
                 raise BenchmarkInvalid("physical PDF page outside real original")
-        except (OSError, ValueError, KeyError) as error:
+        except (OSError, ValueError, KeyError, PdfReadError) as error:
             if isinstance(error, BenchmarkInvalid):
                 raise
             raise BenchmarkInvalid("source cannot be independently read and pinned") from error

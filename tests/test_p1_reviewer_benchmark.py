@@ -8,7 +8,6 @@ import pytest
 
 from application.litigation.reviewer_benchmark import (
     ASSIGNMENTS_SCHEMA,
-    DECISIONS,
     GOLD_SCHEMA,
     PACKET_SCHEMA,
     RESULTS_SCHEMA,

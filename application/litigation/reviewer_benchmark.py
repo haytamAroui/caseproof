@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import itertools
-import math
 import re
 import statistics
 from collections import defaultdict
@@ -89,7 +88,7 @@ def make_blinded_packets(
     """
     validate_cases(cases)
     _bounded(seed, "randomization seed", 256)
-    _require(len(reviewer_languages) >= 4, "at least four reviewer pseudonyms required")
+    _require(4 <= len(reviewer_languages) <= 24, "4–24 reviewer pseudonyms required")
     by_stratum: dict[tuple[str, ...], list[str]] = defaultdict(list)
     for rid, languages in reviewer_languages.items():
         _require(bool(SAFE_ID.fullmatch(rid)), "reviewer id must be a pseudonym")
@@ -258,7 +257,7 @@ def score_completed_trial(
         _require(type(confidence) is int and 1 <= confidence <= 5, "confidence 1–5 required")
         helpful = row.get("warning_helpful")
         _require(
-            helpful in (True, False, None)
+            (helpful is None or type(helpful) is bool)
             and (assignment["condition"] == "guarded_term_warnings" or helpful is None),
             "warning helpfulness unsupported",
         )
