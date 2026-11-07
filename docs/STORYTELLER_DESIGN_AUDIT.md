@@ -1,0 +1,120 @@
+# Storyteller cockpit design audit
+
+Reference: owner-provided CaseProof-Storyteller-Demo.html and app.js; inspected against main 79c6aee. The reference is a standalone synthetic simulation. This is a source-level comparison, not a visual browser or accessibility audit.
+
+| Surface              | Reference                                               | Current frontend                               | Disposition                                                                                                                                                                                                              |
+| -------------------- | ------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Palette              | Paper #f6f6f3, ink #16181d, neutral borders             | Blue-grey and petrol                           | Adopt neutral theme while keeping explicit status text.                                                                                                                                                                  |
+| Typography           | Inter, Source Serif 4, JetBrains Mono from Google Fonts | System sans and monospace                      | Self-host the reference fonts with their OFL licenses and system fallbacks.                                                                                                                                              |
+| Workspace            | Findings, draft, evidence                               | Findings and stacked inspection                | Split existing draft and source/review into responsive panes.                                                                                                                                                            |
+| Findings             | Bordered cards and selection                            | Functional queue with filtering and pagination | Restyle existing buttons; retain navigation and states.                                                                                                                                                                  |
+| Inspection           | Scan/OCR/diff tabs                                      | Existing source viewer and correction/review   | Offer a compact native-button switch between original pixels and available OCR positions. Keep the original visible. Source-text and correction-diff views remain separate and are not represented as a fabricated mode. |
+| Intake and inventory | Cards and staged progress                               | Working forms                                  | Inherit shared theme; complete layout redesign remains open.                                                                                                                                                             |
+| Export and history   | Simulated modal and timeline                            | Real artifact and history flows                | Preserve real behavior; further visual alignment remains open.                                                                                                                                                           |
+| Motion and dark mode | Animated transitions and dark mode                      | Light theme and reduced-motion support         | No dark mode or decorative motion added.                                                                                                                                                                                 |
+
+The implementation updates the theme and reading layout and applies shared surfaces to intake, inventory, exports, history and the DOCX editor. Browser comparison, responsive and keyboard review, signed workflow verification and exact reference parity remain open. No server contract or real decision behavior is changed.
+
+## Screen-by-screen mapping
+
+- Session and matter catalog: existing sign-in, matter list, new-matter form and report list retain their routes and access checks. Shared typography, input and list-card styling applies. The prototype does not define a complete signed-session design.
+- Intake: four native file inputs retain their bounded preflight and readback; styled upload controls and grouped surfaces remain keyboard-operable. The prototype's simulated progress is not a source of transfer status.
+- Inventory: confirmed sources and page-space mappings retain native controls, server confirmation and complete/incomplete disclosures. Grouped cards use the neutral surface.
+- Findings: the existing bounded attention/all filters, paging, current snapshot and four separate dimensions remain unchanged. Draft and source/review panels are responsive; the selected finding and coverage remain visible.
+- Source: PDF canvas, navigation, rotation, zoom, labeled OCR positions and search remain existing features; the reference's illustrative scan/OCR/diff tabs are not fabricated as a substitute for real data. Viewer canvas scroll and page-space labels use shared surfaces.
+- Review and correction: receipt-bound review, exact correction preview, recovery and comparison continue to use their existing components and authorized APIs. Human and machine states remain separate.
+- DOCX editor and Word handoff: existing editor-specific stylesheet adopts the shared ink, focus and neutral borders; native inputs and historical scope notices are unchanged.
+- Exports and history: the real scoped release and frozen history use neutral cards and backend-provided states. Prototype hashes and fake report history are not copied.
+
+## Remaining design decisions and validation
+
+The uploaded prototype requests remote Google Fonts, whereas the frontend blueprint prohibits remote font services. Inter, Source Serif 4 and JetBrains Mono are served locally with their OFL licenses and system fallbacks. The reference also has dark mode and animated simulated transitions; neither is implemented in this increment. A measured browser comparison, manual accessibility and practitioner review, and the signed workflow must precede claims of full visual parity or production readiness.
+
+## Implementation continuation — 7 November 2026
+
+The branch now includes the Storyteller responsive queue/draft/evidence layout, aligned DOCX editor surfaces, restrained CSS entrance and selection transitions, reduced-motion overrides, and an operating-system-preference dark palette. These are source changes, **not** a verified visual acceptance result.
+
+### Release blockers — do not merge as design-complete yet
+
+1. Run `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, and `npm run policy:check` on the final head, and inspect GitHub Actions. CSS source changes do not establish browser correctness.
+2. Compare screenshots with the owner-provided Storyteller demo for desktop, tablet and narrow viewport in both color schemes. Check hard-coded colors in nested editor and viewer components.
+3. Complete real source/draft comparison interactions using actual backend evidence; do not fabricate OCR, diffs, review receipts, or source geometry.
+4. Verify dialog focus containment, keyboard navigation, reduced motion, high contrast, screen-reader labels, and overflow at 200% zoom.
+5. Run genuine signed-user intake → inventory → findings → review → correction/recheck → release → historical reopening; ensure rights restrictions and provenance remain enforced.
+6. Only after these checks and independent review should this draft PR be marked ready for merge.
+
+Motion uses native CSS at present. Adding the `motion` library should be justified by a real interaction requiring coordinated layout transitions and must include dependency/policy review; merely renaming CSS transitions would not improve the product.
+
+## PR #196 implementation refinement — legal review cockpit (7 November 2026)
+
+The existing palette and locally licensed Inter, Source Serif 4 and JetBrains Mono
+remain. A matter-scoped, **seven-stage** route navigator is visible across intake,
+inventory, verification, review, correction, export and history. Stage numbers
+describe navigation only; no step is labelled "complete" without server evidence.
+
+The live review cockpit is rendered as three connected panes on wide displays:
+findings queue, preserved DOCX context, and preserved source PDF. The queue and
+draft/source split are pointer-resizable and keyboard-operable, with 240–420 px
+and 30–70% enforced bounds. Reading modes and widths persist between findings;
+source inspection state is still reset for each finding. Tablets and narrow
+layouts stack evidence instead of shrinking original pixels beyond utility.
+
+Only navigation chrome gets brief Motion transitions (160 ms) and CSS hover
+feedback (150 ms), with reduced-motion support. OCR text remains explicitly
+derived and never receives animated evidence-verification cues.
+
+The release acknowledgment from merged PR #204 is presented in a native modal;
+the existing partial-release consent and exact snapshot/actor binding remain
+unchanged. Ordinary metadata, findings, and coverage stay inline.
+
+The optional dark palette is **deferred**, not auto-enabled from OS preference,
+until light-mode visual inspection and accessibility acceptance are completed.
+No CI green result alone establishes lawyer-facing pixel parity, genuine signed
+journey, or a production rollout.
+
+### Browser acceptance and delivery boundary
+
+PR196 synthetic browser run `42363218281` passed in GitHub Actions
+(7 November 2026); includes source-viewing OCR, keyboard/pointer presentation
+controls, mode switching, mobile stacking, axe accessibility, release
+confirmation, and screenshot artifacts. Explicit release acknowledgment remains
+server-authorized as in merged PR204; no synthetic UI state is treated as a
+legal verification verdict. The F3–F6 genuine-signed workflows are skipped on
+this design branch and must not be counted as signed acceptance.
+
+The Storyteller Motion and formatting self-committing setup workflows were
+removed once the pinned lockfile and format were committed. The remaining
+PR196 acceptance workflow is read-only.
+
+Original demo visual parity is an editorial comparison, not a pixel-perfect
+replica: the live cockpit retains real uncertainty, review gating, and coverage
+controls that the 60-second marketing demo omits. Dark OS appearance intentionally
+renders the validated light mode; dark mode is a separate future increment.
+
+## Storyteller visual parity pass — 7 November 2026
+
+The live React cockpit now follows the synthetic reference's actual desktop
+proportions: **300px findings / flexible manuscript / 400px evidence** in a
+continuous white workspace, with independent 240–420px queue and 320–560px
+source splitters. The source splitter measures from the right, so left-arrow
+expands the right source pane as expected. Narrow widths stack both document
+and evidence to preserve original PDF inspectability.
+
+- Top chrome: compact Matter · Verification · Export navigation, all linked to
+  real authorized application routes, alongside the persistent seven-stage
+  workflow navigation. Missing snapshot context leaves links disabled.
+- Paper typography: 14px Inter control baseline, 17px Source Serif 4 document
+  page at 1.8 line height, JetBrains Mono for evidence hashes; no remote fonts.
+- Reference sematics: palette Paper #F6F6F3, Ink #16181D, Surface #FFFFFF,
+  Border #DCDDD6, Focus #126A9B, muted #5B6070, amber #8A4F00 and green
+  #0B6B57. Semantic colors never assert verification by themselves.
+- Motion: 160ms selection/reading feedback, 150ms lightweight hover states,
+  zero-motion fallback. Native release confirmation and review receipts remain
+  authoritative; no simulated sweeping OCR/verification animation was copied.
+- Source-linked human review and release policy are unchanged.
+
+Visual similarity is closer than the previous two-column/nested-panel layout,
+but the reference's simulated in-page quotation marks, fake scan overlays,
+marketing captions and strong dark-mode palette are **intentionally not**
+replicated as evidentiary truths. Real NL/FR long-page pilot review remains a
+separate gate.

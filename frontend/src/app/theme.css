@@ -1,21 +1,50 @@
+/* Self-hosted variable fonts from Google Fonts, SIL OFL 1.1. */
+@font-face {
+  font-family: 'CaseProof Inter';
+  src: url('./fonts/inter.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'CaseProof Source Serif';
+  src: url('./fonts/source-serif-4.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'CaseProof JetBrains Mono';
+  src: url('./fonts/jetbrains-mono.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+}
 /* Canonical client tokens, mapped in DESIGN.md. */
 :root {
   font-family:
+    'CaseProof Inter',
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #172d38;
-  background: #f4f7f9;
-  --ink: #172d38;
-  --muted: #435e6b;
-  --accent: #103a4b;
+  color: #16181d;
+  background: #f6f6f3;
+  --ink: #16181d;
+  --muted: #5b6070;
+  --accent: #16181d;
   --surface: #fff;
-  --line: #c7d4db;
-  --danger: #9a2727;
+  --line: #dcddd6;
+  --danger: #a61b1b;
+  --warning: #8a4f00;
+  --warning-background: #fff1d6;
+  --success: #0b6b57;
+  --success-background: #e3f4ee;
+  --paper: #f6f6f3;
+  --paper-raised: #edede8;
   --focus: #126a9b;
-  scrollbar-color: var(--muted) #f4f7f9;
+  scrollbar-color: var(--muted) #f6f6f3;
   scrollbar-width: auto;
   font-synthesis: none;
 }
@@ -24,8 +53,8 @@
 }
 body {
   margin: 0;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.45;
 }
 a {
   color: var(--accent);
@@ -51,7 +80,7 @@ summary:focus-visible {
 }
 input {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 10px;
   width: 100%;
   min-height: 44px;
@@ -143,19 +172,19 @@ h3 {
   overflow-wrap: anywhere;
 }
 .matter-list a:hover {
-  background: #eaf1f5;
+  background: #edede8;
 }
 .button {
   min-height: 44px;
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--accent);
   color: #fff;
   padding: 8px 18px;
   font-weight: 600;
 }
 .button:hover {
-  background: #205365;
+  background: #363a43;
 }
 .button:disabled {
   opacity: 0.55;
@@ -164,7 +193,7 @@ h3 {
   padding: 14px 18px;
   border: 1px solid #b8cbd6;
   border-left: 4px solid var(--accent);
-  background: #eaf1f5;
+  background: #edede8;
   overflow-wrap: anywhere;
 }
 .notice.error {
@@ -174,7 +203,7 @@ h3 {
 }
 .review-layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   border: 1px solid var(--line);
   background: var(--surface);
   margin-top: 24px;
@@ -203,7 +232,7 @@ h3 {
   width: 100%;
   padding: 14px;
   color: var(--ink);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow-wrap: anywhere;
 }
 .finding small {
@@ -211,10 +240,10 @@ h3 {
   color: var(--muted);
 }
 .finding:hover {
-  background: #f1f5f7;
+  background: #f6f6f3;
 }
 .finding[aria-current='true'] {
-  background: #eaf1f5;
+  background: #edede8;
   border-color: var(--accent);
 }
 .inspection {
@@ -229,7 +258,7 @@ h3 {
 .dimension {
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
 }
 .dimension dt {
   font-size: 12px;
@@ -260,7 +289,7 @@ pre {
   font-size: 12px;
 }
 code {
-  font-family: ui-monospace, monospace;
+  font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace;
 }
 .skip {
   position: absolute;
@@ -284,11 +313,11 @@ footer {
   height: 12px;
 }
 ::-webkit-scrollbar-track {
-  background: #f4f7f9;
+  background: #f6f6f3;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--muted);
-  border: 3px solid #f4f7f9;
+  border: 3px solid #f6f6f3;
   border-radius: 8px;
 }
 @media (max-width: 760px) {
@@ -410,7 +439,7 @@ select {
   min-height: 44px;
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
 }
@@ -456,13 +485,13 @@ dialog {
   max-height: calc(100vh - 32px);
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 24px;
   background: var(--surface);
   color: var(--ink);
 }
 dialog::backdrop {
-  background: #172d3880;
+  background: #16181d80;
 }
 
 /* F4 evidence-first panels; no decision colors or inferred machine verdicts. */
@@ -496,7 +525,7 @@ dialog::backdrop {
 .review-panel textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 10px;
   font: inherit;
   color: var(--ink);
@@ -513,4 +542,1265 @@ dialog::backdrop {
   background: #e2edf6;
   color: var(--ink);
   font-weight: bold;
+}
+
+/* Independent draft and source reading panes. */
+.cockpit-inspection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  gap: 20px;
+  align-items: start;
+}
+.cockpit-draft,
+.cockpit-evidence {
+  min-width: 0;
+}
+.cockpit-draft .draft-context {
+  font-family: 'CaseProof Source Serif', Georgia, serif;
+  line-height: 1.75;
+}
+.queue .finding {
+  border-color: var(--line);
+  margin-bottom: 8px;
+}
+.review-layout {
+  border-radius: 12px;
+}
+@media (max-width: 1100px) {
+  .cockpit-inspection {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Shared Storyteller surfaces for the existing workflow. */
+.intake,
+.export-workspace,
+.open-report {
+  max-width: 1000px;
+}
+.intake fieldset,
+.export-workspace .draft-context {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.intake fieldset fieldset {
+  background: #f6f6f3;
+}
+.intake input[type='file'] {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+.intake input[type='file']::file-selector-button {
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-right: 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.matter-list {
+  border: 0;
+  display: grid;
+  gap: 8px;
+}
+.matter-list li {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.matter-list a {
+  border-radius: inherit;
+}
+.button[aria-pressed='false'] {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+}
+.button[aria-pressed='true'] {
+  color: var(--surface);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.source-viewer .dimensions {
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+}
+.source-viewer .dimension,
+.dimension {
+  background: var(--surface);
+  border-radius: 8px;
+}
+.source-viewer .viewer-scroll {
+  background: #edede8;
+  border-radius: 8px;
+}
+.export-workspace .draft-context,
+.review-panel,
+.draft-context {
+  border-radius: 12px;
+}
+@media (forced-colors: active) {
+  .button[aria-pressed='true'] {
+    color: HighlightText;
+    background: Highlight;
+    border-color: Highlight;
+  }
+}
+
+/* Mode controls retain native button semantics and do not hide source pixels. */
+.inspection-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 4px;
+  margin-block: 16px;
+}
+.inspection-modes .button {
+  min-height: 44px;
+}
+
+/* Storyteller responsive cockpit refinements: preserve light-mode semantics. */
+:root {
+  --paper: #f6f6f3;
+  --paper-raised: #edede8;
+  --reading-width: 72ch;
+  --panel-radius: 12px;
+}
+@media (min-width: 1500px) {
+  main {
+    max-width: 1760px;
+  }
+  .review-layout {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  }
+  .cockpit-inspection {
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 46%);
+  }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .review-layout {
+    grid-template-columns: minmax(220px, 28%) minmax(0, 1fr);
+  }
+  .queue {
+    padding: 16px;
+  }
+  .inspection {
+    padding: 20px;
+  }
+}
+@media (max-width: 760px) {
+  .app-header {
+    flex-wrap: wrap;
+  }
+  .queue {
+    padding: 16px;
+  }
+  .queue ul {
+    max-height: 35vh;
+  }
+  .inspection {
+    padding: 16px;
+  }
+  .viewer-scroll {
+    height: 55vh;
+    min-height: 260px;
+  }
+  .cockpit-inspection {
+    gap: 12px;
+  }
+  .catalog-actions {
+    gap: 8px;
+  }
+}
+.review-layout > *,
+.cockpit-inspection > * {
+  min-width: 0;
+}
+.draft-quote,
+.draft-context,
+.review-panel {
+  overflow-wrap: anywhere;
+}
+button:not(:disabled),
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .finding,
+  .button {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .finding,
+  .button {
+    transition: none !important;
+  }
+}
+
+/* CaseProof Storyteller cockpit v3.1 — document-first, light-mode baseline.
+   No evidence, OCR overlay or PDF pixel transitions are animated. */
+:root {
+  color-scheme: light;
+  --warning: #86590d;
+  --warning-background: #fff8e9;
+  --success: #226044;
+}
+.app-header {
+  position: relative;
+  z-index: 2;
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  letter-spacing: -0.045em;
+}
+.brand span {
+  letter-spacing: 0;
+}
+main {
+  max-width: 1900px;
+}
+.page-heading {
+  max-width: 90ch;
+}
+.page-heading a {
+  margin-right: 18px;
+}
+
+/* Workflow reflects ROUTE ONLY. No fake completed/approved stage badges. */
+.cockpit-journey {
+  display: block;
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.cockpit-journey-caption {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+}
+.cockpit-journey-caption span {
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.cockpit-journey ol {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 5px;
+  gap: 6px;
+  scrollbar-width: thin;
+}
+.cockpit-journey li {
+  flex: 0 0 auto;
+}
+.cockpit-journey li > a,
+.cockpit-journey li > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 8px 11px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 9px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.cockpit-journey li > span[aria-disabled='true'] {
+  background: var(--surface);
+  color: var(--muted);
+  border-style: dashed;
+}
+.cockpit-journey a:hover {
+  background: #edede8;
+}
+.cockpit-journey a[aria-current='step'] {
+  border-color: var(--focus);
+  background: #eaf3f8;
+  box-shadow: inset 0 -3px 0 var(--focus);
+  font-weight: 750;
+}
+.cockpit-step-number {
+  font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.cockpit-journey :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Findings / draft / preserved PDF: both splitters are pointer + keyboard driven. */
+.review-layout {
+  grid-template-columns: minmax(0, var(--queue-width, 300px)) 12px minmax(
+      0,
+      1fr
+    );
+  min-height: 620px;
+  gap: 0;
+  align-items: start;
+  border-color: var(--line);
+  border-radius: 12px;
+  overflow: clip;
+}
+.review-layout > * {
+  min-width: 0;
+}
+.review-layout .queue {
+  background: var(--surface);
+  padding: 16px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  border-right: 0;
+}
+.queue h2 {
+  font-size: 17px;
+  margin-bottom: 12px;
+}
+.queue .catalog-actions {
+  gap: 7px;
+}
+.queue .catalog-actions .button {
+  padding-inline: 10px;
+  font-size: 12px;
+}
+.queue ul {
+  max-height: none;
+}
+.queue .finding {
+  border-color: var(--line);
+  border-left-width: 3px;
+  border-radius: 8px;
+  margin: 0 0 7px;
+  padding: 12px;
+  line-height: 1.45;
+}
+.queue .finding-attention {
+  border-left-color: var(--warning);
+}
+.queue .finding-attention small {
+  color: var(--warning);
+}
+.queue .finding-unflagged {
+  border-left-color: #9a9f9e;
+}
+.queue .finding[aria-current='true'] {
+  border-color: var(--focus);
+  border-left-color: var(--focus);
+  background: #ebf4f8;
+}
+.queue .finding:hover {
+  background: var(--paper);
+}
+.review-layout .inspection {
+  padding: 20px 22px 30px;
+  background: var(--surface);
+}
+.inspection > .dimensions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 12px 0;
+}
+.inspection > .dimensions .dimension {
+  padding: 10px;
+}
+.inspection > .dimensions dt {
+  font-size: 11px;
+}
+.inspection > .dimensions dd {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.cockpit-splitter {
+  position: relative;
+  width: 12px;
+  align-self: stretch;
+  min-height: 400px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  background: var(--paper);
+  border-inline: 1px solid var(--line);
+}
+.cockpit-splitter::before {
+  content: '';
+  display: block;
+  width: 3px;
+  height: 52px;
+  border-radius: 6px;
+  background: #aeb2b1;
+  position: sticky;
+  top: 40%;
+  margin: 170px auto 0;
+}
+.cockpit-splitter:hover::before,
+.cockpit-splitter:focus-visible::before {
+  background: var(--focus);
+}
+.cockpit-splitter:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -2px;
+}
+.cockpit-reader {
+  margin-top: 14px;
+}
+.cockpit-reader .cockpit-inspection {
+  display: grid;
+  grid-template-columns: minmax(0, var(--draft-panel-width, 50%)) 12px minmax(
+      0,
+      1fr
+    );
+  gap: 0;
+  align-items: start;
+}
+.cockpit-reader .cockpit-inspection > * {
+  min-width: 0;
+}
+.cockpit-reader .cockpit-draft {
+  padding: 0 13px 0 0;
+  border: 0;
+}
+.cockpit-reader .cockpit-evidence {
+  padding: 0 0 0 13px;
+  border: 0;
+}
+.cockpit-reader .cockpit-draft-splitter {
+  min-height: 500px;
+}
+.cockpit-pane-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding-bottom: 10px;
+  margin: 2px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+.cockpit-pane-heading h3 {
+  font-size: 14px;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.cockpit-pane-heading span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.cockpit-draft .draft-context {
+  font-family: 'CaseProof Source Serif', Georgia, serif;
+  max-width: none;
+  line-height: 1.65;
+}
+.cockpit-draft :is(button, input, label, select, textarea) {
+  font-family: 'CaseProof Inter', system-ui, sans-serif;
+}
+.cockpit-draft .draft-quote {
+  font-family: 'CaseProof Source Serif', Georgia, serif;
+}
+.cockpit-draft .draft-context pre {
+  font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace;
+}
+.cockpit-evidence .source-viewer {
+  margin: 0;
+}
+.cockpit-evidence .viewer-scroll {
+  background: var(--paper-raised);
+}
+.cockpit-view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.cockpit-view-switch .button {
+  min-height: 40px;
+  padding: 7px 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+}
+.cockpit-view-switch .button[aria-pressed='true'] {
+  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.cockpit-reading-summary {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+.cockpit-resize-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0 14px;
+}
+.cockpit-resize-controls[hidden] {
+  display: none;
+}
+.cockpit-resize-controls label {
+  display: inline;
+  font-size: 12px;
+}
+.cockpit-resize-controls input[type='range'] {
+  width: min(190px, 100%);
+  min-height: 40px;
+  padding: 0;
+  accent-color: var(--focus);
+}
+.cockpit-resize-controls .button {
+  font-size: 12px;
+  padding-inline: 10px;
+  min-height: 40px;
+}
+.cockpit-reader .cockpit-inspection.cockpit-mode-draft,
+.cockpit-reader .cockpit-inspection.cockpit-mode-source {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cockpit-mode-draft .cockpit-evidence {
+  display: none;
+}
+.cockpit-mode-source .cockpit-draft {
+  display: none;
+}
+.cockpit-reader .cockpit-mode-draft .cockpit-draft,
+.cockpit-reader .cockpit-mode-source .cockpit-evidence {
+  padding: 0;
+}
+
+/* The source stays mounted across focus changes; coverage/decisions stay separate. */
+#coverage {
+  scroll-margin-top: 18px;
+}
+#inspection {
+  scroll-margin-top: 18px;
+}
+#release-history {
+  scroll-margin-top: 18px;
+}
+
+/* A real native modal is reserved for consequential release authorization. */
+.release-confirm-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(88dvh, 740px);
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 25px 80px #16181d33;
+  overflow-y: auto;
+}
+.release-confirm-dialog::backdrop {
+  background: #16181db8;
+}
+.release-confirm-dialog h2 {
+  font-size: 21px;
+  margin: 0 0 12px;
+}
+.release-confirm-dialog .catalog-actions {
+  justify-content: flex-end;
+}
+.release-confirm-dialog code {
+  overflow-wrap: anywhere;
+}
+.release-confirm-dialog :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Responsive: stack evidence before it becomes too small to inspect safely. */
+@media (max-width: 1279px) {
+  .cockpit-reader .cockpit-inspection.cockpit-mode-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cockpit-reader .cockpit-mode-split .cockpit-draft {
+    padding: 0 0 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .cockpit-reader .cockpit-mode-split .cockpit-evidence {
+    padding: 14px 0 0;
+  }
+  .cockpit-draft-splitter,
+  .cockpit-resize-controls {
+    display: none;
+  }
+}
+@media (max-width: 1050px) {
+  .review-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review-layout .queue {
+    position: static;
+    max-height: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .queue ul {
+    max-height: 230px;
+    overflow: auto;
+  }
+  .cockpit-queue-splitter {
+    display: none;
+  }
+  .review-layout .inspection {
+    padding: 18px;
+  }
+}
+@media (max-width: 760px) {
+  main {
+    padding: 16px;
+  }
+  .review-layout .queue {
+    padding: 14px;
+  }
+  .review-layout .inspection {
+    padding: 14px;
+  }
+  .inspection > .dimensions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cockpit-journey {
+    padding: 10px;
+  }
+  .cockpit-journey-caption span {
+    display: block;
+    width: 100%;
+  }
+  .cockpit-pane-heading {
+    align-items: start;
+  }
+  .release-confirm-dialog {
+    padding: 18px;
+  }
+}
+@media (forced-colors: active) {
+  .cockpit-journey a[aria-current='step'],
+  .queue .finding[aria-current='true'],
+  .cockpit-view-switch .button[aria-pressed='true'] {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+  .cockpit-splitter {
+    border-inline: 2px solid CanvasText;
+  }
+  .cockpit-splitter::before {
+    background: CanvasText;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .queue .finding,
+  .cockpit-journey a,
+  .cockpit-view-switch .button {
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .queue .finding,
+  .cockpit-journey a,
+  .cockpit-view-switch .button {
+    transition: none !important;
+  }
+}
+
+/* Bounded, static style map for interactive pane geometry. No JSX inline styles. */
+.review-layout[data-queue-width='240'] {
+  --queue-width: 240px;
+}
+.review-layout[data-queue-width='250'] {
+  --queue-width: 250px;
+}
+.review-layout[data-queue-width='260'] {
+  --queue-width: 260px;
+}
+.review-layout[data-queue-width='270'] {
+  --queue-width: 270px;
+}
+.review-layout[data-queue-width='280'] {
+  --queue-width: 280px;
+}
+.review-layout[data-queue-width='290'] {
+  --queue-width: 290px;
+}
+.review-layout[data-queue-width='300'] {
+  --queue-width: 300px;
+}
+.review-layout[data-queue-width='310'] {
+  --queue-width: 310px;
+}
+.review-layout[data-queue-width='320'] {
+  --queue-width: 320px;
+}
+.review-layout[data-queue-width='330'] {
+  --queue-width: 330px;
+}
+.review-layout[data-queue-width='340'] {
+  --queue-width: 340px;
+}
+.review-layout[data-queue-width='350'] {
+  --queue-width: 350px;
+}
+.review-layout[data-queue-width='360'] {
+  --queue-width: 360px;
+}
+.review-layout[data-queue-width='370'] {
+  --queue-width: 370px;
+}
+.review-layout[data-queue-width='380'] {
+  --queue-width: 380px;
+}
+.review-layout[data-queue-width='390'] {
+  --queue-width: 390px;
+}
+.review-layout[data-queue-width='400'] {
+  --queue-width: 400px;
+}
+.review-layout[data-queue-width='410'] {
+  --queue-width: 410px;
+}
+.review-layout[data-queue-width='420'] {
+  --queue-width: 420px;
+}
+
+/*
+ * Storyteller reference parity: 300px findings / flexible manuscript /
+ * 400px original evidence at desktop. These are PRESENTATION dimensions only.
+ * No fake evidence pixels, release claims, or hidden processing state.
+ */
+.app-header {
+  padding: 12px 20px;
+  gap: 16px;
+  min-height: 66px;
+}
+.brand {
+  font-size: 17px;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.brand span {
+  font-size: 11px;
+  letter-spacing: 0;
+  margin-top: 3px;
+}
+.app-primary-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-right: auto;
+  font-size: 13px;
+}
+.app-primary-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 550;
+  border-bottom: 2px solid transparent;
+  padding: 7px 4px 5px;
+}
+.app-primary-nav a[aria-current='page'] {
+  border-bottom-color: var(--ink);
+  font-weight: 700;
+}
+.app-primary-nav a:hover {
+  border-bottom-color: var(--focus);
+}
+.app-primary-divider,
+.app-primary-unavailable {
+  color: var(--muted);
+}
+.app-primary-unavailable {
+  opacity: 0.65;
+}
+.app-primary-nav :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+main {
+  max-width: none;
+  padding: 16px 20px 26px;
+}
+.page-heading-review {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0 0 12px;
+  max-width: none;
+}
+.page-heading-review > .eyebrow {
+  flex: 0 0 100%;
+  margin: 0;
+  font-size: 11px;
+}
+.page-heading-review > h1 {
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  margin: 0 12px 0 0;
+}
+.page-heading-review > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 5px 6px;
+  font-size: 12px;
+}
+.page-heading-review > p:last-child {
+  flex-basis: 100%;
+  font-size: 12px;
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+.page-heading-review + .notice {
+  margin: 6px 0 0;
+  padding: 9px 13px;
+  font-size: 12px;
+  border-left-width: 3px;
+}
+
+.review-layout {
+  margin-top: 14px;
+  grid-template-columns: minmax(0, var(--queue-width, 300px)) 10px minmax(
+      0,
+      1fr
+    );
+  min-height: min(760px, 82dvh);
+  border-radius: 10px;
+  overflow: clip;
+}
+.review-layout .queue {
+  padding: 20px;
+  border-right: 0;
+  background: var(--surface);
+}
+.review-layout .queue > h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.review-layout .queue > p[role='status'] {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.review-layout .queue .catalog-actions {
+  margin: 14px 0;
+  gap: 8px;
+}
+.review-layout .queue .catalog-actions .button {
+  min-height: 38px;
+  padding: 6px 11px;
+}
+.review-layout .queue .finding {
+  position: relative;
+  min-height: 62px;
+  display: block;
+  padding: 12px;
+  font-size: 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  background: var(--surface);
+  margin-bottom: 8px;
+  border-radius: 8px;
+}
+.review-layout .queue .finding-attention {
+  border-left-color: var(--warning);
+}
+.review-layout .queue .finding-attention small {
+  color: var(--warning);
+}
+.review-layout .queue .finding[aria-current='true'] {
+  background: #fff;
+  border-color: var(--ink);
+  border-left-color: var(--ink);
+}
+.review-layout .queue .finding small {
+  font-size: 11px;
+  font-weight: 650;
+  margin-top: 4px;
+}
+.review-layout .queue .finding :focus-visible {
+  outline-color: var(--focus);
+}
+.review-layout .queue .finding .cockpit-selected-outline {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+}
+.review-layout > .cockpit-queue-splitter {
+  width: 10px;
+  background: var(--paper-raised);
+}
+.review-layout .inspection {
+  padding: 0;
+  min-width: 0;
+  background: var(--surface);
+}
+.cockpit-reader {
+  margin: 0;
+}
+.cockpit-view-switch {
+  padding: 12px 20px 0;
+  margin-bottom: 0;
+}
+.cockpit-view-switch .button {
+  min-height: 38px;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+.cockpit-reading-summary {
+  font-size: 11px;
+  margin: 8px 20px 0;
+}
+.cockpit-resize-controls {
+  padding: 6px 20px 10px;
+  font-size: 12px;
+}
+.cockpit-resize-controls input[type='range'] {
+  width: 160px;
+}
+.cockpit-reader .cockpit-inspection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12px minmax(
+      0,
+      var(--source-panel-width, 400px)
+    );
+  gap: 0;
+  align-items: stretch;
+  border-top: 1px solid var(--line);
+}
+.cockpit-reader .cockpit-draft {
+  padding: 20px;
+  min-width: 0;
+  background: var(--paper);
+}
+.cockpit-reader .cockpit-evidence {
+  padding: 20px;
+  min-width: 0;
+  background: var(--surface);
+}
+.cockpit-reader .cockpit-draft-splitter {
+  width: 12px;
+  min-height: 550px;
+}
+.cockpit-reference-dimensions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0 0 16px;
+}
+.cockpit-reference-dimensions .dimension {
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+.cockpit-reference-dimensions dt {
+  font-size: 10px;
+  line-height: 1.35;
+}
+.cockpit-reference-dimensions dd {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.cockpit-draft > .eyebrow {
+  font-size: 11px;
+  margin: 0 0 6px;
+}
+.cockpit-draft > h2 {
+  margin: 0 0 12px;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+.cockpit-pane-heading {
+  padding-bottom: 10px;
+  margin: 0 0 14px;
+}
+.cockpit-pane-heading h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cockpit-pane-heading span {
+  font-size: 11px;
+}
+.cockpit-draft .draft-context[aria-label='Read-only draft reference'] {
+  max-width: 640px;
+  min-height: 360px;
+  margin: 0 auto;
+  padding: 38px 44px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: #fff;
+  color: #16181d;
+  font-family: 'CaseProof Source Serif', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.8;
+  box-shadow: 0 2px 7px #16181d0d;
+}
+.cockpit-draft .draft-context[aria-label='Read-only draft reference'] h3 {
+  font-family: 'CaseProof Source Serif', Georgia, serif;
+  font-size: 19px;
+  font-weight: 600;
+}
+.cockpit-draft .draft-context[aria-label='Read-only draft reference'] .notice {
+  font-family: 'CaseProof Inter', system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.cockpit-draft .draft-context[aria-label='Quotation and derived source text'] {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  max-width: 640px;
+  margin: 22px auto 0;
+  padding: 16px 4px 0;
+  background: transparent;
+}
+.cockpit-evidence .viewer-scroll {
+  background: var(--paper-raised);
+}
+.cockpit-evidence .source-viewer {
+  margin: 0;
+}
+.cockpit-evidence .source-viewer .viewer-controls {
+  gap: 7px;
+}
+.inspection > [aria-label='Verification and processing coverage'] {
+  margin: 0;
+  padding: 20px;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.inspection > .small {
+  padding: 0 20px 16px;
+}
+/* WCAG 2.2 target size survives the 14px Storyteller control baseline. */
+.inspection details > summary {
+  display: list-item;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.inspection details > summary:hover {
+  background: var(--paper-raised);
+}
+.release-confirm-dialog {
+  background: var(--surface);
+}
+.notice.error {
+  background: #fdecec;
+  color: var(--danger);
+}
+.cockpit-reader .cockpit-inspection[data-source-width='320'] {
+  --source-panel-width: 320px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='330'] {
+  --source-panel-width: 330px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='340'] {
+  --source-panel-width: 340px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='350'] {
+  --source-panel-width: 350px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='360'] {
+  --source-panel-width: 360px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='370'] {
+  --source-panel-width: 370px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='380'] {
+  --source-panel-width: 380px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='390'] {
+  --source-panel-width: 390px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='400'] {
+  --source-panel-width: 400px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='410'] {
+  --source-panel-width: 410px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='420'] {
+  --source-panel-width: 420px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='430'] {
+  --source-panel-width: 430px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='440'] {
+  --source-panel-width: 440px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='450'] {
+  --source-panel-width: 450px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='460'] {
+  --source-panel-width: 460px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='470'] {
+  --source-panel-width: 470px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='480'] {
+  --source-panel-width: 480px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='490'] {
+  --source-panel-width: 490px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='500'] {
+  --source-panel-width: 500px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='510'] {
+  --source-panel-width: 510px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='520'] {
+  --source-panel-width: 520px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='530'] {
+  --source-panel-width: 530px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='540'] {
+  --source-panel-width: 540px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='550'] {
+  --source-panel-width: 550px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='560'] {
+  --source-panel-width: 560px;
+}
+
+/* Keep the reference three-column layout when the manuscript is readable. */
+@media (max-width: 1250px) {
+  .cockpit-reader .cockpit-inspection.cockpit-mode-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cockpit-reader .cockpit-mode-split .cockpit-draft {
+    border-bottom: 1px solid var(--line);
+    padding: 18px;
+  }
+  .cockpit-reader .cockpit-mode-split .cockpit-evidence {
+    padding: 18px;
+  }
+  .cockpit-draft-splitter,
+  .cockpit-resize-controls {
+    display: none;
+  }
+  .cockpit-reference-dimensions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1050px) {
+  .review-layout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .review-layout .queue {
+    position: static;
+    max-height: none;
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .review-layout .queue ul {
+    max-height: 210px;
+    overflow: auto;
+  }
+  .review-layout .cockpit-queue-splitter {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  main {
+    padding: 12px;
+  }
+  .app-header {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .app-primary-nav {
+    order: 3;
+    flex: 0 0 100%;
+    gap: 10px;
+  }
+  .page-heading-review {
+    gap: 8px 12px;
+  }
+  .page-heading-review > h1 {
+    font-size: 21px;
+  }
+  .page-heading-review > a {
+    font-size: 11px;
+  }
+  .cockpit-draft .draft-context[aria-label='Read-only draft reference'] {
+    padding: 24px 22px;
+    font-size: 16px;
+    min-height: 0;
+  }
+  .cockpit-reference-dimensions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cockpit-draft,
+  .cockpit-evidence {
+    padding: 12px;
+  }
+  .cockpit-view-switch {
+    padding: 12px 12px 0;
+  }
+  .cockpit-reading-summary {
+    margin-inline: 12px;
+  }
+}
+@media (forced-colors: active) {
+  .review-layout .queue .finding[aria-current='true'] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+  .cockpit-draft .draft-context[aria-label='Read-only draft reference'] {
+    border-color: CanvasText;
+  }
 }

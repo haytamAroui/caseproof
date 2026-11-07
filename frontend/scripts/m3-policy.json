@@ -1,11 +1,11 @@
 {
   "tokens": {
-    "accent": "#103a4b",
-    "ink": "#172d38",
-    "muted": "#435e6b",
+    "accent": "#16181d",
+    "ink": "#16181d",
+    "muted": "#5b6070",
     "surface": "#ffffff",
-    "line": "#c7d4db",
-    "danger": "#9a2727",
+    "line": "#dcddd6",
+    "danger": "#a61b1b",
     "focus": "#126a9b"
   },
   "requiredScripts": [

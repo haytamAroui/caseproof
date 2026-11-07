@@ -4,7 +4,7 @@ no fake page-fidelity. */
   max-width: 1660px;
   margin: 0 auto;
   padding: 24px 28px 56px;
-  color: #243043;
+  color: var(--ink);
 }
 .docx-editor-heading {
   display: flex;
@@ -22,14 +22,14 @@ no fake page-fidelity. */
   max-width: 850px;
 }
 .docx-eyebrow {
-  color: #4f627b;
+  color: var(--muted);
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .docx-editor a {
-  color: #1c4e7f;
+  color: var(--accent);
   text-underline-offset: 3px;
 }
 .docx-ribbon {
@@ -38,9 +38,9 @@ no fake page-fidelity. */
   align-items: center;
   flex-wrap: wrap;
   padding: 13px 18px;
-  border: 1px solid #ccd6e0;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #f6f8fb;
+  background: #f6f6f3;
 }
 .docx-ribbon label {
   display: inline-flex;
@@ -52,27 +52,27 @@ no fake page-fidelity. */
 .docx-ribbon input {
   width: 16px;
   height: 16px;
-  accent-color: #305e86;
+  accent-color: var(--accent);
 }
 .docx-editor button {
   border-radius: 7px;
-  border: 1px solid #aec0d1;
+  border: 1px solid var(--line);
   background: white;
   padding: 9px 13px;
   font: inherit;
   font-size: 0.88rem;
   font-weight: 600;
-  color: #253b55;
+  color: var(--ink);
   cursor: pointer;
 }
 .docx-editor button:hover:not(:disabled) {
-  background: #e9f0f6;
-  border-color: #728ea9;
+  background: #edede8;
+  border-color: var(--ink);
 }
 .docx-editor button:focus-visible,
 .docx-editor textarea:focus-visible,
 .docx-editor select:focus-visible {
-  outline: 3px solid #34709f;
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 .docx-editor button:disabled {
@@ -80,12 +80,12 @@ no fake page-fidelity. */
   opacity: 0.52;
 }
 .docx-ribbon button:nth-of-type(1) {
-  background: #294d72;
+  background: var(--ink);
   color: white;
-  border-color: #294d72;
+  border-color: var(--ink);
 }
 .docx-ribbon button:nth-of-type(1):hover:not(:disabled) {
-  background: #173b60;
+  background: #363a43;
 }
 .docx-scope-note {
   color: #4d5c6c;
@@ -111,7 +111,7 @@ no fake page-fidelity. */
 .docx-editor-sidebar,
 .docx-editor-revisions,
 .docx-editor-document {
-  border: 1px solid #d3dbe4;
+  border: 1px solid var(--line);
   border-radius: 10px;
   min-width: 0;
   background: white;
@@ -134,7 +134,7 @@ no fake page-fidelity. */
   overflow-wrap: anywhere;
 }
 .docx-mono {
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace;
   font-size: 0.7rem !important;
   overflow-wrap: anywhere;
 }
@@ -143,7 +143,7 @@ no fake page-fidelity. */
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  border-bottom: 1px solid #dce3ea;
+  border-bottom: 1px solid var(--line);
   padding: 16px 22px;
 }
 .docx-editor-toolbar h2 {
@@ -296,8 +296,8 @@ no fake page-fidelity. */
 }
 
 .docx-word-handoff {
-  border: 1px solid #b5c9d8;
-  background: #f8fafc;
+  border: 1px solid var(--line);
+  background: #f6f6f3;
   border-radius: 12px;
   padding: 22px;
   margin: 22px 0;
@@ -346,4 +346,67 @@ no fake page-fidelity. */
 .docx-word-note {
   font-size: 0.82rem;
   color: #5a6b7d;
+}
+
+/* Storyteller token alignment for the candidate editor; no workflow changes. */
+.docx-editor {
+  font-family: 'CaseProof Inter', system-ui, sans-serif;
+}
+.docx-editor-document {
+  font-family: 'CaseProof Source Serif', Georgia, serif;
+  line-height: 1.75;
+}
+.docx-editor-toolbar,
+.docx-ribbon,
+.docx-word-handoff {
+  background: var(--paper, #f6f6f3);
+}
+.docx-editor-sidebar,
+.docx-editor-revisions,
+.docx-editor-document,
+.docx-editor button,
+.docx-block textarea,
+.docx-revision select,
+.docx-word-review textarea {
+  background-color: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.docx-editor-toolbar span,
+.docx-block header small,
+.docx-revision small,
+.docx-page-nav span,
+.docx-word-note {
+  color: var(--muted);
+}
+.docx-block {
+  border-bottom-color: var(--line);
+}
+.docx-kind {
+  background: var(--paper-raised, #edede8);
+  color: var(--ink);
+}
+.docx-block textarea:disabled {
+  background: var(--paper, #f6f6f3);
+  color: var(--muted);
+}
+.docx-editor-status {
+  color: var(--ink);
+  background: var(--paper, #f6f6f3);
+  border-left-color: var(--focus);
+}
+.docx-editor button:hover:not(:disabled) {
+  background: var(--paper-raised, #edede8);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .docx-editor button {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-editor button {
+    transition: none;
+  }
 }

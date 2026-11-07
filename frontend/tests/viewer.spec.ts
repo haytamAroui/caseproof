@@ -715,7 +715,13 @@ test('OCR word positions are opt-in, source bound and exposed as accessible text
   await expect(
     page.getByText('Source page rendered.', { exact: true }),
   ).toBeVisible();
+  const originalMode = page.getByRole('button', { name: 'Original pixels' });
+  await expect(originalMode).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Show OCR word positions' }).click();
+  await expect(originalMode).toHaveAttribute('aria-pressed', 'false');
+  await expect(
+    page.getByRole('img', { name: 'Preserved PDF page pixels' }),
+  ).toBeVisible();
   await expect(
     page.getByRole('list', { name: 'OCR words on this page' }),
   ).toContainText('<synthetic>');
@@ -739,7 +745,8 @@ test('OCR word positions are opt-in, source bound and exposed as accessible text
       );
     });
   expect(overlayHasWord).toBe(true);
-  await page.getByRole('button', { name: 'Hide OCR word positions' }).click();
+  await originalMode.click();
+  await expect(originalMode).toHaveAttribute('aria-pressed', 'true');
   await expect(
     page.getByRole('list', { name: 'OCR words on this page' }),
   ).toHaveCount(0);
@@ -787,4 +794,137 @@ test('OCR word positions abstain when the PDF CropBox does not match provenance'
   await expect(
     page.getByText('Some OCR positions cannot be aligned', { exact: false }),
   ).toBeVisible();
+});
+
+test('Storyteller cockpit exposes workflow, keyboard-resizable panes and mobile stacking', async ({
+  page,
+}) => {
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByRole('navigation', { name: 'Matter workflow' }),
+  ).toBeVisible();
+  const navigation = page.getByRole('navigation', { name: 'Matter workflow' });
+  await expect(navigation.locator('li')).toHaveCount(7);
+  await expect(
+    navigation.getByRole('link', { name: /04 Evidence review/ }),
+  ).toHaveAttribute('aria-current', 'step');
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  const width = page.getByRole('slider', {
+    name: 'Source evidence panel width',
+  });
+  await expect(width).toHaveValue('400');
+  await width.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(width).toHaveValue('410');
+  await expect(page.locator('.cockpit-inspection')).toHaveCSS(
+    '--source-panel-width',
+    '410px',
+  );
+  await page.getByRole('button', { name: 'Restore 400px source' }).click();
+  await expect(width).toHaveValue('400');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(width).toBeHidden();
+  await expect(page.locator('.cockpit-inspection')).toHaveCSS(
+    'grid-template-columns',
+    /.+/,
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test('Storyteller reading cockpit honors reduced motion and retains light baseline under dark OS preference', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const layout = page.locator('.review-layout');
+  await expect(layout).toHaveCSS('animation-name', 'none');
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
+  await expect(page.locator('.cockpit-inspection')).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({
+    path: 'test-results/storyteller-dark-desktop.png',
+    fullPage: true,
+  });
+});
+
+test('Storyteller focus modes preserve evidence state and keyboard accessibility', async ({
+  page,
+}) => {
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const source = page.locator('.cockpit-evidence');
+  await expect(source).toBeVisible();
+  await page.getByRole('button', { name: 'Draft focus' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Draft focus' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(source).toBeHidden();
+  await page.getByRole('button', { name: 'Source focus' }).click();
+  await expect(source).toBeVisible();
+  await expect(page.locator('.cockpit-draft')).toBeHidden();
+  await page.getByRole('button', { name: 'Split view' }).click();
+  await expect(page.locator('.cockpit-draft')).not.toBeHidden();
+  await expect(source).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
+
+test('Storyteller visual acceptance captures desktop and mobile reading modes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(
+    page.getByRole('navigation', { name: 'Matter workflow' }),
+  ).toBeVisible();
+  const queueBounds = await page.locator('.queue').boundingBox();
+  const evidenceBounds = await page.locator('.cockpit-evidence').boundingBox();
+  const manuscriptBounds = await page.locator('.cockpit-draft').boundingBox();
+  expect(Math.round(queueBounds?.width ?? 0)).toBe(300);
+  expect(Math.round(evidenceBounds?.width ?? 0)).toBe(400);
+  expect((manuscriptBounds?.width ?? 0) > 450).toBe(true);
+  await expect(page.locator('body')).toHaveCSS('font-size', '14px');
+  await expect(
+    page.locator(
+      ".cockpit-draft .draft-context[aria-label='Read-only draft reference']",
+    ),
+  ).toHaveCSS('font-size', '17px');
+  await page.screenshot({
+    path: 'test-results/storyteller-desktop-split.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.getByRole('button', { name: 'Source focus' }).click();
+  await page.screenshot({
+    path: 'test-results/storyteller-desktop-source-focus.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Split view' }).click();
+  await expect(page.locator('.cockpit-inspection')).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/storyteller-mobile-split.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });

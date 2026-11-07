@@ -42,6 +42,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
     partialConsent.scope === policyScope && partialConsent.acknowledged;
   // The same operation id survives a lost POST acknowledgement within this
   // screen. We never silently mint a new id and retry a consequential write.
+  const releaseDialog = useRef<HTMLDialogElement>(null);
   const requestId = useRef<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
@@ -71,6 +72,17 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
     preview.data?.review_completeness.can_release_complete ?? false,
     preview.data?.release_actor.actor_id ?? '',
   ].join(':');
+
+  // Native dialog owns focus and Escape behavior. Routine inspection stays inline.
+  useEffect(() => {
+    const dialog = releaseDialog.current;
+    if (!dialog) return;
+    if (releaseIntent === intentionScope && !unknown) {
+      if (!dialog.open) dialog.showModal();
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  }, [releaseIntent, intentionScope, unknown]);
 
   async function commitRelease() {
     const review = preview.data?.review_completeness;
@@ -342,11 +354,20 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                 Review release details
               </Button>
               {releaseIntent === intentionScope && (
-                <section
-                  className="draft-context"
-                  aria-label="Release confirmation"
+                <dialog
+                  ref={releaseDialog}
+                  className="release-confirm-dialog"
+                  aria-labelledby="release-confirm-title"
+                  aria-describedby="release-confirm-note"
+                  onCancel={(event) => {
+                    if (working) event.preventDefault();
+                    else setReleaseIntent('');
+                  }}
+                  onClose={() => setReleaseIntent('')}
                 >
-                  <h3>Confirm this exact reviewed release</h3>
+                  <h2 id="release-confirm-title">
+                    Confirm this exact reviewed release
+                  </h2>
                   <p>
                     Authenticated account:{' '}
                     <strong>{preview.data.release_actor.actor_label}</strong>
@@ -363,24 +384,31 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                       ? 'Complete detected-findings review'
                       : 'Partial review with unresolved findings'}
                   </p>
-                  <Notice>{preview.data.acknowledgement_notice}</Notice>
+                  <div id="release-confirm-note">
+                    <Notice>{preview.data.acknowledgement_notice}</Notice>
+                  </div>
                   <p className="small">
                     This account label does not assert professional status or
                     that you personally reviewed every finding.
                   </p>
-                  <Button
-                    onClick={() => setReleaseIntent('')}
-                    disabled={working}
-                  >
-                    Cancel release
-                  </Button>
-                  <Button
-                    onClick={() => void commitRelease()}
-                    disabled={working || unknown}
-                  >
-                    {working ? 'Processing…' : 'Acknowledge and create release'}
-                  </Button>
-                </section>
+                  <div className="catalog-actions">
+                    <Button
+                      autoFocus
+                      onClick={() => setReleaseIntent('')}
+                      disabled={working}
+                    >
+                      Cancel release
+                    </Button>
+                    <Button
+                      onClick={() => void commitRelease()}
+                      disabled={working || unknown}
+                    >
+                      {working
+                        ? 'Processing…'
+                        : 'Acknowledge and create release'}
+                    </Button>
+                  </div>
+                </dialog>
               )}
             </section>
           )}
@@ -398,7 +426,11 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
         </div>
       )}
       {message && <Notice>{message}</Notice>}
-      <section className="draft-context" aria-label="Export history">
+      <section
+        className="draft-context"
+        id="release-history"
+        aria-label="Export history"
+      >
         <h2>Frozen release history</h2>
         {history.isPending ? (
           <Notice>Loading authorized release history…</Notice>

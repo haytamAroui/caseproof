@@ -407,14 +407,26 @@ function SourceInspection({
           )}
           {ocrWords.length > 0 && (
             <>
-              <Button
-                aria-pressed={showOcr}
-                onClick={() => setShowOcr((value) => !value)}
+              <div
+                className="inspection-modes"
+                role="group"
+                aria-label="Source inspection modes"
               >
-                {showOcr
-                  ? 'Hide OCR word positions'
-                  : 'Show OCR word positions'}
-              </Button>
+                <Button
+                  aria-pressed={!showOcr}
+                  onClick={() => setShowOcr(false)}
+                >
+                  Original pixels
+                </Button>
+                <Button
+                  aria-pressed={showOcr}
+                  onClick={() => setShowOcr((value) => !value)}
+                >
+                  {showOcr
+                    ? 'Hide OCR word positions'
+                    : 'Show OCR word positions'}
+                </Button>
+              </div>
               {showOcr && (
                 <div>
                   <p>

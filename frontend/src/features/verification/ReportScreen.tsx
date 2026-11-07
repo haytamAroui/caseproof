@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
+import { SplitHandle } from '../../shared/ui/SplitHandle';
 import { useSession } from '../../shared/session';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
@@ -40,6 +42,14 @@ export function ReportScreen({
     uuid.test(caseId) && uuid.test(briefId) && /^[0-9a-f]{64}$/.test(snapshot);
   const queueRef = useRef<HTMLElement>(null);
   const inspectionRef = useRef<HTMLElement>(null);
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const [queueWidth, setQueueWidth] = useState(300);
+  // Presentation preferences survive reference changes; source inspection does not.
+  const [sourceWidth, setSourceWidth] = useState(400);
+  const reduceMotion = useReducedMotion();
+  const [readingMode, setReadingMode] = useState<'split' | 'draft' | 'source'>(
+    'split',
+  );
   const focusReference = useRef<string | null>(null);
   const [filter, setFilter] = useState<'attention' | 'all'>('attention');
   const [search, setSearch] = useState('');
@@ -141,7 +151,7 @@ export function ReportScreen({
   }
   return (
     <>
-      <header className="page-heading">
+      <header className="page-heading page-heading-review">
         <p className="eyebrow">
           {historical
             ? 'Historical report · read-only'
@@ -175,7 +185,11 @@ export function ReportScreen({
           ? 'Historical snapshot. Current permissions were checked again, but this report cannot be reviewed, corrected, rechecked or exported as current. Source availability is checked separately.'
           : 'Current snapshot inspection. Human decisions remain separate from source rendering.'}
       </Notice>
-      <div className="review-layout">
+      <div
+        className="review-layout"
+        ref={layoutRef}
+        data-queue-width={queueWidth}
+      >
         <section
           className="queue"
           aria-label="References"
@@ -229,7 +243,7 @@ export function ReportScreen({
           }}
         >
           <h2>
-            References <span>{report.findings.length}</span>
+            Findings <span>{report.findings.length}</span>
           </h2>
           <p role="status">
             {report.findings.filter(needsAttention).length} need attention out
@@ -307,7 +321,7 @@ export function ReportScreen({
               {visible.map((f) => (
                 <li key={f.reference_id}>
                   <button
-                    className="finding"
+                    className={`finding ${needsAttention(f) ? 'finding-attention' : 'finding-unflagged'}`}
                     data-reference-id={f.reference_id}
                     aria-current={
                       f.reference_id === selected?.reference_id
@@ -324,8 +338,22 @@ export function ReportScreen({
                       )
                     }
                   >
+                    {f.reference_id === selected?.reference_id && (
+                      <motion.span
+                        className="cockpit-selected-outline"
+                        aria-hidden="true"
+                        initial={reduceMotion ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: reduceMotion ? 0 : 0.16 }}
+                      />
+                    )}
                     {f.literal}
-                    <small>{f.identity.replaceAll('_', ' ')}</small>
+                    <small>
+                      {needsAttention(f)
+                        ? 'Needs attention'
+                        : 'No machine discrepancy flagged'}{' '}
+                      · {f.identity.replaceAll('_', ' ')}
+                    </small>
                   </button>
                 </li>
               ))}
@@ -355,30 +383,35 @@ export function ReportScreen({
             </nav>
           )}
         </section>
+        <SplitHandle
+          containerRef={layoutRef}
+          label="Resize findings queue"
+          value={queueWidth}
+          min={240}
+          max={420}
+          step={10}
+          unit="px"
+          reset={300}
+          onChange={setQueueWidth}
+          className="cockpit-queue-splitter"
+        />
         <section
           className="inspection"
+          id="inspection"
           aria-labelledby="finding-title"
           ref={inspectionRef}
           tabIndex={-1}
         >
           {selected ? (
             <>
-              <p className="eyebrow">Selected reference</p>
-              <h2 id="finding-title">{selected.literal}</h2>
-              <dl className="dimensions">
-                <StateValue label="Identity" value={selected.identity} />
-                <StateValue
-                  label="Page mapping"
-                  value={selected.page_mapping}
-                />
-                <StateValue label="Fidelity" value={selected.fidelity} />
-                <StateValue label="Human support" value={selected.support} />
-              </dl>
-              <QuoteContext finding={selected} />
               <FindingInspection
                 key={`${session.epoch}:${caseId}:${briefId}:${snapshot}:${selected.reference_id}:${historical}`}
                 finding={selected}
                 historical={historical}
+                sourceWidth={sourceWidth}
+                onSourceWidthChange={setSourceWidth}
+                readingMode={readingMode}
+                onReadingModeChange={setReadingMode}
                 renderSource={renderSource}
                 renderDraft={renderDraft}
                 renderReview={renderReview}
@@ -510,6 +543,10 @@ function QuoteContext({ finding }: { finding: FindingView }) {
 function FindingInspection({
   finding,
   historical,
+  sourceWidth,
+  onSourceWidthChange,
+  readingMode,
+  onReadingModeChange,
   renderSource,
   renderDraft,
   renderReview,
@@ -517,6 +554,10 @@ function FindingInspection({
 }: {
   finding: FindingView;
   historical: boolean;
+  sourceWidth: number;
+  onSourceWidthChange: (width: number) => void;
+  readingMode: 'split' | 'draft' | 'source';
+  onReadingModeChange: (mode: 'split' | 'draft' | 'source') => void;
   renderSource?:
     | ((
         finding: FindingView,
@@ -537,19 +578,130 @@ function FindingInspection({
   onNext: (() => void) | undefined;
 }) {
   const [inspected, setInspected] = useState(false);
+  const readerRef = useRef<HTMLDivElement>(null);
+  const widthControlId = useId();
+  const reduceMotion = useReducedMotion();
   return (
-    <>
-      {renderDraft?.(finding, historical)}
-      {renderSource ? (
-        renderSource(finding, historical, () => setInspected(true))
-      ) : (
-        <Notice error>
-          Preserved source viewer unavailable. No human source inspection may be
-          recorded.
-        </Notice>
-      )}
-      {renderReview?.(finding, historical, inspected, onNext)}
-    </>
+    <div className="cockpit-reader">
+      <div
+        className="cockpit-view-switch"
+        role="group"
+        aria-label="Reading layout"
+      >
+        <button
+          type="button"
+          className="button"
+          aria-pressed={readingMode === 'split'}
+          onClick={() => onReadingModeChange('split')}
+        >
+          Split view
+        </button>
+        <button
+          type="button"
+          className="button"
+          aria-pressed={readingMode === 'draft'}
+          onClick={() => onReadingModeChange('draft')}
+        >
+          Draft focus
+        </button>
+        <button
+          type="button"
+          className="button"
+          aria-pressed={readingMode === 'source'}
+          onClick={() => onReadingModeChange('source')}
+        >
+          Source focus
+        </button>
+      </div>
+      <motion.p
+        key={readingMode}
+        className="cockpit-reading-summary"
+        initial={reduceMotion ? false : { opacity: 0, y: 3 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reduceMotion ? 0 : 0.16, ease: 'easeOut' }}
+        aria-live="polite"
+      >
+        {readingMode === 'split'
+          ? 'Three-panel review: the preserved draft and original source remain separate. Drag the divider or use arrow keys.'
+          : readingMode === 'draft'
+            ? 'Draft focus. Source evidence is hidden, not verified or discarded.'
+            : 'Source focus. Preserved original pixels remain the inspection authority.'}
+      </motion.p>
+      <div className="cockpit-resize-controls" hidden={readingMode !== 'split'}>
+        <label htmlFor={widthControlId}>
+          Source panel width: {sourceWidth}px
+        </label>
+        <input
+          id={widthControlId}
+          type="range"
+          min={320}
+          max={560}
+          step={10}
+          value={sourceWidth}
+          onChange={(event) => onSourceWidthChange(Number(event.target.value))}
+          aria-label="Source evidence panel width"
+        />
+        <button
+          type="button"
+          className="button"
+          onClick={() => onSourceWidthChange(400)}
+        >
+          Restore 400px source
+        </button>
+      </div>
+      <div
+        ref={readerRef}
+        className={`cockpit-inspection cockpit-mode-${readingMode}`}
+        data-source-width={sourceWidth}
+      >
+        <div className="cockpit-draft">
+          <p className="eyebrow">Selected reference</p>
+          <h2 id="finding-title">{finding.literal}</h2>
+          <dl className="dimensions cockpit-reference-dimensions">
+            <StateValue label="Identity" value={finding.identity} />
+            <StateValue label="Page mapping" value={finding.page_mapping} />
+            <StateValue label="Fidelity" value={finding.fidelity} />
+            <StateValue label="Human support" value={finding.support} />
+          </dl>
+          <header className="cockpit-pane-heading">
+            <h3>Draft</h3>
+            <span>Preserved DOCX · extracted context</span>
+          </header>
+          {renderDraft?.(finding, historical)}
+          <QuoteContext finding={finding} />
+        </div>
+        {readingMode === 'split' && (
+          <SplitHandle
+            containerRef={readerRef}
+            label="Resize draft and source panels"
+            value={sourceWidth}
+            min={320}
+            max={560}
+            step={10}
+            unit="px"
+            reset={400}
+            fromEnd
+            onChange={onSourceWidthChange}
+            className="cockpit-draft-splitter"
+          />
+        )}
+        <div className="cockpit-evidence">
+          <header className="cockpit-pane-heading">
+            <h3>Source evidence</h3>
+            <span>{finding.literal} · original PDF</span>
+          </header>
+          {renderSource ? (
+            renderSource(finding, historical, () => setInspected(true))
+          ) : (
+            <Notice error>
+              Preserved source viewer unavailable. No human source inspection
+              may be recorded.
+            </Notice>
+          )}
+          {renderReview?.(finding, historical, inspected, onNext)}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -652,6 +804,7 @@ function CoverageSummary({
   return (
     <section
       aria-label="Verification and processing coverage"
+      id="coverage"
       className="draft-context"
     >
       <h3>Coverage and exclusions</h3>

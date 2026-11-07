@@ -218,6 +218,20 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
   ).toBeVisible();
   await page.getByLabel(/I acknowledge this release is partial/).check();
   await page.getByRole('button', { name: 'Review release details' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Confirm this exact reviewed release' }),
+  ).toBeVisible();
+
+  // Escape discards intent without creating a release or another operation ID.
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('dialog', { name: 'Confirm this exact reviewed release' }),
+  ).toHaveCount(0);
+  expect(releasePosts).toBe(0);
+  await page.getByRole('button', { name: 'Review release details' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Confirm this exact reviewed release' }),
+  ).toBeVisible();
   await expect(page.getByText('account@example.test')).toBeVisible();
   await page
     .getByRole('button', { name: 'Acknowledge and create release' })
