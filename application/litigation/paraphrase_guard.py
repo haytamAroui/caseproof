@@ -134,7 +134,14 @@ def guard_paraphrase(
     candidate_terms = _terms(paragraph[:_MAX_DRAFT])
     if not paragraph.strip() or len(paragraph) > _MAX_DRAFT:
         reasons.append("DRAFT_PARAGRAPH_MISSING_OR_UNBOUNDED")
-    if not source_version_id or not source_sha256 or pdf_page is None:
+    if (
+        not isinstance(source_version_id, str)
+        or not source_version_id.strip()
+        or not isinstance(source_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", source_sha256) is None
+        or type(pdf_page) is not int
+        or pdf_page < 1
+    ):
         reasons.append("SOURCE_PINPOINT_UNRESOLVED")
     if not source_text_context or len(source_text_context) > _MAX_SOURCE:
         reasons.append("SOURCE_TEXT_UNAVAILABLE")
@@ -155,10 +162,12 @@ def guard_paraphrase(
         elif (
             not ocr_uncertain
             and not source_text_partial
-            and source_version_id
-            and source_sha256
-            and pdf_page is not None
-            and re.fullmatch(r"[0-9a-f]{64}", source_sha256)
+            and isinstance(source_version_id, str)
+            and bool(source_version_id.strip())
+            and isinstance(source_sha256, str)
+            and re.fullmatch(r"[0-9a-f]{64}", source_sha256) is not None
+            and type(pdf_page) is int
+            and pdf_page >= 1
         ):
             # Text offset is navigational only, never a verified PDF polygon.
             anchor_basis = "unique_exact_quote_in_derived_page_text"
