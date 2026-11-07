@@ -19,6 +19,7 @@ from application.capacity_envelope import CAPACITY_POLICY, MAX_PDF_PAGES
 from application.data_rights import Action
 from application.extraction.contracts import ExtractionError
 from application.litigation.dossier_contracts import add_report_contract, assess_fidelity, quotation_context
+from application.litigation.paraphrase_guard import guard_paraphrase
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
@@ -797,6 +798,35 @@ class DossierStore:
             assess_fidelity(finding, visual_pages[key])
             # Identity/pinpoint remain independently checked; visual conflict
             # never changes exhibit identity or claims human semantic support.
+        # P0 snapshot-bound warning layer. Derived text is NOT a verified PDF
+        # passage: absence of a token is never a contradiction, and a matching
+        # token never authorizes semantic support.
+        for finding in found["findings"]:
+            offset = finding["offsets"]
+            finding["paraphrase_guard"] = guard_paraphrase(
+                draft_region=regions.get(finding["region"], ""),
+                reference_start=offset["start"],
+                reference_end=offset["end"],
+                quoted_text=finding.get("quoted_text"),
+                source_text_context=finding.get("source_text_context"),
+                source_version_id=finding.get("version_id"),
+                source_sha256=finding.get("source_sha256"),
+                pdf_page=finding.get("pdf_page"),
+                ocr_uncertain=(
+                    finding.get("fidelity") in {"ocr_unreliable", "representation_conflict"}
+                    or finding.get("ocr_uncertainty") == "requires_human_confirmation"
+                ),
+                source_text_partial=finding.get("source_text_context_partial") is not False,
+                draft_language=finding.get("draft_language"),
+                source_language=finding.get("source_language"),
+            )
+        found["coverage"]["guarded_term_warning_findings"] = sum(
+            bool(f["paraphrase_guard"]["warnings"]) for f in found["findings"]
+        )
+        found["coverage"]["guard_unassessed_findings"] = sum(
+            f["paraphrase_guard"]["state"] == "needs_manual_review"
+            for f in found["findings"]
+        )
         found["coverage"]["visual_pages_attempted"] = len(visual_pages)
         found["coverage"]["visual_pages_completed"] = sum(not p.get("error") for p in visual_pages.values())
         found["coverage"]["visual_findings_not_assessed"] = sum(

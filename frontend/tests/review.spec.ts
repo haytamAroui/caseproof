@@ -148,6 +148,9 @@ test('review requires rendered original and explicit region inspection; lost ack
   const save = review.getByRole('button', { name: 'Save human decision' });
   await expect(save).toBeDisabled();
   await expect(
+    review.getByRole('radio', { name: 'Qualify the support' }),
+  ).not.toBeChecked();
+  await expect(
     page.getByText('Source page rendered.', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText('Before', { exact: false })).toBeVisible();
@@ -156,6 +159,7 @@ test('review requires rendered original and explicit region inspection; lost ack
   await review
     .getByLabel('Rationale (required, visible to authorized reviewers)')
     .fill('Viewed preserved pixels');
+  await review.getByRole('radio', { name: 'Qualify the support' }).check();
   await expect(save).toBeEnabled();
   await save.click();
   await expect(
@@ -475,6 +479,7 @@ test('inspection and unsaved review never carry into another snapshot with the s
     'Rationale (required, visible to authorized reviewers)',
   );
   await rationale.fill('Prior snapshot only');
+  await review.getByRole('radio', { name: 'Qualify the support' }).check();
   await expect(
     review.getByRole('button', { name: 'Save human decision' }),
   ).toBeEnabled();
@@ -872,6 +877,7 @@ test('next saved decision follows the active filtered queue', async ({
   await review
     .getByLabel('Rationale (required, visible to authorized reviewers)')
     .fill('Viewed preserved pixels');
+  await review.getByRole('radio', { name: 'Qualify the support' }).check();
   await review.getByRole('button', { name: 'Save human decision' }).click();
   await review
     .getByRole('button', { name: 'Reconcile durable receipt' })
@@ -1028,4 +1034,56 @@ test('unanchored DOCX region offers only a snapshot-bound preserved original', a
     'caseproof-preserved-original.docx',
   );
   expect(await download.failure()).toBeNull();
+});
+
+test('P0 guarded terms are visible as warnings while human disposition remains unassessed', async ({
+  page,
+}) => {
+  const guardedReport = {
+    ...report,
+    findings: report.findings.map((finding) => ({
+      ...finding,
+      paraphrase_guard: {
+        schema: 'caseproof-paraphrase-review-guard-v1',
+        state: 'needs_manual_review',
+        semantic_support: 'not_assessed',
+        source_version_id: 'source-version-synthetic',
+        source_sha256: 'c'.repeat(64),
+        pdf_page: 1,
+        source_excerpt: 'Le paiement est enregistré. Montant EUR 500,00.',
+        warnings: [
+          {
+            kind: 'amount',
+            term: 'EUR 900,00',
+            reason_code: 'TERM_NOT_SEEN_IN_NEARBY_DERIVED_TEXT',
+          },
+        ],
+        candidate_terms: [{ kind: 'amount', term: 'EUR 900,00' }],
+        reason_codes: ['GUARDED_TERMS_REQUIRE_MANUAL_REVIEW'],
+      },
+    })),
+  };
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({ json: guardedReport }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const warning = page.getByRole('region', {
+    name: 'Deterministic paraphrase review warnings',
+  });
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText('EUR 900,00');
+  await expect(warning).toContainText(
+    'Source version source-version-synthetic',
+  );
+  await expect(warning).toContainText('never contradictions');
+  await warning.getByText('Read adjacent derived source context').click();
+  await expect(warning).toContainText('Montant EUR 500,00.');
+  const reviewer = page.getByRole('region', { name: 'Human review' });
+  await expect(
+    reviewer.getByRole('radio', { name: 'Qualify the support' }),
+  ).not.toBeChecked();
+  await expect(
+    reviewer.getByRole('button', { name: 'Save human decision' }),
+  ).toBeDisabled();
 });

@@ -46,6 +46,7 @@ def render_dossier_export(report: dict[str, Any], format: str) -> str:
                     "literal_assessment",
                     "source_text_context",
                     "source_text_context_partial",
+                    "paraphrase_guard",
                 )
             }
             for f in report["findings"]

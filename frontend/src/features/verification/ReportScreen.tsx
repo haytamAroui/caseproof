@@ -457,6 +457,137 @@ export function ReportScreen({
   );
 }
 
+/**
+ * Only displays snapshot-frozen, derived-text warnings. The lexical window
+ * is never a verified PDF crop, NLI result or legal support classification.
+ */
+function ParaphraseGuardPanel({ finding }: { finding: FindingView }) {
+  const raw = finding.paraphrase_guard;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return (
+      <Notice>
+        This frozen report has no guarded-term review. Inspect the preserved
+        source and surrounding context prior to making a semantic decision.
+      </Notice>
+    );
+  }
+  const guard = raw as Record<string, unknown>;
+  if (
+    guard.schema !== 'caseproof-paraphrase-review-guard-v1' ||
+    guard.semantic_support !== 'not_assessed'
+  )
+    return (
+      <Notice error>
+        Unsupported guarded-term assessment. Review the original.
+      </Notice>
+    );
+  const warnings = Array.isArray(guard.warnings)
+    ? guard.warnings
+        .slice(0, 24)
+        .filter(
+          (x): x is Record<string, unknown> =>
+            x !== null && typeof x === 'object' && !Array.isArray(x),
+        )
+    : [];
+  const candidateTerms = Array.isArray(guard.candidate_terms)
+    ? guard.candidate_terms
+        .slice(0, 24)
+        .filter(
+          (x): x is Record<string, unknown> =>
+            x !== null && typeof x === 'object' && !Array.isArray(x),
+        )
+    : [];
+  const reasonCodes = Array.isArray(guard.reason_codes)
+    ? guard.reason_codes
+        .slice(0, 12)
+        .filter((x): x is string => typeof x === 'string')
+    : [];
+  const excerpt =
+    typeof guard.source_excerpt === 'string'
+      ? guard.source_excerpt.slice(0, 760)
+      : '';
+  const sourceVersion =
+    typeof guard.source_version_id === 'string'
+      ? guard.source_version_id.slice(0, 100)
+      : 'unresolved';
+  const pdfPage =
+    typeof guard.pdf_page === 'number' && Number.isInteger(guard.pdf_page)
+      ? guard.pdf_page
+      : null;
+  return (
+    <section
+      className="paraphrase-review-guard"
+      aria-label="Deterministic paraphrase review warnings"
+    >
+      <h4>Guarded-term review — human assessment required</h4>
+      <p>
+        No automated claim verification. These lexical signals are warnings,
+        never contradictions, support findings, or authenticated PDF locations.
+      </p>
+      <p className="small">
+        Source version {sourceVersion}
+        {pdfPage !== null
+          ? ` · physical PDF page ${pdfPage}`
+          : ' · pinpoint unavailable'}
+        {' · '}Human support: not assessed by this guard
+      </p>
+      {warnings.length > 0 ? (
+        <ul aria-label="Guarded terms requiring attention">
+          {warnings.map((w, index) =>
+            typeof w.kind === 'string' && typeof w.term === 'string' ? (
+              <li key={index}>
+                <strong>{w.kind.replaceAll('_', ' ')}:</strong>{' '}
+                {w.term.slice(0, 96)} — not found in the nearby derived passage;
+                inspect original pixels and adjacent paragraphs
+              </li>
+            ) : null,
+          )}
+        </ul>
+      ) : (
+        <p>
+          {reasonCodes.length > 0
+            ? 'Guarded terms could not be compared reliably. Inspect the original page and adjoining evidence.'
+            : 'No lexical discrepancy identified. This does not establish semantic support.'}
+        </p>
+      )}
+      {reasonCodes.length > 0 && candidateTerms.length > 0 && (
+        <details>
+          <summary>Unassessed guarded terms from the draft</summary>
+          <ul aria-label="Guarded terms requiring original source inspection">
+            {candidateTerms.map((item, index) =>
+              typeof item.kind === 'string' && typeof item.term === 'string' ? (
+                <li key={index}>
+                  {item.kind.replaceAll('_', ' ')}: {item.term.slice(0, 96)}
+                </li>
+              ) : null,
+            )}
+          </ul>
+          <p className="small">
+            These terms were extracted only from the draft, not confirmed absent
+            from any original exhibit.
+          </p>
+        </details>
+      )}
+      {reasonCodes.length > 0 && (
+        <p className="small">
+          Review limitations:{' '}
+          {reasonCodes.join(', ').replaceAll('_', ' ').toLowerCase()}.
+        </p>
+      )}
+      {excerpt && (
+        <details>
+          <summary>Read adjacent derived source context</summary>
+          <blockquote>{excerpt}</blockquote>
+          <p className="small">
+            Derived page text for navigation only. The original PDF remains
+            authoritative for inspection.
+          </p>
+        </details>
+      )}
+    </section>
+  );
+}
+
 function QuoteContext({ finding }: { finding: FindingView }) {
   const [showMatches, setShowMatches] = useState(false);
   const quote = finding.quoted_text;
@@ -473,6 +604,7 @@ function QuoteContext({ finding }: { finding: FindingView }) {
       aria-label="Quotation and derived source text"
     >
       <h3>Quotation and derived source text</h3>
+      <ParaphraseGuardPanel finding={finding} />
       <p>
         Compare this text with the preserved source pixels. A text match is not
         a finding of legal support.
