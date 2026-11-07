@@ -46,7 +46,9 @@ export function ReportScreen({
   const [queueWidth, setQueueWidth] = useState(300);
   // Presentation preferences survive reference changes; source inspection does not.
   const [draftWidth, setDraftWidth] = useState(50);
-  const [readingMode, setReadingMode] = useState<'split' | 'draft' | 'source'>('split');
+  const [readingMode, setReadingMode] = useState<'split' | 'draft' | 'source'>(
+    'split',
+  );
   const focusReference = useRef<string | null>(null);
   const [filter, setFilter] = useState<'attention' | 'all'>('attention');
   const [search, setSearch] = useState('');
@@ -582,7 +584,11 @@ function FindingInspection({
   const reduceMotion = useReducedMotion();
   return (
     <div className="cockpit-reader">
-      <div className="cockpit-view-switch" role="group" aria-label="Reading layout">
+      <div
+        className="cockpit-view-switch"
+        role="group"
+        aria-label="Reading layout"
+      >
         <button
           type="button"
           className="button"
@@ -623,9 +629,7 @@ function FindingInspection({
             : 'Source focus. Preserved original pixels remain the inspection authority.'}
       </motion.p>
       <div className="cockpit-resize-controls" hidden={readingMode !== 'split'}>
-        <label htmlFor={widthControlId}>
-          Draft panel width: {draftWidth}%
-        </label>
+        <label htmlFor={widthControlId}>Draft panel width: {draftWidth}%</label>
         <input
           id={widthControlId}
           type="range"
@@ -680,8 +684,8 @@ function FindingInspection({
             renderSource(finding, historical, () => setInspected(true))
           ) : (
             <Notice error>
-              Preserved source viewer unavailable. No human source inspection may
-              be recorded.
+              Preserved source viewer unavailable. No human source inspection
+              may be recorded.
             </Notice>
           )}
           {renderReview?.(finding, historical, inspected, onNext)}

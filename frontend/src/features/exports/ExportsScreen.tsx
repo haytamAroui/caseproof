@@ -365,7 +365,9 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                   }}
                   onClose={() => setReleaseIntent('')}
                 >
-                  <h2 id="release-confirm-title">Confirm this exact reviewed release</h2>
+                  <h2 id="release-confirm-title">
+                    Confirm this exact reviewed release
+                  </h2>
                   <p>
                     Authenticated account:{' '}
                     <strong>{preview.data.release_actor.actor_label}</strong>
@@ -401,7 +403,9 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                       onClick={() => void commitRelease()}
                       disabled={working || unknown}
                     >
-                      {working ? 'Processing…' : 'Acknowledge and create release'}
+                      {working
+                        ? 'Processing…'
+                        : 'Acknowledge and create release'}
                     </Button>
                   </div>
                 </dialog>
@@ -422,7 +426,11 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
         </div>
       )}
       {message && <Notice>{message}</Notice>}
-      <section className="draft-context" id="release-history" aria-label="Export history">
+      <section
+        className="draft-context"
+        id="release-history"
+        aria-label="Export history"
+      >
         <h2>Frozen release history</h2>
         {history.isPending ? (
           <Notice>Loading authorized release history…</Notice>

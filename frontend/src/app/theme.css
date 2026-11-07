@@ -667,32 +667,80 @@ dialog::backdrop {
   --panel-radius: 12px;
 }
 @media (min-width: 1500px) {
-  main { max-width: 1760px; }
-  .review-layout { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); }
-  .cockpit-inspection { grid-template-columns: minmax(0, 1fr) minmax(380px, 46%); }
+  main {
+    max-width: 1760px;
+  }
+  .review-layout {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  }
+  .cockpit-inspection {
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 46%);
+  }
 }
 @media (min-width: 761px) and (max-width: 1100px) {
-  .review-layout { grid-template-columns: minmax(220px, 28%) minmax(0, 1fr); }
-  .queue { padding: 16px; }
-  .inspection { padding: 20px; }
+  .review-layout {
+    grid-template-columns: minmax(220px, 28%) minmax(0, 1fr);
+  }
+  .queue {
+    padding: 16px;
+  }
+  .inspection {
+    padding: 20px;
+  }
 }
 @media (max-width: 760px) {
-  .app-header { flex-wrap: wrap; }
-  .queue { padding: 16px; }
-  .queue ul { max-height: 35vh; }
-  .inspection { padding: 16px; }
-  .viewer-scroll { height: 55vh; min-height: 260px; }
-  .cockpit-inspection { gap: 12px; }
-  .catalog-actions { gap: 8px; }
+  .app-header {
+    flex-wrap: wrap;
+  }
+  .queue {
+    padding: 16px;
+  }
+  .queue ul {
+    max-height: 35vh;
+  }
+  .inspection {
+    padding: 16px;
+  }
+  .viewer-scroll {
+    height: 55vh;
+    min-height: 260px;
+  }
+  .cockpit-inspection {
+    gap: 12px;
+  }
+  .catalog-actions {
+    gap: 8px;
+  }
 }
-.review-layout > *, .cockpit-inspection > * { min-width: 0; }
-.draft-quote, .draft-context, .review-panel { overflow-wrap: anywhere; }
-button:not(:disabled), a, input, select, textarea { touch-action: manipulation; }
+.review-layout > *,
+.cockpit-inspection > * {
+  min-width: 0;
+}
+.draft-quote,
+.draft-context,
+.review-panel {
+  overflow-wrap: anywhere;
+}
+button:not(:disabled),
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
 @media (prefers-reduced-motion: no-preference) {
-  .finding, .button { transition: background-color 140ms ease, border-color 140ms ease; }
+  .finding,
+  .button {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .finding, .button { transition: none !important; }
+  .finding,
+  .button {
+    transition: none !important;
+  }
 }
 
 /* CaseProof Storyteller cockpit v3.1 — document-first, light-mode baseline.
@@ -708,11 +756,21 @@ button:not(:disabled), a, input, select, textarea { touch-action: manipulation; 
   z-index: 2;
   border-bottom: 1px solid var(--line);
 }
-.brand { letter-spacing: -0.045em; }
-.brand span { letter-spacing: 0; }
-main { max-width: 1900px; }
-.page-heading { max-width: 90ch; }
-.page-heading a { margin-right: 18px; }
+.brand {
+  letter-spacing: -0.045em;
+}
+.brand span {
+  letter-spacing: 0;
+}
+main {
+  max-width: 1900px;
+}
+.page-heading {
+  max-width: 90ch;
+}
+.page-heading a {
+  margin-right: 18px;
+}
 
 /* Workflow reflects ROUTE ONLY. No fake completed/approved stage badges. */
 .cockpit-journey {
@@ -731,7 +789,7 @@ main { max-width: 1900px; }
   margin: 0 0 10px;
   font-size: 12px;
   font-weight: 750;
-  letter-spacing: .03em;
+  letter-spacing: 0.03em;
 }
 .cockpit-journey-caption span {
   font-weight: 400;
@@ -748,7 +806,9 @@ main { max-width: 1900px; }
   gap: 6px;
   scrollbar-width: thin;
 }
-.cockpit-journey li { flex: 0 0 auto; }
+.cockpit-journey li {
+  flex: 0 0 auto;
+}
 .cockpit-journey li > a,
 .cockpit-journey li > span {
   display: inline-flex;
@@ -770,7 +830,9 @@ main { max-width: 1900px; }
   color: var(--muted);
   border-style: dashed;
 }
-.cockpit-journey a:hover { background: #edede8; }
+.cockpit-journey a:hover {
+  background: #edede8;
+}
 .cockpit-journey a[aria-current='step'] {
   border-color: var(--focus);
   background: #eaf3f8;
@@ -780,13 +842,19 @@ main { max-width: 1900px; }
 .cockpit-step-number {
   font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace;
   font-size: 11px;
-  opacity: .8;
+  opacity: 0.8;
 }
-.cockpit-journey :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.cockpit-journey :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
 
 /* Findings / draft / preserved PDF: both splitters are pointer + keyboard driven. */
 .review-layout {
-  grid-template-columns: minmax(0, var(--queue-width, 300px)) 12px minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--queue-width, 300px)) 12px minmax(
+      0,
+      1fr
+    );
   min-height: 620px;
   gap: 0;
   align-items: start;
@@ -794,7 +862,9 @@ main { max-width: 1900px; }
   border-radius: 12px;
   overflow: clip;
 }
-.review-layout > * { min-width: 0; }
+.review-layout > * {
+  min-width: 0;
+}
 .review-layout .queue {
   background: var(--surface);
   padding: 16px;
@@ -804,10 +874,20 @@ main { max-width: 1900px; }
   overflow: auto;
   border-right: 0;
 }
-.queue h2 { font-size: 17px; margin-bottom: 12px; }
-.queue .catalog-actions { gap: 7px; }
-.queue .catalog-actions .button { padding-inline: 10px; font-size: 12px; }
-.queue ul { max-height: none; }
+.queue h2 {
+  font-size: 17px;
+  margin-bottom: 12px;
+}
+.queue .catalog-actions {
+  gap: 7px;
+}
+.queue .catalog-actions .button {
+  padding-inline: 10px;
+  font-size: 12px;
+}
+.queue ul {
+  max-height: none;
+}
 .queue .finding {
   border-color: var(--line);
   border-left-width: 3px;
@@ -816,23 +896,41 @@ main { max-width: 1900px; }
   padding: 12px;
   line-height: 1.45;
 }
-.queue .finding-attention { border-left-color: var(--warning); }
-.queue .finding-attention small { color: var(--warning); }
-.queue .finding-unflagged { border-left-color: #9a9f9e; }
+.queue .finding-attention {
+  border-left-color: var(--warning);
+}
+.queue .finding-attention small {
+  color: var(--warning);
+}
+.queue .finding-unflagged {
+  border-left-color: #9a9f9e;
+}
 .queue .finding[aria-current='true'] {
   border-color: var(--focus);
   border-left-color: var(--focus);
   background: #ebf4f8;
 }
-.queue .finding:hover { background: var(--paper); }
+.queue .finding:hover {
+  background: var(--paper);
+}
 .review-layout .inspection {
   padding: 20px 22px 30px;
   background: var(--surface);
 }
-.inspection > .dimensions { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 12px 0; }
-.inspection > .dimensions .dimension { padding: 10px; }
-.inspection > .dimensions dt { font-size: 11px; }
-.inspection > .dimensions dd { font-size: 12px; overflow-wrap: anywhere; }
+.inspection > .dimensions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 12px 0;
+}
+.inspection > .dimensions .dimension {
+  padding: 10px;
+}
+.inspection > .dimensions dt {
+  font-size: 11px;
+}
+.inspection > .dimensions dd {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 
 .cockpit-splitter {
   position: relative;
@@ -857,19 +955,39 @@ main { max-width: 1900px; }
   margin: 170px auto 0;
 }
 .cockpit-splitter:hover::before,
-.cockpit-splitter:focus-visible::before { background: var(--focus); }
-.cockpit-splitter:focus-visible { outline: 3px solid var(--focus); outline-offset: -2px; }
-.cockpit-reader { margin-top: 14px; }
+.cockpit-splitter:focus-visible::before {
+  background: var(--focus);
+}
+.cockpit-splitter:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -2px;
+}
+.cockpit-reader {
+  margin-top: 14px;
+}
 .cockpit-reader .cockpit-inspection {
   display: grid;
-  grid-template-columns: minmax(0, var(--draft-panel-width, 50%)) 12px minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--draft-panel-width, 50%)) 12px minmax(
+      0,
+      1fr
+    );
   gap: 0;
   align-items: start;
 }
-.cockpit-reader .cockpit-inspection > * { min-width: 0; }
-.cockpit-reader .cockpit-draft { padding: 0 13px 0 0; border: 0; }
-.cockpit-reader .cockpit-evidence { padding: 0 0 0 13px; border: 0; }
-.cockpit-reader .cockpit-draft-splitter { min-height: 500px; }
+.cockpit-reader .cockpit-inspection > * {
+  min-width: 0;
+}
+.cockpit-reader .cockpit-draft {
+  padding: 0 13px 0 0;
+  border: 0;
+}
+.cockpit-reader .cockpit-evidence {
+  padding: 0 0 0 13px;
+  border: 0;
+}
+.cockpit-reader .cockpit-draft-splitter {
+  min-height: 500px;
+}
 .cockpit-pane-heading {
   display: flex;
   flex-wrap: wrap;
@@ -880,15 +998,41 @@ main { max-width: 1900px; }
   margin: 2px 0 14px;
   border-bottom: 1px solid var(--line);
 }
-.cockpit-pane-heading h3 { font-size: 14px; margin: 0; letter-spacing: -.01em; }
-.cockpit-pane-heading span { color: var(--muted); font-size: 11px; }
-.cockpit-draft .draft-context { font-family: 'CaseProof Source Serif', Georgia, serif; max-width: none; line-height: 1.65; }
-.cockpit-draft :is(button, input, label, select, textarea) { font-family: 'CaseProof Inter', system-ui, sans-serif; }
-.cockpit-draft .draft-quote { font-family: 'CaseProof Source Serif', Georgia, serif; }
-.cockpit-draft .draft-context pre { font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace; }
-.cockpit-evidence .source-viewer { margin: 0; }
-.cockpit-evidence .viewer-scroll { background: var(--paper-raised); }
-.cockpit-view-switch { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.cockpit-pane-heading h3 {
+  font-size: 14px;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.cockpit-pane-heading span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.cockpit-draft .draft-context {
+  font-family: 'CaseProof Source Serif', Georgia, serif;
+  max-width: none;
+  line-height: 1.65;
+}
+.cockpit-draft :is(button, input, label, select, textarea) {
+  font-family: 'CaseProof Inter', system-ui, sans-serif;
+}
+.cockpit-draft .draft-quote {
+  font-family: 'CaseProof Source Serif', Georgia, serif;
+}
+.cockpit-draft .draft-context pre {
+  font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace;
+}
+.cockpit-evidence .source-viewer {
+  margin: 0;
+}
+.cockpit-evidence .viewer-scroll {
+  background: var(--paper-raised);
+}
+.cockpit-view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
 .cockpit-view-switch .button {
   min-height: 40px;
   padding: 7px 13px;
@@ -901,7 +1045,11 @@ main { max-width: 1900px; }
   background: var(--ink);
   border-color: var(--ink);
 }
-.cockpit-reading-summary { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+.cockpit-reading-summary {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 12px;
+}
 .cockpit-resize-controls {
   display: flex;
   flex-wrap: wrap;
@@ -909,26 +1057,49 @@ main { max-width: 1900px; }
   gap: 10px;
   padding: 7px 0 14px;
 }
-.cockpit-resize-controls[hidden] { display: none; }
-.cockpit-resize-controls label { display: inline; font-size: 12px; }
+.cockpit-resize-controls[hidden] {
+  display: none;
+}
+.cockpit-resize-controls label {
+  display: inline;
+  font-size: 12px;
+}
 .cockpit-resize-controls input[type='range'] {
   width: min(190px, 100%);
   min-height: 40px;
   padding: 0;
   accent-color: var(--focus);
 }
-.cockpit-resize-controls .button { font-size: 12px; padding-inline: 10px; min-height: 40px; }
+.cockpit-resize-controls .button {
+  font-size: 12px;
+  padding-inline: 10px;
+  min-height: 40px;
+}
 .cockpit-reader .cockpit-inspection.cockpit-mode-draft,
-.cockpit-reader .cockpit-inspection.cockpit-mode-source { grid-template-columns: minmax(0,1fr); }
-.cockpit-mode-draft .cockpit-evidence { display: none; }
-.cockpit-mode-source .cockpit-draft { display: none; }
+.cockpit-reader .cockpit-inspection.cockpit-mode-source {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cockpit-mode-draft .cockpit-evidence {
+  display: none;
+}
+.cockpit-mode-source .cockpit-draft {
+  display: none;
+}
 .cockpit-reader .cockpit-mode-draft .cockpit-draft,
-.cockpit-reader .cockpit-mode-source .cockpit-evidence { padding: 0; }
+.cockpit-reader .cockpit-mode-source .cockpit-evidence {
+  padding: 0;
+}
 
 /* The source stays mounted across focus changes; coverage/decisions stay separate. */
-#coverage { scroll-margin-top: 18px; }
-#inspection { scroll-margin-top: 18px; }
-#release-history { scroll-margin-top: 18px; }
+#coverage {
+  scroll-margin-top: 18px;
+}
+#inspection {
+  scroll-margin-top: 18px;
+}
+#release-history {
+  scroll-margin-top: 18px;
+}
 
 /* A real native modal is reserved for consequential release authorization. */
 .release-confirm-dialog {
@@ -943,11 +1114,23 @@ main { max-width: 1900px; }
   box-shadow: 0 25px 80px #16181d33;
   overflow-y: auto;
 }
-.release-confirm-dialog::backdrop { background: #16181db8; }
-.release-confirm-dialog h2 { font-size: 21px; margin: 0 0 12px; }
-.release-confirm-dialog .catalog-actions { justify-content: flex-end; }
-.release-confirm-dialog code { overflow-wrap: anywhere; }
-.release-confirm-dialog :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.release-confirm-dialog::backdrop {
+  background: #16181db8;
+}
+.release-confirm-dialog h2 {
+  font-size: 21px;
+  margin: 0 0 12px;
+}
+.release-confirm-dialog .catalog-actions {
+  justify-content: flex-end;
+}
+.release-confirm-dialog code {
+  overflow-wrap: anywhere;
+}
+.release-confirm-dialog :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
 
 /* Responsive: stack evidence before it becomes too small to inspect safely. */
 @media (max-width: 1279px) {
@@ -958,29 +1141,60 @@ main { max-width: 1900px; }
     padding: 0 0 14px;
     border-bottom: 1px solid var(--line);
   }
-  .cockpit-reader .cockpit-mode-split .cockpit-evidence { padding: 14px 0 0; }
-  .cockpit-draft-splitter, .cockpit-resize-controls { display: none; }
+  .cockpit-reader .cockpit-mode-split .cockpit-evidence {
+    padding: 14px 0 0;
+  }
+  .cockpit-draft-splitter,
+  .cockpit-resize-controls {
+    display: none;
+  }
 }
 @media (max-width: 1050px) {
-  .review-layout { grid-template-columns: minmax(0, 1fr); }
+  .review-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .review-layout .queue {
     position: static;
     max-height: none;
     border-bottom: 1px solid var(--line);
   }
-  .queue ul { max-height: 230px; overflow: auto; }
-  .cockpit-queue-splitter { display: none; }
-  .review-layout .inspection { padding: 18px; }
+  .queue ul {
+    max-height: 230px;
+    overflow: auto;
+  }
+  .cockpit-queue-splitter {
+    display: none;
+  }
+  .review-layout .inspection {
+    padding: 18px;
+  }
 }
 @media (max-width: 760px) {
-  main { padding: 16px; }
-  .review-layout .queue { padding: 14px; }
-  .review-layout .inspection { padding: 14px; }
-  .inspection > .dimensions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cockpit-journey { padding: 10px; }
-  .cockpit-journey-caption span { display: block; width: 100%; }
-  .cockpit-pane-heading { align-items: start; }
-  .release-confirm-dialog { padding: 18px; }
+  main {
+    padding: 16px;
+  }
+  .review-layout .queue {
+    padding: 14px;
+  }
+  .review-layout .inspection {
+    padding: 14px;
+  }
+  .inspection > .dimensions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cockpit-journey {
+    padding: 10px;
+  }
+  .cockpit-journey-caption span {
+    display: block;
+    width: 100%;
+  }
+  .cockpit-pane-heading {
+    align-items: start;
+  }
+  .release-confirm-dialog {
+    padding: 18px;
+  }
 }
 @media (forced-colors: active) {
   .cockpit-journey a[aria-current='step'],
@@ -990,18 +1204,26 @@ main { max-width: 1900px; }
     color: HighlightText;
     border-color: Highlight;
   }
-  .cockpit-splitter { border-inline: 2px solid CanvasText; }
-  .cockpit-splitter::before { background: CanvasText; }
+  .cockpit-splitter {
+    border-inline: 2px solid CanvasText;
+  }
+  .cockpit-splitter::before {
+    background: CanvasText;
+  }
 }
 @media (prefers-reduced-motion: no-preference) {
   .queue .finding,
   .cockpit-journey a,
   .cockpit-view-switch .button {
-    transition: background-color 150ms ease, border-color 150ms ease;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .queue .finding, .cockpit-journey a, .cockpit-view-switch .button {
+  .queue .finding,
+  .cockpit-journey a,
+  .cockpit-view-switch .button {
     transition: none !important;
   }
 }

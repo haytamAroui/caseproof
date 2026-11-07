@@ -14,8 +14,7 @@ export function MatterJourney({
   hash: string;
 }) {
   const segments = pathname.split('/').filter(Boolean);
-  if (segments[0] !== 'matters' || !uuid.test(segments[1] ?? ''))
-    return null;
+  if (segments[0] !== 'matters' || !uuid.test(segments[1] ?? '')) return null;
   const matter = segments[1]!;
   const briefFromPath = segments[2] === 'briefs' ? segments[3] : null;
   const query = new URLSearchParams(search);
@@ -53,11 +52,17 @@ export function MatterJourney({
       label: 'Verification & coverage',
       to: reportUrl ? `${reportUrl}#coverage` : null,
     },
-    { number: 4, label: 'Evidence review', to: reportUrl ? `${reportUrl}#inspection` : null },
+    {
+      number: 4,
+      label: 'Evidence review',
+      to: reportUrl ? `${reportUrl}#inspection` : null,
+    },
     {
       number: 5,
       label: 'Correction & recheck',
-      to: reportUrl ? `${root}/briefs/${brief}/edit?snapshot=${snapshot}` : null,
+      to: reportUrl
+        ? `${root}/briefs/${brief}/edit?snapshot=${snapshot}`
+        : null,
     },
     { number: 6, label: 'Release & export', to: exportUrl },
     {
@@ -75,13 +80,20 @@ export function MatterJourney({
         {steps.map(({ number, label, to }) => (
           <li key={number}>
             {to ? (
-              <Link to={to} aria-current={number === active ? 'step' : undefined}>
-                <span className="cockpit-step-number">{String(number).padStart(2, '0')}</span>
+              <Link
+                to={to}
+                aria-current={number === active ? 'step' : undefined}
+              >
+                <span className="cockpit-step-number">
+                  {String(number).padStart(2, '0')}
+                </span>
                 <span>{label}</span>
               </Link>
             ) : (
               <span aria-disabled="true">
-                <span className="cockpit-step-number">{String(number).padStart(2, '0')}</span>
+                <span className="cockpit-step-number">
+                  {String(number).padStart(2, '0')}
+                </span>
                 <span>{label}</span>
               </span>
             )}
