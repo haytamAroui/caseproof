@@ -1,0 +1,33 @@
+name: P1 source projection one-shot formatter
+on:
+  push:
+    branches: [feat/p1-controlled-reviewer-benchmark]
+    paths:
+      - .github/workflows/p1-source-one-shot-format.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    if: github.repository == 'haytamAroui/caseproof' && github.ref == 'refs/heads/feat/p1-controlled-reviewer-benchmark'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: feat/p1-controlled-reviewer-benchmark
+          persist-credentials: true
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - name: Apply locked Ruff to new P1 source binding and tests
+        run: |
+          uv run --locked ruff check --fix application/litigation/review_source_binding.py tests/test_p1_review_source_binding.py
+          uv run --locked ruff format application/litigation/review_source_binding.py tests/test_p1_review_source_binding.py
+      - name: Commit exact results to draft branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add application/litigation/review_source_binding.py tests/test_p1_review_source_binding.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'style(P1): pinned Ruff for source binding and adversarial tests'
+            git push origin HEAD:feat/p1-controlled-reviewer-benchmark
+          fi
