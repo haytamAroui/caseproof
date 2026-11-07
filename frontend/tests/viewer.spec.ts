@@ -854,7 +854,7 @@ test('Storyteller focus modes preserve evidence state and keyboard accessibility
   await expect(source).toBeVisible();
   await expect(page.locator('.cockpit-draft')).toBeHidden();
   await page.getByRole('button', { name: 'Split view' }).click();
-  await expect(page.locator('.cockpit-draft')).toBeVisible();
+  await expect(page.locator('.cockpit-draft')).not.toBeHidden();
   await expect(source).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
