@@ -468,38 +468,50 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 ### 5.4 Bundle 3 — release preflight
 
+**5 November 2026 engineering reconciliation:** The release-completeness decision
+(D02) was implemented in [PR #197](https://github.com/haytamAroui/caseproof/pull/197)
+and merged as [845a6e7](https://github.com/haytamAroui/caseproof/commit/845a6e720088dec71fa71fb9e93744a720141fdf).
+[Dedicated F6 regression CI](https://github.com/haytamAroui/caseproof/actions/runs/42081353655)
+passed 25 tests; [final signed F3–F6 acceptance](https://github.com/haytamAroui/caseproof/actions/runs/42082133289)
+passed the partial-release browser flow, old/new immutable download,
+recheck, revocation and zero-residual cleanup. These are synthetic
+development-scoped engineering receipts. **Independent legal, security and
+pilot approval remain OPEN**, and T34 volume/concurrency races at a larger
+approved capacity envelope are not established by this evidence.
+
+
 #### T30 — Define release eligibility and completeness
 
-- [ ] Complete T30 and record its acceptance evidence.
+- [x] Complete the bounded engineering implementation of T30 and record its acceptance evidence.
 
-**Status:** BLOCKED_DECISION. **Depends on:** D02.  
+**Status:** ENGINEERING VERIFIED — ADR 0034 decision, signed and unit evidence in PR #197. **Depends on:** D02.  
 **Build:** Preserve ADR0032 until amended. Define release types, incomplete review, zero findings/decisions, qualified/contradicted decisions, coverage and historical access. Count applicable unique finding decisions instead of raw ledger rows.  
 **Done when:** Decision table and backend tests establish partial versus complete labels without implying certification.  
 **Touch points:** Release policy; ADR amendment/new ADR. **Trace:** C1.
 
 #### T31 — Share server policy between preview and commit
 
-- [ ] Complete T31 and record its acceptance evidence.
+- [x] Complete the bounded engineering implementation of T31 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T30.  
+**Status:** ENGINEERING VERIFIED — one server policy for preview and commit; stale preview denied in PR #197. **Depends on:** T30.  
 **Build:** Return can_release, reason codes, total/required/reviewed/unreviewed counts, review_complete, coverage and currentness. Recompute with fresh permissions/state at commit; never trust a submitted preview flag.  
 **Done when:** Preview/commit share rules; a race or changed snapshot denies commit; old preview grants nothing.  
 **Touch points:** dossier_export_release.py; generated response contract. **Trace:** C2; S10.
 
 #### T32 — Freeze scope in new release manifests
 
-- [ ] Complete T32 and record its acceptance evidence.
+- [x] Complete the bounded engineering implementation of T32 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T31; T07 compatibility verification before schema changes ship.  
+**Status:** ENGINEERING VERIFIED — scope recorded in frozen HMAC-covered manifest; legacy reads preserved. **Depends on:** T31; T07 compatibility verification before schema changes ship.  
 **Build:** Record counts/completeness/limitations under compatible or explicitly versioned schema. Preserve old manifest/HMAC validation and exact old artifact bytes; never mutate historical signed records.  
 **Done when:** Old and new releases reopen under correct schemas with unchanged historical bytes.  
 **Touch points:** Manifest/receipt reader and writer; migration only if required. **Trace:** C3/C6.
 
 #### T33 — Build actionable export checklist
 
-- [ ] Complete T33 and record its acceptance evidence.
+- [x] Complete the bounded engineering implementation of T33 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T31.  
+**Status:** ENGINEERING VERIFIED — actionable export checklist, explicit partial consent, frontend signed acceptance. **Depends on:** T31.  
 **Build:** Show eligibility, review completeness and coverage separately. Link authorized items to finding/source/region through existing route context. Preserve historical selection; expose pending/unknown/rejected/released states.  
 **Done when:** Partial label matches policy; failed release never shows completion; keyboard/screen reader can act on each issue.  
 **Touch points:** frontend/src/features/exports; app navigation. **Trace:** C4–C5; Vaquill V7/V8.
@@ -508,16 +520,16 @@ Each unchecked task below starts at TODO unless its Status says otherwise. Accep
 
 - [ ] Complete T34 and record its acceptance evidence.
 
-**Status:** TODO. **Depends on:** T31–T33.  
+**Status:** PARTIAL ENGINEERING — baseline replay/duplicates/stale/HMAC/source revocation and artifact byte limits verified in PR #197 and dedicated capacity tests; full-envelope competing writers/races remain OPEN. **Depends on:** T31–T33.  
 **Build:** Exercise one reviewed plus unreviewed findings under approved policy, duplicate review rows, stale snapshot, revocation, competing release, lost ack, tampered bytes and oversized artifacts.  
 **Done when:** One authorized operation; fresh checks and stable reason codes; downloaded bytes match frozen artifact.  
 **Touch points:** Export tests and disposable SQL/signed acceptance. **Trace:** C acceptance; UF05.
 
 #### T35 — Preserve historical release access
 
-- [ ] Complete T35 and record its acceptance evidence.
+- [x] Complete the bounded engineering implementation of T35 and record its acceptance evidence.
 
-**Status:** VERIFY_EXISTING. **Depends on:** T32–T34.  
+**Status:** ENGINEERING VERIFIED — frozen old/new downloads, revocation and cold reopen in signed PR #197. **Depends on:** T32–T34.  
 **Build:** After changed draft/inventory/source, sign out/restart and reopen authorized old report/source/release. Recheck current grants/retention and history labels.  
 **Done when:** Exact historical bytes; no regeneration; revoked actor denied; source links reopen original version.  
 **Touch points:** Existing history/release endpoints; ExportsScreen. **Trace:** S11/P08/P09.

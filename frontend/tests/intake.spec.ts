@@ -441,3 +441,46 @@ test('Roman printed page and detector miss remain review-needed after durable co
     pdf_page: 6,
   });
 });
+
+test('oversized inventory is refused before any browser write', async ({
+  page,
+}) => {
+  let writes = 0;
+  await page.route('**/intake/matters/' + caseId, (route) =>
+    route.fulfill({ json: intake(false) }),
+  );
+  await page.route('**/intake/matters/' + caseId + '/reservations', (route) => {
+    writes++;
+    return route.fulfill({ json: intake(false) });
+  });
+  await page.route('**/intake/matters/' + caseId + '/sources', (route) => {
+    writes++;
+    return route.fulfill({ json: intake() });
+  });
+
+  await connect(page, '/workspace/matters/' + caseId + '/sources');
+  for (const [i, label] of [
+    'DOCX draft',
+    'UTF-8 inventory',
+    'First PDF exhibit',
+    'Second PDF exhibit or scan',
+  ].entries()) {
+    await page.getByLabel(label, { exact: true }).setInputFiles({
+      name: sources[i]!.filename,
+      mimeType: sources[i]!.media_type,
+      buffer:
+        i === 1
+          ? Buffer.alloc(1_048_577, 65)
+          : Buffer.from('synthetic original'),
+    });
+  }
+  await page
+    .getByRole('button', { name: 'Preserve or reconcile originals' })
+    .click();
+  await expect(
+    page.getByText('No completed intake receipt was received.', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  expect(writes).toBe(0);
+});

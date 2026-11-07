@@ -9,6 +9,7 @@ import hashlib
 import http.client
 import io
 import json
+import os
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
@@ -223,7 +224,20 @@ def export_one(
     acceptance.login(page)
     expect(page.get_by_role("heading", name="Reviewed exports and history")).to_be_visible(timeout=90000)
     expect(page.get_by_role("heading", name="Preview release scope")).to_be_visible(timeout=90000)
-    expect(page.get_by_role("button", name="Create frozen reviewed release")).to_be_enabled(timeout=90000)
+    preview_button = page.get_by_role("button", name="Review release details")
+    expect(preview_button).to_be_visible(timeout=90000)
+    if page.get_by_label("I acknowledge this release is partial and some detected findings remain unreviewed.").count() == 1:
+        release_type = "partial_review"
+        acknowledge = page.get_by_label("I acknowledge this release is partial and some detected findings remain unreviewed.")
+        expect(preview_button).to_be_disabled()
+        acknowledge.check()
+    else:
+        release_type = "complete_review"
+    expect(preview_button).to_be_enabled(timeout=90000)
+    preview_button.click()
+    expect(page.get_by_role("heading", name="Confirm this exact reviewed release")).to_be_visible()
+    action = page.get_by_role("button", name="Acknowledge and create release")
+    expect(action).to_be_enabled()
     previous = page.url
     writes = [0]
     captured: dict[str, Any] = {}
@@ -244,7 +258,7 @@ def export_one(
         route.abort("failed")
 
     page.route("**/dossier/releases", lost_release_ack)
-    page.get_by_role("button", name="Create frozen reviewed release").click()
+    action.click()
     expect(page.get_by_role("button", name="Reconcile previous release")).to_be_visible(timeout=90000)
     page.get_by_role("button", name="Reconcile previous release").click()
     expect(page.get_by_text("The previously submitted release was found and recovered.")).to_be_visible(timeout=90000)
@@ -257,6 +271,50 @@ def export_one(
             or manifest.get("review_count", 0) < 1 or len(manifest.get("server_receipt", "")) != 64
             or manifest.get("sources") is None):
         raise RuntimeError("F6_MANIFEST_SCOPE_OR_REVIEW_INVALID")
+    ack = manifest.get("release_acknowledgement", {})
+    if (ack.get("schema") != "caseproof-release-ack-v1"
+            or ack.get("release_id") != receipt.get("release_id")
+            or ack.get("snapshot_hash") != snapshot
+            or not ack.get("actor_id")
+            or ack.get("release_type") != release_type):
+        raise RuntimeError("F6_RELEASE_ACKNOWLEDGEMENT_NOT_FROZEN")
+    print("F6_SIGNED_RELEASE_ACKNOWLEDGEMENT_VERIFIED", flush=True)
+    completeness = manifest.get("review_completeness", {})
+    if (completeness.get("policy_version") != "caseproof-release-completeness-v1"
+            or completeness.get("release_type") != release_type
+            or completeness.get("total_findings") != manifest.get("finding_count")
+            or completeness.get("reviewed_findings") != manifest.get("review_count")
+            or completeness.get("partial_acknowledged") != (release_type == "partial_review")
+            or (release_type == "complete_review" and not completeness.get("review_complete"))
+            or (release_type == "partial_review" and completeness.get("review_complete"))):
+        raise RuntimeError("F6_SIGNED_RELEASE_COMPLETENESS_SCOPE_INVALID")
+    if os.getenv("CASEPROOF_RIGHTS_SIGNED_LIVE") == "YES":
+        attestation = manifest.get("rights_attestation")
+        sources = manifest.get("sources", [])
+        if not isinstance(attestation, dict) or (
+            attestation.get("schema") != "caseproof-export-rights-v1"
+            or attestation.get("action") != "export"
+            or attestation.get("scope") != "same_matter"
+            or attestation.get("decision") != "allow"
+        ):
+            raise RuntimeError("PR203_SIGNED_RIGHTS_MANIFEST_MISSING")
+        rights_sources = attestation.get("sources")
+        if not isinstance(rights_sources, list) or len(rights_sources) != len(sources):
+            raise RuntimeError("PR203_SIGNED_RIGHTS_SOURCE_COUNT_MISMATCH")
+        for source in sources:
+            evidence = [
+                x for x in rights_sources if isinstance(x, dict)
+                and x.get("version_id") == source.get("version_id")
+            ]
+            if len(evidence) != 1 or (
+                evidence[0].get("original_sha256") != source.get("sha256")
+                or evidence[0].get("decision") != "allow"
+                or type(evidence[0].get("policy_version")) is not int
+                or evidence[0]["policy_version"] < 1
+            ):
+                raise RuntimeError("PR203_SIGNED_RIGHTS_SOURCE_POLICY_MISMATCH")
+        print("PR203_GENUINE_SIGNED_EXPORT_RIGHTS_MANIFEST_PASSED", flush=True)
+    print("F6_GENUINE_SIGNED_RELEASE_" + release_type.upper() + "_SCOPE_PASSED", flush=True)
     source_links = manifest.get("source_links", [])
     original_destination = (
         f"/v2/matters/{case}/briefs/{brief}/dossier/history/{snapshot}"

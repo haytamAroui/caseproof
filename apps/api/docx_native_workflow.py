@@ -18,6 +18,7 @@ from zipfile import ZipFile
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from application.data_rights import Action
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.litigation_evidence_app import _token
 from apps.api.signed_supabase_originals import PrivateStorageExists, PrivateStorageOutcomeUnknown
@@ -271,6 +272,16 @@ def create_native_word_router(
                 "state": "active", "version_id": previous["version_id"],
                 "reconciled": True, "requires_recheck": True,
             }
+        # New derivative processing must use the latest rights policy.
+        gate = getattr(store, "rights_gate", None)
+        if gate is not None:
+            frozen = store.frozen_report(
+                bearer, case_id, brief_id, body.snapshot_hash,
+            )
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id,
+                sources=frozen.get("sources", []), action=Action.PROCESS,
+            )
         # Even retries must verify the identical candidate bytes before
         # sending another storage write; byte hashes are independent of IDs.
         candidate = await limited_docx_body(request, body.byte_length)
@@ -310,6 +321,11 @@ def create_native_word_router(
         if (len(readback) != body.byte_length
             or hashlib.sha256(readback).hexdigest() != body.candidate_sha256):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id,
+                sources=frozen.get("sources", []), action=Action.PROCESS,
+            )
         active = s.revisions.editor_activate(
             bearer, case_id, body.request_id, body.review_request_id,
             body.candidate_sha256, body.byte_length,

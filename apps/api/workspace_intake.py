@@ -18,6 +18,15 @@ from uuid import UUID, uuid5
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from application.capacity_envelope import (
+    MAX_BASE64_CHARS,
+    MAX_INTAKE_BYTES,
+    MAX_INVENTORY_BYTES,
+    MAX_INVENTORY_IDENTITIES,
+    MAX_SOURCE_BYTES,
+    SOURCE_COUNT,
+    refusal_reason,
+)
 from application.documents.file_boundary import DOCX, validate_original_container
 from application.extraction.contracts import ExtractionError
 from apps.api.access_control import AccessFailure, AccessRejected
@@ -47,13 +56,13 @@ class IntakeFile(Contract):
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ]
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    byte_length: int = Field(ge=1, le=5_242_880)
-    content_base64: str = Field(min_length=1, max_length=6_990_600)
+    byte_length: int = Field(ge=1, le=MAX_SOURCE_BYTES)
+    content_base64: str = Field(min_length=1, max_length=MAX_BASE64_CHARS)
 
 
 class IntakeCommand(Contract):
     request_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
-    files: list[IntakeFile] = Field(min_length=4, max_length=4)
+    files: list[IntakeFile] = Field(min_length=SOURCE_COUNT, max_length=SOURCE_COUNT)
 
     @model_validator(mode="after")
     def coherent(self) -> IntakeCommand:
@@ -62,7 +71,7 @@ class IntakeCommand(Contract):
         if (
             sorted(f.role for f in self.files) != ["draft", "exhibit", "exhibit", "inventory"]
             or len({f.filename for f in self.files}) != 4
-            or sum(f.byte_length for f in self.files) > 12_000_000
+            or sum(f.byte_length for f in self.files) > MAX_INTAKE_BYTES
         ):
             raise ValueError("one draft, one inventory and two uniquely named PDFs required")
         return self
@@ -112,6 +121,15 @@ class IntakeView(Contract):
 
 def preflight(command: IntakeCommand) -> list[bytes]:
     originals = []
+    inventory = next(f.byte_length for f in command.files if f.role == "inventory")
+    reason = refusal_reason(
+        source_count=len(command.files),
+        byte_lengths=[f.byte_length for f in command.files],
+        inventory_bytes=inventory,
+        pdf_page_counts=[],
+    )
+    if reason:
+        raise HTTPException(422, reason + "; no originals written")
     for source in command.files:
         try:
             safe_original_filename(source.filename)
@@ -123,16 +141,16 @@ def preflight(command: IntakeCommand) -> list[bytes]:
                 raise ValueError("role/media mismatch")
             validate_original_container(raw, expected)
             if source.role == "inventory":
-                if len(raw) > 1_048_576 or "\x00" in raw.decode("utf-8"):
+                if len(raw) > MAX_INVENTORY_BYTES or "\x00" in raw.decode("utf-8"):
                     raise ValueError("invalid inventory")
                 candidates = detect_exhibit_references(raw.decode("utf-8"), region="inventory")
                 identities = {
                     ("stuk" if r.label.startswith("stuk") else "piece", r.number) for r in candidates
                 }
-                if len(identities) > 512:
+                if len(identities) > MAX_INVENTORY_IDENTITIES:
                     raise HTTPException(
                         422,
-                        "Inventory supports at most 512 distinct Stuk/Pièce identities; no files written.",
+                        f"Inventory supports at most {MAX_INVENTORY_IDENTITIES} distinct Stuk/Pièce identities; no files written.",
                     )
             else:
                 parse_verified_original(

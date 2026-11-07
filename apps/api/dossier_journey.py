@@ -15,12 +15,15 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from pypdf import PdfReader, PdfWriter
 
+from application.capacity_envelope import CAPACITY_POLICY, MAX_PDF_PAGES
+from application.data_rights import Action
 from application.extraction.contracts import ExtractionError
 from application.litigation.dossier_contracts import add_report_contract, assess_fidelity, quotation_context
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
 from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
+from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.dossier_draft_revisions import DraftRevisionClient, stale_snapshot_conflict
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_headless_verification import DecisionBody
@@ -51,7 +54,7 @@ class PageConfirmation(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     space: Literal["printed", "bundle"]
     label: str = Field(min_length=1, max_length=12, pattern=PAGE_LABEL_PATTERN)
-    pdf_page: int = Field(ge=1, le=64)
+    pdf_page: int = Field(ge=1, le=MAX_PDF_PAGES)
     rationale: str = Field(min_length=3, max_length=500)
 
 
@@ -133,6 +136,7 @@ class CorrectionPreviewBody(BaseModel):
         if self.locator_identity is not None and self.locator_identity.exact_text != self.before:
             raise ValueError("locator exact text differs from correction before text")
         return self
+
     snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     original_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     reference_id: str = Field(min_length=1, max_length=256)
@@ -150,7 +154,14 @@ def reopen_for_mutation(
     store: DossierStore, bearer: str, case: str, brief: str, snapshot: str
 ) -> tuple[dict[str, Any], bytes]:
     try:
-        return store.reopen(bearer, case, brief, snapshot)
+        report, original = store.reopen(bearer, case, brief, snapshot)
+        gate = getattr(store, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
+        return report, original
     except HTTPException as exc:
         if exc.status_code == 409:
             raise HTTPException(412, "snapshot is stale") from None
@@ -161,7 +172,9 @@ def validate_correction_target(
     original: bytes, finding: dict[str, Any], brief: str, command: CorrectionPreviewBody
 ) -> None:
     identity = command.locator_identity
-    if command.before != finding.get("literal") or (identity is not None and identity.source_version_id != brief):
+    if command.before != finding.get("literal") or (
+        identity is not None and identity.source_version_id != brief
+    ):
         raise ValueError("correction does not match reference anchor")
     target = {**finding, "locator_identity": identity.model_dump() if identity is not None else None}
     if correction_anchor(original, target) != command.paragraph_index:
@@ -182,9 +195,13 @@ class VisualDecisionBody(DecisionBody):
 
 
 class DossierStore:
-    def __init__(self, key: str, receipt_secret: str | None = None):
+    def __init__(
+        self, key: str, receipt_secret: str | None = None, *,
+        rights_gate: SignedRightsGate | None = None,
+    ):
         self.key = key
-        self.client = JourneyClient(key)
+        self.client = JourneyClient(key, rights_gate=rights_gate)
+        self.rights_gate = rights_gate
         self.revisions = DraftRevisionClient(key, receipt_secret)
         self.visual = PDFVisualFidelity()
         # Domain-separated receipt key, never the public client key. No key is
@@ -244,16 +261,55 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return result
 
+    def release_actor(self, bearer: str) -> dict[str, str]:
+        """Server-verified release identity; never trust browser-supplied names.
+
+        A confirmed Auth email is an account label, not an attested legal name
+        or a claim that this actor reviewed any particular finding.
+        """
+        try:
+            verified = self.revisions.verifier.verify_bearer(bearer)
+            user = self.revisions.verifier.user_lookup.get_verified_user(bearer)
+        except InvalidBearer:
+            raise AccessRejected(AccessFailure.AUTHENTICATION_REQUIRED) from None
+        except IdentityServiceUnavailable:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        except Exception:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if not isinstance(user, dict) or user.get("id") != verified.subject_id:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        email = user.get("email")
+        confirmed = user.get("email_confirmed_at")
+        usable = (
+            isinstance(email, str)
+            and 3 <= len(email) <= 254
+            and "@" in email
+            and not any(ord(char) < 32 for char in email)
+            and isinstance(confirmed, str)
+            and bool(confirmed)
+        )
+        return {
+            "actor_id": verified.subject_id,
+            "actor_label": str(email) if usable else f"Account {verified.subject_id}",
+            "actor_label_type": "confirmed_email" if usable else "account_id",
+        }
+
     def export_rpc(
-        self, bearer: str, case: str, action: str, release_id: str | None,
+        self,
+        bearer: str,
+        case: str,
+        action: str,
+        release_id: str | None,
         data: dict[str, Any],
     ) -> dict[str, Any]:
         """Signed reads; only trusted backend may persist a signed release."""
         if action not in {"authorize", "release", "status", "list", "artifact"}:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         payload: dict[str, Any] = {
-            "p_case": case, "p_action": action,
-            "p_export": release_id, "p_data": data,
+            "p_case": case,
+            "p_action": action,
+            "p_export": release_id,
+            "p_data": data,
         }
         if action == "release":
             # The API has already checked the signed report. A separate fresh
@@ -270,21 +326,26 @@ class DossierStore:
                 raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
             payload["p_actor"] = actor.subject_id
             headers = {
-                "apikey": key, "Content-Type": "application/json",
+                "apikey": key,
+                "Content-Type": "application/json",
                 "Cache-Control": "no-store",
             }
             if key.startswith("eyJ"):
                 headers["Authorization"] = "Bearer " + key
         else:
             headers = {
-                "apikey": self.key, "Authorization": "Bearer " + bearer,
-                "Content-Type": "application/json", "Cache-Control": "no-store",
+                "apikey": self.key,
+                "Authorization": "Bearer " + bearer,
+                "Content-Type": "application/json",
+                "Cache-Control": "no-store",
             }
         con = http.client.HTTPSConnection(HOST, timeout=60)
         try:
             con.request(
-                "POST", "/rest/v1/rpc/caseproof_dossier_export_release",
-                canonical(payload).encode(), headers,
+                "POST",
+                "/rest/v1/rpc/caseproof_dossier_export_release",
+                canonical(payload).encode(),
+                headers,
             )
             response = con.getresponse()
             status, raw = response.status, response.read(16_000_001)
@@ -327,8 +388,12 @@ class DossierStore:
         ):
             raise HTTPException(409, "correction operation differs from command")
         if state == "active":
-            return {"state": "active", "version_id": status["version_id"],
-                    "committed": True, "requires_recheck": True}
+            return {
+                "state": "active",
+                "version_id": status["version_id"],
+                "committed": True,
+                "requires_recheck": True,
+            }
         return {"state": state, "committed": False, "requires_recheck": state == "reserved"}
 
     def correction_review_receipt(
@@ -349,7 +414,8 @@ class DossierStore:
         if not isinstance(rows, list):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         matching = [
-            row for row in rows
+            row
+            for row in rows
             if isinstance(row, dict)
             and row.get("reference_id") == reference
             and row.get("reviewer_id") == actor
@@ -391,7 +457,9 @@ class DossierStore:
             # predicate transactionally. This API gate prevents bypassing the review
             # receipt even if the browser sends a direct commit.
             try:
-                self.correction_review_receipt(bearer, case, brief, command.snapshot_hash, command.reference_id)
+                self.correction_review_receipt(
+                    bearer, case, brief, command.snapshot_hash, command.reference_id
+                )
             except StaleDossierConflict:
                 raise HTTPException(412, "snapshot is stale") from None
             report, original = reopen_for_mutation(self, bearer, case, brief, command.snapshot_hash)
@@ -410,6 +478,12 @@ class DossierStore:
             )
         else:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        gate = getattr(self, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         try:
             validate_correction_target(original, finding, brief, command)
             derivative = corrected_docx_preview(
@@ -445,6 +519,11 @@ class DossierStore:
             or reserved.get("byte_length") != len(derivative)
         ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         params = {
             "bearer": bearer,
             "case_id": case,
@@ -458,6 +537,11 @@ class DossierStore:
         readback = self.client.library.read(**params)
         if len(readback) != len(derivative) or hashlib.sha256(readback).hexdigest() != digest:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
         activated = self.revisions.activate(bearer, case, command.request_id, digest, len(readback))
         if activated.get("state") != "active" or activated.get("version_id") != reserved["version_id"]:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
@@ -469,7 +553,9 @@ class DossierStore:
         entries = manifest.get("sources") if isinstance(manifest, dict) else None
         if not isinstance(entries, list):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        drafts = [row.get("version_id") for row in entries if isinstance(row, dict) and row.get("role") == "draft"]
+        drafts = [
+            row.get("version_id") for row in entries if isinstance(row, dict) and row.get("role") == "draft"
+        ]
         if len(drafts) != 1 or not isinstance(drafts[0], str):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return drafts[0]
@@ -567,6 +653,12 @@ class DossierStore:
         self, bearer: str, case: str, brief: str, *, language_context: dict[str, Any] | None = None
     ) -> tuple[dict[str, Any], bytes]:
         context = self.rpc(bearer, case, "context")
+        rights_gate = getattr(self, "rights_gate", None)
+        if rights_gate is not None:
+            signed_manifest = self.client.bundle_manifest(bearer, case)["sources"]
+            rights_gate.require_bundle(
+                bearer=bearer, case_id=case, sources=signed_manifest, action=Action.PROCESS,
+            )
         sources, originals = self.sources(bearer, case)
         drafts = [s for s in sources if s["role"] == "draft" and s["version_id"] == brief]
         if len(drafts) != 1:
@@ -674,7 +766,7 @@ class DossierStore:
         # Both text-layer PDFs and scans take the visual path. Inputs come only
         # from verified private originals; unavailable engines never count as pass.
         visual_pages: dict[tuple[str, int], dict[str, Any]] = {}
-        visual_budget = 4
+        visual_budget = int(CAPACITY_POLICY["max_visual_pages_per_snapshot"])
         for finding in found["findings"]:
             version, page_number = finding["version_id"], finding["pdf_page"]
             tail = regions.get(finding["region"], "")[finding["offsets"]["end"] :]
@@ -737,6 +829,10 @@ class DossierStore:
         if len(serialized.encode()) > 1_900_000:
             raise HTTPException(422, "visual snapshot budget exceeded; reduce assessed pages")
         report["snapshot_hash"] = hashlib.sha256(serialized.encode()).hexdigest()
+        if rights_gate is not None:
+            rights_gate.require_bundle(
+                bearer=bearer, case_id=case, sources=sources, action=Action.PROCESS,
+            )
         self.rpc(
             bearer, case, "snapshot", {"serialized": serialized, "snapshot_hash": report["snapshot_hash"]}
         )
@@ -805,8 +901,11 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
 
     @router.get(base + "/history/{snapshot_hash}/comparison")
     def compare_frozen_findings(
-        case_id: str, brief_id: str, snapshot_hash: str,
-        current_brief_id: str, current_snapshot_hash: str,
+        case_id: str,
+        brief_id: str,
+        snapshot_hash: str,
+        current_brief_id: str,
+        current_snapshot_hash: str,
         authorization: str | None = Header(default=None),
     ) -> dict[str, Any]:
         from application.litigation.finding_drift import explain_finding_drift
@@ -822,11 +921,13 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             except ValueError:
                 raise HTTPException(422, "invalid draft version") from None
         old = s.frozen_report(bearer, case_id, brief_id, snapshot_hash, historical=True)
-        new = s.frozen_report(bearer, case_id, current_brief_id,
-                              current_snapshot_hash, historical=True)
-        if (old.get('brief_id') != brief_id or old.get('snapshot_hash') != snapshot_hash
-                or new.get('brief_id') != current_brief_id
-                or new.get('snapshot_hash') != current_snapshot_hash):
+        new = s.frozen_report(bearer, case_id, current_brief_id, current_snapshot_hash, historical=True)
+        if (
+            old.get("brief_id") != brief_id
+            or old.get("snapshot_hash") != snapshot_hash
+            or new.get("brief_id") != current_brief_id
+            or new.get("snapshot_hash") != current_snapshot_hash
+        ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
             return explain_finding_drift(old, new)
@@ -881,7 +982,10 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
 
     @router.get(base + "/snapshots/{snapshot_hash}/references/{reference_id}/correction-anchor")
     def correction_anchor_route(
-        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        case_id: str,
+        brief_id: str,
+        snapshot_hash: str,
+        reference_id: str,
         authorization: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
@@ -894,13 +998,22 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             locator = bound_locator(original, finding, brief_id)
         except ValueError:
             raise HTTPException(422, "unsupported or ambiguous correction anchor") from None
-        return {"snapshot_hash": snapshot_hash, "brief_version_id": brief_id,
-                "reference_id": reference_id, "original_sha256": hashlib.sha256(original).hexdigest(),
-                "paragraph_index": index, "before": finding["literal"], "locator_identity": locator}
+        return {
+            "snapshot_hash": snapshot_hash,
+            "brief_version_id": brief_id,
+            "reference_id": reference_id,
+            "original_sha256": hashlib.sha256(original).hexdigest(),
+            "paragraph_index": index,
+            "before": finding["literal"],
+            "locator_identity": locator,
+        }
 
     @router.get(base + "/snapshots/{snapshot_hash}/references/{reference_id}/correction-operations")
     def correction_operations(
-        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        case_id: str,
+        brief_id: str,
+        snapshot_hash: str,
+        reference_id: str,
         authorization: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
@@ -914,7 +1027,10 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
 
     @router.get(base + "/corrections/review-receipt")
     def correction_review_receipt(
-        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        case_id: str,
+        brief_id: str,
+        snapshot_hash: str,
+        reference_id: str,
         authorization: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
@@ -1073,13 +1189,15 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         if not isinstance(rows.get("decisions"), list):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
-            result = ReviewLedgerView.model_validate({
-                "schema": "caseproof-review-ledger-v1",
-                "case_id": case_id,
-                "brief_id": brief_id,
-                "snapshot_hash": report["snapshot_hash"],
-                "decisions": rows["decisions"],
-            })
+            result = ReviewLedgerView.model_validate(
+                {
+                    "schema": "caseproof-review-ledger-v1",
+                    "case_id": case_id,
+                    "brief_id": brief_id,
+                    "snapshot_hash": report["snapshot_hash"],
+                    "decisions": rows["decisions"],
+                }
+            )
             references = {f["reference_id"] for f in report["findings"]}
             if any(decision.reference_id not in references for decision in result.decisions):
                 raise ValueError("Orphan review")
@@ -1093,7 +1211,10 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         response_model_by_alias=True,
     )
     def draft_context(
-        case_id: str, brief_id: str, snapshot_hash: str, reference_id: str,
+        case_id: str,
+        brief_id: str,
+        snapshot_hash: str,
+        reference_id: str,
         authorization: str | None = Header(default=None),
     ) -> DraftExcerptView:
         s, bearer = active(authorization)
@@ -1127,10 +1248,16 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
                     available = True
         return DraftExcerptView(
             schema="caseproof-draft-excerpt-v1",
-            case_id=case_id, brief_id=brief_id, snapshot_hash=snapshot_hash,
-            reference_id=reference_id, original_sha256=hashlib.sha256(original).hexdigest(),
-            available=available, region=region if available else None,
-            excerpt=excerpt, selection_start=start, selection_end=end,
+            case_id=case_id,
+            brief_id=brief_id,
+            snapshot_hash=snapshot_hash,
+            reference_id=reference_id,
+            original_sha256=hashlib.sha256(original).hexdigest(),
+            available=available,
+            region=region if available else None,
+            excerpt=excerpt,
+            selection_start=start,
+            selection_end=end,
             reason=None if available else "unsupported_or_ambiguous_anchor",
         )
 
@@ -1172,6 +1299,12 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
     ) -> Response:
         s, bearer = active(authorization)
         report, original = read_dossier_report(s, bearer, case_id, brief_id, snapshot_hash, decisions=True)
+        gate = getattr(s, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id,
+                sources=report.get("sources", []), action=Action.EXPORT,
+            )
         headers = {"X-CaseProof-Snapshot": report["snapshot_hash"], "Cache-Control": "no-store"}
         if format == "docx":
             try:
@@ -1284,7 +1417,10 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
 
     @router.get(base + "/sources/{version_id}/original")
     def original(
-        case_id: str, brief_id: str, version_id: str, authorization: str | None = Header(default=None),
+        case_id: str,
+        brief_id: str,
+        version_id: str,
+        authorization: str | None = Header(default=None),
         snapshot_hash: str | None = None,
     ) -> Response:
         s, bearer = active(authorization)
@@ -1297,15 +1433,23 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
                 raise AccessRejected(AccessFailure.RESOURCE_MASKED)
             source = matches[0]
             raw = files.get(version_id)
-            if (not isinstance(raw, bytes) or len(raw) != source.get("byte_length")
-                    or hashlib.sha256(raw).hexdigest() != source.get("sha256")):
+            if (
+                not isinstance(raw, bytes)
+                or len(raw) != source.get("byte_length")
+                or hashlib.sha256(raw).hexdigest() != source.get("sha256")
+            ):
                 raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-            return Response(raw, media_type="application/octet-stream", headers={
-                "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
-                "Content-Disposition": "attachment; filename=caseproof-original",
-                "X-CaseProof-Snapshot": snapshot_hash,
-                "X-CaseProof-Original-SHA256": source["sha256"],
-            })
+            return Response(
+                raw,
+                media_type="application/octet-stream",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Content-Type-Options": "nosniff",
+                    "Content-Disposition": "attachment; filename=caseproof-original",
+                    "X-CaseProof-Snapshot": snapshot_hash,
+                    "X-CaseProof-Original-SHA256": source["sha256"],
+                },
+            )
         sources, files = s.sources(bearer, case_id)
         if not any(x["role"] == "draft" and x["version_id"] == brief_id for x in sources):
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
@@ -1338,6 +1482,13 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         source = next((x for x in sources if x["version_id"] == version_id), None)
         if not source or not 1 <= page_number <= source.get("page_count", 0):
             raise HTTPException(404, "source page unavailable")
+        gate = getattr(s, "rights_gate", None)
+        if gate is not None:
+            gate.require(
+                bearer=bearer, case_id=case_id,
+                document_id=source["document_id"], version_id=version_id,
+                action=Action.PROCESS,
+            )
         writer = PdfWriter()
         writer.add_page(PdfReader(io.BytesIO(files[version_id])).pages[page_number - 1])
         out = io.BytesIO()
