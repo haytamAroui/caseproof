@@ -1035,3 +1035,54 @@ test('unanchored DOCX region offers only a snapshot-bound preserved original', a
   );
   expect(await download.failure()).toBeNull();
 });
+
+
+test('P0 guarded terms are visible as warnings while human disposition remains unassessed', async ({
+  page,
+}) => {
+  const guardedReport = {
+    ...report,
+    findings: report.findings.map((finding) => ({
+      ...finding,
+      paraphrase_guard: {
+        schema: 'caseproof-paraphrase-review-guard-v1',
+        state: 'needs_manual_review',
+        semantic_support: 'not_assessed',
+        source_version_id: 'source-version-synthetic',
+        source_sha256: 'c'.repeat(64),
+        pdf_page: 1,
+        source_excerpt: 'Le paiement est enregistré. Montant EUR 500,00.',
+        warnings: [
+          {
+            kind: 'amount',
+            term: 'EUR 900,00',
+            reason_code: 'TERM_NOT_SEEN_IN_NEARBY_DERIVED_TEXT',
+          },
+        ],
+        candidate_terms: [{ kind: 'amount', term: 'EUR 900,00' }],
+        reason_codes: ['GUARDED_TERMS_REQUIRE_MANUAL_REVIEW'],
+      },
+    })),
+  };
+  await page.route('**/dossier?*', (route) =>
+    route.fulfill({ json: guardedReport }),
+  );
+  await page.goto(scope);
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const warning = page.getByRole('region', {
+    name: 'Deterministic paraphrase review warnings',
+  });
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText('EUR 900,00');
+  await expect(warning).toContainText('Source version source-version-synthetic');
+  await expect(warning).toContainText('never contradictions');
+  await warning.getByText('Read adjacent derived source context').click();
+  await expect(warning).toContainText('Montant EUR 500,00.');
+  const reviewer = page.getByRole('region', { name: 'Human review' });
+  await expect(
+    reviewer.getByRole('radio', { name: 'Qualify the support' }),
+  ).not.toBeChecked();
+  await expect(
+    reviewer.getByRole('button', { name: 'Save human decision' }),
+  ).toBeDisabled();
+});
