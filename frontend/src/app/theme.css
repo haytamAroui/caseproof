@@ -1313,3 +1313,10 @@ main {
 .cockpit-reader .cockpit-inspection[data-draft-width='70'] {
   --draft-panel-width: 70%;
 }
+
+/* Responsive one-column reading wins over the bounded desktop width map. */
+@media (max-width: 1279px) {
+  .cockpit-reader .cockpit-inspection.cockpit-mode-split[data-draft-width] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
