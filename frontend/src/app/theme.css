@@ -830,3 +830,11 @@ dialog::backdrop { background: #16181d99; }
 @media (max-width: 1100px) {
   .cockpit-resize-controls { display: none; }
 }
+
+/* Matter workflow navigation: explicit current stage, no inferred completion. */
+.cockpit-journey { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 12px; }
+.cockpit-journey > * { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 13px; text-decoration: none; }
+.cockpit-journey [aria-current='step'] { border-color: var(--focus); box-shadow: inset 0 -2px var(--focus); font-weight: 700; }
+.cockpit-journey a:hover { background: var(--paper-raised); }
+.cockpit-journey a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 760px) { .cockpit-journey > * { flex: 1 1 180px; } }
