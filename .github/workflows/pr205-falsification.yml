@@ -1,0 +1,84 @@
+name: PR205 deterministic NL-FR falsification gate
+on:
+  push:
+    branches: [feat/p0-evidence-falsification-paraphrase-guard]
+    paths:
+      - .github/workflows/pr205-falsification.yml
+      - application/litigation/paraphrase_guard.py
+      - apps/api/dossier_journey.py
+      - application/litigation/report_projection.py
+      - tests/test_paraphrase_guard.py
+      - tests/test_p0_review_benchmark_manifest.py
+      - tests/fixtures/p0_review_benchmark_cases.json
+      - tests/test_dossier_journey.py
+  pull_request:
+    paths:
+      - .github/workflows/pr205-falsification.yml
+      - application/litigation/paraphrase_guard.py
+      - apps/api/dossier_journey.py
+      - application/litigation/report_projection.py
+      - tests/test_paraphrase_guard.py
+      - tests/test_p0_review_benchmark_manifest.py
+      - tests/fixtures/p0_review_benchmark_cases.json
+      - tests/test_dossier_journey.py
+permissions:
+  contents: read
+jobs:
+  falsification:
+    name: Author-seeded NL FR falsification (NOT human validation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - name: Deterministic adversarial fixture and version-bound regression
+        run: |
+          uv run --locked pytest -q \
+            tests/test_paraphrase_guard.py \
+            tests/test_p0_review_benchmark_manifest.py \
+            tests/test_dossier_journey.py \
+            tests/test_citation_fidelity.py \
+            tests/test_exhibit_identity_pinpoint_split.py
+      - name: Python quality and typed guard
+        run: |
+          uv run --locked ruff check \
+            application/litigation/paraphrase_guard.py \
+            tests/test_paraphrase_guard.py \
+            tests/test_p0_review_benchmark_manifest.py
+          uv run --locked ruff format --check \
+            application/litigation/paraphrase_guard.py \
+            tests/test_paraphrase_guard.py \
+            tests/test_p0_review_benchmark_manifest.py
+          uv run --locked mypy --explicit-package-bases application/litigation/paraphrase_guard.py
+      - name: Record bounded synthetic acceptance provenance (no human claims)
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          fixture = json.loads(Path('tests/fixtures/p0_review_benchmark_cases.json').read_text())
+          packet = {
+            'schema': 'caseproof-p0-synthetic-falsification-receipt-v1',
+            'repository_head': os.environ['GITHUB_SHA'],
+            'fixture_schema': fixture['schema'],
+            'fixture_count': len(fixture['cases']),
+            'scope': 'unit-and-source-version-falsification-regressions-only',
+            'result': 'passed_after_locked_pytest_ruff_and_mypy',
+            'independently_adjudicated': False,
+            'actual_human_reviewer_accuracy_measured': False,
+            'genuine_signed_user_acceptance': False,
+          }
+          dest = Path('/tmp/caseproof-p0-falsification')
+          dest.mkdir(exist_ok=True)
+          (dest/'receipt.json').write_text(json.dumps(packet, sort_keys=True, indent=2)+'\n')
+          print('CASEPROOF_P0_SYNTHETIC_FALSIFICATION_PASSED')
+          PY
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: p0-falsification-synthetic-receipt
+          path: /tmp/caseproof-p0-falsification/receipt.json
+          retention-days: 30
