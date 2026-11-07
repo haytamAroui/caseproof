@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
+import { SplitHandle } from '../../app/SplitHandle';
 import { useSession } from '../../shared/session';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
@@ -41,6 +42,11 @@ export function ReportScreen({
     uuid.test(caseId) && uuid.test(briefId) && /^[0-9a-f]{64}$/.test(snapshot);
   const queueRef = useRef<HTMLElement>(null);
   const inspectionRef = useRef<HTMLElement>(null);
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const [queueWidth, setQueueWidth] = useState(300);
+  // Presentation preferences survive reference changes; source inspection does not.
+  const [draftWidth, setDraftWidth] = useState(50);
+  const [readingMode, setReadingMode] = useState<'split' | 'draft' | 'source'>('split');
   const focusReference = useRef<string | null>(null);
   const [filter, setFilter] = useState<'attention' | 'all'>('attention');
   const [search, setSearch] = useState('');
@@ -176,20 +182,11 @@ export function ReportScreen({
           ? 'Historical snapshot. Current permissions were checked again, but this report cannot be reviewed, corrected, rechecked or exported as current. Source availability is checked separately.'
           : 'Current snapshot inspection. Human decisions remain separate from source rendering.'}
       </Notice>
-      <nav className="cockpit-journey" aria-label="Matter workflow">
-        <Link to={`/matters/${caseId}/inventory`}>1–2 · Intake and inventory</Link>
-        <span aria-current="step">3–4 · Verify and review</span>
-        {!historical && (
-          <Link to={`/matters/${caseId}/briefs/${briefId}/edit?snapshot=${snapshot}`}>
-            5 · Correct and recheck
-          </Link>
-        )}
-        <Link to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}>
-          6 · Release and export
-        </Link>
-        {historical && <span>7 · Historical snapshot (read-only)</span>}
-      </nav>
-      <div className="review-layout">
+      <div
+        className="review-layout"
+        ref={layoutRef}
+        style={{ '--queue-width': `${queueWidth}px` } as CSSProperties}
+      >
         <section
           className="queue"
           aria-label="References"
@@ -243,7 +240,7 @@ export function ReportScreen({
           }}
         >
           <h2>
-            References <span>{report.findings.length}</span>
+            Findings <span>{report.findings.length}</span>
           </h2>
           <p role="status">
             {report.findings.filter(needsAttention).length} need attention out
@@ -321,7 +318,7 @@ export function ReportScreen({
               {visible.map((f) => (
                 <li key={f.reference_id}>
                   <button
-                    className="finding"
+                    className={`finding ${needsAttention(f) ? 'finding-attention' : 'finding-unflagged'}`}
                     data-reference-id={f.reference_id}
                     aria-current={
                       f.reference_id === selected?.reference_id
@@ -339,7 +336,12 @@ export function ReportScreen({
                     }
                   >
                     {f.literal}
-                    <small>{f.identity.replaceAll('_', ' ')}</small>
+                    <small>
+                      {needsAttention(f)
+                        ? 'Needs attention'
+                        : 'No machine discrepancy flagged'}{' '}
+                      · {f.identity.replaceAll('_', ' ')}
+                    </small>
                   </button>
                 </li>
               ))}
@@ -369,8 +371,21 @@ export function ReportScreen({
             </nav>
           )}
         </section>
+        <SplitHandle
+          containerRef={layoutRef}
+          label="Resize findings queue"
+          value={queueWidth}
+          min={240}
+          max={420}
+          step={10}
+          unit="px"
+          reset={300}
+          onChange={setQueueWidth}
+          className="cockpit-queue-splitter"
+        />
         <section
           className="inspection"
+          id="inspection"
           aria-labelledby="finding-title"
           ref={inspectionRef}
           tabIndex={-1}
@@ -388,11 +403,14 @@ export function ReportScreen({
                 <StateValue label="Fidelity" value={selected.fidelity} />
                 <StateValue label="Human support" value={selected.support} />
               </dl>
-              <QuoteContext finding={selected} />
               <FindingInspection
                 key={`${session.epoch}:${caseId}:${briefId}:${snapshot}:${selected.reference_id}:${historical}`}
                 finding={selected}
                 historical={historical}
+                draftWidth={draftWidth}
+                onDraftWidthChange={setDraftWidth}
+                readingMode={readingMode}
+                onReadingModeChange={setReadingMode}
                 renderSource={renderSource}
                 renderDraft={renderDraft}
                 renderReview={renderReview}
@@ -524,6 +542,10 @@ function QuoteContext({ finding }: { finding: FindingView }) {
 function FindingInspection({
   finding,
   historical,
+  draftWidth,
+  onDraftWidthChange,
+  readingMode,
+  onReadingModeChange,
   renderSource,
   renderDraft,
   renderReview,
@@ -531,6 +553,10 @@ function FindingInspection({
 }: {
   finding: FindingView;
   historical: boolean;
+  draftWidth: number;
+  onDraftWidthChange: (width: number) => void;
+  readingMode: 'split' | 'draft' | 'source';
+  onReadingModeChange: (mode: 'split' | 'draft' | 'source') => void;
   renderSource?:
     | ((
         finding: FindingView,
@@ -551,8 +577,7 @@ function FindingInspection({
   onNext: (() => void) | undefined;
 }) {
   const [inspected, setInspected] = useState(false);
-  const [draftWidth, setDraftWidth] = useState(50);
-  const [readingMode, setReadingMode] = useState<'split' | 'draft' | 'source'>('split');
+  const readerRef = useRef<HTMLDivElement>(null);
   const widthControlId = useId();
   const reduceMotion = useReducedMotion();
   return (
@@ -562,7 +587,7 @@ function FindingInspection({
           type="button"
           className="button"
           aria-pressed={readingMode === 'split'}
-          onClick={() => setReadingMode('split')}
+          onClick={() => onReadingModeChange('split')}
         >
           Split view
         </button>
@@ -570,7 +595,7 @@ function FindingInspection({
           type="button"
           className="button"
           aria-pressed={readingMode === 'draft'}
-          onClick={() => setReadingMode('draft')}
+          onClick={() => onReadingModeChange('draft')}
         >
           Draft focus
         </button>
@@ -578,11 +603,25 @@ function FindingInspection({
           type="button"
           className="button"
           aria-pressed={readingMode === 'source'}
-          onClick={() => setReadingMode('source')}
+          onClick={() => onReadingModeChange('source')}
         >
           Source focus
         </button>
       </div>
+      <motion.p
+        key={readingMode}
+        className="cockpit-reading-summary"
+        initial={reduceMotion ? false : { opacity: 0, y: 3 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reduceMotion ? 0 : 0.16, ease: 'easeOut' }}
+        aria-live="polite"
+      >
+        {readingMode === 'split'
+          ? 'Draft and preserved source side by side. Drag a divider or use arrow keys to resize.'
+          : readingMode === 'draft'
+            ? 'Draft focus. Source evidence is hidden, not verified or discarded.'
+            : 'Source focus. Preserved original pixels remain the inspection authority.'}
+      </motion.p>
       <div className="cockpit-resize-controls" hidden={readingMode !== 'split'}>
         <label htmlFor={widthControlId}>
           Draft panel width: {draftWidth}%
@@ -594,25 +633,49 @@ function FindingInspection({
           max={75}
           step={5}
           value={draftWidth}
-          onChange={(event) => setDraftWidth(Number(event.target.value))}
+          onChange={(event) => onDraftWidthChange(Number(event.target.value))}
           aria-label="Draft panel width percentage"
         />
         <button
           type="button"
           className="button"
-          onClick={() => setDraftWidth(50)}
+          onClick={() => onDraftWidthChange(50)}
         >
           Equal panels
         </button>
       </div>
-      <motion.div
-        layout={!reduceMotion}
-        transition={{ duration: reduceMotion ? 0 : 0.18, ease: 'easeOut' }}
+      <div
+        ref={readerRef}
         className={`cockpit-inspection cockpit-mode-${readingMode}`}
         style={{ '--draft-panel-width': `${draftWidth}%` } as CSSProperties}
       >
-        <div className="cockpit-draft">{renderDraft?.(finding, historical)}</div>
+        <div className="cockpit-draft">
+          <header className="cockpit-pane-heading">
+            <h3>Draft</h3>
+            <span>Preserved DOCX · extracted context</span>
+          </header>
+          {renderDraft?.(finding, historical)}
+          <QuoteContext finding={finding} />
+        </div>
+        {readingMode === 'split' && (
+          <SplitHandle
+            containerRef={readerRef}
+            label="Resize draft and source panels"
+            value={draftWidth}
+            min={30}
+            max={70}
+            step={5}
+            unit="%"
+            reset={50}
+            onChange={onDraftWidthChange}
+            className="cockpit-draft-splitter"
+          />
+        )}
         <div className="cockpit-evidence">
+          <header className="cockpit-pane-heading">
+            <h3>Source evidence</h3>
+            <span>Preserved PDF · inspect original pixels</span>
+          </header>
           {renderSource ? (
             renderSource(finding, historical, () => setInspected(true))
           ) : (
@@ -623,7 +686,7 @@ function FindingInspection({
           )}
           {renderReview?.(finding, historical, inspected, onNext)}
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
@@ -727,6 +790,7 @@ function CoverageSummary({
   return (
     <section
       aria-label="Verification and processing coverage"
+      id="coverage"
       className="draft-context"
     >
       <h3>Coverage and exclusions</h3>
