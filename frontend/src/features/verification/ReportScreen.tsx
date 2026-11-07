@@ -555,7 +555,9 @@ function FindingInspection({
   return (
     <div className="cockpit-reader">
       <div className="cockpit-resize-controls">
-        <label htmlFor={widthControlId}>Draft panel width: {draftWidth}%</label>
+        <label htmlFor={widthControlId}>
+          Draft panel width: {draftWidth}%
+        </label>
         <input
           id={widthControlId}
           type="range"
@@ -566,7 +568,11 @@ function FindingInspection({
           onChange={(event) => setDraftWidth(Number(event.target.value))}
           aria-label="Draft panel width percentage"
         />
-        <button type="button" className="button" onClick={() => setDraftWidth(50)}>
+        <button
+          type="button"
+          className="button"
+          onClick={() => setDraftWidth(50)}
+        >
           Equal panels
         </button>
       </div>
@@ -581,10 +587,10 @@ function FindingInspection({
           ) : (
             <Notice error>
               Preserved source viewer unavailable. No human source inspection may
-            be recorded.
-          </Notice>
-        )}
-        {renderReview?.(finding, historical, inspected, onNext)}
+              be recorded.
+            </Notice>
+          )}
+          {renderReview?.(finding, historical, inspected, onNext)}
         </div>
       </div>
     </div>
