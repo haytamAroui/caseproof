@@ -264,9 +264,7 @@ def test_source_modifier_omitted_from_claim_is_warning_only(
         ("a" * 64, "1"),
     ],
 )
-def test_malformed_source_identity_abstains_without_lexical_warnings(
-    digest: str, page: object
-) -> None:
+def test_malformed_source_identity_abstains_without_lexical_warnings(digest: str, page: object) -> None:
     draft = "Pièce 7, «Le paiement est enregistré.» EUR 900,00."
     result = guard_paraphrase(
         draft_region=draft,
