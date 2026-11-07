@@ -25,6 +25,23 @@ const artifact = (kind: keyof typeof media) => ({
   byte_length: 17,
   media_type: media[kind],
 });
+const complete = {
+  policy_version: 'caseproof-release-completeness-v1',
+  total_findings: 1,
+  required_reviews: 1,
+  reviewed_findings: 1,
+  unreviewed_findings: 0,
+  unreviewed_reference_ids: [],
+  review_complete: true,
+  can_release_complete: true,
+  can_release_partial: false,
+  text_coverage_complete: false,
+  reference_recall_measured: false,
+  reason_codes: [
+    'TEXT_COVERAGE_INCOMPLETE_OR_UNKNOWN',
+    'REFERENCE_RECALL_UNMEASURED',
+  ],
+} as const;
 const manifest = {
   schema: 'caseproof-reviewed-release-v1',
   release_id: id,
@@ -33,6 +50,11 @@ const manifest = {
   snapshot_hash: scope.snapshot,
   review_count: 1,
   finding_count: 1,
+  review_completeness: {
+    ...complete,
+    release_type: 'complete_review',
+    partial_acknowledged: false,
+  },
   coverage: { reference_recall_measured: false },
   sources: [
     { role: 'draft', version_id: scope.briefId, sha256: 'c'.repeat(64) },
@@ -200,14 +222,69 @@ describe('F6 reviewed export contracts', () => {
       finding_count: 1,
       review_count: 0,
       release_ready: false,
+      can_release: false,
+      review_completeness: {
+        ...complete,
+        reviewed_findings: 0,
+        unreviewed_findings: 1,
+        unreviewed_reference_ids: ['ref-one'],
+        review_complete: false,
+        can_release_complete: false,
+        can_release_partial: false,
+        reason_codes: ['NO_SAVED_REVIEWS', 'UNREVIEWED_FINDINGS'],
+      },
       coverage: {},
       formats: ['json', 'markdown', 'docx'],
+      release_actor: {
+        actor_id: id,
+        actor_label: 'reviewer@example.test',
+        actor_label_type: 'confirmed_email',
+      },
+      acknowledgement_version: 'caseproof-release-ack-v1',
+      acknowledgement_notice:
+        'I authorize creation of this immutable CaseProof review record.',
       limitations: ['Not certified'],
     };
     expect(parseReleasePreview(preview, scope).release_ready).toBe(false);
     expect(() =>
       parseReleasePreview({ ...preview, release_ready: true }, scope),
     ).toThrow();
+    expect(() =>
+      parseReleasePreview(
+        {
+          ...preview,
+          review_count: 1,
+          release_ready: true,
+        },
+        scope,
+      ),
+    ).toThrow();
+    expect(() =>
+      parseRelease(
+        {
+          ...record,
+          manifest: {
+            ...manifest,
+            review_completeness: {
+              ...manifest.review_completeness,
+              release_type: 'partial_review',
+            },
+          },
+        },
+        scope,
+      ),
+    ).toThrow();
+    // Existing immutable v1 artifacts without the new policy remain readable,
+    // but their review completeness must not be inferred.
+    expect(
+      parseRelease(
+        {
+          ...record,
+          manifest: { ...manifest, review_completeness: undefined },
+        },
+        scope,
+      ).manifest.review_completeness,
+    ).toBeUndefined();
     expect(() =>
       parseReleasePreview(
         { ...preview, formats: ['json', 'markdown', 'pdf'] },

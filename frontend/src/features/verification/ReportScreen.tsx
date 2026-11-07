@@ -629,8 +629,8 @@ function FindingInspection({
         <input
           id={widthControlId}
           type="range"
-          min={25}
-          max={75}
+          min={30}
+          max={70}
           step={5}
           value={draftWidth}
           onChange={(event) => onDraftWidthChange(Number(event.target.value))}

@@ -44,3 +44,31 @@ The branch now includes the Storyteller responsive queue/draft/evidence layout, 
 6. Only after these checks and independent review should this draft PR be marked ready for merge.
 
 Motion uses native CSS at present. Adding the `motion` library should be justified by a real interaction requiring coordinated layout transitions and must include dependency/policy review; merely renaming CSS transitions would not improve the product.
+
+
+## PR #196 implementation refinement — legal review cockpit (7 November 2026)
+
+The existing palette and locally licensed Inter, Source Serif 4 and JetBrains Mono
+remain. A matter-scoped, **seven-stage** route navigator is visible across intake,
+inventory, verification, review, correction, export and history. Stage numbers
+describe navigation only; no step is labelled "complete" without server evidence.
+
+The live review cockpit is rendered as three connected panes on wide displays:
+findings queue, preserved DOCX context, and preserved source PDF. The queue and
+draft/source split are pointer-resizable and keyboard-operable, with 240–420 px
+and 30–70% enforced bounds. Reading modes and widths persist between findings;
+source inspection state is still reset for each finding. Tablets and narrow
+layouts stack evidence instead of shrinking original pixels beyond utility.
+
+Only navigation chrome gets brief Motion transitions (160 ms) and CSS hover
+feedback (150 ms), with reduced-motion support. OCR text remains explicitly
+derived and never receives animated evidence-verification cues.
+
+The release acknowledgment from merged PR #204 is presented in a native modal;
+the existing partial-release consent and exact snapshot/actor binding remain
+unchanged. Ordinary metadata, findings, and coverage stay inline.
+
+The optional dark palette is **deferred**, not auto-enabled from OS preference,
+until light-mode visual inspection and accessibility acceptance are completed.
+No CI green result alone establishes lawyer-facing pixel parity, genuine signed
+journey, or a production rollout.

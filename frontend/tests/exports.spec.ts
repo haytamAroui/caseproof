@@ -20,8 +20,35 @@ const preview = {
   snapshot_hash: snapshot,
   finding_count: 2,
   review_count: 1,
-  release_ready: true,
+  release_ready: false,
+  can_release: true,
+  review_completeness: {
+    policy_version: 'caseproof-release-completeness-v1',
+    total_findings: 2,
+    required_reviews: 2,
+    reviewed_findings: 1,
+    unreviewed_findings: 1,
+    unreviewed_reference_ids: ['ref-two'],
+    review_complete: false,
+    can_release_complete: false,
+    can_release_partial: true,
+    text_coverage_complete: false,
+    reference_recall_measured: false,
+    reason_codes: [
+      'UNREVIEWED_FINDINGS',
+      'TEXT_COVERAGE_INCOMPLETE_OR_UNKNOWN',
+      'REFERENCE_RECALL_UNMEASURED',
+    ],
+  },
   formats: ['json', 'markdown', 'docx'],
+  release_actor: {
+    actor_id: '77777777-7777-4777-8777-777777777777',
+    actor_label: 'account@example.test',
+    actor_label_type: 'confirmed_email',
+  },
+  acknowledgement_version: 'caseproof-release-ack-v1',
+  acknowledgement_notice:
+    'I authorize creation of this immutable CaseProof review record for the displayed scope. Not a signature.',
   coverage: {
     unprocessed_regions: 1,
     text_coverage_complete: false,
@@ -47,6 +74,11 @@ function record(releaseId: string, frozen = snapshot) {
       bundle_signature: 'b'.repeat(64),
       review_count: 1,
       finding_count: 2,
+      review_completeness: {
+        ...preview.review_completeness,
+        release_type: 'partial_review',
+        partial_acknowledged: true,
+      },
       coverage: preview.coverage,
       sources: [
         { role: 'draft', version_id: briefId, sha256: 'c'.repeat(64) },
@@ -154,8 +186,16 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
     const command = route.request().postDataJSON() as {
       release_id: string;
       snapshot_hash: string;
+      release_type: string;
+      partial_acknowledged: boolean;
+      release_acknowledged: boolean;
+      acknowledgement_version: string;
     };
     expect(command.snapshot_hash).toBe(snapshot);
+    expect(command.release_type).toBe('partial_review');
+    expect(command.partial_acknowledged).toBe(true);
+    expect(command.release_acknowledged).toBe(true);
+    expect(command.acknowledgement_version).toBe('caseproof-release-ack-v1');
     const next = record(command.release_id);
     saved.push(next);
     return route.fulfill({ json: next });
@@ -173,8 +213,18 @@ test('F6 preview, release, hash-verified download and cold reopen of history', a
   );
   await open(page);
   await expect(page.getByText('Partial OCR remains unassessed.')).toBeVisible();
+  await expect(
+    page.getByText(/1 of 2 detected findings reviewed/),
+  ).toBeVisible();
+  await page.getByLabel(/I acknowledge this release is partial/).check();
+  await page.getByRole('button', { name: 'Review release details' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Confirm this exact reviewed release' }),
+  ).toBeVisible();
+
+  await expect(page.getByText('account@example.test')).toBeVisible();
   await page
-    .getByRole('button', { name: 'Create frozen reviewed release' })
+    .getByRole('button', { name: 'Acknowledge and create release' })
     .click();
   await expect(
     page.getByRole('heading', { name: 'Selected frozen release' }),
@@ -243,12 +293,20 @@ test('F6 lost POST acknowledgment reconciles without repeating the write', async
     return route.fulfill({ json: committed });
   });
   await open(page);
+  await expect(
+    page.getByText(/1 of 2 detected findings reviewed/),
+  ).toBeVisible();
+  await page.getByLabel(/I acknowledge this release is partial/).check();
+  await page.getByRole('button', { name: 'Review release details' }).click();
+  await expect(page.getByText('account@example.test')).toBeVisible();
   await page
-    .getByRole('button', { name: 'Create frozen reviewed release' })
+    .getByRole('button', { name: 'Acknowledge and create release' })
     .click();
   await expect(page.getByText(/Release outcome unknown/)).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Create frozen reviewed release' }),
+    page.getByRole('button', {
+      name: 'Review release details',
+    }),
   ).toBeDisabled();
   await page
     .getByRole('button', { name: 'Reconcile previous release' })

@@ -32,8 +32,17 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState('');
   const [unknown, setUnknown] = useState(false);
+  const policyScope = `${session.epoch}:${caseId}:${briefId}:${snapshot}`;
+  const [releaseIntent, setReleaseIntent] = useState('');
+  const [partialConsent, setPartialConsent] = useState({
+    scope: '',
+    acknowledged: false,
+  });
+  const partialAcknowledged =
+    partialConsent.scope === policyScope && partialConsent.acknowledged;
   // The same operation id survives a lost POST acknowledgement within this
   // screen. We never silently mint a new id and retry a consequential write.
+  const releaseDialog = useRef<HTMLDialogElement>(null);
   const requestId = useRef<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
@@ -56,8 +65,39 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
     retry: false,
   });
 
+  const intentionScope = [
+    policyScope,
+    preview.data?.review_completeness.reviewed_findings ?? -1,
+    preview.data?.review_completeness.unreviewed_findings ?? -1,
+    preview.data?.review_completeness.can_release_complete ?? false,
+    preview.data?.release_actor.actor_id ?? '',
+  ].join(':');
+
+  // Native dialog owns focus and Escape behavior. Routine inspection stays inline.
+  useEffect(() => {
+    const dialog = releaseDialog.current;
+    if (!dialog) return;
+    if (releaseIntent === intentionScope && !unknown) {
+      if (!dialog.open) dialog.showModal();
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  }, [releaseIntent, intentionScope, unknown]);
+
   async function commitRelease() {
-    if (!valid || !preview.data?.release_ready || working) return;
+    const review = preview.data?.review_completeness;
+    const releaseType = review?.can_release_complete
+      ? 'complete_review'
+      : 'partial_review';
+    if (
+      !valid ||
+      !review ||
+      working ||
+      releaseIntent !== intentionScope ||
+      (!review.can_release_complete &&
+        !(review.can_release_partial && partialAcknowledged))
+    )
+      return;
     const id = requestId.current ?? crypto.randomUUID();
     requestId.current = id;
     const controller = new AbortController();
@@ -68,18 +108,29 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       // One exact snapshot command; POST is deliberately never retried.
       const response = await api.post(
         base,
-        { release_id: id, snapshot_hash: snapshot },
+        {
+          release_id: id,
+          snapshot_hash: snapshot,
+          release_type: releaseType,
+          partial_acknowledged:
+            releaseType === 'partial_review' && partialAcknowledged,
+          release_acknowledged: true,
+          acknowledgement_version: 'caseproof-release-ack-v1',
+        },
         controller.signal,
       );
       const parsed = parseRelease(response, scope);
       setSelected(parsed);
       requestId.current = null;
       setUnknown(false);
+      setPartialConsent({ scope: policyScope, acknowledged: false });
+      setReleaseIntent('');
       setMessage(
         'Frozen reviewed release saved. Verify and download the selected artifact.',
       );
       void history.refetch();
     } catch {
+      setReleaseIntent('');
       setUnknown(true);
       setMessage(
         'Release outcome unknown. Reconcile this operation before starting a new release.',
@@ -200,9 +251,51 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
             <section className="draft-context" aria-label="Release readiness">
               <h2>Preview release scope</h2>
               <p>
-                {preview.data.finding_count} detected references;{' '}
-                {preview.data.review_count} persisted human decisions.
+                {preview.data.review_completeness.reviewed_findings} of{' '}
+                {preview.data.review_completeness.required_reviews} detected
+                findings reviewed;{' '}
+                {preview.data.review_completeness.unreviewed_findings} pending.
               </p>
+              <p className="small">
+                {preview.data.review_completeness.review_complete
+                  ? 'Review complete for detected findings only; this is not complete dossier coverage.'
+                  : 'Review incomplete. A complete-reviewed release is blocked.'}
+              </p>
+              {preview.data.review_completeness.unreviewed_reference_ids
+                .length > 0 && (
+                <div aria-label="Unreviewed findings">
+                  <p>Inspect and review pending findings:</p>
+                  <ul>
+                    {preview.data.review_completeness.unreviewed_reference_ids
+                      .slice(0, 12)
+                      .map((reference) => (
+                        <li key={reference}>
+                          <Link
+                            to={
+                              '/matters/' +
+                              caseId +
+                              '/briefs/' +
+                              briefId +
+                              '?snapshot=' +
+                              snapshot +
+                              '&finding=' +
+                              encodeURIComponent(reference)
+                            }
+                          >
+                            Review {reference}
+                          </Link>
+                        </li>
+                      ))}
+                  </ul>
+                  {preview.data.review_completeness.unreviewed_findings >
+                    12 && (
+                    <p className="small">
+                      Additional findings are available in the reviewer
+                      workspace.
+                    </p>
+                  )}
+                </div>
+              )}
               {preview.data.coverage.text_coverage_complete !== true && (
                 <Notice>
                   DOCX coverage is incomplete or unmeasured. Do not interpret a
@@ -217,18 +310,102 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                   {text}
                 </p>
               ))}
-              {!preview.data.release_ready && (
+              {!preview.data.can_release && (
                 <Notice error>
-                  A saved human review is required before a reviewed release.
-                  Complete review in the findings workspace.
+                  No reviewed release is eligible. Save a human decision for a
+                  detected finding before exporting.
                 </Notice>
               )}
+              {preview.data.review_completeness.can_release_partial && (
+                <div>
+                  <Notice>
+                    A partial release includes unreviewed findings. It is not a
+                    completed review or legal approval; the manifest and DOCX
+                    will permanently disclose this limited scope.
+                  </Notice>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={partialAcknowledged}
+                      onChange={(event) =>
+                        setPartialConsent({
+                          scope: policyScope,
+                          acknowledged: event.target.checked,
+                        })
+                      }
+                    />
+                    I acknowledge this release is partial and some detected
+                    findings remain unreviewed.
+                  </label>
+                </div>
+              )}
               <Button
-                onClick={() => void commitRelease()}
-                disabled={!preview.data.release_ready || working || unknown}
+                onClick={() => setReleaseIntent(intentionScope)}
+                disabled={
+                  working ||
+                  unknown ||
+                  (!preview.data.review_completeness.can_release_complete &&
+                    !(
+                      preview.data.review_completeness.can_release_partial &&
+                      partialAcknowledged
+                    ))
+                }
               >
-                {working ? 'Processing…' : 'Create frozen reviewed release'}
+                Review release details
               </Button>
+              {releaseIntent === intentionScope && (
+                <dialog
+                  ref={releaseDialog}
+                  className="release-confirm-dialog"
+                  aria-labelledby="release-confirm-title"
+                  aria-describedby="release-confirm-note"
+                  onCancel={(event) => {
+                    if (working) event.preventDefault();
+                    else setReleaseIntent('');
+                  }}
+                  onClose={() => setReleaseIntent('')}
+                >
+                  <h2 id="release-confirm-title">Confirm this exact reviewed release</h2>
+                  <p>
+                    Authenticated account:{' '}
+                    <strong>{preview.data.release_actor.actor_label}</strong>
+                  </p>
+                  <p className="small">
+                    Actor ID: <code>{preview.data.release_actor.actor_id}</code>
+                  </p>
+                  <p>
+                    Snapshot <code>{snapshot}</code> ·{' '}
+                    {preview.data.review_completeness.reviewed_findings} of{' '}
+                    {preview.data.review_completeness.required_reviews} detected
+                    findings reviewed ·{' '}
+                    {preview.data.review_completeness.can_release_complete
+                      ? 'Complete detected-findings review'
+                      : 'Partial review with unresolved findings'}
+                  </p>
+                  <div id="release-confirm-note">
+                    <Notice>{preview.data.acknowledgement_notice}</Notice>
+                  </div>
+                  <p className="small">
+                    This account label does not assert professional status or
+                    that you personally reviewed every finding.
+                  </p>
+                  <div className="catalog-actions">
+                    <Button
+                      autoFocus
+                      onClick={() => setReleaseIntent('')}
+                      disabled={working}
+                    >
+                      Cancel release
+                    </Button>
+                    <Button
+                      onClick={() => void commitRelease()}
+                      disabled={working || unknown}
+                    >
+                      {working ? 'Processing…' : 'Acknowledge and create release'}
+                    </Button>
+                  </div>
+                </dialog>
+              )}
             </section>
           )}
         </>
@@ -245,7 +422,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
         </div>
       )}
       {message && <Notice>{message}</Notice>}
-      <section className="draft-context" aria-label="Export history">
+      <section className="draft-context" id="release-history" aria-label="Export history">
         <h2>Frozen release history</h2>
         {history.isPending ? (
           <Notice>Loading authorized release history…</Notice>
@@ -271,7 +448,13 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                 <span className="small">
                   {' '}
                   Snapshot {release.snapshot_hash.slice(0, 12)}… ·{' '}
-                  {release.manifest.review_count} decisions
+                  {release.manifest.review_count} decisions ·{' '}
+                  {release.manifest.review_completeness
+                    ? release.manifest.review_completeness.release_type ===
+                      'partial_review'
+                      ? 'partial review'
+                      : 'all detected findings reviewed'
+                    : 'legacy scope unclassified'}
                   {release.snapshot_hash === snapshot
                     ? ' · selected snapshot'
                     : ' · historical release'}
@@ -290,10 +473,43 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
           <p>
             Manifest <code>{selected.manifest.manifest_sha256}</code>
           </p>
+          {selected.manifest.release_acknowledgement ? (
+            <p>
+              Released by authenticated account:{' '}
+              <strong>
+                {selected.manifest.release_acknowledgement.actor_label}
+              </strong>{' '}
+              on {selected.manifest.release_acknowledgement.acknowledged_at}.
+              This records release intent, not legal certification or signature.
+            </p>
+          ) : (
+            <Notice>
+              Historical release: no explicit release acknowledgement was
+              recorded.
+            </Notice>
+          )}
           <p>
             {selected.manifest.finding_count} references;{' '}
             {selected.manifest.review_count} human decisions.
           </p>
+          {selected.manifest.review_completeness ? (
+            <p>
+              Frozen release type:{' '}
+              <strong>
+                {selected.manifest.review_completeness.release_type ===
+                'partial_review'
+                  ? 'Partial review — incomplete'
+                  : 'All detected findings reviewed'}
+              </strong>
+              . {selected.manifest.review_completeness.unreviewed_findings}{' '}
+              findings remained unreviewed at release.
+            </p>
+          ) : (
+            <Notice>
+              Legacy frozen release. Review completeness was not recorded under
+              the current policy; do not infer a complete review.
+            </Notice>
+          )}
           <p>Referenced preserved originals:</p>
           <ul>
             {selected.manifest.sources.map((source) => (
