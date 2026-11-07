@@ -25,10 +25,9 @@ _DATE = re.compile(
 )
 _ARTICLE = re.compile(r"\b(?:art\.|article|artikel)\s*\d+(?:[./-]\d+)*\b", re.I)
 _PARTY = re.compile(
-    r"\b(?:madame|monsieur|mme\.?|mevrouw|de heer|partij|partie|"
+    r"\b(?i:madame|monsieur|mme\.?|mevrouw|de heer|partij|partie|"
     r"société|vennootschap|bv|srl|nv|sa)\s+"
     r"([A-ZÀ-ÖØ-Þ][\w'’.-]{1,45}(?:\s+[A-ZÀ-ÖØ-Þ][\w'’.-]{1,45}){0,2})",
-    re.I,
 )
 _NUMBER = re.compile(r"(?<![\w])\d{1,6}(?:[.,]\d{1,3})?(?!\w)")
 _NEGATION = re.compile(r"\b(?:niet|geen|nooit|nimmer|not|never|without|"
@@ -144,7 +143,11 @@ def guard_paraphrase(
             reasons.append("QUOTE_NOT_FOUND_IN_DERIVED_PAGE_TEXT")
         elif source_text_context.find(quoted_text, first + 1) >= 0:
             reasons.append("DUPLICATE_QUOTE_AMBIGUOUS")
-        elif not ocr_uncertain and not source_text_partial:
+        elif (
+            not ocr_uncertain and not source_text_partial
+            and source_version_id and source_sha256 and pdf_page is not None
+            and re.fullmatch(r"[0-9a-f]{64}", source_sha256)
+        ):
             # Text offset is navigational only, never a verified PDF polygon.
             anchor_basis = "unique_exact_quote_in_derived_page_text"
             a = max(0, first - 360)
