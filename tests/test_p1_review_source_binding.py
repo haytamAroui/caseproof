@@ -205,9 +205,7 @@ def test_optional_authenticated_source_projection_preserves_canonical_export_byt
     payload = response.json()
     assert payload["schema"] == "caseproof-review-source-bindings-view-v1"
     assert payload["signed_as_one_record"] is False
-    assert payload["bindings"][0]["binding_state"] == (
-        "SOURCE_VERSION_AND_REVIEW_REGIONS_CORRESPOND"
-    )
+    assert payload["bindings"][0]["binding_state"] == ("SOURCE_VERSION_AND_REVIEW_REGIONS_CORRESPOND")
     assert payload["bindings"][0]["original_pdf_sha256"] == ORIGINAL
 
 
