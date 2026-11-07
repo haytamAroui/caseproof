@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
@@ -553,6 +554,7 @@ function FindingInspection({
   const [draftWidth, setDraftWidth] = useState(50);
   const [readingMode, setReadingMode] = useState<'split' | 'draft' | 'source'>('split');
   const widthControlId = useId();
+  const reduceMotion = useReducedMotion();
   return (
     <div className="cockpit-reader">
       <div className="cockpit-view-switch" role="group" aria-label="Reading layout">
@@ -603,7 +605,9 @@ function FindingInspection({
           Equal panels
         </button>
       </div>
-      <div
+      <motion.div
+        layout={!reduceMotion}
+        transition={{ duration: reduceMotion ? 0 : 0.18, ease: 'easeOut' }}
         className={`cockpit-inspection cockpit-mode-${readingMode}`}
         style={{ '--draft-panel-width': `${draftWidth}%` } as CSSProperties}
       >
@@ -619,7 +623,7 @@ function FindingInspection({
           )}
           {renderReview?.(finding, historical, inspected, onNext)}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
