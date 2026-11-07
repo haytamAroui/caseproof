@@ -231,3 +231,19 @@ def test_confirmed_printed_page_maps_to_physical_six_without_offset_guessing():
     entry['pages'].append({'space': 'printed', 'label': '4', 'pdf_page': 5, 'rationale': 'conflict'})
     conflict = assess(docx('Pièce 2, printed p. 4.'), [source], context)['findings'][0]
     assert conflict['page_mapping'] == 'conflicting' and conflict['pdf_page'] is None
+
+
+def test_duplicate_printed_page_mapping_abstains_even_when_target_is_identical():
+    source = {'role': 'exhibit', 'version_id': 'v', 'document_id': 'd',
+              'sha256': 'a' * 64, 'page_count': 2}
+    entry = {'label': 'piece', 'number': '2', 'source_version_id': 'v', 'pages': [
+        {'space': 'printed', 'label': '7', 'pdf_page': 1, 'rationale': 'first'},
+        {'space': 'printed', 'label': '7', 'pdf_page': 1, 'rationale': 'duplicate'},
+    ]}
+    context = {'payload': {'inventory_complete': True, 'entries': [entry]}}
+    finding = assess(docx('Pièce 2, printed p. 7.'), [source], context)['findings'][0]
+    assert finding['page_mapping'] == 'conflicting'
+    assert finding['pdf_page'] is None
+    assert finding['mapping_basis'] == []
+    assert finding['technical_check'] == 'unresolved'
+    assert finding['page_mapping_reason'] == 'duplicate_or_conflicting_page_mapping_requires_review'
