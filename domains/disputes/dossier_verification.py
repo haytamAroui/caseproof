@@ -48,6 +48,16 @@ def build_findings(
         version = entry.get("source_version_id") if entry else None
         candidates = [s for s in sources if s["version_id"] == version and s["role"] == "exhibit"]
         source = candidates[0] if len(candidates) == 1 else None
+        # A database row is not sufficient evidence of an immutable original.
+        # Do not assert a checked pinpoint without a well-formed source digest
+        # and a bounded, genuine physical PDF page count.
+        source_pinned = bool(
+            source
+            and isinstance(source.get("sha256"), str)
+            and re.fullmatch(r"[0-9a-f]{64}", source["sha256"])
+            and type(source.get("page_count")) is int
+            and 1 <= source["page_count"] <= 100_000
+        )
         identities = tuple(f"entry-{i}" for i, _ in enumerate(matches))
         decision = resolve_exhibit_identity(
             inventory_status=status,
@@ -80,7 +90,8 @@ def build_findings(
             }
         mapped = []
         if (
-            source
+            source is not None
+            and source_pinned
             and entry
             and requested
             and not unsupported_sequence
@@ -100,7 +111,10 @@ def build_findings(
                     and 1 <= p["pdf_page"] <= source.get("page_count", 0)
                 ]
         targets = {p["pdf_page"] for p in mapped}
-        pdf_page = next(iter(targets)) if len(targets) == 1 else None
+        # Multiple mapping records are ambiguous even when they point to the same page.
+        # A single target alone is not evidence that the mapping is uniquely confirmed.
+        mapping_ambiguous = len(mapped) > 1
+        pdf_page = next(iter(targets)) if len(mapped) == 1 and len(targets) == 1 else None
         geometry = source.get("geometry", {}).get(str(pdf_page)) if source and pdf_page else None
         image_page = bool(source and pdf_page and pdf_page in source.get("image_only_pages", []))
         image_page = image_page or bool(source and source.get("image_only"))
@@ -130,10 +144,16 @@ def build_findings(
                 "source_id": source["document_id"] if source else None,
                 "version_id": source["version_id"] if source else None,
                 "source_sha256": source["sha256"] if source else None,
-                "page_mapping": "mapped" if pdf_page else "conflicting" if len(targets) > 1 else "unmapped",
+                "page_mapping": "mapped" if pdf_page else "conflicting" if mapping_ambiguous else "unmapped",
                 "pdf_page": pdf_page,
                 "page_spaces": page_spaces,
-                "page_mapping_reason": "page_sequence_requires_review" if unsupported_sequence else None,
+                "page_mapping_reason": (
+                    "page_sequence_requires_review"
+                    if unsupported_sequence
+                    else "duplicate_or_conflicting_page_mapping_requires_review"
+                    if mapping_ambiguous
+                    else None
+                ),
                 "printed_page": requested["label"]
                 if pdf_page and requested and requested["space"] == "printed"
                 else None,
@@ -150,7 +170,7 @@ def build_findings(
                 else "not_assessed",
                 "fidelity": "ocr_unreliable" if geometry or image_page else "not_assessed",
                 "support": "not_assessed",
-                "technical_check": "checked" if identity == "resolved" and pdf_page else "unresolved",
+                "technical_check": "checked" if identity == "resolved" and source_pinned and pdf_page else "unresolved",
             }
         )
     checked = sum(f["technical_check"] == "checked" for f in findings)
