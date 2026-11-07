@@ -1,4 +1,5 @@
 name: PR205 one-shot formatter
+# Final P0 warning/provenance UI pass
 on:
   push:
     branches: [feat/p0-evidence-falsification-paraphrase-guard]
