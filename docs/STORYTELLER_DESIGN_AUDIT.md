@@ -71,3 +71,22 @@ The optional dark palette is **deferred**, not auto-enabled from OS preference,
 until light-mode visual inspection and accessibility acceptance are completed.
 No CI green result alone establishes lawyer-facing pixel parity, genuine signed
 journey, or a production rollout.
+
+### Browser acceptance and delivery boundary
+
+PR196 synthetic browser run `42363218281` passed in GitHub Actions
+(7 November 2026); includes source-viewing OCR, keyboard/pointer presentation
+controls, mode switching, mobile stacking, axe accessibility, release
+confirmation, and screenshot artifacts. Explicit release acknowledgment remains
+server-authorized as in merged PR204; no synthetic UI state is treated as a
+legal verification verdict. The F3–F6 genuine-signed workflows are skipped on
+this design branch and must not be counted as signed acceptance.
+
+The Storyteller Motion and formatting self-committing setup workflows were
+removed once the pinned lockfile and format were committed. The remaining
+PR196 acceptance workflow is read-only.
+
+Original demo visual parity is an editorial comparison, not a pixel-perfect
+replica: the live cockpit retains real uncertainty, review gating, and coverage
+controls that the 60-second marketing demo omits. Dark OS appearance intentionally
+renders the validated light mode; dark mode is a separate future increment.

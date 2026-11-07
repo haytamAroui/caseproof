@@ -838,7 +838,7 @@ test('Storyteller cockpit exposes workflow, keyboard-resizable panes and mobile 
   ).toBe(true);
 });
 
-test('Storyteller reading cockpit honors reduced motion and remains accessible in dark mode', async ({
+test('Storyteller reading cockpit honors reduced motion and retains light baseline under dark OS preference', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
@@ -848,6 +848,7 @@ test('Storyteller reading cockpit honors reduced motion and remains accessible i
   await page.getByRole('button', { name: 'Connect session' }).click();
   const layout = page.locator('.review-layout');
   await expect(layout).toHaveCSS('animation-name', 'none');
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
   await expect(page.locator('.cockpit-inspection')).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({
