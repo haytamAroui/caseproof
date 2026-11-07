@@ -175,6 +175,19 @@ export function ReportScreen({
           ? 'Historical snapshot. Current permissions were checked again, but this report cannot be reviewed, corrected, rechecked or exported as current. Source availability is checked separately.'
           : 'Current snapshot inspection. Human decisions remain separate from source rendering.'}
       </Notice>
+      <nav className="cockpit-journey" aria-label="Matter workflow">
+        <Link to={`/matters/${caseId}/inventory`}>1–2 · Intake and inventory</Link>
+        <span aria-current="step">3–4 · Verify and review</span>
+        {!historical && (
+          <Link to={`/matters/${caseId}/briefs/${briefId}/edit?snapshot=${snapshot}`}>
+            5 · Correct and recheck
+          </Link>
+        )}
+        <Link to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}>
+          6 · Release and export
+        </Link>
+        {historical && <span>7 · Historical snapshot (read-only)</span>}
+      </nav>
       <div className="review-layout">
         <section
           className="queue"
@@ -556,9 +569,12 @@ function FindingInspection({
           Equal panels
         </button>
       </div>
-      <div className="cockpit-inspection" style={{ '--draft-panel-width': `${draftWidth}%` } as CSSProperties}>
-      <div className="cockpit-draft">{renderDraft?.(finding, historical)}</div>
-      <div className="cockpit-evidence">
+      <div
+        className="cockpit-inspection"
+        style={{ '--draft-panel-width': `${draftWidth}%` } as CSSProperties}
+      >
+        <div className="cockpit-draft">{renderDraft?.(finding, historical)}</div>
+        <div className="cockpit-evidence">
         {renderSource ? (
           renderSource(finding, historical, () => setInspected(true))
         ) : (
@@ -568,8 +584,8 @@ function FindingInspection({
           </Notice>
         )}
         {renderReview?.(finding, historical, inspected, onNext)}
+        </div>
       </div>
-    </div>
     </div>
   );
 }
