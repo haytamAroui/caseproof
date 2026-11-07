@@ -694,3 +694,38 @@ button:not(:disabled), a, input, select, textarea { touch-action: manipulation; 
 @media (prefers-reduced-motion: reduce) {
   .finding, .button { transition: none !important; }
 }
+
+/* Three-column Storyteller review cockpit: queue / draft / source.
+   Uses the existing semantic DOM and does not change evidence authority. */
+@media (min-width: 1450px) {
+  .review-layout {
+    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+    align-items: start;
+  }
+  .review-layout > .queue {
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 24px);
+    overflow: auto;
+  }
+  .cockpit-inspection {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+  }
+  .cockpit-draft, .cockpit-evidence { min-width: 0; }
+}
+.cockpit-draft .draft-context {
+  max-width: none;
+  background: var(--surface);
+}
+.cockpit-draft .draft-quote { font-family: 'CaseProof Source Serif', Georgia, serif; }
+.cockpit-evidence .source-viewer { margin-top: 0; }
+.cockpit-evidence .viewer-scroll { background: var(--paper-raised); }
+.review-panel :is(button, input, select, textarea):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .review-layout > .queue { position: static; max-height: none; }
+  .cockpit-inspection { grid-template-columns: minmax(0, 1fr); }
+}
