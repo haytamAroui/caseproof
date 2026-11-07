@@ -59,16 +59,16 @@ test('Storyteller stage navigation, accessible panel splitters and stable review
   await expect(queue).toHaveAttribute('aria-valuenow', '310');
   await draft.focus();
   await page.keyboard.press('ArrowRight');
-  await expect(draft).toHaveAttribute('aria-valuenow', '55');
+  await expect(draft).toHaveAttribute('aria-valuenow', '390');
   await page.getByRole('button', { name: 'Exhibit A' }).click();
   await expect(
     page.getByRole('separator', { name: 'Resize draft and source panels' }),
-  ).toHaveAttribute('aria-valuenow', '55');
+  ).toHaveAttribute('aria-valuenow', '390');
   await page.getByRole('button', { name: 'Source focus' }).click();
   await expect(page.locator('.cockpit-draft')).toBeHidden();
   await expect(page.locator('.cockpit-evidence')).toBeVisible();
   await page.getByRole('button', { name: 'Split view' }).click();
-  await expect(draft).toHaveAttribute('aria-valuenow', '55');
+  await expect(draft).toHaveAttribute('aria-valuenow', '390');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const transition = await page
     .getByRole('button', { name: 'Split view' })

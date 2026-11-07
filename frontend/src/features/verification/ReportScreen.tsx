@@ -46,6 +46,7 @@ export function ReportScreen({
   const [queueWidth, setQueueWidth] = useState(300);
   // Presentation preferences survive reference changes; source inspection does not.
   const [sourceWidth, setSourceWidth] = useState(400);
+  const reduceMotion = useReducedMotion();
   const [readingMode, setReadingMode] = useState<'split' | 'draft' | 'source'>(
     'split',
   );
@@ -150,7 +151,7 @@ export function ReportScreen({
   }
   return (
     <>
-      <header className="page-heading">
+      <header className="page-heading page-heading-review">
         <p className="eyebrow">
           {historical
             ? 'Historical report · read-only'
@@ -337,6 +338,15 @@ export function ReportScreen({
                       )
                     }
                   >
+                    {f.reference_id === selected?.reference_id && (
+                      <motion.span
+                        className="cockpit-selected-outline"
+                        aria-hidden="true"
+                        initial={reduceMotion ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: reduceMotion ? 0 : 0.16 }}
+                      />
+                    )}
                     {f.literal}
                     <small>
                       {needsAttention(f)

@@ -90,3 +90,31 @@ Original demo visual parity is an editorial comparison, not a pixel-perfect
 replica: the live cockpit retains real uncertainty, review gating, and coverage
 controls that the 60-second marketing demo omits. Dark OS appearance intentionally
 renders the validated light mode; dark mode is a separate future increment.
+
+## Storyteller visual parity pass — 7 November 2026
+
+The live React cockpit now follows the synthetic reference's actual desktop
+proportions: **300px findings / flexible manuscript / 400px evidence** in a
+continuous white workspace, with independent 240–420px queue and 320–560px
+source splitters. The source splitter measures from the right, so left-arrow
+expands the right source pane as expected. Narrow widths stack both document
+and evidence to preserve original PDF inspectability.
+
+- Top chrome: compact Matter · Verification · Export navigation, all linked to
+  real authorized application routes, alongside the persistent seven-stage
+  workflow navigation. Missing snapshot context leaves links disabled.
+- Paper typography: 14px Inter control baseline, 17px Source Serif 4 document
+  page at 1.8 line height, JetBrains Mono for evidence hashes; no remote fonts.
+- Reference sematics: palette Paper #F6F6F3, Ink #16181D, Surface #FFFFFF,
+  Border #DCDDD6, Focus #126A9B, muted #5B6070, amber #8A4F00 and green
+  #0B6B57. Semantic colors never assert verification by themselves.
+- Motion: 160ms selection/reading feedback, 150ms lightweight hover states,
+  zero-motion fallback. Native release confirmation and review receipts remain
+  authoritative; no simulated sweeping OCR/verification animation was copied.
+- Source-linked human review and release policy are unchanged.
+
+Visual similarity is closer than the previous two-column/nested-panel layout,
+but the reference's simulated in-page quotation marks, fake scan overlays,
+marketing captions and strong dark-mode palette are **intentionally not**
+replicated as evidentiary truths. Real NL/FR long-page pilot review remains a
+separate gate.

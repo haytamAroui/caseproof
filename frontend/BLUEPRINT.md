@@ -173,7 +173,7 @@ Canonical token owner: `src/app/theme.css`. Keep this table and runtime values s
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Accent / primary action | `--accent: #16181d`                                                                                                   |
 | Primary text            | `--ink: #16181d`                                                                                                      |
-| Secondary text          | `--muted: #555b69`                                                                                                    |
+| Secondary text          | `--muted: #5b6070`                                                                                                    |
 | Reading surface         | `--surface: #ffffff`                                                                                                  |
 | Dividers                | `--line: #dcddd6`                                                                                                     |
 | Error                   | `--danger: #a61b1b` plus text                                                                                         |

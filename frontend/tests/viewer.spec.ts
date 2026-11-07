@@ -813,18 +813,18 @@ test('Storyteller cockpit exposes workflow, keyboard-resizable panes and mobile 
   ).toHaveAttribute('aria-current', 'step');
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const width = page.getByRole('slider', {
-    name: 'Draft panel width percentage',
+    name: 'Source evidence panel width',
   });
-  await expect(width).toHaveValue('50');
+  await expect(width).toHaveValue('400');
   await width.focus();
   await page.keyboard.press('ArrowRight');
-  await expect(width).toHaveValue('55');
+  await expect(width).toHaveValue('410');
   await expect(page.locator('.cockpit-inspection')).toHaveCSS(
-    '--draft-panel-width',
-    '55%',
+    '--source-panel-width',
+    '410px',
   );
-  await page.getByRole('button', { name: 'Equal panels' }).click();
-  await expect(width).toHaveValue('50');
+  await page.getByRole('button', { name: 'Restore 400px source' }).click();
+  await expect(width).toHaveValue('400');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(width).toBeHidden();
   await expect(page.locator('.cockpit-inspection')).toHaveCSS(
@@ -891,6 +891,16 @@ test('Storyteller visual acceptance captures desktop and mobile reading modes', 
   await expect(
     page.getByRole('navigation', { name: 'Matter workflow' }),
   ).toBeVisible();
+  const queueBounds = await page.locator('.queue').boundingBox();
+  const evidenceBounds = await page.locator('.cockpit-evidence').boundingBox();
+  const manuscriptBounds = await page.locator('.cockpit-draft').boundingBox();
+  expect(Math.round(queueBounds?.width ?? 0)).toBe(300);
+  expect(Math.round(evidenceBounds?.width ?? 0)).toBe(400);
+  expect((manuscriptBounds?.width ?? 0) > 450).toBe(true);
+  await expect(page.locator('body')).toHaveCSS('font-size', '14px');
+  await expect(
+    page.locator(".cockpit-draft .draft-context[aria-label='Read-only draft reference']"),
+  ).toHaveCSS('font-size', '17px');
   await page.screenshot({
     path: 'test-results/storyteller-desktop-split.png',
     fullPage: true,
