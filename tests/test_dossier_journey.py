@@ -106,6 +106,9 @@ def test_omitted_confirmation_entry_cannot_become_absent_inventory():
     assert report['findings'][0]['identity'] == 'not_assessed'
     assert report['findings'][0]['identity_reason'] == 'INVENTORY_INCOMPLETE'
     assert not report['coverage']['inventory_confirmed_complete']
+    assert report["findings"][0]["paraphrase_guard"]["semantic_support"] == "not_assessed"
+    assert "SOURCE_PINPOINT_UNRESOLVED" in report["findings"][0]["paraphrase_guard"]["reason_codes"]
+    assert report["coverage"]["guard_unassessed_findings"] == 1
 
 
 

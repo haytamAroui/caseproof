@@ -1,0 +1,76 @@
+{
+  "schema": "caseproof-seeded-review-benchmark-v1",
+  "label_status": "SYNTHETIC_AUTHOR_SEEDED_NOT_INDEPENDENTLY_ADJUDICATED",
+  "purpose": "Controlled reviewer experiment packet: randomize these labels, do not disclose answers to reviewers.",
+  "cases": [
+    {
+      "id": "NL-wrong-page",
+      "language": "nl",
+      "seed": "Stuk 4 cites physical PDF page 7 but the quotation occurs only on page 8",
+      "seeded_error": "wrong_physical_page",
+      "label": "must_not_auto_verify"
+    },
+    {
+      "id": "FR-duplicate",
+      "language": "fr",
+      "seed": "Pièce 7 quotation appears twice on mapped physical page",
+      "seeded_error": "duplicate_quote",
+      "label": "ambiguous_location"
+    },
+    {
+      "id": "NL-wrong-version",
+      "language": "nl",
+      "seed": "Stuk 4 quote comes from a superseded source version",
+      "seeded_error": "source_version_drift",
+      "label": "requires_recheck"
+    },
+    {
+      "id": "FR-OCR",
+      "language": "fr",
+      "seed": "Pièce 7 scanned page has unreliable OCR",
+      "seeded_error": "unreliable_ocr",
+      "label": "not_assessed"
+    },
+    {
+      "id": "NL-negation",
+      "language": "nl",
+      "seed": "Claim adds niet where preserved passage is affirmative",
+      "seeded_error": "negation_added",
+      "label": "manual_review_required"
+    },
+    {
+      "id": "FR-qualifier",
+      "language": "fr",
+      "seed": "Claim omits sous réserve near source evidence",
+      "seeded_error": "qualifier_omitted",
+      "label": "manual_review_required"
+    },
+    {
+      "id": "FR-amount",
+      "language": "fr",
+      "seed": "Claim states EUR 900 while source shows EUR 500",
+      "seeded_error": "amount_changed",
+      "label": "manual_review_required"
+    }
+  ],
+  "human_comparison_design": {
+    "conditions": [
+      "standard_interface",
+      "guarded_term_warnings"
+    ],
+    "future_third_condition": "advisory_nli_not_enabled",
+    "outcomes": [
+      "false_confirmation_rate",
+      "missed_contradiction_rate",
+      "seconds_per_decision",
+      "inter_reviewer_agreement",
+      "warning_helpfulness"
+    ],
+    "blinding": "no gold labels shown to reviewers",
+    "prerequisites": [
+      "independent legal label adjudication",
+      "reviewer consent",
+      "actual timed human trials"
+    ]
+  }
+}
