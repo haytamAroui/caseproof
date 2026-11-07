@@ -658,3 +658,39 @@ dialog::backdrop {
 .inspection-modes .button {
   min-height: 44px;
 }
+
+/* Storyteller responsive cockpit refinements: preserve light-mode semantics. */
+:root {
+  --paper: #f6f6f3;
+  --paper-raised: #edede8;
+  --reading-width: 72ch;
+  --panel-radius: 12px;
+}
+@media (min-width: 1500px) {
+  main { max-width: 1760px; }
+  .review-layout { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); }
+  .cockpit-inspection { grid-template-columns: minmax(0, 1fr) minmax(380px, 46%); }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .review-layout { grid-template-columns: minmax(220px, 28%) minmax(0, 1fr); }
+  .queue { padding: 16px; }
+  .inspection { padding: 20px; }
+}
+@media (max-width: 760px) {
+  .app-header { flex-wrap: wrap; }
+  .queue { padding: 16px; }
+  .queue ul { max-height: 35vh; }
+  .inspection { padding: 16px; }
+  .viewer-scroll { height: 55vh; min-height: 260px; }
+  .cockpit-inspection { gap: 12px; }
+  .catalog-actions { gap: 8px; }
+}
+.review-layout > *, .cockpit-inspection > * { min-width: 0; }
+.draft-quote, .draft-context, .review-panel { overflow-wrap: anywhere; }
+button:not(:disabled), a, input, select, textarea { touch-action: manipulation; }
+@media (prefers-reduced-motion: no-preference) {
+  .finding, .button { transition: background-color 140ms ease, border-color 140ms ease; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .finding, .button { transition: none !important; }
+}
