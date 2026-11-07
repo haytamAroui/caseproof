@@ -806,10 +806,11 @@ test('Storyteller cockpit exposes workflow, keyboard-resizable panes and mobile 
   await expect(
     page.getByRole('navigation', { name: 'Matter workflow' }),
   ).toBeVisible();
-  await expect(page.getByText('3–4 · Verify and review')).toHaveAttribute(
-    'aria-current',
-    'step',
-  );
+  const navigation = page.getByRole('navigation', { name: 'Matter workflow' });
+  await expect(navigation.locator('li')).toHaveCount(7);
+  await expect(
+    navigation.getByRole('link', { name: /04 Evidence review/ }),
+  ).toHaveAttribute('aria-current', 'step');
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const width = page.getByRole('slider', {
     name: 'Draft panel width percentage',
