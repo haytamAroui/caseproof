@@ -8,6 +8,7 @@ import hmac
 import http.client
 import io
 import json
+import re
 from typing import Any, Literal
 from uuid import UUID
 
@@ -22,6 +23,7 @@ from application.litigation.dossier_contracts import add_report_contract, assess
 from application.litigation.paraphrase_guard import guard_paraphrase
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
+from application.litigation.review_source_binding import project_review_source_bindings
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
 from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
 from apps.api.data_rights_enforcement import SignedRightsGate
@@ -1204,6 +1206,30 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
             "confirm",
             {"bundle_signature": body.bundle_signature, "request_id": body.request_id, "payload": payload},
         )
+
+    @router.get(base + "/snapshots/{snapshot_hash}/review-source-bindings")
+    def review_source_bindings(
+        case_id: str,
+        brief_id: str,
+        snapshot_hash: str,
+        authorization: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        """Optional authorized view; never changes canonical signed export bytes."""
+        if not re.fullmatch(r"[0-9a-f]{64}", snapshot_hash):
+            raise HTTPException(422, "invalid snapshot")
+        s, bearer = active(authorization)
+        report, _ = read_dossier_report(s, bearer, case_id, brief_id, snapshot_hash, decisions=True)
+        try:
+            bindings = project_review_source_bindings(report, report["human_decisions"])
+        except (ValueError, KeyError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return {
+            "schema": "caseproof-review-source-bindings-view-v1",
+            "snapshot_hash": report["snapshot_hash"],
+            "bindings": bindings,
+            "signed_as_one_record": False,
+            "notice": "Read-only correspondence, not a newly signed human review receipt.",
+        }
 
     @router.get(base + "/reviews", response_model=ReviewLedgerView, response_model_by_alias=True)
     def review_ledger(

@@ -1,0 +1,82 @@
+name: P1 controlled reviewer benchmark (synthetic only)
+on:
+  pull_request:
+    paths:
+      - .github/workflows/p1-controlled-reviewer-benchmark.yml
+      - application/litigation/reviewer_benchmark.py
+      - scripts/p1_reviewer_benchmark.py
+      - tests/test_p1_reviewer_benchmark.py
+      - tests/test_p1_reviewer_benchmark_cli.py
+      - application/litigation/review_source_binding.py
+      - apps/api/dossier_journey.py
+      - application/litigation/report_projection.py
+      - tests/test_p1_review_source_binding.py
+  push:
+    branches:
+      - feat/p1-controlled-reviewer-benchmark
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    name: Blinded NL FR allocation and source-version falsification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - name: Source-byte and blinded-allocation adversarial tests
+        run: |
+          uv run --locked pytest -q \
+            tests/test_p1_reviewer_benchmark.py \
+            tests/test_p1_reviewer_benchmark_cli.py \
+            tests/test_p1_review_source_binding.py
+      - name: Typed and formatted benchmark contracts
+        run: |
+          uv run --locked ruff check \
+            application/litigation/reviewer_benchmark.py \
+            application/litigation/review_source_binding.py \
+            scripts/p1_reviewer_benchmark.py \
+            tests/test_p1_reviewer_benchmark.py \
+            tests/test_p1_reviewer_benchmark_cli.py \
+            tests/test_p1_review_source_binding.py
+          uv run --locked ruff format --check \
+            application/litigation/reviewer_benchmark.py \
+            application/litigation/review_source_binding.py \
+            scripts/p1_reviewer_benchmark.py \
+            tests/test_p1_reviewer_benchmark.py \
+            tests/test_p1_reviewer_benchmark_cli.py \
+            tests/test_p1_review_source_binding.py
+          uv run --locked mypy --explicit-package-bases \
+            application/litigation/reviewer_benchmark.py \
+            application/litigation/review_source_binding.py \
+            scripts/p1_reviewer_benchmark.py
+      - name: Record synthetic-only study engineering receipt
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = {
+            "schema": "caseproof-p1-synthetic-benchmark-acceptance-v1",
+            "commit": os.environ["GITHUB_SHA"],
+            "scope": "blinded assignment and deterministic trial scoring unit tests only",
+            "human_reviewers_recruited": False,
+            "independent_belgian_labels_collected": False,
+            "actual_reviewer_accuracy_measured": False,
+            "source_rights_independently_verified": False,
+            "causal_benefit_established": False,
+            "nli_enabled": False,
+          }
+          dest = Path("/tmp/caseproof-p1-synthetic")
+          dest.mkdir(exist_ok=True)
+          (dest / "receipt.json").write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+          print("CASEPROOF_P1_SYNTHETIC_BENCHMARK_VERIFIED")
+          PY
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: p1-synthetic-benchmark-engineering-receipt
+          path: /tmp/caseproof-p1-synthetic/receipt.json
+          retention-days: 30
