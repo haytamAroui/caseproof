@@ -556,9 +556,30 @@ function FindingInspection({
   return (
     <div className="cockpit-reader">
       <div className="cockpit-view-switch" role="group" aria-label="Reading layout">
-        <button type="button" className="button" aria-pressed={readingMode === 'split'} onClick={() => setReadingMode('split')}>Split view</button>
-        <button type="button" className="button" aria-pressed={readingMode === 'draft'} onClick={() => setReadingMode('draft')}>Draft focus</button>
-        <button type="button" className="button" aria-pressed={readingMode === 'source'} onClick={() => setReadingMode('source')}>Source focus</button>
+        <button
+          type="button"
+          className="button"
+          aria-pressed={readingMode === 'split'}
+          onClick={() => setReadingMode('split')}
+        >
+          Split view
+        </button>
+        <button
+          type="button"
+          className="button"
+          aria-pressed={readingMode === 'draft'}
+          onClick={() => setReadingMode('draft')}
+        >
+          Draft focus
+        </button>
+        <button
+          type="button"
+          className="button"
+          aria-pressed={readingMode === 'source'}
+          onClick={() => setReadingMode('source')}
+        >
+          Source focus
+        </button>
       </div>
       <div className="cockpit-resize-controls" hidden={readingMode !== 'split'}>
         <label htmlFor={widthControlId}>
