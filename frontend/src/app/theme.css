@@ -1619,6 +1619,15 @@ main {
 .inspection > .small {
   padding: 0 20px 16px;
 }
+.inspection details > summary {
+  display: list-item;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.inspection details > summary:hover { background: var(--paper-raised); }
 .release-confirm-dialog {
   background: var(--surface);
 }

@@ -58,8 +58,12 @@ test('P6 NL/FR/EN, keyboard, reflow, reduced motion, forced colors and axe', asy
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze();
+  const failureTargets = results.violations
+    .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)
+    .join('; ');
   expect(
     results.violations.map((v) => ({ id: v.id, nodes: v.nodes.length })),
+    failureTargets,
   ).toEqual([]);
 
   await page.setViewportSize({ width: 320, height: 700 });
