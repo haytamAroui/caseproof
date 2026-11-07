@@ -551,12 +551,13 @@ function FindingInspection({
 }) {
   const [inspected, setInspected] = useState(false);
   const [draftWidth, setDraftWidth] = useState(50);
+  const widthControlId = `draft-panel-width-${finding.reference_id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   return (
     <div className="cockpit-reader">
       <div className="cockpit-resize-controls">
-        <label htmlFor="draft-panel-width">Draft panel width: {draftWidth}%</label>
+        <label htmlFor={widthControlId}>Draft panel width: {draftWidth}%</label>
         <input
-          id="draft-panel-width"
+          id={widthControlId}
           type="range"
           min={25}
           max={75}
@@ -575,11 +576,11 @@ function FindingInspection({
       >
         <div className="cockpit-draft">{renderDraft?.(finding, historical)}</div>
         <div className="cockpit-evidence">
-        {renderSource ? (
-          renderSource(finding, historical, () => setInspected(true))
-        ) : (
-          <Notice error>
-            Preserved source viewer unavailable. No human source inspection may
+          {renderSource ? (
+            renderSource(finding, historical, () => setInspected(true))
+          ) : (
+            <Notice error>
+              Preserved source viewer unavailable. No human source inspection may
             be recorded.
           </Notice>
         )}
