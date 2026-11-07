@@ -729,3 +729,34 @@ button:not(:disabled), a, input, select, textarea { touch-action: manipulation; 
   .review-layout > .queue { position: static; max-height: none; }
   .cockpit-inspection { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Storyteller interaction motion: restrained, compositing-friendly, and optional.
+   No animation is used to imply verification or change reviewer state. */
+@keyframes cockpit-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .review-layout, .intake, .export-workspace, .docx-editor-layout {
+    animation: cockpit-enter 180ms ease-out both;
+  }
+  .finding:hover:not([aria-current='true']) {
+    border-color: var(--line);
+    background: var(--paper);
+  }
+  .inspection-modes .button,
+  .queue .finding,
+  .matter-list a {
+    transition: background-color 150ms ease, border-color 150ms ease;
+  }
+  dialog[open] { animation: cockpit-enter 160ms ease-out both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .review-layout, .intake, .export-workspace, .docx-editor-layout,
+  dialog[open] { animation: none !important; }
+  .inspection-modes .button, .queue .finding, .matter-list a {
+    transition: none !important;
+  }
+}
+dialog[open] { box-shadow: 0 18px 60px #16181d26; }
+dialog::backdrop { background: #16181d99; }
