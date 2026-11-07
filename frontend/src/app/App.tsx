@@ -34,6 +34,7 @@ import type { SessionHost } from '../shared/session';
 import { Button, Notice } from '../shared/ui';
 import { createQueryClient } from './query';
 import { MatterJourney } from './MatterJourney';
+import { PrimaryNavigation } from './PrimaryNavigation';
 import { recoveryDestination } from './recovery';
 declare global {
   interface Window {
@@ -215,6 +216,12 @@ function Workspace({ api }: { api: ApiClient }) {
         <Link to="/" className="brand">
           CaseProof <span>Evidence workspace</span>
         </Link>
+        {session.connected && (
+          <PrimaryNavigation
+            pathname={location.pathname}
+            search={location.search}
+          />
+        )}
         {session.connected && (
           <Button onClick={() => controller.clear()}>End session</Button>
         )}

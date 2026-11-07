@@ -19,6 +19,7 @@ export function SplitHandle({
   unit,
   reset,
   onChange,
+  fromEnd = false,
   className = '',
 }: {
   containerRef: RefObject<HTMLDivElement | null>;
@@ -30,24 +31,24 @@ export function SplitHandle({
   unit: 'px' | '%';
   reset: number;
   onChange: (next: number) => void;
+  fromEnd?: boolean;
   className?: string;
 }) {
   function update(clientX: number) {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
+    const coordinate = fromEnd ? rect.right - clientX : clientX - rect.left;
     const valueAtPointer =
-      unit === '%'
-        ? ((clientX - rect.left) / rect.width) * 100
-        : clientX - rect.left;
+      unit === '%' ? (coordinate / rect.width) * 100 : coordinate;
     onChange(clampSplit(Math.round(valueAtPointer / step) * step, min, max));
   }
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
     const key = event.key;
     const next =
       key === 'ArrowLeft'
-        ? value - step
+        ? value + (fromEnd ? step : -step)
         : key === 'ArrowRight'
-          ? value + step
+          ? value + (fromEnd ? -step : step)
           : key === 'Home'
             ? min
             : key === 'End'

@@ -45,7 +45,7 @@ export function ReportScreen({
   const layoutRef = useRef<HTMLDivElement>(null);
   const [queueWidth, setQueueWidth] = useState(300);
   // Presentation preferences survive reference changes; source inspection does not.
-  const [draftWidth, setDraftWidth] = useState(50);
+  const [sourceWidth, setSourceWidth] = useState(400);
   const [readingMode, setReadingMode] = useState<'split' | 'draft' | 'source'>(
     'split',
   );
@@ -388,29 +388,18 @@ export function ReportScreen({
         <section
           className="inspection"
           id="inspection"
-          aria-labelledby="finding-title"
+          aria-label="Finding inspection"
           ref={inspectionRef}
           tabIndex={-1}
         >
           {selected ? (
             <>
-              <p className="eyebrow">Selected reference</p>
-              <h2 id="finding-title">{selected.literal}</h2>
-              <dl className="dimensions">
-                <StateValue label="Identity" value={selected.identity} />
-                <StateValue
-                  label="Page mapping"
-                  value={selected.page_mapping}
-                />
-                <StateValue label="Fidelity" value={selected.fidelity} />
-                <StateValue label="Human support" value={selected.support} />
-              </dl>
               <FindingInspection
                 key={`${session.epoch}:${caseId}:${briefId}:${snapshot}:${selected.reference_id}:${historical}`}
                 finding={selected}
                 historical={historical}
-                draftWidth={draftWidth}
-                onDraftWidthChange={setDraftWidth}
+                sourceWidth={sourceWidth}
+                onSourceWidthChange={setSourceWidth}
                 readingMode={readingMode}
                 onReadingModeChange={setReadingMode}
                 renderSource={renderSource}
@@ -544,8 +533,8 @@ function QuoteContext({ finding }: { finding: FindingView }) {
 function FindingInspection({
   finding,
   historical,
-  draftWidth,
-  onDraftWidthChange,
+  sourceWidth,
+  onSourceWidthChange,
   readingMode,
   onReadingModeChange,
   renderSource,
@@ -555,8 +544,8 @@ function FindingInspection({
 }: {
   finding: FindingView;
   historical: boolean;
-  draftWidth: number;
-  onDraftWidthChange: (width: number) => void;
+  sourceWidth: number;
+  onSourceWidthChange: (width: number) => void;
   readingMode: 'split' | 'draft' | 'source';
   onReadingModeChange: (mode: 'split' | 'draft' | 'source') => void;
   renderSource?:
@@ -623,37 +612,45 @@ function FindingInspection({
         aria-live="polite"
       >
         {readingMode === 'split'
-          ? 'Draft and preserved source side by side. Drag a divider or use arrow keys to resize.'
+          ? 'Three-panel review: the preserved draft and original source remain separate. Drag the divider or use arrow keys.'
           : readingMode === 'draft'
             ? 'Draft focus. Source evidence is hidden, not verified or discarded.'
             : 'Source focus. Preserved original pixels remain the inspection authority.'}
       </motion.p>
       <div className="cockpit-resize-controls" hidden={readingMode !== 'split'}>
-        <label htmlFor={widthControlId}>Draft panel width: {draftWidth}%</label>
+        <label htmlFor={widthControlId}>Source panel width: {sourceWidth}px</label>
         <input
           id={widthControlId}
           type="range"
-          min={30}
-          max={70}
-          step={5}
-          value={draftWidth}
-          onChange={(event) => onDraftWidthChange(Number(event.target.value))}
-          aria-label="Draft panel width percentage"
+          min={320}
+          max={560}
+          step={10}
+          value={sourceWidth}
+          onChange={(event) => onSourceWidthChange(Number(event.target.value))}
+          aria-label="Source evidence panel width"
         />
         <button
           type="button"
           className="button"
-          onClick={() => onDraftWidthChange(50)}
+          onClick={() => onSourceWidthChange(400)}
         >
-          Equal panels
+          Restore 400px source
         </button>
       </div>
       <div
         ref={readerRef}
         className={`cockpit-inspection cockpit-mode-${readingMode}`}
-        data-draft-width={draftWidth}
+        data-source-width={sourceWidth}
       >
         <div className="cockpit-draft">
+          <p className="eyebrow">Selected reference</p>
+          <h2 id="finding-title">{finding.literal}</h2>
+          <dl className="dimensions cockpit-reference-dimensions">
+            <StateValue label="Identity" value={finding.identity} />
+            <StateValue label="Page mapping" value={finding.page_mapping} />
+            <StateValue label="Fidelity" value={finding.fidelity} />
+            <StateValue label="Human support" value={finding.support} />
+          </dl>
           <header className="cockpit-pane-heading">
             <h3>Draft</h3>
             <span>Preserved DOCX · extracted context</span>
@@ -665,20 +662,21 @@ function FindingInspection({
           <SplitHandle
             containerRef={readerRef}
             label="Resize draft and source panels"
-            value={draftWidth}
-            min={30}
-            max={70}
-            step={5}
-            unit="%"
-            reset={50}
-            onChange={onDraftWidthChange}
+            value={sourceWidth}
+            min={320}
+            max={560}
+            step={10}
+            unit="px"
+            reset={400}
+            fromEnd
+            onChange={onSourceWidthChange}
             className="cockpit-draft-splitter"
           />
         )}
         <div className="cockpit-evidence">
           <header className="cockpit-pane-heading">
             <h3>Source evidence</h3>
-            <span>Preserved PDF · inspect original pixels</span>
+            <span>{finding.literal} · original PDF</span>
           </header>
           {renderSource ? (
             renderSource(finding, historical, () => setInspected(true))
