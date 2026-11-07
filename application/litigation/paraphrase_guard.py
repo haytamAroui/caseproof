@@ -28,6 +28,7 @@ _PARTY = re.compile(
     r"\b(?:madame|monsieur|mme\.?|mevrouw|de heer|partij|partie|"
     r"société|vennootschap|bv|srl|nv|sa)\s+"
     r"([A-ZÀ-ÖØ-Þ][\w'’.-]{1,45}(?:\s+[A-ZÀ-ÖØ-Þ][\w'’.-]{1,45}){0,2})",
+    re.I,
 )
 _NUMBER = re.compile(r"(?<![\w])\d{1,6}(?:[.,]\d{1,3})?(?!\w)")
 _NEGATION = re.compile(r"\b(?:niet|geen|nooit|nimmer|not|never|without|"
