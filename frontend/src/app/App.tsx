@@ -33,6 +33,7 @@ import {
 import type { SessionHost } from '../shared/session';
 import { Button, Notice } from '../shared/ui';
 import { createQueryClient } from './query';
+import { MatterJourney } from './MatterJourney';
 import { recoveryDestination } from './recovery';
 declare global {
   interface Window {
@@ -219,6 +220,13 @@ function Workspace({ api }: { api: ApiClient }) {
         )}
       </header>
       <main id="main" tabIndex={-1}>
+        {session.connected && (
+          <MatterJourney
+            pathname={location.pathname}
+            search={location.search}
+            hash={location.hash}
+          />
+        )}
         {session.connected && returnTo && (
           <section aria-label="Session recovery">
             <Notice>
