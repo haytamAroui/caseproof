@@ -695,193 +695,313 @@ button:not(:disabled), a, input, select, textarea { touch-action: manipulation; 
   .finding, .button { transition: none !important; }
 }
 
-/* Three-column Storyteller review cockpit: queue / draft / source.
-   Uses the existing semantic DOM and does not change evidence authority. */
-@media (min-width: 1450px) {
-  .review-layout {
-    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
-    align-items: start;
-  }
-  .review-layout > .queue {
-    position: sticky;
-    top: 12px;
-    max-height: calc(100vh - 24px);
-    overflow: auto;
-  }
-  .cockpit-inspection {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
-  }
-  .cockpit-draft, .cockpit-evidence { min-width: 0; }
+/* CaseProof Storyteller cockpit v3.1 — document-first, light-mode baseline.
+   No evidence, OCR overlay or PDF pixel transitions are animated. */
+:root {
+  color-scheme: light;
+  --warning: #86590d;
+  --warning-background: #fff8e9;
+  --success: #226044;
 }
-.cockpit-draft .draft-context {
-  max-width: none;
+.app-header {
+  position: relative;
+  z-index: 2;
+  border-bottom: 1px solid var(--line);
+}
+.brand { letter-spacing: -0.045em; }
+.brand span { letter-spacing: 0; }
+main { max-width: 1900px; }
+.page-heading { max-width: 90ch; }
+.page-heading a { margin-right: 18px; }
+
+/* Workflow reflects ROUTE ONLY. No fake completed/approved stage badges. */
+.cockpit-journey {
+  display: block;
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.cockpit-journey-caption {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .03em;
+}
+.cockpit-journey-caption span {
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.cockpit-journey ol {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 5px;
+  gap: 6px;
+  scrollbar-width: thin;
+}
+.cockpit-journey li { flex: 0 0 auto; }
+.cockpit-journey li > a,
+.cockpit-journey li > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 8px 11px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 9px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.cockpit-journey li > span[aria-disabled='true'] {
+  background: var(--surface);
+  color: var(--muted);
+  border-style: dashed;
+}
+.cockpit-journey a:hover { background: #edede8; }
+.cockpit-journey a[aria-current='step'] {
+  border-color: var(--focus);
+  background: #eaf3f8;
+  box-shadow: inset 0 -3px 0 var(--focus);
+  font-weight: 750;
+}
+.cockpit-step-number {
+  font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  opacity: .8;
+}
+.cockpit-journey :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Findings / draft / preserved PDF: both splitters are pointer + keyboard driven. */
+.review-layout {
+  grid-template-columns: minmax(0, var(--queue-width, 300px)) 12px minmax(0, 1fr);
+  min-height: 620px;
+  gap: 0;
+  align-items: start;
+  border-color: var(--line);
+  border-radius: 12px;
+  overflow: clip;
+}
+.review-layout > * { min-width: 0; }
+.review-layout .queue {
+  background: var(--surface);
+  padding: 16px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  border-right: 0;
+}
+.queue h2 { font-size: 17px; margin-bottom: 12px; }
+.queue .catalog-actions { gap: 7px; }
+.queue .catalog-actions .button { padding-inline: 10px; font-size: 12px; }
+.queue ul { max-height: none; }
+.queue .finding {
+  border-color: var(--line);
+  border-left-width: 3px;
+  border-radius: 8px;
+  margin: 0 0 7px;
+  padding: 12px;
+  line-height: 1.45;
+}
+.queue .finding-attention { border-left-color: var(--warning); }
+.queue .finding-attention small { color: var(--warning); }
+.queue .finding-unflagged { border-left-color: #9a9f9e; }
+.queue .finding[aria-current='true'] {
+  border-color: var(--focus);
+  border-left-color: var(--focus);
+  background: #ebf4f8;
+}
+.queue .finding:hover { background: var(--paper); }
+.review-layout .inspection {
+  padding: 20px 22px 30px;
   background: var(--surface);
 }
+.inspection > .dimensions { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 12px 0; }
+.inspection > .dimensions .dimension { padding: 10px; }
+.inspection > .dimensions dt { font-size: 11px; }
+.inspection > .dimensions dd { font-size: 12px; overflow-wrap: anywhere; }
+
+.cockpit-splitter {
+  position: relative;
+  width: 12px;
+  align-self: stretch;
+  min-height: 400px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  background: var(--paper);
+  border-inline: 1px solid var(--line);
+}
+.cockpit-splitter::before {
+  content: '';
+  display: block;
+  width: 3px;
+  height: 52px;
+  border-radius: 6px;
+  background: #aeb2b1;
+  position: sticky;
+  top: 40%;
+  margin: 170px auto 0;
+}
+.cockpit-splitter:hover::before,
+.cockpit-splitter:focus-visible::before { background: var(--focus); }
+.cockpit-splitter:focus-visible { outline: 3px solid var(--focus); outline-offset: -2px; }
+.cockpit-reader { margin-top: 14px; }
+.cockpit-reader .cockpit-inspection {
+  display: grid;
+  grid-template-columns: minmax(0, var(--draft-panel-width, 50%)) 12px minmax(0, 1fr);
+  gap: 0;
+  align-items: start;
+}
+.cockpit-reader .cockpit-inspection > * { min-width: 0; }
+.cockpit-reader .cockpit-draft { padding: 0 13px 0 0; border: 0; }
+.cockpit-reader .cockpit-evidence { padding: 0 0 0 13px; border: 0; }
+.cockpit-reader .cockpit-draft-splitter { min-height: 500px; }
+.cockpit-pane-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding-bottom: 10px;
+  margin: 2px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+.cockpit-pane-heading h3 { font-size: 14px; margin: 0; letter-spacing: -.01em; }
+.cockpit-pane-heading span { color: var(--muted); font-size: 11px; }
+.cockpit-draft .draft-context { font-family: 'CaseProof Source Serif', Georgia, serif; max-width: none; line-height: 1.65; }
+.cockpit-draft :is(button, input, label, select, textarea) { font-family: 'CaseProof Inter', system-ui, sans-serif; }
 .cockpit-draft .draft-quote { font-family: 'CaseProof Source Serif', Georgia, serif; }
-.cockpit-evidence .source-viewer { margin-top: 0; }
+.cockpit-draft .draft-context pre { font-family: 'CaseProof JetBrains Mono', ui-monospace, monospace; }
+.cockpit-evidence .source-viewer { margin: 0; }
 .cockpit-evidence .viewer-scroll { background: var(--paper-raised); }
-.review-panel :is(button, input, select, textarea):focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
+.cockpit-view-switch { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.cockpit-view-switch .button {
+  min-height: 40px;
+  padding: 7px 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
 }
-@media (max-width: 760px) {
-  .review-layout > .queue { position: static; max-height: none; }
-  .cockpit-inspection { grid-template-columns: minmax(0, 1fr); }
+.cockpit-view-switch .button[aria-pressed='true'] {
+  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
 }
-
-/* Storyteller interaction motion: restrained, compositing-friendly, and optional.
-   No animation is used to imply verification or change reviewer state. */
-@keyframes cockpit-enter {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+.cockpit-reading-summary { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+.cockpit-resize-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0 14px;
 }
-@media (prefers-reduced-motion: no-preference) {
-  .review-layout, .intake, .export-workspace, .docx-editor-layout {
-    animation: cockpit-enter 180ms ease-out both;
-  }
-  .finding:hover:not([aria-current='true']) {
-    border-color: var(--line);
-    background: var(--paper);
-  }
-  .inspection-modes .button,
-  .queue .finding,
-  .matter-list a {
-    transition: background-color 150ms ease, border-color 150ms ease;
-  }
-  dialog[open] { animation: cockpit-enter 160ms ease-out both; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .review-layout, .intake, .export-workspace, .docx-editor-layout,
-  dialog[open] { animation: none !important; }
-  .inspection-modes .button, .queue .finding, .matter-list a {
-    transition: none !important;
-  }
-}
-dialog[open] { box-shadow: 0 18px 60px #16181d26; }
-dialog::backdrop { background: #16181d99; }
-
-/* Storyteller dark appearance follows the operating-system preference.
-   Status text, source pixels and machine/human distinctions remain unchanged. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --ink: #f1f0ed;
-    --muted: #b5b8bd;
-    --accent: #f1f0ed;
-    --surface: #24272c;
-    --line: #51545a;
-    --danger: #ff9292;
-    --focus: #83c9f1;
-    --paper: #17191d;
-    --paper-raised: #30343a;
-    background: var(--paper);
-    color: var(--ink);
-    scrollbar-color: var(--muted) var(--paper);
-  }
-  body, main { background: var(--paper); color: var(--ink); }
-  .app-header, .review-layout, .matter-list li,
-  .queue, .inspection, .review-panel, .draft-context,
-  .dimension, .intake fieldset, .export-workspace .draft-context,
-  .page-empty, .viewer-page, .docx-editor-sidebar,
-  .docx-editor-revisions, .docx-editor-document {
-    background: var(--surface);
-    color: var(--ink);
-    border-color: var(--line);
-  }
-  .finding, .finding small, .queue h2 span { color: var(--ink); }
-  .finding:hover, .finding[aria-current='true'],
-  .matter-list a:hover, .intake fieldset fieldset,
-  .source-viewer .viewer-scroll { background: var(--paper-raised); }
-  .button { color: var(--paper); background: var(--accent); border-color: var(--accent); }
-  .button:hover { background: #d1d5db; }
-  .button[aria-pressed='false'] { background: var(--surface); color: var(--ink); border-color: var(--line); }
-  .button[aria-pressed='true'] { background: var(--accent); color: var(--paper); }
-  .notice { background: var(--paper-raised); border-color: var(--line); color: var(--ink); }
-  .notice.error { background: #40262b; border-color: var(--danger); color: #ffd4d4; }
-  .draft-context mark { background: #66501f; color: #fff0c0; }
-  input, select, textarea, dialog, .intake input[type='file'],
-  .intake input[type='file']::file-selector-button {
-    background: var(--surface);
-    color: var(--ink);
-    border-color: var(--line);
-  }
-  dialog::backdrop { background: #000a; }
-  .skip { background: var(--surface); color: var(--ink); }
-  ::-webkit-scrollbar-track { background: var(--paper); }
-  ::-webkit-scrollbar-thumb { border-color: var(--paper); }
-  .docx-editor button, .docx-ribbon, .docx-word-handoff {
-    background: var(--surface);
-    color: var(--ink);
-    border-color: var(--line);
-  }
-  .docx-editor button:hover:not(:disabled) { background: var(--paper-raised); }
-  .docx-ribbon button:nth-of-type(1) { background: var(--accent); color: var(--paper); }
-  .docx-block textarea:disabled { background: var(--paper-raised); color: var(--muted); }
-}
-
-/* Accessible adjustable reading split; narrow viewports retain stacked panels. */
-.cockpit-resize-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-block: 12px; }
-.cockpit-resize-controls label { display: inline; font-size: 13px; }
-.cockpit-resize-controls input[type='range'] { width: min(240px, 100%); min-height: 44px; padding: 0; accent-color: var(--focus); }
-@media (min-width: 1101px) {
-  .cockpit-reader .cockpit-inspection { grid-template-columns: minmax(0, var(--draft-panel-width, 50%)) minmax(0, 1fr); }
-}
-@media (max-width: 1100px) {
-  .cockpit-resize-controls { display: none; }
-}
-
-/* Matter workflow navigation: explicit current stage, no inferred completion. */
-.cockpit-journey { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 12px; }
-.cockpit-journey > * { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 13px; text-decoration: none; }
-.cockpit-journey [aria-current='step'] { border-color: var(--focus); box-shadow: inset 0 -2px var(--focus); font-weight: 700; }
-.cockpit-journey a:hover { background: var(--paper-raised); }
-.cockpit-journey a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (max-width: 760px) { .cockpit-journey > * { flex: 1 1 180px; } }
-
-/* The slider percentage applies to the available reading grid, not the queue. */
-@media (min-width: 1101px) {
-  .cockpit-reader .cockpit-inspection {
-    grid-template-columns: minmax(0, var(--draft-panel-width, 50%)) minmax(0, 1fr);
-    gap: 0;
-  }
-  .cockpit-reader .cockpit-draft { padding-right: 12px; border-right: 1px solid var(--line); }
-  .cockpit-reader .cockpit-evidence { padding-left: 12px; }
-}
-@media (max-width: 1100px) {
-  .cockpit-reader .cockpit-inspection { grid-template-columns: minmax(0, 1fr); }
-}
-
-/* Storyteller reading modes: inspection state stays mounted across view changes. */
-.cockpit-view-switch { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
-.cockpit-view-switch .button { background: var(--surface); color: var(--ink); border-color: var(--line); }
-.cockpit-view-switch .button[aria-pressed='true'] { background: var(--accent); color: #fff; border-color: var(--accent); }
-.cockpit-view-switch .button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .cockpit-resize-controls[hidden] { display: none; }
-.cockpit-inspection.cockpit-mode-draft, .cockpit-inspection.cockpit-mode-source { grid-template-columns: minmax(0, 1fr); }
+.cockpit-resize-controls label { display: inline; font-size: 12px; }
+.cockpit-resize-controls input[type='range'] {
+  width: min(190px, 100%);
+  min-height: 40px;
+  padding: 0;
+  accent-color: var(--focus);
+}
+.cockpit-resize-controls .button { font-size: 12px; padding-inline: 10px; min-height: 40px; }
+.cockpit-reader .cockpit-inspection.cockpit-mode-draft,
+.cockpit-reader .cockpit-inspection.cockpit-mode-source { grid-template-columns: minmax(0,1fr); }
 .cockpit-mode-draft .cockpit-evidence { display: none; }
 .cockpit-mode-source .cockpit-draft { display: none; }
-.cockpit-mode-source .cockpit-evidence { padding-left: 0; }
-.cockpit-mode-draft .cockpit-draft { border-right: 0; padding-right: 0; }
-@media (min-width: 1101px) {
-  .cockpit-reader .cockpit-mode-draft, .cockpit-reader .cockpit-mode-source { grid-template-columns: minmax(0, 1fr); }
-}
+.cockpit-reader .cockpit-mode-draft .cockpit-draft,
+.cockpit-reader .cockpit-mode-source .cockpit-evidence { padding: 0; }
 
-/* Full-width reading mode must win over the standard split rules. */
-.cockpit-reader .cockpit-inspection.cockpit-mode-draft,
-.cockpit-reader .cockpit-inspection.cockpit-mode-source {
-  grid-template-columns: minmax(0, 1fr);
+/* The source stays mounted across focus changes; coverage/decisions stay separate. */
+#coverage { scroll-margin-top: 18px; }
+#inspection { scroll-margin-top: 18px; }
+#release-history { scroll-margin-top: 18px; }
+
+/* A real native modal is reserved for consequential release authorization. */
+.release-confirm-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(88dvh, 740px);
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 25px 80px #16181d33;
+  overflow-y: auto;
 }
-.cockpit-reader .cockpit-mode-draft .cockpit-draft {
-  border-right: 0;
-  padding-right: 0;
+.release-confirm-dialog::backdrop { background: #16181db8; }
+.release-confirm-dialog h2 { font-size: 21px; margin: 0 0 12px; }
+.release-confirm-dialog .catalog-actions { justify-content: flex-end; }
+.release-confirm-dialog code { overflow-wrap: anywhere; }
+.release-confirm-dialog :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Responsive: stack evidence before it becomes too small to inspect safely. */
+@media (max-width: 1279px) {
+  .cockpit-reader .cockpit-inspection.cockpit-mode-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cockpit-reader .cockpit-mode-split .cockpit-draft {
+    padding: 0 0 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .cockpit-reader .cockpit-mode-split .cockpit-evidence { padding: 14px 0 0; }
+  .cockpit-draft-splitter, .cockpit-resize-controls { display: none; }
 }
-.cockpit-reader .cockpit-mode-source .cockpit-evidence {
-  padding-left: 0;
+@media (max-width: 1050px) {
+  .review-layout { grid-template-columns: minmax(0, 1fr); }
+  .review-layout .queue {
+    position: static;
+    max-height: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .queue ul { max-height: 230px; overflow: auto; }
+  .cockpit-queue-splitter { display: none; }
+  .review-layout .inspection { padding: 18px; }
+}
+@media (max-width: 760px) {
+  main { padding: 16px; }
+  .review-layout .queue { padding: 14px; }
+  .review-layout .inspection { padding: 14px; }
+  .inspection > .dimensions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cockpit-journey { padding: 10px; }
+  .cockpit-journey-caption span { display: block; width: 100%; }
+  .cockpit-pane-heading { align-items: start; }
+  .release-confirm-dialog { padding: 18px; }
+}
+@media (forced-colors: active) {
+  .cockpit-journey a[aria-current='step'],
+  .queue .finding[aria-current='true'],
+  .cockpit-view-switch .button[aria-pressed='true'] {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+  .cockpit-splitter { border-inline: 2px solid CanvasText; }
+  .cockpit-splitter::before { background: CanvasText; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .queue .finding,
+  .cockpit-journey a,
+  .cockpit-view-switch .button {
+    transition: background-color 150ms ease, border-color 150ms ease;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cockpit-reader *, .cockpit-journey * {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+  .queue .finding, .cockpit-journey a, .cockpit-view-switch .button {
+    transition: none !important;
   }
 }
