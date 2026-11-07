@@ -35,6 +35,55 @@ test.beforeEach(async ({ page }) => {
     };
   });
 });
+test('Storyteller stage navigation, accessible panel splitters and stable review preferences', async ({
+  page,
+}) => {
+  await page.route('**/v2/**', (route) => route.fulfill({ json: report }));
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${hash}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const journey = page.getByRole('navigation', { name: 'Matter workflow' });
+  await expect(journey.locator('li')).toHaveCount(7);
+  await expect(
+    journey.getByRole('link', { name: /04 Evidence review/ }),
+  ).toHaveAttribute('aria-current', 'step');
+  const queue = page.getByRole('separator', { name: 'Resize findings queue' });
+  const draft = page.getByRole('separator', {
+    name: 'Resize draft and source panels',
+  });
+  await expect(queue).toHaveAttribute('aria-valuenow', '300');
+  await queue.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(queue).toHaveAttribute('aria-valuenow', '310');
+  await draft.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(draft).toHaveAttribute('aria-valuenow', '55');
+  await page.getByRole('button', { name: 'Exhibit A' }).click();
+  await expect(
+    page.getByRole('separator', { name: 'Resize draft and source panels' }),
+  ).toHaveAttribute('aria-valuenow', '55');
+  await page.getByRole('button', { name: 'Source focus' }).click();
+  await expect(page.locator('.cockpit-draft')).toBeHidden();
+  await expect(page.locator('.cockpit-evidence')).toBeVisible();
+  await page.getByRole('button', { name: 'Split view' }).click();
+  await expect(draft).toHaveAttribute('aria-valuenow', '55');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const transition = await page
+    .getByRole('button', { name: 'Split view' })
+    .evaluate((node) => getComputedStyle(node).transitionDuration);
+  expect(transition).toBe('0s');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(queue).toBeHidden();
+  await expect(draft).toBeHidden();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
 test('frozen report, keyboard, accessibility, narrow layout and session removal', async ({
   page,
 }) => {
