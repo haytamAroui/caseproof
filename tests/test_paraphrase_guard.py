@@ -167,3 +167,35 @@ def test_long_paragraph_and_large_page_never_generate_false_absence() -> None:
     assert "DRAFT_PARAGRAPH_MISSING_OR_UNBOUNDED" in result["reason_codes"]
     assert result["warnings"] == []
     assert result["semantic_support"] == "not_assessed"
+
+
+@pytest.mark.parametrize(
+    ("claim", "source", "kind"),
+    [
+        (
+            "Pièce 7, PDF p. 1, «Le paiement est enregistré.» Le montant est accepté.",
+            "Le paiement est enregistré. Le montant est accepté sous réserve.",
+            "qualifier",
+        ),
+        (
+            "Stuk 4, PDF p. 1, «De betaling is geboekt.» De factuur is betaald.",
+            "De betaling is geboekt. De factuur is niet betaald.",
+            "negation",
+        ),
+    ],
+)
+def test_source_modifier_omitted_from_claim_is_warning_only(
+    claim: str, source: str, kind: str,
+) -> None:
+    nl = "Stuk 4" in claim
+    result = check(
+        claim, source,
+        quote="De betaling is geboekt." if nl else "Le paiement est enregistré.",
+        lang="nl" if nl else "fr", source_lang="nl" if nl else "fr",
+    )
+    assert any(
+        w["kind"] == kind and w["reason_code"] == "SOURCE_MODIFIER_NOT_SEEN_IN_DRAFT"
+        for w in result["warnings"]
+    )
+    assert result["semantic_support"] == "not_assessed"
+    assert result["state"] == "needs_manual_review"

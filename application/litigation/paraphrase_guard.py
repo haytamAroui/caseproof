@@ -173,6 +173,26 @@ def guard_paraphrase(
                 if len(warnings) == _MAX_WARNINGS:
                     reasons.append("GUARDED_TERM_LIMIT_REACHED")
                     break
+        # Bidirectional for semantic-risk modifiers: dropping a source negation
+        # or qualifier can invert legal meaning even when the draft adds no token.
+        # This remains a lexical *warning*, never an inferred contradiction.
+        normalized_draft = _fold(paragraph)
+        for kind, term in _terms(source_excerpt):
+            if kind not in {"negation", "qualifier"}:
+                continue
+            if _fold(term) in normalized_draft:
+                continue
+            if any(w["kind"] == kind and _fold(w["term"]) == _fold(term)
+                   for w in warnings):
+                continue
+            if len(warnings) >= _MAX_WARNINGS:
+                reasons.append("GUARDED_TERM_LIMIT_REACHED")
+                break
+            warnings.append({
+                "kind": kind,
+                "term": term,
+                "reason_code": "SOURCE_MODIFIER_NOT_SEEN_IN_DRAFT",
+            })
         if warnings:
             reasons.append("GUARDED_TERMS_REQUIRE_MANUAL_REVIEW")
     elif candidate_terms:
