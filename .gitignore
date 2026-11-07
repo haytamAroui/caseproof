@@ -8,3 +8,9 @@ __pycache__/
 
 frontend/viewer-dist/
 frontend/tests/viewer-comparison/generated/
+
+# Never commit actual law-firm evidence, permission receipts or reviewer data.
+pilot-private/
+evals/private/
+docs/pilot/private/
+*.pilot-private.json
