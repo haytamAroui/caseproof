@@ -13,6 +13,7 @@
     "lint": "eslint src scripts tests && node scripts/check-boundaries.mjs && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:cockpit": "vitest run src/app/SplitHandle.test.ts",
     "test:e2e": "playwright test",
     "contracts:generate": "node scripts/generate-types.mjs",
     "contracts:check": "node scripts/generate-types.mjs --check",
