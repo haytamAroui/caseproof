@@ -858,3 +858,36 @@ test('Storyteller focus modes preserve evidence state and keyboard accessibility
   await expect(source).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
+
+test('Storyteller visual acceptance captures desktop and mobile reading modes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(page.getByRole('navigation', { name: 'Matter workflow' })).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/storyteller-desktop-split.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.getByRole('button', { name: 'Source focus' }).click();
+  await page.screenshot({
+    path: 'test-results/storyteller-desktop-source-focus.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Split view' }).click();
+  await expect(page.locator('.cockpit-inspection')).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/storyteller-mobile-split.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+  ).toBe(true);
+});
