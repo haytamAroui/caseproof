@@ -838,3 +838,16 @@ dialog::backdrop { background: #16181d99; }
 .cockpit-journey a:hover { background: var(--paper-raised); }
 .cockpit-journey a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 760px) { .cockpit-journey > * { flex: 1 1 180px; } }
+
+/* The slider percentage applies to the available reading grid, not the queue. */
+@media (min-width: 1101px) {
+  .cockpit-reader .cockpit-inspection {
+    grid-template-columns: minmax(0, var(--draft-panel-width, 50%)) minmax(0, 1fr);
+    gap: 0;
+  }
+  .cockpit-reader .cockpit-draft { padding-right: 12px; border-right: 1px solid var(--line); }
+  .cockpit-reader .cockpit-evidence { padding-left: 12px; }
+}
+@media (max-width: 1100px) {
+  .cockpit-reader .cockpit-inspection { grid-template-columns: minmax(0, 1fr); }
+}
