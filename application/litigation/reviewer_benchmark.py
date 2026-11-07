@@ -199,7 +199,8 @@ def make_blinded_packets(
 def _gold_labels(gold: dict[str, Any], manifest: dict[str, Any]) -> dict[str, str]:
     _require(gold.get("schema") == GOLD_SCHEMA, "independent labels schema required")
     entries = gold.get("cases")
-    _require(isinstance(entries, list), "gold case records required")
+    if not isinstance(entries, list):
+        raise BenchmarkInvalid("gold case records required")
     gold_by_case: dict[str, str] = {}
     known = {c["case_id"]: c for c in manifest["cases"]}
     for record in entries:
@@ -210,7 +211,8 @@ def _gold_labels(gold: dict[str, Any], manifest: dict[str, Any]) -> dict[str, st
         for key in ("source_version_id", "source_sha256", "physical_pdf_page"):
             _require(record.get(key) == source[key], "gold source identity or page mismatch")
         labels = record.get("independent_labels")
-        _require(isinstance(labels, list) and len(labels) >= 2, "two independent labels required")
+        if not isinstance(labels, list) or len(labels) < 2:
+            raise BenchmarkInvalid("two independent labels required")
         persons: set[str] = set()
         decisions: list[str] = []
         for row in labels:
@@ -249,7 +251,8 @@ def score_completed_trial(
     labels = _gold_labels(gold, manifest)
     expected = {a["assignment_id"]: a for a in manifest["assignments"]}
     rows = submissions.get("decisions")
-    _require(isinstance(rows, list) and len(rows) == len(expected), "full assignment census required")
+    if not isinstance(rows, list) or len(rows) != len(expected):
+        raise BenchmarkInvalid("full assignment census required")
     seen: set[str] = set()
     grouped: dict[str, list[tuple[dict[str, Any], str]]] = defaultdict(list)
     for row in rows:

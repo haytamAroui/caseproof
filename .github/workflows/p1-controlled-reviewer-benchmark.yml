@@ -7,6 +7,10 @@ on:
       - scripts/p1_reviewer_benchmark.py
       - tests/test_p1_reviewer_benchmark.py
       - tests/test_p1_reviewer_benchmark_cli.py
+      - application/litigation/review_source_binding.py
+      - apps/api/dossier_journey.py
+      - application/litigation/report_projection.py
+      - tests/test_p1_review_source_binding.py
   push:
     branches:
       - feat/p1-controlled-reviewer-benchmark
@@ -28,21 +32,27 @@ jobs:
         run: |
           uv run --locked pytest -q \
             tests/test_p1_reviewer_benchmark.py \
-            tests/test_p1_reviewer_benchmark_cli.py
+            tests/test_p1_reviewer_benchmark_cli.py \
+            tests/test_p1_review_source_binding.py
       - name: Typed and formatted benchmark contracts
         run: |
           uv run --locked ruff check \
             application/litigation/reviewer_benchmark.py \
+            application/litigation/review_source_binding.py \
             scripts/p1_reviewer_benchmark.py \
             tests/test_p1_reviewer_benchmark.py \
-            tests/test_p1_reviewer_benchmark_cli.py
+            tests/test_p1_reviewer_benchmark_cli.py \
+            tests/test_p1_review_source_binding.py
           uv run --locked ruff format --check \
             application/litigation/reviewer_benchmark.py \
+            application/litigation/review_source_binding.py \
             scripts/p1_reviewer_benchmark.py \
             tests/test_p1_reviewer_benchmark.py \
-            tests/test_p1_reviewer_benchmark_cli.py
+            tests/test_p1_reviewer_benchmark_cli.py \
+            tests/test_p1_review_source_binding.py
           uv run --locked mypy --explicit-package-bases \
             application/litigation/reviewer_benchmark.py \
+            application/litigation/review_source_binding.py \
             scripts/p1_reviewer_benchmark.py
       - name: Record synthetic-only study engineering receipt
         run: |
