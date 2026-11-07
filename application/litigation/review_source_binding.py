@@ -97,7 +97,8 @@ def project_review_source_bindings(
             and source.get("sha256") == digest
             and type(physical_page) is int
             and physical_page >= 1
-            and (type(source.get("page_count")) is not int or physical_page <= source["page_count"])
+            and type(source.get("page_count")) is int
+            and physical_page <= source["page_count"]
         )
         visual = finding.get("visual_assessment")
         regions = visual.get("regions") if isinstance(visual, dict) else None

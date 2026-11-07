@@ -193,3 +193,10 @@ def test_authorized_read_and_export_include_clear_unsigned_source_correspondence
     assert "signed_as_one_record" in markdown
     serialized = render_dossier_export(report, "json")
     assert '"review_source_bindings"' in serialized
+
+
+def test_unknown_original_page_count_never_produces_positive_binding() -> None:
+    report = frozen_report()
+    del report["sources"][0]["page_count"]
+    binding = project_review_source_bindings(report, [ledger_row()])[0]
+    assert binding["binding_state"] == "NOT_SOURCE_BOUND"
