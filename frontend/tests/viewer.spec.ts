@@ -805,6 +805,7 @@ test('Storyteller cockpit exposes workflow, keyboard-resizable panes and mobile 
   await page.getByRole('button', { name: 'Connect session' }).click();
   await expect(page.getByRole('navigation', { name: 'Matter workflow' })).toBeVisible();
   await expect(page.getByText('3–4 · Verify and review')).toHaveAttribute('aria-current', 'step');
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const width = page.getByRole('slider', { name: 'Draft panel width percentage' });
   await expect(width).toHaveValue('50');
   await width.focus();
@@ -817,4 +818,22 @@ test('Storyteller cockpit exposes workflow, keyboard-resizable panes and mobile 
   await expect(width).toBeHidden();
   await expect(page.locator('.cockpit-inspection')).toHaveCSS('grid-template-columns', /.+/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('Storyteller reading cockpit honors reduced motion and remains accessible in dark mode', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const layout = page.locator('.review-layout');
+  await expect(layout).toHaveCSS('animation-name', 'none');
+  await expect(page.locator('.cockpit-inspection')).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({
+    path: 'test-results/storyteller-dark-desktop.png',
+    fullPage: true,
+  });
 });
