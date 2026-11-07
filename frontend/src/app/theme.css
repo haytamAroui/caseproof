@@ -866,3 +866,22 @@ dialog::backdrop { background: #16181d99; }
 @media (min-width: 1101px) {
   .cockpit-reader .cockpit-mode-draft, .cockpit-reader .cockpit-mode-source { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Full-width reading mode must win over the standard split rules. */
+.cockpit-reader .cockpit-inspection.cockpit-mode-draft,
+.cockpit-reader .cockpit-inspection.cockpit-mode-source {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cockpit-reader .cockpit-mode-draft .cockpit-draft {
+  border-right: 0;
+  padding-right: 0;
+}
+.cockpit-reader .cockpit-mode-source .cockpit-evidence {
+  padding-left: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit-reader *, .cockpit-journey * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
