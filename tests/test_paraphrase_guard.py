@@ -1,8 +1,6 @@
 """Adversarial NL/FR P0 seed cases. Synthetic labels, NOT independent human ratings."""
 from __future__ import annotations
 
-from dataclasses import replace
-
 import pytest
 
 from application.litigation.paraphrase_guard import GUARD_VERSION, guard_paraphrase

@@ -1,4 +1,5 @@
 """Reproducible P0 seed manifest checks. No simulated human accuracy metrics."""
+
 import json
 from pathlib import Path
 
