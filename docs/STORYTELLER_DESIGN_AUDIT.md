@@ -29,3 +29,18 @@ The implementation updates the theme and reading layout and applies shared surfa
 ## Remaining design decisions and validation
 
 The uploaded prototype requests remote Google Fonts, whereas the frontend blueprint prohibits remote font services. Inter, Source Serif 4 and JetBrains Mono are served locally with their OFL licenses and system fallbacks. The reference also has dark mode and animated simulated transitions; neither is implemented in this increment. A measured browser comparison, manual accessibility and practitioner review, and the signed workflow must precede claims of full visual parity or production readiness.
+
+## Implementation continuation — 7 November 2026
+
+The branch now includes the Storyteller responsive queue/draft/evidence layout, aligned DOCX editor surfaces, restrained CSS entrance and selection transitions, reduced-motion overrides, and an operating-system-preference dark palette. These are source changes, **not** a verified visual acceptance result.
+
+### Release blockers — do not merge as design-complete yet
+
+1. Run `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, and `npm run policy:check` on the final head, and inspect GitHub Actions. CSS source changes do not establish browser correctness.
+2. Compare screenshots with the owner-provided Storyteller demo for desktop, tablet and narrow viewport in both color schemes. Check hard-coded colors in nested editor and viewer components.
+3. Complete real source/draft comparison interactions using actual backend evidence; do not fabricate OCR, diffs, review receipts, or source geometry.
+4. Verify dialog focus containment, keyboard navigation, reduced motion, high contrast, screen-reader labels, and overflow at 200% zoom.
+5. Run genuine signed-user intake → inventory → findings → review → correction/recheck → release → historical reopening; ensure rights restrictions and provenance remain enforced.
+6. Only after these checks and independent review should this draft PR be marked ready for merge.
+
+Motion uses native CSS at present. Adding the `motion` library should be justified by a real interaction requiring coordinated layout transitions and must include dependency/policy review; merely renaming CSS transitions would not improve the product.
