@@ -1619,6 +1619,7 @@ main {
 .inspection > .small {
   padding: 0 20px 16px;
 }
+/* WCAG 2.2 target size survives the 14px Storyteller control baseline. */
 .inspection details > summary {
   display: list-item;
   min-height: 36px;
