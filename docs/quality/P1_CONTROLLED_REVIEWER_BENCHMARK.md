@@ -161,3 +161,19 @@ and obtain independent statistical and legal review.
 
 Research outputs must never claim "lawyers more accurate" until the
 above conditions are actually satisfied and independently assessed.
+
+## Additional P1 increment — source-link projection
+
+This PR adds an **on-demand, read-only correspondence** between each existing
+human ledger decision and the frozen signed snapshot's source version, original
+PDF SHA-256, physical page and explicit inspected region IDs. This is included
+in authorized report projections (JSON and Markdown) with an explicit notice
+that it is **NOT** a new durable, jointly signed review receipt. The existing
+review RPC and SQL ledger remain unchanged. Missing, ambiguous or mismatched
+source versions, source digests and region IDs yield NOT_SOURCE_BOUND. A
+uniquely matched derived-text quotation may have a separately labelled
+**derived-text quote hash**; this is never a PDF crop or visual proof.
+
+Durable, source-position-signed review receipts with verified reviewer
+justification are still a later P1 step and require an independently
+reviewed migration, rights checks and genuine signed-user acceptance.

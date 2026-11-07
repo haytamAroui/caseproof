@@ -22,6 +22,7 @@ from application.litigation.dossier_contracts import add_report_contract, assess
 from application.litigation.paraphrase_guard import guard_paraphrase
 from application.litigation.regional_fidelity import select_visual_assessment
 from application.litigation.report_projection import render_dossier_export
+from application.litigation.review_source_binding import project_review_source_bindings
 from application.litigation.workspace_contract import DraftExcerptView, ReviewLedgerView
 from apps.api.access_control import AccessFailure, AccessRejected, IdentityServiceUnavailable, InvalidBearer
 from apps.api.data_rights_enforcement import SignedRightsGate
@@ -891,7 +892,16 @@ def read_dossier_report(
         rows = store.rpc(bearer, case, "decisions", {"snapshot_hash": report["snapshot_hash"]})
         if not isinstance(rows.get("decisions"), list):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        report = {**report, "human_decisions": rows["decisions"]}
+        try:
+            source_bindings = project_review_source_bindings(report, rows["decisions"])
+        except ValueError:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        report = {
+            **report,
+            "human_decisions": rows["decisions"],
+            # On-demand correspondence, NEVER a new durable signed review receipt.
+            "review_source_bindings": source_bindings,
+        }
     return report, original
 
 

@@ -79,6 +79,11 @@ def render_dossier_export(report: dict[str, Any], format: str) -> str:
         ],
     )
     text += _section("Human decisions", report["human_decisions"])
+    if "review_source_bindings" in report:
+        text += _section(
+            "Read-only reviewer-to-source bindings (not signed review receipts)",
+            report["review_source_bindings"],
+        )
     if "release_acknowledgement" in report:
         text += _section("Release acknowledgment (not a legal signature)", report["release_acknowledgement"])
     return text
