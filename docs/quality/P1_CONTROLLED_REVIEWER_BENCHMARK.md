@@ -94,9 +94,12 @@ Run from repository root using the pinned Python environment:
 
 The command produces separate, permission-restricted participant packets,
 empty submission templates and a **private** allocation manifest. It never
-copies original PDF content or gold labels into packets. The participant
-must still use the genuine CaseProof UI and preserved PDF pixels; the
-packet itself is not a signed review receipt or a replacement interface.
+copies original PDF content or gold labels into packets. For an actual A/B trial, an **isolated research frontend** must enforce
+the assigned warning visibility while presenting the same actual original
+PDF and review tools in both arms. The normal CaseProof UI must not suppress
+P0 warnings simply to create a baseline cohort. That isolated study UI is
+**not implemented** in this PR. The participant packet is not a signed
+review receipt or a replacement for the original source viewer.
 
 For a real trial, put all actual completed decisions in a single private
 file with schema caseproof-p1-reviewer-submissions-v1 and the assignment
@@ -151,6 +154,8 @@ and obtain independent statistical and legal review.
 - No completed independent legal labels for P0's seven seed categories.
 - No real human participants or trial submissions.
 - No authenticated intervention telemetry in the deployed cockpit.
+- No isolated study frontend to enforce blinded warning visibility across
+  identical source-inspection controls. **No production warning suppression.**
 - No confidential document rights/governance or retention decision for
   practitioner study bytes and logs.
 - No durable, signed linkage of every human decision to a specific
