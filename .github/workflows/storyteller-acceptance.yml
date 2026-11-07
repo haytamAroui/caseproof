@@ -37,7 +37,7 @@ jobs:
         run: npm run contracts:check && npm run policy:check && npm run lint
         working-directory: frontend
       - name: All unit tests and production typecheck
-        run: npm test && npm run build && npm run test:cockpit
+        run: npm run test:cockpit && npm test && npm run build
         working-directory: frontend
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
