@@ -398,7 +398,7 @@ export function ReportScreen({
         <section
           className="inspection"
           id="inspection"
-          aria-label="Finding inspection"
+          aria-labelledby="finding-title"
           ref={inspectionRef}
           tabIndex={-1}
         >

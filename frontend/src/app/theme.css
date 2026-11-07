@@ -1323,11 +1323,14 @@ main {
   font-size: 13px;
 }
 .app-primary-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
   color: var(--ink);
   text-decoration: none;
   font-weight: 550;
   border-bottom: 2px solid transparent;
-  padding: 7px 0 5px;
+  padding: 7px 4px 5px;
 }
 .app-primary-nav a[aria-current='page'] {
   border-bottom-color: var(--ink);
@@ -1372,6 +1375,10 @@ main {
   margin: 0 12px 0 0;
 }
 .page-heading-review > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 5px 6px;
   font-size: 12px;
 }
 .page-heading-review > p:last-child {
