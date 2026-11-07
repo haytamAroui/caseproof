@@ -1229,31 +1229,87 @@ main {
 }
 
 /* Bounded, static style map for interactive pane geometry. No JSX inline styles. */
-.review-layout[data-queue-width='240'] { --queue-width: 240px; }
-.review-layout[data-queue-width='250'] { --queue-width: 250px; }
-.review-layout[data-queue-width='260'] { --queue-width: 260px; }
-.review-layout[data-queue-width='270'] { --queue-width: 270px; }
-.review-layout[data-queue-width='280'] { --queue-width: 280px; }
-.review-layout[data-queue-width='290'] { --queue-width: 290px; }
-.review-layout[data-queue-width='300'] { --queue-width: 300px; }
-.review-layout[data-queue-width='310'] { --queue-width: 310px; }
-.review-layout[data-queue-width='320'] { --queue-width: 320px; }
-.review-layout[data-queue-width='330'] { --queue-width: 330px; }
-.review-layout[data-queue-width='340'] { --queue-width: 340px; }
-.review-layout[data-queue-width='350'] { --queue-width: 350px; }
-.review-layout[data-queue-width='360'] { --queue-width: 360px; }
-.review-layout[data-queue-width='370'] { --queue-width: 370px; }
-.review-layout[data-queue-width='380'] { --queue-width: 380px; }
-.review-layout[data-queue-width='390'] { --queue-width: 390px; }
-.review-layout[data-queue-width='400'] { --queue-width: 400px; }
-.review-layout[data-queue-width='410'] { --queue-width: 410px; }
-.review-layout[data-queue-width='420'] { --queue-width: 420px; }
-.cockpit-reader .cockpit-inspection[data-draft-width='30'] { --draft-panel-width: 30%; }
-.cockpit-reader .cockpit-inspection[data-draft-width='35'] { --draft-panel-width: 35%; }
-.cockpit-reader .cockpit-inspection[data-draft-width='40'] { --draft-panel-width: 40%; }
-.cockpit-reader .cockpit-inspection[data-draft-width='45'] { --draft-panel-width: 45%; }
-.cockpit-reader .cockpit-inspection[data-draft-width='50'] { --draft-panel-width: 50%; }
-.cockpit-reader .cockpit-inspection[data-draft-width='55'] { --draft-panel-width: 55%; }
-.cockpit-reader .cockpit-inspection[data-draft-width='60'] { --draft-panel-width: 60%; }
-.cockpit-reader .cockpit-inspection[data-draft-width='65'] { --draft-panel-width: 65%; }
-.cockpit-reader .cockpit-inspection[data-draft-width='70'] { --draft-panel-width: 70%; }
+.review-layout[data-queue-width='240'] {
+  --queue-width: 240px;
+}
+.review-layout[data-queue-width='250'] {
+  --queue-width: 250px;
+}
+.review-layout[data-queue-width='260'] {
+  --queue-width: 260px;
+}
+.review-layout[data-queue-width='270'] {
+  --queue-width: 270px;
+}
+.review-layout[data-queue-width='280'] {
+  --queue-width: 280px;
+}
+.review-layout[data-queue-width='290'] {
+  --queue-width: 290px;
+}
+.review-layout[data-queue-width='300'] {
+  --queue-width: 300px;
+}
+.review-layout[data-queue-width='310'] {
+  --queue-width: 310px;
+}
+.review-layout[data-queue-width='320'] {
+  --queue-width: 320px;
+}
+.review-layout[data-queue-width='330'] {
+  --queue-width: 330px;
+}
+.review-layout[data-queue-width='340'] {
+  --queue-width: 340px;
+}
+.review-layout[data-queue-width='350'] {
+  --queue-width: 350px;
+}
+.review-layout[data-queue-width='360'] {
+  --queue-width: 360px;
+}
+.review-layout[data-queue-width='370'] {
+  --queue-width: 370px;
+}
+.review-layout[data-queue-width='380'] {
+  --queue-width: 380px;
+}
+.review-layout[data-queue-width='390'] {
+  --queue-width: 390px;
+}
+.review-layout[data-queue-width='400'] {
+  --queue-width: 400px;
+}
+.review-layout[data-queue-width='410'] {
+  --queue-width: 410px;
+}
+.review-layout[data-queue-width='420'] {
+  --queue-width: 420px;
+}
+.cockpit-reader .cockpit-inspection[data-draft-width='30'] {
+  --draft-panel-width: 30%;
+}
+.cockpit-reader .cockpit-inspection[data-draft-width='35'] {
+  --draft-panel-width: 35%;
+}
+.cockpit-reader .cockpit-inspection[data-draft-width='40'] {
+  --draft-panel-width: 40%;
+}
+.cockpit-reader .cockpit-inspection[data-draft-width='45'] {
+  --draft-panel-width: 45%;
+}
+.cockpit-reader .cockpit-inspection[data-draft-width='50'] {
+  --draft-panel-width: 50%;
+}
+.cockpit-reader .cockpit-inspection[data-draft-width='55'] {
+  --draft-panel-width: 55%;
+}
+.cockpit-reader .cockpit-inspection[data-draft-width='60'] {
+  --draft-panel-width: 60%;
+}
+.cockpit-reader .cockpit-inspection[data-draft-width='65'] {
+  --draft-panel-width: 65%;
+}
+.cockpit-reader .cockpit-inspection[data-draft-width='70'] {
+  --draft-panel-width: 70%;
+}
