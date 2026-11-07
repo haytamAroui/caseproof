@@ -4,6 +4,7 @@ No labels, identities, signatures or elapsed time are independently authenticate
 by this module. Real lawyer accuracy requires separately adjudicated original
 evidence, actual human submissions, approved rights and trial governance.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -54,8 +55,7 @@ def validate_cases(cases: list[dict[str, Any]]) -> None:
         _require(item.get("language") in {"nl", "fr"}, "only NL/FR cases supported")
         _bounded(item.get("source_version_id"), "source_version_id", 200)
         _require(
-            isinstance(item.get("source_sha256"), str)
-            and bool(SHA256.fullmatch(item["source_sha256"])),
+            isinstance(item.get("source_sha256"), str) and bool(SHA256.fullmatch(item["source_sha256"])),
             "original source sha256 required",
         )
         _require(
@@ -109,52 +109,65 @@ def make_blinded_packets(
             for case in order:
                 alias = "CASE-" + _digest(seed, "case", case["case_id"])[:14]
                 assignment_id = "ASN-" + _digest(seed, "assignment", rid, case["case_id"])[:18]
-                assignments.append({
-                    "assignment_id": assignment_id,
-                    "case_id": case["case_id"],
-                    "case_ref": alias,
+                assignments.append(
+                    {
+                        "assignment_id": assignment_id,
+                        "case_id": case["case_id"],
+                        "case_ref": alias,
+                        "reviewer_id": rid,
+                        "condition": condition,
+                        "source_version_id": case["source_version_id"],
+                        "source_sha256": case["source_sha256"],
+                        "physical_pdf_page": case["physical_pdf_page"],
+                    }
+                )
+                shown.append(
+                    {
+                        "assignment_id": assignment_id,
+                        "case_ref": alias,
+                        "language": case["language"],
+                        "source_version_id": case["source_version_id"],
+                        "source_sha256": case["source_sha256"],
+                        "physical_pdf_page": case["physical_pdf_page"],
+                        "source_pdf": case["source_pdf"],
+                        "draft_claim": case["draft_claim"],
+                        "anchored_passage": case["anchored_passage"],
+                        "context_before": case["context_before"],
+                        "context_after": case["context_after"],
+                        "guarded_term_warnings": (
+                            [{"kind": w["kind"], "term": w["term"]} for w in case["warnings"]]
+                            if condition == "guarded_term_warnings"
+                            else []
+                        ),
+                        "guard_notice": (
+                            "Lexical warnings only: no automatic support or contradiction determination"
+                            if condition == "guarded_term_warnings"
+                            else None
+                        ),
+                    }
+                )
+            packets.append(
+                {
+                    "schema": PACKET_SCHEMA,
                     "reviewer_id": rid,
                     "condition": condition,
-                    "source_version_id": case["source_version_id"],
-                    "source_sha256": case["source_sha256"],
-                    "physical_pdf_page": case["physical_pdf_page"],
-                })
-                shown.append({
-                    "assignment_id": assignment_id,
-                    "case_ref": alias,
-                    "language": case["language"],
-                    "source_version_id": case["source_version_id"],
-                    "source_sha256": case["source_sha256"],
-                    "physical_pdf_page": case["physical_pdf_page"],
-                    "source_pdf": case["source_pdf"],
-                    "draft_claim": case["draft_claim"],
-                    "anchored_passage": case["anchored_passage"],
-                    "context_before": case["context_before"],
-                    "context_after": case["context_after"],
-                    "guarded_term_warnings": (
-                        [{"kind": w["kind"], "term": w["term"]} for w in case["warnings"]]
-                        if condition == "guarded_term_warnings" else []
-                    ),
-                    "guard_notice": (
-                        "Lexical warnings only: no automatic support or contradiction determination"
-                        if condition == "guarded_term_warnings" else None
-                    ),
-                })
-            packets.append({
-                "schema": PACKET_SCHEMA,
-                "reviewer_id": rid,
-                "condition": condition,
-                "status": "AWAITING_REAL_HUMAN_DECISIONS",
-                "source_inspection_required": True,
-                "cases": shown,
-            })
+                    "status": "AWAITING_REAL_HUMAN_DECISIONS",
+                    "source_inspection_required": True,
+                    "cases": shown,
+                }
+            )
     # If a language only has one allocated arm, disallow a causal comparison.
     coverage: dict[str, dict[str, int]] = {}
     for lang in {"nl", "fr"}:
         if lang in {c["language"] for c in cases}:
             coverage[lang] = {
-                arm: len({a["reviewer_id"] for a in assignments
-                          if a["condition"] == arm and cases_by_id[a["case_id"]]["language"] == lang})
+                arm: len(
+                    {
+                        a["reviewer_id"]
+                        for a in assignments
+                        if a["condition"] == arm and cases_by_id[a["case_id"]]["language"] == lang
+                    }
+                )
                 for arm in CONDITIONS
             }
     ready = bool(coverage) and all(all(n >= 2 for n in arms.values()) for arms in coverage.values())
@@ -245,12 +258,19 @@ def score_completed_trial(
         _require(aid in expected and aid not in seen, "duplicate or unassigned decision")
         seen.add(aid)
         assignment = expected[aid]
-        for key in ("reviewer_id", "case_ref", "condition", "source_version_id",
-                    "source_sha256", "physical_pdf_page"):
+        for key in (
+            "reviewer_id",
+            "case_ref",
+            "condition",
+            "source_version_id",
+            "source_sha256",
+            "physical_pdf_page",
+        ):
             _require(row.get(key) == assignment[key], f"decision {key} mismatch")
         _require(row.get("decision") in DECISIONS, "no human decision")
-        _require(type(row.get("elapsed_ms")) is int
-                 and 100 <= row["elapsed_ms"] <= 3_600_000, "invalid timing")
+        _require(
+            type(row.get("elapsed_ms")) is int and 100 <= row["elapsed_ms"] <= 3_600_000, "invalid timing"
+        )
         _require(row.get("inspected_original") is True, "original source inspection not attested")
         _bounded(row.get("rationale"), "reviewer justification", 2000)
         confidence = row.get("confidence")
@@ -275,11 +295,11 @@ def score_completed_trial(
         for row, _gold_state in sample:
             by_case[expected[row["assignment_id"]]["case_id"]].append(row["decision"])
         agreement_pairs = [
-            left == right for decisions in by_case.values()
+            left == right
+            for decisions in by_case.values()
             for left, right in itertools.combinations(decisions, 2)
         ]
-        helpful = [d["warning_helpful"] for d, _ in sample
-                   if d["warning_helpful"] is not None]
+        helpful = [d["warning_helpful"] for d, _ in sample if d["warning_helpful"] is not None]
         result[arm] = {
             "decisions": len(sample),
             "unique_reviewers": len({d["reviewer_id"] for d, _ in sample}),
@@ -288,21 +308,15 @@ def score_completed_trial(
             "false_confirmation_rate": len(false) / len(unsupported) if unsupported else None,
             "missed_contradictions": len(missed),
             "contradictions_reviewed": len(contradictions),
-            "missed_contradiction_rate": (
-                len(missed) / len(contradictions) if contradictions else None
-            ),
-            "median_seconds_per_decision": statistics.median(
-                d["elapsed_ms"] / 1000 for d, _ in sample
-            ),
+            "missed_contradiction_rate": (len(missed) / len(contradictions) if contradictions else None),
+            "median_seconds_per_decision": statistics.median(d["elapsed_ms"] / 1000 for d, _ in sample),
             "exact_decision_agreement_pairs": sum(agreement_pairs),
             "total_decision_agreement_pairs": len(agreement_pairs),
             "exact_reviewer_agreement": (
                 sum(agreement_pairs) / len(agreement_pairs) if agreement_pairs else None
             ),
             "warning_helpful_responses": len(helpful),
-            "warning_helpful_share": (
-                sum(helpful) / len(helpful) if helpful else None
-            ),
+            "warning_helpful_share": (sum(helpful) / len(helpful) if helpful else None),
             "false_supported_mean_confidence": (
                 statistics.mean(d["confidence"] for d, _ in false) if false else None
             ),

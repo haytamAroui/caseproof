@@ -1,4 +1,5 @@
 """Real locally-generated PDF bytes for the P1 benchmark preparation boundary."""
+
 from __future__ import annotations
 
 import hashlib
@@ -50,8 +51,10 @@ def test_prepare_checks_original_pdf_sha_and_page_and_separates_private_mapping(
     case_file.write_text(json.dumps({"cases": case_manifest(digest)}))
     reviewer_file = tmp_path / "reviewers.json"
     reviewers = {
-        "reviewer-alpha": ["nl"], "reviewer-bravo": ["nl"],
-        "reviewer-charlie": ["nl"], "reviewer-delta": ["nl"],
+        "reviewer-alpha": ["nl"],
+        "reviewer-bravo": ["nl"],
+        "reviewer-charlie": ["nl"],
+        "reviewer-delta": ["nl"],
     }
     reviewer_file.write_text(json.dumps({"reviewer_languages": reviewers}))
     out = tmp_path / "blinded"
@@ -85,8 +88,11 @@ def test_prepare_checks_original_pdf_sha_and_page_and_separates_private_mapping(
         assert row["decisions"][0]["decision"] is None
     with pytest.raises(FileExistsError):
         prepare(
-            cases_path=case_file, reviewers_path=reviewer_file,
-            source_root=original_root, seed="same-seed", destination=out,
+            cases_path=case_file,
+            reviewers_path=reviewer_file,
+            source_root=original_root,
+            seed="same-seed",
+            destination=out,
         )
 
 
@@ -114,9 +120,13 @@ def test_empty_template_cannot_be_scored_as_a_real_trial(tmp_path: Path) -> None
     inputs.mkdir()
     (inputs / "cases.json").write_text(json.dumps({"cases": case_manifest(digest)}))
     (inputs / "reviewers.json").write_text(
-        json.dumps({"reviewer_languages": {
-            rid: ["nl"] for rid in ("researcher-a", "researcher-b", "researcher-c", "researcher-d")
-        }}),
+        json.dumps(
+            {
+                "reviewer_languages": {
+                    rid: ["nl"] for rid in ("researcher-a", "researcher-b", "researcher-c", "researcher-d")
+                }
+            }
+        ),
     )
     out = tmp_path / "out"
     prepare(

@@ -4,6 +4,7 @@ No network calls, no applicant identification, no auto-generated legal labels.
 Evidence is read from a bounded, rights-cleared local fixture directory.
 Never use unreviewed real client data or claim this authenticates reviewers.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -128,8 +129,7 @@ def prepare(
         "schema": "caseproof-p1-preparation-receipt-v1",
         "participants": len(packets),
         "assignments": len(manifest["assignments"]),
-        "balanced_for_descriptive_arm_comparison":
-            manifest["balanced_for_descriptive_arm_comparison"],
+        "balanced_for_descriptive_arm_comparison": manifest["balanced_for_descriptive_arm_comparison"],
         "source_pdf_digest_and_page_verified": True,
         "human_results_collected": False,
         "gold_labels_verified": False,
@@ -172,8 +172,11 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "prepare":
         result = prepare(
-            cases_path=args.cases, reviewers_path=args.reviewers,
-            source_root=args.source_root, seed=args.seed, destination=args.out,
+            cases_path=args.cases,
+            reviewers_path=args.reviewers,
+            source_root=args.source_root,
+            seed=args.seed,
+            destination=args.out,
         )
     else:
         result = score(
