@@ -803,21 +803,38 @@ test('Storyteller cockpit exposes workflow, keyboard-resizable panes and mobile 
     `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
   );
   await page.getByRole('button', { name: 'Connect session' }).click();
-  await expect(page.getByRole('navigation', { name: 'Matter workflow' })).toBeVisible();
-  await expect(page.getByText('3–4 · Verify and review')).toHaveAttribute('aria-current', 'step');
+  await expect(
+    page.getByRole('navigation', { name: 'Matter workflow' }),
+  ).toBeVisible();
+  await expect(page.getByText('3–4 · Verify and review')).toHaveAttribute(
+    'aria-current',
+    'step',
+  );
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  const width = page.getByRole('slider', { name: 'Draft panel width percentage' });
+  const width = page.getByRole('slider', {
+    name: 'Draft panel width percentage',
+  });
   await expect(width).toHaveValue('50');
   await width.focus();
   await page.keyboard.press('ArrowRight');
   await expect(width).toHaveValue('55');
-  await expect(page.locator('.cockpit-inspection')).toHaveCSS('--draft-panel-width', '55%');
+  await expect(page.locator('.cockpit-inspection')).toHaveCSS(
+    '--draft-panel-width',
+    '55%',
+  );
   await page.getByRole('button', { name: 'Equal panels' }).click();
   await expect(width).toHaveValue('50');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(width).toBeHidden();
-  await expect(page.locator('.cockpit-inspection')).toHaveCSS('grid-template-columns', /.+/);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.locator('.cockpit-inspection')).toHaveCSS(
+    'grid-template-columns',
+    /.+/,
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });
 
 test('Storyteller reading cockpit honors reduced motion and remains accessible in dark mode', async ({
@@ -848,7 +865,9 @@ test('Storyteller focus modes preserve evidence state and keyboard accessibility
   const source = page.locator('.cockpit-evidence');
   await expect(source).toBeVisible();
   await page.getByRole('button', { name: 'Draft focus' }).click();
-  await expect(page.getByRole('button', { name: 'Draft focus' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByRole('button', { name: 'Draft focus' }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(source).toBeHidden();
   await page.getByRole('button', { name: 'Source focus' }).click();
   await expect(source).toBeVisible();
@@ -867,7 +886,9 @@ test('Storyteller visual acceptance captures desktop and mobile reading modes', 
     `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
   );
   await page.getByRole('button', { name: 'Connect session' }).click();
-  await expect(page.getByRole('navigation', { name: 'Matter workflow' })).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Matter workflow' }),
+  ).toBeVisible();
   await page.screenshot({
     path: 'test-results/storyteller-desktop-split.png',
     fullPage: true,
@@ -888,6 +909,8 @@ test('Storyteller visual acceptance captures desktop and mobile reading modes', 
     animations: 'disabled',
   });
   expect(
-    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
   ).toBe(true);
 });
