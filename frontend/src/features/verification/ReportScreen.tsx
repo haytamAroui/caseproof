@@ -628,7 +628,9 @@ function FindingInspection({
             : 'Source focus. Preserved original pixels remain the inspection authority.'}
       </motion.p>
       <div className="cockpit-resize-controls" hidden={readingMode !== 'split'}>
-        <label htmlFor={widthControlId}>Source panel width: {sourceWidth}px</label>
+        <label htmlFor={widthControlId}>
+          Source panel width: {sourceWidth}px
+        </label>
         <input
           id={widthControlId}
           type="range"

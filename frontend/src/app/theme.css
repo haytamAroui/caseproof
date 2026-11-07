@@ -1293,7 +1293,6 @@ main {
   --queue-width: 420px;
 }
 
-
 /*
  * Storyteller reference parity: 300px findings / flexible manuscript /
  * 400px original evidence at desktop. These are PRESENTATION dimensions only.
@@ -1306,7 +1305,7 @@ main {
 }
 .brand {
   font-size: 17px;
-  letter-spacing: -.04em;
+  letter-spacing: -0.04em;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -1334,10 +1333,20 @@ main {
   border-bottom-color: var(--ink);
   font-weight: 700;
 }
-.app-primary-nav a:hover { border-bottom-color: var(--focus); }
-.app-primary-divider, .app-primary-unavailable { color: var(--muted); }
-.app-primary-unavailable { opacity: .65; }
-.app-primary-nav :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.app-primary-nav a:hover {
+  border-bottom-color: var(--focus);
+}
+.app-primary-divider,
+.app-primary-unavailable {
+  color: var(--muted);
+}
+.app-primary-unavailable {
+  opacity: 0.65;
+}
+.app-primary-nav :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
 
 main {
   max-width: none;
@@ -1359,10 +1368,12 @@ main {
 .page-heading-review > h1 {
   font-size: 24px;
   line-height: 1.2;
-  letter-spacing: -.035em;
+  letter-spacing: -0.035em;
   margin: 0 12px 0 0;
 }
-.page-heading-review > a { font-size: 12px; }
+.page-heading-review > a {
+  font-size: 12px;
+}
 .page-heading-review > p:last-child {
   flex-basis: 100%;
   font-size: 12px;
@@ -1378,7 +1389,10 @@ main {
 
 .review-layout {
   margin-top: 14px;
-  grid-template-columns: minmax(0, var(--queue-width, 300px)) 10px minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--queue-width, 300px)) 10px minmax(
+      0,
+      1fr
+    );
   min-height: min(760px, 82dvh);
   border-radius: 10px;
   overflow: clip;
@@ -1391,7 +1405,7 @@ main {
 .review-layout .queue > h2 {
   margin: 0 0 12px;
   font-size: 14px;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   font-weight: 700;
 }
@@ -1401,8 +1415,14 @@ main {
   color: var(--muted);
   margin: 0 0 8px;
 }
-.review-layout .queue .catalog-actions { margin: 14px 0; gap: 8px; }
-.review-layout .queue .catalog-actions .button { min-height: 38px; padding: 6px 11px; }
+.review-layout .queue .catalog-actions {
+  margin: 14px 0;
+  gap: 8px;
+}
+.review-layout .queue .catalog-actions .button {
+  min-height: 38px;
+  padding: 6px 11px;
+}
 .review-layout .queue .finding {
   position: relative;
   min-height: 62px;
@@ -1418,7 +1438,9 @@ main {
 .review-layout .queue .finding-attention {
   border-left-color: var(--warning);
 }
-.review-layout .queue .finding-attention small { color: var(--warning); }
+.review-layout .queue .finding-attention small {
+  color: var(--warning);
+}
 .review-layout .queue .finding[aria-current='true'] {
   background: #fff;
   border-color: var(--ink);
@@ -1429,7 +1451,9 @@ main {
   font-weight: 650;
   margin-top: 4px;
 }
-.review-layout .queue .finding :focus-visible { outline-color: var(--focus); }
+.review-layout .queue .finding :focus-visible {
+  outline-color: var(--focus);
+}
 .review-layout .queue .finding .cockpit-selected-outline {
   position: absolute;
   inset: -1px;
@@ -1441,8 +1465,14 @@ main {
   width: 10px;
   background: var(--paper-raised);
 }
-.review-layout .inspection { padding: 0; min-width: 0; background: var(--surface); }
-.cockpit-reader { margin: 0; }
+.review-layout .inspection {
+  padding: 0;
+  min-width: 0;
+  background: var(--surface);
+}
+.cockpit-reader {
+  margin: 0;
+}
 .cockpit-view-switch {
   padding: 12px 20px 0;
   margin-bottom: 0;
@@ -1460,10 +1490,15 @@ main {
   padding: 6px 20px 10px;
   font-size: 12px;
 }
-.cockpit-resize-controls input[type='range'] { width: 160px; }
+.cockpit-resize-controls input[type='range'] {
+  width: 160px;
+}
 .cockpit-reader .cockpit-inspection {
   display: grid;
-  grid-template-columns: minmax(0,1fr) 12px minmax(0,var(--source-panel-width,400px));
+  grid-template-columns: minmax(0, 1fr) 12px minmax(
+      0,
+      var(--source-panel-width, 400px)
+    );
   gap: 0;
   align-items: stretch;
   border-top: 1px solid var(--line);
@@ -1478,10 +1513,13 @@ main {
   min-width: 0;
   background: var(--surface);
 }
-.cockpit-reader .cockpit-draft-splitter { width: 12px; min-height: 550px; }
+.cockpit-reader .cockpit-draft-splitter {
+  width: 12px;
+  min-height: 550px;
+}
 .cockpit-reference-dimensions {
   display: grid;
-  grid-template-columns: repeat(4,minmax(0,1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 7px;
   margin: 0 0 16px;
 }
@@ -1491,8 +1529,14 @@ main {
   border-radius: 6px;
   background: var(--surface);
 }
-.cockpit-reference-dimensions dt { font-size: 10px; line-height: 1.35; }
-.cockpit-reference-dimensions dd { font-size: 11px; overflow-wrap: anywhere; }
+.cockpit-reference-dimensions dt {
+  font-size: 10px;
+  line-height: 1.35;
+}
+.cockpit-reference-dimensions dd {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
 .cockpit-draft > .eyebrow {
   font-size: 11px;
   margin: 0 0 6px;
@@ -1500,7 +1544,7 @@ main {
 .cockpit-draft > h2 {
   margin: 0 0 12px;
   font-size: 19px;
-  letter-spacing: -.02em;
+  letter-spacing: -0.02em;
 }
 .cockpit-pane-heading {
   padding-bottom: 10px;
@@ -1510,10 +1554,12 @@ main {
   margin: 0;
   font-size: 12px;
   font-weight: 750;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.cockpit-pane-heading span { font-size: 11px; }
+.cockpit-pane-heading span {
+  font-size: 11px;
+}
 .cockpit-draft .draft-context[aria-label='Read-only draft reference'] {
   max-width: 640px;
   min-height: 360px;
@@ -1547,9 +1593,15 @@ main {
   padding: 16px 4px 0;
   background: transparent;
 }
-.cockpit-evidence .viewer-scroll { background: var(--paper-raised); }
-.cockpit-evidence .source-viewer { margin: 0; }
-.cockpit-evidence .source-viewer .viewer-controls { gap: 7px; }
+.cockpit-evidence .viewer-scroll {
+  background: var(--paper-raised);
+}
+.cockpit-evidence .source-viewer {
+  margin: 0;
+}
+.cockpit-evidence .source-viewer .viewer-controls {
+  gap: 7px;
+}
 .inspection > [aria-label='Verification and processing coverage'] {
   margin: 0;
   padding: 20px;
@@ -1557,75 +1609,171 @@ main {
   border: 0;
   border-top: 1px solid var(--line);
 }
-.inspection > .small { padding: 0 20px 16px; }
-.release-confirm-dialog { background: var(--surface); }
-.notice.error { background: #fdecec; color: var(--danger); }
-.cockpit-reader .cockpit-inspection[data-source-width='320'] { --source-panel-width: 320px; }
-.cockpit-reader .cockpit-inspection[data-source-width='330'] { --source-panel-width: 330px; }
-.cockpit-reader .cockpit-inspection[data-source-width='340'] { --source-panel-width: 340px; }
-.cockpit-reader .cockpit-inspection[data-source-width='350'] { --source-panel-width: 350px; }
-.cockpit-reader .cockpit-inspection[data-source-width='360'] { --source-panel-width: 360px; }
-.cockpit-reader .cockpit-inspection[data-source-width='370'] { --source-panel-width: 370px; }
-.cockpit-reader .cockpit-inspection[data-source-width='380'] { --source-panel-width: 380px; }
-.cockpit-reader .cockpit-inspection[data-source-width='390'] { --source-panel-width: 390px; }
-.cockpit-reader .cockpit-inspection[data-source-width='400'] { --source-panel-width: 400px; }
-.cockpit-reader .cockpit-inspection[data-source-width='410'] { --source-panel-width: 410px; }
-.cockpit-reader .cockpit-inspection[data-source-width='420'] { --source-panel-width: 420px; }
-.cockpit-reader .cockpit-inspection[data-source-width='430'] { --source-panel-width: 430px; }
-.cockpit-reader .cockpit-inspection[data-source-width='440'] { --source-panel-width: 440px; }
-.cockpit-reader .cockpit-inspection[data-source-width='450'] { --source-panel-width: 450px; }
-.cockpit-reader .cockpit-inspection[data-source-width='460'] { --source-panel-width: 460px; }
-.cockpit-reader .cockpit-inspection[data-source-width='470'] { --source-panel-width: 470px; }
-.cockpit-reader .cockpit-inspection[data-source-width='480'] { --source-panel-width: 480px; }
-.cockpit-reader .cockpit-inspection[data-source-width='490'] { --source-panel-width: 490px; }
-.cockpit-reader .cockpit-inspection[data-source-width='500'] { --source-panel-width: 500px; }
-.cockpit-reader .cockpit-inspection[data-source-width='510'] { --source-panel-width: 510px; }
-.cockpit-reader .cockpit-inspection[data-source-width='520'] { --source-panel-width: 520px; }
-.cockpit-reader .cockpit-inspection[data-source-width='530'] { --source-panel-width: 530px; }
-.cockpit-reader .cockpit-inspection[data-source-width='540'] { --source-panel-width: 540px; }
-.cockpit-reader .cockpit-inspection[data-source-width='550'] { --source-panel-width: 550px; }
-.cockpit-reader .cockpit-inspection[data-source-width='560'] { --source-panel-width: 560px; }
+.inspection > .small {
+  padding: 0 20px 16px;
+}
+.release-confirm-dialog {
+  background: var(--surface);
+}
+.notice.error {
+  background: #fdecec;
+  color: var(--danger);
+}
+.cockpit-reader .cockpit-inspection[data-source-width='320'] {
+  --source-panel-width: 320px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='330'] {
+  --source-panel-width: 330px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='340'] {
+  --source-panel-width: 340px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='350'] {
+  --source-panel-width: 350px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='360'] {
+  --source-panel-width: 360px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='370'] {
+  --source-panel-width: 370px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='380'] {
+  --source-panel-width: 380px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='390'] {
+  --source-panel-width: 390px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='400'] {
+  --source-panel-width: 400px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='410'] {
+  --source-panel-width: 410px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='420'] {
+  --source-panel-width: 420px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='430'] {
+  --source-panel-width: 430px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='440'] {
+  --source-panel-width: 440px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='450'] {
+  --source-panel-width: 450px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='460'] {
+  --source-panel-width: 460px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='470'] {
+  --source-panel-width: 470px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='480'] {
+  --source-panel-width: 480px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='490'] {
+  --source-panel-width: 490px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='500'] {
+  --source-panel-width: 500px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='510'] {
+  --source-panel-width: 510px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='520'] {
+  --source-panel-width: 520px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='530'] {
+  --source-panel-width: 530px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='540'] {
+  --source-panel-width: 540px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='550'] {
+  --source-panel-width: 550px;
+}
+.cockpit-reader .cockpit-inspection[data-source-width='560'] {
+  --source-panel-width: 560px;
+}
 
 /* Keep the reference three-column layout when the manuscript is readable. */
 @media (max-width: 1250px) {
   .cockpit-reader .cockpit-inspection.cockpit-mode-split {
-    grid-template-columns: minmax(0,1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .cockpit-reader .cockpit-mode-split .cockpit-draft {
     border-bottom: 1px solid var(--line);
     padding: 18px;
   }
-  .cockpit-reader .cockpit-mode-split .cockpit-evidence { padding: 18px; }
-  .cockpit-draft-splitter, .cockpit-resize-controls { display:none; }
-  .cockpit-reference-dimensions { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .cockpit-reader .cockpit-mode-split .cockpit-evidence {
+    padding: 18px;
+  }
+  .cockpit-draft-splitter,
+  .cockpit-resize-controls {
+    display: none;
+  }
+  .cockpit-reference-dimensions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 @media (max-width: 1050px) {
-  .review-layout { grid-template-columns:minmax(0,1fr); min-height:0; }
+  .review-layout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
   .review-layout .queue {
     position: static;
     max-height: none;
     padding: 16px;
     border-bottom: 1px solid var(--line);
   }
-  .review-layout .queue ul { max-height: 210px; overflow: auto; }
-  .review-layout .cockpit-queue-splitter { display:none; }
+  .review-layout .queue ul {
+    max-height: 210px;
+    overflow: auto;
+  }
+  .review-layout .cockpit-queue-splitter {
+    display: none;
+  }
 }
 @media (max-width: 760px) {
-  main { padding: 12px; }
-  .app-header { padding: 10px 12px; gap: 10px; }
-  .app-primary-nav { order: 3; flex: 0 0 100%; gap: 10px; }
-  .page-heading-review { gap: 8px 12px; }
-  .page-heading-review > h1 { font-size: 21px; }
-  .page-heading-review > a { font-size: 11px; }
+  main {
+    padding: 12px;
+  }
+  .app-header {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .app-primary-nav {
+    order: 3;
+    flex: 0 0 100%;
+    gap: 10px;
+  }
+  .page-heading-review {
+    gap: 8px 12px;
+  }
+  .page-heading-review > h1 {
+    font-size: 21px;
+  }
+  .page-heading-review > a {
+    font-size: 11px;
+  }
   .cockpit-draft .draft-context[aria-label='Read-only draft reference'] {
     padding: 24px 22px;
     font-size: 16px;
     min-height: 0;
   }
-  .cockpit-reference-dimensions { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .cockpit-draft,.cockpit-evidence { padding: 12px; }
-  .cockpit-view-switch { padding: 12px 12px 0; }
-  .cockpit-reading-summary { margin-inline: 12px; }
+  .cockpit-reference-dimensions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cockpit-draft,
+  .cockpit-evidence {
+    padding: 12px;
+  }
+  .cockpit-view-switch {
+    padding: 12px 12px 0;
+  }
+  .cockpit-reading-summary {
+    margin-inline: 12px;
+  }
 }
 @media (forced-colors: active) {
   .review-layout .queue .finding[aria-current='true'] {

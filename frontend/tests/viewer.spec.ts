@@ -899,7 +899,9 @@ test('Storyteller visual acceptance captures desktop and mobile reading modes', 
   expect((manuscriptBounds?.width ?? 0) > 450).toBe(true);
   await expect(page.locator('body')).toHaveCSS('font-size', '14px');
   await expect(
-    page.locator(".cockpit-draft .draft-context[aria-label='Read-only draft reference']"),
+    page.locator(
+      ".cockpit-draft .draft-context[aria-label='Read-only draft reference']",
+    ),
   ).toHaveCSS('font-size', '17px');
   await page.screenshot({
     path: 'test-results/storyteller-desktop-split.png',
