@@ -489,6 +489,14 @@ function ParaphraseGuardPanel({ finding }: { finding: FindingView }) {
             x !== null && typeof x === 'object' && !Array.isArray(x),
         )
     : [];
+  const candidateTerms = Array.isArray(guard.candidate_terms)
+    ? guard.candidate_terms
+        .slice(0, 24)
+        .filter(
+          (x): x is Record<string, unknown> =>
+            x !== null && typeof x === 'object' && !Array.isArray(x),
+        )
+    : [];
   const reasonCodes = Array.isArray(guard.reason_codes)
     ? guard.reason_codes
         .slice(0, 12)
@@ -537,9 +545,28 @@ function ParaphraseGuardPanel({ finding }: { finding: FindingView }) {
         </ul>
       ) : (
         <p>
-          No lexical discrepancy identified. This does not establish semantic
-          support.
+          {reasonCodes.length > 0
+            ? 'Guarded terms could not be compared reliably. Inspect the original page and adjoining evidence.'
+            : 'No lexical discrepancy identified. This does not establish semantic support.'}
         </p>
+      )}
+      {reasonCodes.length > 0 && candidateTerms.length > 0 && (
+        <details>
+          <summary>Unassessed guarded terms from the draft</summary>
+          <ul aria-label="Guarded terms requiring original source inspection">
+            {candidateTerms.map((item, index) =>
+              typeof item.kind === 'string' && typeof item.term === 'string' ? (
+                <li key={index}>
+                  {item.kind.replaceAll('_', ' ')}: {item.term.slice(0, 96)}
+                </li>
+              ) : null,
+            )}
+          </ul>
+          <p className="small">
+            These terms were extracted only from the draft, not confirmed
+            absent from any original exhibit.
+          </p>
+        </details>
       )}
       {reasonCodes.length > 0 && (
         <p className="small">

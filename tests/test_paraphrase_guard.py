@@ -179,6 +179,7 @@ def test_uncertain_or_wrong_version_evidence_abstains(
     result = check(draft, source, quote=quote, version=version, ocr=ocr, partial=partial)
     assert reason in result["reason_codes"]
     assert result["warnings"] == []
+    assert result["candidate_terms"]
     assert result["source_excerpt"] == ""
     assert result["anchor_basis"] == "unavailable"
     assert result["semantic_support"] == "not_assessed"
