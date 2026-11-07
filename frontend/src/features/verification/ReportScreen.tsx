@@ -9,7 +9,7 @@ import { coveragePages, coverageRegions } from './coverageRegions';
 import { quoteMatches } from './quoteComparison';
 import { CoverageSource } from './CoverageSource';
 import { OriginalDraftDownload } from './OriginalDraftDownload';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function ReportScreen({
@@ -537,8 +537,26 @@ function FindingInspection({
   onNext: (() => void) | undefined;
 }) {
   const [inspected, setInspected] = useState(false);
+  const [draftWidth, setDraftWidth] = useState(50);
   return (
-    <div className="cockpit-inspection">
+    <div className="cockpit-reader">
+      <div className="cockpit-resize-controls">
+        <label htmlFor="draft-panel-width">Draft panel width: {draftWidth}%</label>
+        <input
+          id="draft-panel-width"
+          type="range"
+          min={25}
+          max={75}
+          step={5}
+          value={draftWidth}
+          onChange={(event) => setDraftWidth(Number(event.target.value))}
+          aria-label="Draft panel width percentage"
+        />
+        <button type="button" className="button" onClick={() => setDraftWidth(50)}>
+          Equal panels
+        </button>
+      </div>
+      <div className="cockpit-inspection" style={{ '--draft-panel-width': `${draftWidth}%` } as CSSProperties}>
       <div className="cockpit-draft">{renderDraft?.(finding, historical)}</div>
       <div className="cockpit-evidence">
         {renderSource ? (
@@ -551,6 +569,7 @@ function FindingInspection({
         )}
         {renderReview?.(finding, historical, inspected, onNext)}
       </div>
+    </div>
     </div>
   );
 }
