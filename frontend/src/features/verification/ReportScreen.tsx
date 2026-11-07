@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
 import { useSession } from '../../shared/session';
@@ -551,10 +551,16 @@ function FindingInspection({
 }) {
   const [inspected, setInspected] = useState(false);
   const [draftWidth, setDraftWidth] = useState(50);
-  const widthControlId = `draft-panel-width-${finding.reference_id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const [readingMode, setReadingMode] = useState<'split' | 'draft' | 'source'>('split');
+  const widthControlId = useId();
   return (
     <div className="cockpit-reader">
-      <div className="cockpit-resize-controls">
+      <div className="cockpit-view-switch" role="group" aria-label="Reading layout">
+        <button type="button" className="button" aria-pressed={readingMode === 'split'} onClick={() => setReadingMode('split')}>Split view</button>
+        <button type="button" className="button" aria-pressed={readingMode === 'draft'} onClick={() => setReadingMode('draft')}>Draft focus</button>
+        <button type="button" className="button" aria-pressed={readingMode === 'source'} onClick={() => setReadingMode('source')}>Source focus</button>
+      </div>
+      <div className="cockpit-resize-controls" hidden={readingMode !== 'split'}>
         <label htmlFor={widthControlId}>
           Draft panel width: {draftWidth}%
         </label>
@@ -577,7 +583,7 @@ function FindingInspection({
         </button>
       </div>
       <div
-        className="cockpit-inspection"
+        className={`cockpit-inspection cockpit-mode-${readingMode}`}
         style={{ '--draft-panel-width': `${draftWidth}%` } as CSSProperties}
       >
         <div className="cockpit-draft">{renderDraft?.(finding, historical)}</div>
