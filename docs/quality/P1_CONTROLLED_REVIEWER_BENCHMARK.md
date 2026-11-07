@@ -174,9 +174,16 @@ human ledger decision and the frozen signed snapshot's source version, original
 PDF SHA-256, physical page and explicit inspected region IDs. This is included
 in authorized report projections (JSON and Markdown) with an explicit notice
 that it is **NOT** a new durable, jointly signed review receipt. The existing
-review RPC and SQL ledger remain unchanged. Missing, ambiguous or mismatched
-source versions, source digests and region IDs yield NOT_SOURCE_BOUND. A
-uniquely matched derived-text quotation may have a separately labelled
+review RPC and SQL ledger remain unchanged. Instead of silently changing
+canonical report or signed export bytes (or changing the MCP adapter's exact
+canonical parity), the projection is available only on the authenticated,
+snapshot-scoped **GET** route:
+`/v2/matters/{case_id}/briefs/{brief_id}/dossier/snapshots/{snapshot_hash}/review-source-bindings`.
+The caller must already be allowed to reopen that exact snapshot and read
+the existing review ledger. The route is not yet wired into the production
+reviewer UI. Missing, ambiguous or mismatched source versions, source digests
+and region IDs yield NOT_SOURCE_BOUND; unknown PDF page count also abstains.
+A uniquely matched derived-text quotation may have a separately labelled
 **derived-text quote hash**; this is never a PDF crop or visual proof.
 
 Durable, source-position-signed review receipts with verified reviewer

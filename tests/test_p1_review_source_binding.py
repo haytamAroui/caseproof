@@ -13,7 +13,10 @@ from application.litigation.review_source_binding import (
     SOURCE_BINDING_SCHEMA,
     project_review_source_bindings,
 )
-from apps.api.dossier_journey import read_dossier_report
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from apps.api.dossier_journey import create_dossier_router, read_dossier_report
 
 SNAPSHOT = "a" * 64
 ORIGINAL = "b" * 64
@@ -151,7 +154,7 @@ def test_orphan_replay_and_cross_snapshot_fails_closed() -> None:
         project_review_source_bindings(report, [ledger_row()])
 
 
-def test_authorized_read_and_export_include_clear_unsigned_source_correspondence() -> None:
+def test_optional_authenticated_source_projection_preserves_canonical_export_bytes() -> None:
     class AuthorizedMock:
         def __init__(self) -> None:
             self.report = frozen_report()
@@ -184,15 +187,29 @@ def test_authorized_read_and_export_include_clear_unsigned_source_correspondence
         decisions=True,
     )
     assert original == b"synthetic-docx-bytes"
-    assert report["review_source_bindings"][0]["binding_state"] == (
+    assert "review_source_bindings" not in report
+    assert "review_source_bindings" not in store.report
+    markdown = render_dossier_export(report, "markdown")
+    assert "Read-only reviewer-to-source bindings" not in markdown
+    serialized = render_dossier_export(report, "json")
+    assert '"review_source_bindings"' not in serialized
+
+    app = FastAPI()
+    app.include_router(create_dossier_router(store))
+    with TestClient(app) as client:
+        response = client.get(
+            f"/v2/matters/case-synthetic/briefs/brief-synthetic/dossier/"
+            f"snapshots/{SNAPSHOT}/review-source-bindings",
+            headers={"Authorization": "Bearer synthetic-signed-bearer"},
+        )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema"] == "caseproof-review-source-bindings-view-v1"
+    assert payload["signed_as_one_record"] is False
+    assert payload["bindings"][0]["binding_state"] == (
         "SOURCE_VERSION_AND_REVIEW_REGIONS_CORRESPOND"
     )
-    assert "review_source_bindings" not in store.report  # never change frozen snapshot
-    markdown = render_dossier_export(report, "markdown")
-    assert "Read-only reviewer-to-source bindings (not signed review receipts)" in markdown
-    assert "signed_as_one_record" in markdown
-    serialized = render_dossier_export(report, "json")
-    assert '"review_source_bindings"' in serialized
+    assert payload["bindings"][0]["original_pdf_sha256"] == ORIGINAL
 
 
 def test_unknown_original_page_count_never_produces_positive_binding() -> None:
