@@ -100,7 +100,10 @@ def build_findings(
                     and 1 <= p["pdf_page"] <= source.get("page_count", 0)
                 ]
         targets = {p["pdf_page"] for p in mapped}
-        pdf_page = next(iter(targets)) if len(targets) == 1 else None
+        # Multiple mapping records are ambiguous even when they point to the same page.
+        # A single target alone is not evidence that the mapping is uniquely confirmed.
+        mapping_ambiguous = len(mapped) > 1
+        pdf_page = next(iter(targets)) if len(mapped) == 1 and len(targets) == 1 else None
         geometry = source.get("geometry", {}).get(str(pdf_page)) if source and pdf_page else None
         image_page = bool(source and pdf_page and pdf_page in source.get("image_only_pages", []))
         image_page = image_page or bool(source and source.get("image_only"))
@@ -130,10 +133,16 @@ def build_findings(
                 "source_id": source["document_id"] if source else None,
                 "version_id": source["version_id"] if source else None,
                 "source_sha256": source["sha256"] if source else None,
-                "page_mapping": "mapped" if pdf_page else "conflicting" if len(targets) > 1 else "unmapped",
+                "page_mapping": "mapped" if pdf_page else "conflicting" if mapping_ambiguous else "unmapped",
                 "pdf_page": pdf_page,
                 "page_spaces": page_spaces,
-                "page_mapping_reason": "page_sequence_requires_review" if unsupported_sequence else None,
+                "page_mapping_reason": (
+                    "page_sequence_requires_review"
+                    if unsupported_sequence
+                    else "duplicate_or_conflicting_page_mapping_requires_review"
+                    if mapping_ambiguous
+                    else None
+                ),
                 "printed_page": requested["label"]
                 if pdf_page and requested and requested["space"] == "printed"
                 else None,
