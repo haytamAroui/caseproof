@@ -90,7 +90,8 @@ def build_findings(
             }
         mapped = []
         if (
-            source_pinned
+            source is not None
+            and source_pinned
             and entry
             and requested
             and not unsupported_sequence
