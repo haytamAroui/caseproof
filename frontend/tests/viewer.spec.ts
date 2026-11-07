@@ -795,3 +795,26 @@ test('OCR word positions abstain when the PDF CropBox does not match provenance'
     page.getByText('Some OCR positions cannot be aligned', { exact: false }),
   ).toBeVisible();
 });
+
+test('Storyteller cockpit exposes workflow, keyboard-resizable panes and mobile stacking', async ({
+  page,
+}) => {
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  await expect(page.getByRole('navigation', { name: 'Matter workflow' })).toBeVisible();
+  await expect(page.getByText('3–4 · Verify and review')).toHaveAttribute('aria-current', 'step');
+  const width = page.getByRole('slider', { name: 'Draft panel width percentage' });
+  await expect(width).toHaveValue('50');
+  await width.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(width).toHaveValue('55');
+  await expect(page.locator('.cockpit-inspection')).toHaveCSS('--draft-panel-width', '55%');
+  await page.getByRole('button', { name: 'Equal panels' }).click();
+  await expect(width).toHaveValue('50');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(width).toBeHidden();
+  await expect(page.locator('.cockpit-inspection')).toHaveCSS('grid-template-columns', /.+/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
