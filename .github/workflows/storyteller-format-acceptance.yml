@@ -7,8 +7,8 @@ on:
       - .github/workflows/storyteller-format-acceptance.yml
       - frontend/src/app/App.tsx
       - frontend/src/app/MatterJourney.tsx
-      - frontend/src/app/SplitHandle.tsx
-      - frontend/src/app/SplitHandle.test.ts
+      - frontend/src/shared/ui/SplitHandle.tsx
+      - frontend/src/shared/ui/SplitHandle.test.ts
       - frontend/src/app/theme.css
       - frontend/src/features/verification/ReportScreen.tsx
       - frontend/src/features/exports/ExportsScreen.tsx
@@ -36,8 +36,8 @@ jobs:
           npx prettier --write \
             src/app/App.tsx \
             src/app/MatterJourney.tsx \
-            src/app/SplitHandle.tsx \
-            src/app/SplitHandle.test.ts \
+            src/shared/ui/SplitHandle.tsx \
+            src/shared/ui/SplitHandle.test.ts \
             src/app/theme.css \
             src/features/verification/ReportScreen.tsx \
             src/features/exports/ExportsScreen.tsx \
@@ -51,7 +51,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add frontend/src/app/App.tsx frontend/src/app/MatterJourney.tsx \
-            frontend/src/app/SplitHandle.tsx frontend/src/app/SplitHandle.test.ts \
+            frontend/src/shared/ui/SplitHandle.tsx frontend/src/shared/ui/SplitHandle.test.ts \
             frontend/src/app/theme.css frontend/src/features/verification/ReportScreen.tsx \
             frontend/src/features/exports/ExportsScreen.tsx \
             frontend/src/features/exports/api.ts frontend/src/features/exports/api.test.ts \

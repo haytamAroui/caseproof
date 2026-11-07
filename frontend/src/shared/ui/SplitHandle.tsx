@@ -39,7 +39,7 @@ export function SplitHandle({
       unit === '%'
         ? ((clientX - rect.left) / rect.width) * 100
         : clientX - rect.left;
-    onChange(clampSplit(valueAtPointer, min, max));
+    onChange(clampSplit(Math.round(valueAtPointer / step) * step, min, max));
   }
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
     const key = event.key;

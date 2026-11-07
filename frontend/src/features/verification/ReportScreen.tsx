@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
-import { SplitHandle } from '../../app/SplitHandle';
+import { SplitHandle } from '../../shared/ui/SplitHandle';
 import { useSession } from '../../shared/session';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
@@ -11,7 +11,7 @@ import { coveragePages, coverageRegions } from './coverageRegions';
 import { quoteMatches } from './quoteComparison';
 import { CoverageSource } from './CoverageSource';
 import { OriginalDraftDownload } from './OriginalDraftDownload';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function ReportScreen({
@@ -187,7 +187,7 @@ export function ReportScreen({
       <div
         className="review-layout"
         ref={layoutRef}
-        style={{ '--queue-width': `${queueWidth}px` } as CSSProperties}
+        data-queue-width={queueWidth}
       >
         <section
           className="queue"
@@ -651,7 +651,7 @@ function FindingInspection({
       <div
         ref={readerRef}
         className={`cockpit-inspection cockpit-mode-${readingMode}`}
-        style={{ '--draft-panel-width': `${draftWidth}%` } as CSSProperties}
+        data-draft-width={draftWidth}
       >
         <div className="cockpit-draft">
           <header className="cockpit-pane-heading">
