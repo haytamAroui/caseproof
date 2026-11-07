@@ -5,6 +5,7 @@ dossier snapshot to an independently loaded review ledger. It is NOT a
 new durable review receipt or cryptographic co-signature. Missing context
 never earns a positive binding status.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -96,10 +97,7 @@ def project_review_source_bindings(
             and source.get("sha256") == digest
             and type(physical_page) is int
             and physical_page >= 1
-            and (
-                type(source.get("page_count")) is not int
-                or physical_page <= source["page_count"]
-            )
+            and (type(source.get("page_count")) is not int or physical_page <= source["page_count"])
         )
         visual = finding.get("visual_assessment")
         regions = visual.get("regions") if isinstance(visual, dict) else None
@@ -120,34 +118,37 @@ def project_review_source_bindings(
             and set(reviewed) == set(expected)
         )
         rationale = row.get("rationale")
-        projections.append({
-            "schema": SOURCE_BINDING_SCHEMA,
-            "snapshot_hash": snapshot,
-            "review_request_id": request,
-            "reference_id": ref,
-            "reviewer_id": row.get("reviewer_id"),
-            "decision": row.get("decision"),
-            "review_timestamp": row.get("timestamp"),
-            "source_version_id": version if source_is_pinned else None,
-            "original_pdf_sha256": digest if source_is_pinned else None,
-            "physical_pdf_page": physical_page if source_is_pinned else None,
-            "reviewed_region_ids": reviewed if region_correspondence else [],
-            "rationale_sha256": (
-                hashlib.sha256(rationale.encode("utf-8")).hexdigest()
-                if isinstance(rationale, str) and rationale else None
-            ),
-            "derived_quote_sha256": _quote_digest(finding) if source_is_pinned else None,
-            "binding_state": (
-                "SOURCE_VERSION_AND_REVIEW_REGIONS_CORRESPOND"
-                if source_is_pinned and region_correspondence
-                else "NOT_SOURCE_BOUND"
-            ),
-            "signed_as_one_record": False,
-            "original_pdf_pixels_verified_by_this_projection": False,
-            "semantic_support_verified_by_this_projection": False,
-            "notice": (
-                "Read-only correspondence of frozen source and existing review ledger, "
-                "not an independent signed receipt, crop validation, or legal verdict."
-            ),
-        })
+        projections.append(
+            {
+                "schema": SOURCE_BINDING_SCHEMA,
+                "snapshot_hash": snapshot,
+                "review_request_id": request,
+                "reference_id": ref,
+                "reviewer_id": row.get("reviewer_id"),
+                "decision": row.get("decision"),
+                "review_timestamp": row.get("timestamp"),
+                "source_version_id": version if source_is_pinned else None,
+                "original_pdf_sha256": digest if source_is_pinned else None,
+                "physical_pdf_page": physical_page if source_is_pinned else None,
+                "reviewed_region_ids": reviewed if region_correspondence else [],
+                "rationale_sha256": (
+                    hashlib.sha256(rationale.encode("utf-8")).hexdigest()
+                    if isinstance(rationale, str) and rationale
+                    else None
+                ),
+                "derived_quote_sha256": _quote_digest(finding) if source_is_pinned else None,
+                "binding_state": (
+                    "SOURCE_VERSION_AND_REVIEW_REGIONS_CORRESPOND"
+                    if source_is_pinned and region_correspondence
+                    else "NOT_SOURCE_BOUND"
+                ),
+                "signed_as_one_record": False,
+                "original_pdf_pixels_verified_by_this_projection": False,
+                "semantic_support_verified_by_this_projection": False,
+                "notice": (
+                    "Read-only correspondence of frozen source and existing review ledger, "
+                    "not an independent signed receipt, crop validation, or legal verdict."
+                ),
+            }
+        )
     return projections

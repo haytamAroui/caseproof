@@ -1,4 +1,5 @@
 """P1 read-only frozen-source review provenance; never a signed legal receipt."""
+
 from __future__ import annotations
 
 import hashlib
@@ -98,7 +99,8 @@ def test_matching_version_page_and_regions_produce_only_correspondence() -> None
     ],
 )
 def test_wrong_source_version_sha_or_page_never_generates_positive_binding(
-    field: str, bad: object,
+    field: str,
+    bad: object,
 ) -> None:
     report = frozen_report()
     report["findings"][0][field] = bad
@@ -155,11 +157,16 @@ def test_authorized_read_and_export_include_clear_unsigned_source_correspondence
             self.report = frozen_report()
             self.original = b"synthetic-docx-bytes"
             self.rows = [ledger_row()]
+
         def reopen(self, bearer: str, case: str, brief: str, snapshot: str):
             assert (bearer, case, brief, snapshot) == (
-                "synthetic-signed-bearer", "case-synthetic", "brief-synthetic", SNAPSHOT
+                "synthetic-signed-bearer",
+                "case-synthetic",
+                "brief-synthetic",
+                SNAPSHOT,
             )
             return self.report, self.original
+
         def rpc(self, bearer: str, case: str, action: str, data: dict[str, Any]):
             assert bearer == "synthetic-signed-bearer"
             assert case == "case-synthetic"
@@ -169,8 +176,12 @@ def test_authorized_read_and_export_include_clear_unsigned_source_correspondence
 
     store = AuthorizedMock()
     report, original = read_dossier_report(
-        store, "synthetic-signed-bearer", "case-synthetic", "brief-synthetic",
-        SNAPSHOT, decisions=True,
+        store,
+        "synthetic-signed-bearer",
+        "case-synthetic",
+        "brief-synthetic",
+        SNAPSHOT,
+        decisions=True,
     )
     assert original == b"synthetic-docx-bytes"
     assert report["review_source_bindings"][0]["binding_state"] == (
