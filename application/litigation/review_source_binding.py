@@ -137,7 +137,11 @@ def project_review_source_bindings(
                     if isinstance(rationale, str) and rationale
                     else None
                 ),
-                "derived_quote_sha256": _quote_digest(finding) if source_is_pinned else None,
+                "derived_quote_sha256": (
+                    _quote_digest(finding)
+                    if source_is_pinned and region_correspondence
+                    else None
+                ),
                 "binding_state": (
                     "SOURCE_VERSION_AND_REVIEW_REGIONS_CORRESPOND"
                     if source_is_pinned and region_correspondence
