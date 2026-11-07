@@ -220,9 +220,7 @@ def guard_paraphrase(
         "draft_excerpt": paragraph[:_MAX_DRAFT],
         "source_excerpt": source_excerpt,
         "warnings": warnings,
-        "candidate_terms": [
-            {"kind": kind, "term": term} for kind, term in candidate_terms[:_MAX_WARNINGS]
-        ],
+        "candidate_terms": [{"kind": kind, "term": term} for kind, term in candidate_terms[:_MAX_WARNINGS]],
         "candidate_limit_reached": len(candidate_terms) > _MAX_WARNINGS,
         "reason_codes": list(dict.fromkeys(reasons)),
         "notice": (

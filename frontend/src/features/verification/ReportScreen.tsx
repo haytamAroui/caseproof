@@ -563,8 +563,8 @@ function ParaphraseGuardPanel({ finding }: { finding: FindingView }) {
             )}
           </ul>
           <p className="small">
-            These terms were extracted only from the draft, not confirmed
-            absent from any original exhibit.
+            These terms were extracted only from the draft, not confirmed absent
+            from any original exhibit.
           </p>
         </details>
       )}
