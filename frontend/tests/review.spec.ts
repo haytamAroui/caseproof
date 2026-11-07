@@ -1036,7 +1036,6 @@ test('unanchored DOCX region offers only a snapshot-bound preserved original', a
   expect(await download.failure()).toBeNull();
 });
 
-
 test('P0 guarded terms are visible as warnings while human disposition remains unassessed', async ({
   page,
 }) => {
@@ -1074,7 +1073,9 @@ test('P0 guarded terms are visible as warnings while human disposition remains u
   });
   await expect(warning).toBeVisible();
   await expect(warning).toContainText('EUR 900,00');
-  await expect(warning).toContainText('Source version source-version-synthetic');
+  await expect(warning).toContainText(
+    'Source version source-version-synthetic',
+  );
   await expect(warning).toContainText('never contradictions');
   await warning.getByText('Read adjacent derived source context').click();
   await expect(warning).toContainText('Montant EUR 500,00.');
