@@ -247,3 +247,21 @@ def test_duplicate_printed_page_mapping_abstains_even_when_target_is_identical()
     assert finding['mapping_basis'] == []
     assert finding['technical_check'] == 'unresolved'
     assert finding['page_mapping_reason'] == 'duplicate_or_conflicting_page_mapping_requires_review'
+
+
+def test_pinpoint_requires_valid_original_digest_and_physical_page_count():
+    entry = {'label': 'piece', 'number': '2', 'source_version_id': 'v', 'pages': []}
+    context = {'payload': {'inventory_complete': True, 'entries': [entry]}}
+    original = {'role': 'exhibit', 'version_id': 'v', 'document_id': 'd',
+                'sha256': 'a' * 64, 'page_count': 2}
+    draft = docx('Pièce 2, PDF p. 1.')
+    assert assess(draft, [original], context)['findings'][0]['technical_check'] == 'checked'
+    for invalid in ({'sha256': None}, {'sha256': 'not-a-sha256'},
+                    {'sha256': 'A' * 64}, {'page_count': True},
+                    {'page_count': '2'}, {'page_count': 0},
+                    {'page_count': 100_001}):
+        source = {**original, **invalid}
+        finding = assess(draft, [source], context)['findings'][0]
+        assert finding['technical_check'] == 'unresolved'
+        assert finding['pdf_page'] is None
+        assert finding['page_mapping'] == 'unmapped'
