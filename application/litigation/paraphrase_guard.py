@@ -4,6 +4,7 @@ Only an exact, unique quotation in the source *derived page text* gives
 a lexical window. That is NOT an independently validated PDF crop or proof
 of legal support. Missing terms are prompts to inspect original pixels.
 """
+
 from __future__ import annotations
 
 import re
@@ -21,7 +22,8 @@ _DATE = re.compile(
     r"\d{1,2}\s+(?:januari|februari|maart|april|mei|juni|juli|augustus|"
     r"september|oktober|november|december|janvier|février|fevrier|mars|"
     r"avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|"
-    r"décembre|decembre)\s+\d{4})(?!\d)", re.I,
+    r"décembre|decembre)\s+\d{4})(?!\d)",
+    re.I,
 )
 _ARTICLE = re.compile(r"\b(?:art\.|article|artikel)\s*\d+(?:[./-]\d+)*\b", re.I)
 _PARTY = re.compile(
@@ -30,24 +32,30 @@ _PARTY = re.compile(
     r"([A-ZÀ-ÖØ-Þ][\w'’.-]{1,45}(?:\s+[A-ZÀ-ÖØ-Þ][\w'’.-]{1,45}){0,2})",
 )
 _NUMBER = re.compile(r"(?<![\w])\d{1,6}(?:[.,]\d{1,3})?(?!\w)")
-_NEGATION = re.compile(r"\b(?:niet|geen|nooit|nimmer|not|never|without|"
-                       r"pas|jamais|aucun|aucune|non|sans)\b", re.I)
+_NEGATION = re.compile(
+    r"\b(?:niet|geen|nooit|nimmer|not|never|without|"
+    r"pas|jamais|aucun|aucune|non|sans)\b",
+    re.I,
+)
 _QUALIFIER = re.compile(
     r"\b(?:slechts|uitsluitend|minstens|hoogstens|ongeveer|vermoedelijk|"
     r"mogelijk|voorwaardelijk|ten minste|ten hoogste|onder voorbehoud|"
     r"seulement|uniquement|environ|présumé|présumée|probablement|"
     r"peut-être|sous réserve|au moins|au plus|approximately|only|"
-    r"allegedly|possibly|at least|at most|subject to)\b", re.I,
+    r"allegedly|possibly|at least|at most|subject to)\b",
+    re.I,
 )
-_REFERENCE_NUMBER = re.compile(r"(?:stuk(?:ken)?|pièce(?:s)?|piece(?:s)?|"
-                                r"exhibit|pdf\s+p\.?|p\.?|pages?)\s*$", re.I)
+_REFERENCE_NUMBER = re.compile(
+    r"(?:stuk(?:ken)?|pièce(?:s)?|piece(?:s)?|"
+    r"exhibit|pdf\s+p\.?|p\.?|pages?)\s*$",
+    re.I,
+)
 
 
 def _fold(text: str) -> str:
     return " ".join(
         "".join(
-            ch for ch in unicodedata.normalize("NFKD", text.casefold())
-            if not unicodedata.combining(ch)
+            ch for ch in unicodedata.normalize("NFKD", text.casefold()) if not unicodedata.combining(ch)
         ).split()
     )
 
@@ -57,7 +65,9 @@ def _terms(paragraph: str) -> list[tuple[str, str]]:
     occupied: list[tuple[int, int]] = []
     located: list[tuple[int, str, str]] = []
     for kind, pattern in (
-        ("amount", _AMOUNT), ("date", _DATE), ("article", _ARTICLE),
+        ("amount", _AMOUNT),
+        ("date", _DATE),
+        ("article", _ARTICLE),
         ("party_name", _PARTY),
     ):
         for match in pattern.finditer(paragraph):
@@ -67,7 +77,7 @@ def _terms(paragraph: str) -> list[tuple[str, str]]:
     for match in _NUMBER.finditer(paragraph):
         if any(a <= match.start() < b for a, b in occupied):
             continue
-        if _REFERENCE_NUMBER.search(paragraph[max(0, match.start() - 20):match.start()]):
+        if _REFERENCE_NUMBER.search(paragraph[max(0, match.start() - 20) : match.start()]):
             continue
         located.append((match.start(), "number", match.group()))
     for kind, pattern in (("negation", _NEGATION), ("qualifier", _QUALIFIER)):
@@ -105,8 +115,10 @@ def guard_paraphrase(
     uncertainty and truncated text all require human source inspection.
     """
     if (
-        not isinstance(draft_region, str) or len(draft_region) > 150_000
-        or type(reference_start) is not int or type(reference_end) is not int
+        not isinstance(draft_region, str)
+        or len(draft_region) > 150_000
+        or type(reference_start) is not int
+        or type(reference_end) is not int
         or not 0 <= reference_start <= reference_end <= len(draft_region)
     ):
         raise ValueError("guard requires valid immutable DOCX region offsets")
@@ -130,10 +142,7 @@ def guard_paraphrase(
         reasons.append("SOURCE_TEXT_PARTIAL")
     if ocr_uncertain:
         reasons.append("OCR_OR_VISUAL_FIDELITY_UNCERTAIN")
-    if (
-        draft_language and source_language
-        and draft_language != source_language
-    ):
+    if draft_language and source_language and draft_language != source_language:
         reasons.append("CROSS_LANGUAGE_LEXICAL_COMPARISON_UNSUPPORTED")
     if not quoted_text:
         reasons.append("NO_UNIQUE_VERBATIM_ANCHOR")
@@ -144,8 +153,11 @@ def guard_paraphrase(
         elif source_text_context.find(quoted_text, first + 1) >= 0:
             reasons.append("DUPLICATE_QUOTE_AMBIGUOUS")
         elif (
-            not ocr_uncertain and not source_text_partial
-            and source_version_id and source_sha256 and pdf_page is not None
+            not ocr_uncertain
+            and not source_text_partial
+            and source_version_id
+            and source_sha256
+            and pdf_page is not None
             and re.fullmatch(r"[0-9a-f]{64}", source_sha256)
         ):
             # Text offset is navigational only, never a verified PDF polygon.
@@ -157,19 +169,18 @@ def guard_paraphrase(
     if (
         anchor_basis != "unavailable"
         and len(paragraph) <= _MAX_DRAFT
-        and not (
-            draft_language and source_language
-            and draft_language != source_language
-        )
+        and not (draft_language and source_language and draft_language != source_language)
     ):
         normalized_source = _fold(source_excerpt)
         for kind, term in candidate_terms:
             if _fold(term) not in normalized_source:
-                warnings.append({
-                    "kind": kind,
-                    "term": term,
-                    "reason_code": "TERM_NOT_SEEN_IN_NEARBY_DERIVED_TEXT",
-                })
+                warnings.append(
+                    {
+                        "kind": kind,
+                        "term": term,
+                        "reason_code": "TERM_NOT_SEEN_IN_NEARBY_DERIVED_TEXT",
+                    }
+                )
                 if len(warnings) == _MAX_WARNINGS:
                     reasons.append("GUARDED_TERM_LIMIT_REACHED")
                     break
@@ -182,17 +193,18 @@ def guard_paraphrase(
                 continue
             if _fold(term) in normalized_draft:
                 continue
-            if any(w["kind"] == kind and _fold(w["term"]) == _fold(term)
-                   for w in warnings):
+            if any(w["kind"] == kind and _fold(w["term"]) == _fold(term) for w in warnings):
                 continue
             if len(warnings) >= _MAX_WARNINGS:
                 reasons.append("GUARDED_TERM_LIMIT_REACHED")
                 break
-            warnings.append({
-                "kind": kind,
-                "term": term,
-                "reason_code": "SOURCE_MODIFIER_NOT_SEEN_IN_DRAFT",
-            })
+            warnings.append(
+                {
+                    "kind": kind,
+                    "term": term,
+                    "reason_code": "SOURCE_MODIFIER_NOT_SEEN_IN_DRAFT",
+                }
+            )
         if warnings:
             reasons.append("GUARDED_TERMS_REQUIRE_MANUAL_REVIEW")
     elif candidate_terms:

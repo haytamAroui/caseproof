@@ -147,7 +147,9 @@ test('review requires rendered original and explicit region inspection; lost ack
   const review = page.getByRole('region', { name: 'Human review' });
   const save = review.getByRole('button', { name: 'Save human decision' });
   await expect(save).toBeDisabled();
-  await expect(review.getByRole('radio', { name: 'Qualify the support' })).not.toBeChecked();
+  await expect(
+    review.getByRole('radio', { name: 'Qualify the support' }),
+  ).not.toBeChecked();
   await expect(
     page.getByText('Source page rendered.', { exact: true }),
   ).toBeVisible();

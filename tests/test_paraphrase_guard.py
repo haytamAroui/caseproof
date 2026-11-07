@@ -1,4 +1,5 @@
 """Adversarial NL/FR P0 seed cases. Synthetic labels, NOT independent human ratings."""
+
 from __future__ import annotations
 
 import pytest
@@ -89,7 +90,10 @@ def check(
     ],
 )
 def test_seeded_unsupported_term_creates_warning_never_contradiction(
-    draft: str, source: str, quote: str, kind: str,
+    draft: str,
+    source: str,
+    quote: str,
+    kind: str,
 ) -> None:
     lang = "nl" if "Stuk 4" in draft else "fr"
     result = check(draft, source, quote=quote, lang=lang, source_lang=lang)
@@ -98,8 +102,7 @@ def test_seeded_unsupported_term_creates_warning_never_contradiction(
     assert result["state"] == "needs_manual_review"
     assert result["anchor_basis"] == "unique_exact_quote_in_derived_page_text"
     assert any(item["kind"] == kind for item in result["warnings"])
-    assert all(item["reason_code"] == "TERM_NOT_SEEN_IN_NEARBY_DERIVED_TEXT"
-               for item in result["warnings"])
+    assert all(item["reason_code"] == "TERM_NOT_SEEN_IN_NEARBY_DERIVED_TEXT" for item in result["warnings"])
     assert "contradicted" not in str(result)
 
 
@@ -120,18 +123,57 @@ def test_adjacent_paragraph_prevents_false_absence_warning() -> None:
 @pytest.mark.parametrize(
     ("source", "quote", "version", "ocr", "partial", "reason"),
     [
-        ("Le paiement est enregistré. Le paiement est enregistré.", "Le paiement est enregistré.", "source-v1", False, False, "DUPLICATE_QUOTE_AMBIGUOUS"),
-        ("Le paiement est constaté.", "Le paiement est enregistré.", "source-v1", False, False, "QUOTE_NOT_FOUND_IN_DERIVED_PAGE_TEXT"),
+        (
+            "Le paiement est enregistré. Le paiement est enregistré.",
+            "Le paiement est enregistré.",
+            "source-v1",
+            False,
+            False,
+            "DUPLICATE_QUOTE_AMBIGUOUS",
+        ),
+        (
+            "Le paiement est constaté.",
+            "Le paiement est enregistré.",
+            "source-v1",
+            False,
+            False,
+            "QUOTE_NOT_FOUND_IN_DERIVED_PAGE_TEXT",
+        ),
         (None, "Le paiement est enregistré.", "source-v1", False, False, "SOURCE_TEXT_UNAVAILABLE"),
         ("Le paiement est enregistré.", None, "source-v1", False, False, "NO_UNIQUE_VERBATIM_ANCHOR"),
-        ("Le paiement est enregistré.", "Le paiement est enregistré.", None, False, False, "SOURCE_PINPOINT_UNRESOLVED"),
-        ("Le paiement est enregistré.", "Le paiement est enregistré.", "source-v1", True, False, "OCR_OR_VISUAL_FIDELITY_UNCERTAIN"),
-        ("Le paiement est enregistré.", "Le paiement est enregistré.", "source-v1", False, True, "SOURCE_TEXT_PARTIAL"),
+        (
+            "Le paiement est enregistré.",
+            "Le paiement est enregistré.",
+            None,
+            False,
+            False,
+            "SOURCE_PINPOINT_UNRESOLVED",
+        ),
+        (
+            "Le paiement est enregistré.",
+            "Le paiement est enregistré.",
+            "source-v1",
+            True,
+            False,
+            "OCR_OR_VISUAL_FIDELITY_UNCERTAIN",
+        ),
+        (
+            "Le paiement est enregistré.",
+            "Le paiement est enregistré.",
+            "source-v1",
+            False,
+            True,
+            "SOURCE_TEXT_PARTIAL",
+        ),
     ],
 )
 def test_uncertain_or_wrong_version_evidence_abstains(
-    source: str | None, quote: str | None, version: str | None, ocr: bool,
-    partial: bool, reason: str,
+    source: str | None,
+    quote: str | None,
+    version: str | None,
+    ocr: bool,
+    partial: bool,
+    reason: str,
 ) -> None:
     draft = "Pièce 7, PDF p. 1, «Le paiement est enregistré.» La somme est EUR 300,00."
     result = check(draft, source, quote=quote, version=version, ocr=ocr, partial=partial)
@@ -153,9 +195,16 @@ def test_cross_language_never_reports_absence_as_contradiction() -> None:
 def test_unsupported_offsets_fail_closed_without_guessing() -> None:
     with pytest.raises(ValueError, match="offsets"):
         guard_paraphrase(
-            draft_region="Pièce 7", reference_start=99, reference_end=100,
-            quoted_text=None, source_text_context=None, source_version_id=None,
-            source_sha256=None, pdf_page=None, ocr_uncertain=True, source_text_partial=True,
+            draft_region="Pièce 7",
+            reference_start=99,
+            reference_end=100,
+            quoted_text=None,
+            source_text_context=None,
+            source_version_id=None,
+            source_sha256=None,
+            pdf_page=None,
+            ocr_uncertain=True,
+            source_text_partial=True,
         )
 
 
@@ -183,13 +232,17 @@ def test_long_paragraph_and_large_page_never_generate_false_absence() -> None:
     ],
 )
 def test_source_modifier_omitted_from_claim_is_warning_only(
-    claim: str, source: str, kind: str,
+    claim: str,
+    source: str,
+    kind: str,
 ) -> None:
     nl = "Stuk 4" in claim
     result = check(
-        claim, source,
+        claim,
+        source,
         quote="De betaling is geboekt." if nl else "Le paiement est enregistré.",
-        lang="nl" if nl else "fr", source_lang="nl" if nl else "fr",
+        lang="nl" if nl else "fr",
+        source_lang="nl" if nl else "fr",
     )
     assert any(
         w["kind"] == kind and w["reason_code"] == "SOURCE_MODIFIER_NOT_SEEN_IN_DRAFT"

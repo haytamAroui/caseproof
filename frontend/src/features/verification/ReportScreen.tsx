@@ -476,27 +476,41 @@ function ParaphraseGuardPanel({ finding }: { finding: FindingView }) {
     guard.schema !== 'caseproof-paraphrase-review-guard-v1' ||
     guard.semantic_support !== 'not_assessed'
   )
-    return <Notice error>Unsupported guarded-term assessment. Review the original.</Notice>;
+    return (
+      <Notice error>
+        Unsupported guarded-term assessment. Review the original.
+      </Notice>
+    );
   const warnings = Array.isArray(guard.warnings)
-    ? guard.warnings.slice(0, 24).filter(
-        (x): x is Record<string, unknown> =>
-          x !== null && typeof x === 'object' && !Array.isArray(x),
-      )
+    ? guard.warnings
+        .slice(0, 24)
+        .filter(
+          (x): x is Record<string, unknown> =>
+            x !== null && typeof x === 'object' && !Array.isArray(x),
+        )
     : [];
   const reasonCodes = Array.isArray(guard.reason_codes)
-    ? guard.reason_codes.slice(0, 12).filter((x): x is string => typeof x === 'string')
+    ? guard.reason_codes
+        .slice(0, 12)
+        .filter((x): x is string => typeof x === 'string')
     : [];
-  const excerpt = typeof guard.source_excerpt === 'string'
-    ? guard.source_excerpt.slice(0, 760)
-    : '';
-  const sourceVersion = typeof guard.source_version_id === 'string'
-    ? guard.source_version_id.slice(0, 100)
-    : 'unresolved';
-  const pdfPage = typeof guard.pdf_page === 'number' && Number.isInteger(guard.pdf_page)
-    ? guard.pdf_page
-    : null;
+  const excerpt =
+    typeof guard.source_excerpt === 'string'
+      ? guard.source_excerpt.slice(0, 760)
+      : '';
+  const sourceVersion =
+    typeof guard.source_version_id === 'string'
+      ? guard.source_version_id.slice(0, 100)
+      : 'unresolved';
+  const pdfPage =
+    typeof guard.pdf_page === 'number' && Number.isInteger(guard.pdf_page)
+      ? guard.pdf_page
+      : null;
   return (
-    <section className="paraphrase-review-guard" aria-label="Deterministic paraphrase review warnings">
+    <section
+      className="paraphrase-review-guard"
+      aria-label="Deterministic paraphrase review warnings"
+    >
       <h4>Guarded-term review — human assessment required</h4>
       <p>
         No automated claim verification. These lexical signals are warnings,
@@ -504,7 +518,9 @@ function ParaphraseGuardPanel({ finding }: { finding: FindingView }) {
       </p>
       <p className="small">
         Source version {sourceVersion}
-        {pdfPage !== null ? ` · physical PDF page ${pdfPage}` : ' · pinpoint unavailable'}
+        {pdfPage !== null
+          ? ` · physical PDF page ${pdfPage}`
+          : ' · pinpoint unavailable'}
         {' · '}Human support: not assessed by this guard
       </p>
       {warnings.length > 0 ? (
@@ -520,11 +536,15 @@ function ParaphraseGuardPanel({ finding }: { finding: FindingView }) {
           )}
         </ul>
       ) : (
-        <p>No lexical discrepancy identified. This does not establish semantic support.</p>
+        <p>
+          No lexical discrepancy identified. This does not establish semantic
+          support.
+        </p>
       )}
       {reasonCodes.length > 0 && (
         <p className="small">
-          Review limitations: {reasonCodes.join(', ').replaceAll('_', ' ').toLowerCase()}.
+          Review limitations:{' '}
+          {reasonCodes.join(', ').replaceAll('_', ' ').toLowerCase()}.
         </p>
       )}
       {excerpt && (

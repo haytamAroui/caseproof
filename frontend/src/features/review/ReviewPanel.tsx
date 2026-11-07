@@ -261,7 +261,10 @@ export function ReviewPanel({
       <fieldset disabled={busy || Boolean(submitted)}>
         <legend>Disposition — none selected by default</legend>
         {decision === null && (
-          <p role="status">Not assessed. Select a disposition only after examining the preserved source and relevant context.</p>
+          <p role="status">
+            Not assessed. Select a disposition only after examining the
+            preserved source and relevant context.
+          </p>
         )}
         {dispositions.map(({ id, label }) => (
           <label key={id}>
