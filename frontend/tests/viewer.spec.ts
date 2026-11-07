@@ -837,3 +837,24 @@ test('Storyteller reading cockpit honors reduced motion and remains accessible i
     fullPage: true,
   });
 });
+
+test('Storyteller focus modes preserve evidence state and keyboard accessibility', async ({
+  page,
+}) => {
+  await page.goto(
+    `/workspace/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`,
+  );
+  await page.getByRole('button', { name: 'Connect session' }).click();
+  const source = page.locator('.cockpit-evidence');
+  await expect(source).toBeVisible();
+  await page.getByRole('button', { name: 'Draft focus' }).click();
+  await expect(page.getByRole('button', { name: 'Draft focus' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(source).toBeHidden();
+  await page.getByRole('button', { name: 'Source focus' }).click();
+  await expect(source).toBeVisible();
+  await expect(page.locator('.cockpit-draft')).toBeHidden();
+  await page.getByRole('button', { name: 'Split view' }).click();
+  await expect(page.locator('.cockpit-draft')).toBeVisible();
+  await expect(source).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});
