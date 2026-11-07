@@ -7,15 +7,14 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from application.litigation.report_projection import render_dossier_export
 from application.litigation.review_source_binding import (
     SOURCE_BINDING_SCHEMA,
     project_review_source_bindings,
 )
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from apps.api.dossier_journey import create_dossier_router, read_dossier_report
 
 SNAPSHOT = "a" * 64
