@@ -119,9 +119,12 @@ def test_unconfirmed_regions_and_missing_source_regions_abstain() -> None:
     binding = project_review_source_bindings(frozen_report(), [row])[0]
     assert binding["binding_state"] == "NOT_SOURCE_BOUND"
     assert binding["reviewed_region_ids"] == []
+    assert binding["derived_quote_sha256"] is None
     report = frozen_report()
     report["findings"][0]["visual_assessment"]["regions"] = []
-    assert project_review_source_bindings(report, [ledger_row()])[0]["binding_state"] == "NOT_SOURCE_BOUND"
+    missing_regions = project_review_source_bindings(report, [ledger_row()])[0]
+    assert missing_regions["binding_state"] == "NOT_SOURCE_BOUND"
+    assert missing_regions["derived_quote_sha256"] is None
 
 
 def test_duplicated_quotation_and_ocr_never_produce_unique_quote_hash() -> None:

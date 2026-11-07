@@ -251,3 +251,36 @@ def test_source_modifier_omitted_from_claim_is_warning_only(
     )
     assert result["semantic_support"] == "not_assessed"
     assert result["state"] == "needs_manual_review"
+
+
+@pytest.mark.parametrize(
+    ("digest", "page"),
+    [
+        ("invalid-digest", 1),
+        ("A" * 64, 1),
+        ("a" * 64, 0),
+        ("a" * 64, -1),
+        ("a" * 64, True),
+        ("a" * 64, "1"),
+    ],
+)
+def test_malformed_source_identity_abstains_without_lexical_warnings(digest: str, page: object) -> None:
+    draft = "Pièce 7, «Le paiement est enregistré.» EUR 900,00."
+    result = guard_paraphrase(
+        draft_region=draft,
+        reference_start=0,
+        reference_end=len("Pièce 7"),
+        quoted_text="Le paiement est enregistré.",
+        source_text_context="Le paiement est enregistré. EUR 500,00.",
+        source_version_id="source-v1",
+        source_sha256=digest,
+        pdf_page=page,  # type: ignore[arg-type]
+        ocr_uncertain=False,
+        source_text_partial=False,
+        draft_language="fr",
+        source_language="fr",
+    )
+    assert result["anchor_basis"] == "unavailable"
+    assert result["warnings"] == []
+    assert "SOURCE_PINPOINT_UNRESOLVED" in result["reason_codes"]
+    assert result["semantic_support"] == "not_assessed"
