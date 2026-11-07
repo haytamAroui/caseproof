@@ -1627,7 +1627,9 @@ main {
   font-size: 13px;
   line-height: 1.5;
 }
-.inspection details > summary:hover { background: var(--paper-raised); }
+.inspection details > summary:hover {
+  background: var(--paper-raised);
+}
 .release-confirm-dialog {
   background: var(--surface);
 }
