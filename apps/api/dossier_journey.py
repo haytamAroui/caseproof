@@ -8,6 +8,7 @@ import hmac
 import http.client
 import io
 import json
+import re
 from typing import Any, Literal
 from uuid import UUID
 
