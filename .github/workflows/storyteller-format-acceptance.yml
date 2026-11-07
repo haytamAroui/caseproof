@@ -13,6 +13,8 @@ on:
       - frontend/src/features/verification/ReportScreen.tsx
       - frontend/src/features/exports/ExportsScreen.tsx
       - frontend/tests/workspace.spec.ts
+      - frontend/tests/viewer.spec.ts
+      - frontend/src/features/docx-editor/DocxEditor.css
   workflow_dispatch:
 permissions:
   contents: write
@@ -44,6 +46,8 @@ jobs:
             src/features/exports/api.ts \
             src/features/exports/api.test.ts \
             tests/workspace.spec.ts \
+            tests/viewer.spec.ts \
+            src/features/docx-editor/DocxEditor.css \
             tests/exports.spec.ts \
             ../docs/STORYTELLER_DESIGN_AUDIT.md
       - name: Commit exact Prettier result to the feature branch
@@ -56,6 +60,7 @@ jobs:
             frontend/src/features/exports/ExportsScreen.tsx \
             frontend/src/features/exports/api.ts frontend/src/features/exports/api.test.ts \
             frontend/tests/workspace.spec.ts frontend/tests/exports.spec.ts \
+            frontend/tests/viewer.spec.ts frontend/src/features/docx-editor/DocxEditor.css \
             docs/STORYTELLER_DESIGN_AUDIT.md
           if git diff --cached --quiet; then
             echo 'All authored cockpit files already formatted'
