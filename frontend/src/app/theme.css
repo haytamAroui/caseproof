@@ -855,11 +855,11 @@ dialog::backdrop { background: #16181d99; }
 /* Storyteller reading modes: inspection state stays mounted across view changes. */
 .cockpit-view-switch { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
 .cockpit-view-switch .button { background: var(--surface); color: var(--ink); border-color: var(--line); }
-.cockpit-view-switch .button[aria-pressed='true'] { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+.cockpit-view-switch .button[aria-pressed='true'] { background: var(--accent); color: #fff; border-color: var(--accent); }
 .cockpit-view-switch .button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .cockpit-resize-controls[hidden] { display: none; }
 .cockpit-inspection.cockpit-mode-draft, .cockpit-inspection.cockpit-mode-source { grid-template-columns: minmax(0, 1fr); }
-.cockpit-mode-draft .cockpit-evidence { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.cockpit-mode-draft .cockpit-evidence { display: none; }
 .cockpit-mode-source .cockpit-draft { display: none; }
 .cockpit-mode-source .cockpit-evidence { padding-left: 0; }
 .cockpit-mode-draft .cockpit-draft { border-right: 0; padding-right: 0; }
