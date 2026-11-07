@@ -44,6 +44,18 @@ test('Storyteller stage navigation, accessible panel splitters and stable review
     `/workspace/matters/${matter}/briefs/${brief}?snapshot=${hash}`,
   );
   await page.getByRole('button', { name: 'Connect session' }).click();
+  const primary = page.getByRole('navigation', { name: 'Primary workspace' });
+  await expect(primary.getByRole('link', { name: 'Matter' })).toHaveAttribute(
+    'href',
+    /\/workspace\/?$/,
+  );
+  await expect(
+    primary.getByRole('link', { name: 'Verification' }),
+  ).toHaveAttribute('href', /\/briefs\/.*snapshot=/);
+  await expect(primary.getByRole('link', { name: 'Export' })).toHaveAttribute(
+    'href',
+    /\/exports\?brief=.*snapshot=/,
+  );
   const journey = page.getByRole('navigation', { name: 'Matter workflow' });
   await expect(journey.locator('li')).toHaveCount(7);
   await expect(
@@ -58,6 +70,10 @@ test('Storyteller stage navigation, accessible panel splitters and stable review
   await page.keyboard.press('ArrowRight');
   await expect(queue).toHaveAttribute('aria-valuenow', '310');
   await draft.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(draft).toHaveAttribute('aria-valuenow', '390');
+  await page.keyboard.press('ArrowLeft');
+  await expect(draft).toHaveAttribute('aria-valuenow', '400');
   await page.keyboard.press('ArrowRight');
   await expect(draft).toHaveAttribute('aria-valuenow', '390');
   await page.getByRole('button', { name: 'Exhibit A' }).click();
