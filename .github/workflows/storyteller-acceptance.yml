@@ -42,7 +42,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
         working-directory: frontend
-      - name: Actual browser: cockpit, source inspection and exports
+      - name: "Actual browser: cockpit, source inspection and exports"
         run: npm run test:e2e
         working-directory: frontend
       - name: Upload real browser screenshots and failures
