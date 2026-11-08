@@ -65,7 +65,7 @@ def _sentences(text: str) -> list[tuple[int, int]]:
     for paragraph in _PARAGRAPH.finditer(text):
         line = paragraph.group(0)
         cuts = [0, *(m.end() for m in _SENTENCE_BREAK.finditer(line)), len(line)]
-        for first, last in zip(cuts, cuts[1:], strict=True):
+        for first, last in zip(cuts, cuts[1:]):
             fragment = line[first:last]
             leading = len(fragment) - len(fragment.lstrip())
             trailing = len(fragment.rstrip())
