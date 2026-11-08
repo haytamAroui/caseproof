@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from apps.api.access_control import AccessRejected
-
 from apps.api.dossier_journey import create_dossier_router
 from infrastructure.parsers.docx_claim_discovery import discover_docx_claim_candidates
 
