@@ -9,7 +9,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from application.data_rights import Action
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.dossier_journey import DossierStore, canonical, create_dossier_router
 from infrastructure.parsers.docx_claim_discovery import discover_docx_claim_candidates
