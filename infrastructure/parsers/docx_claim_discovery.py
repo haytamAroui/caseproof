@@ -94,7 +94,7 @@ def discover_docx_claim_candidates(payload: bytes) -> ClaimDiscovery:
                 omitted += 1
                 continue
             identity = hashlib.sha256(
-                f"{original_sha256}\0{region.part}\0{start}\0{end}\0{statement}".encode("utf-8")
+                f"{original_sha256}\0{region.part}\0{start}\0{end}\0{statement}".encode()
             ).hexdigest()
             candidates.append(
                 ClaimCandidate(
