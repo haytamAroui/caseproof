@@ -5,8 +5,11 @@ from hashlib import sha256
 from io import BytesIO
 from zipfile import ZipFile
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
+
+from apps.api.access_control import AccessRejected
 
 from apps.api.dossier_journey import create_dossier_router
 from infrastructure.parsers.docx_claim_discovery import discover_docx_claim_candidates
@@ -103,6 +106,11 @@ class _SignedFakeStore:
 
 def _client(store: _SignedFakeStore) -> TestClient:
     app = FastAPI()
+
+    @app.exception_handler(AccessRejected)
+    async def denied(request: Request, exc: AccessRejected) -> JSONResponse:
+        return JSONResponse({"error": exc.code.value}, status_code=exc.http_status)
+
     app.include_router(create_dossier_router(store))  # type: ignore[arg-type]
     return TestClient(app)
 
