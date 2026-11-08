@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
+from application.data_rights import Action
 from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.dossier_journey import DossierStore, canonical, create_dossier_router
 from infrastructure.parsers.docx_claim_discovery import discover_docx_claim_candidates
@@ -253,3 +254,48 @@ def test_real_signed_dossier_store_read_uses_existing_hmac_and_never_snapshot_rp
     assert calls.count("sources") == 1
     assert "snapshot" not in calls
     assert response.json()["snapshot_hash"] == snapshot
+
+
+def test_frozen_candidate_read_requires_process_rights_and_rechecks_downgrade() -> None:
+    class _Gate:
+        calls = 0
+        block_on = 0
+
+        def require_bundle(self, *, bearer, case_id, sources, action):
+            assert bearer == "signed-synthetic" and case_id == "matter-a"
+            assert action == Action.PROCESS
+            assert len(sources) == 1 and sources[0]["role"] == "draft"
+            self.calls += 1
+            if self.calls == self.block_on:
+                raise AccessRejected(AccessFailure.PERMISSION_DENIED)
+
+    store = _SignedFakeStore(_docx("Stuk 2 is relevant."))
+    gate = _Gate()
+    store.rights_gate = gate
+    client = _client(store)
+    gate.block_on = 1
+    response = client.get(_url(), headers=_headers())
+    assert response.status_code == 403
+    assert store.reads == 1 and store.writes == 0
+    gate.calls = 0
+    gate.block_on = 2
+    response = client.get(_url(), headers=_headers())
+    assert response.status_code == 403
+    assert store.reads == 4 and store.writes == 0
+    gate.calls = 0
+    gate.block_on = 0
+    response = client.get(_url(), headers=_headers())
+    assert response.status_code == 200 and gate.calls == 2
+    assert store.writes == 0
+
+
+def test_same_org_other_matter_and_revoked_actor_deny_without_content() -> None:
+    store = _SignedFakeStore(_docx("Stuk 8 is confidential."))
+    client = _client(store)
+    other_matter = _url().replace("/matter-a/", "/matter-b/")
+    assert client.get(other_matter, headers=_headers()).status_code == 404
+    store.revoked = True
+    response = client.get(_url(), headers=_headers())
+    assert response.status_code == 404
+    assert "Stuk 8" not in response.text
+    assert store.writes == 0
