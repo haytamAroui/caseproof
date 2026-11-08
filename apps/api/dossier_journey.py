@@ -42,6 +42,7 @@ from domains.disputes.exhibit_identity import InventoryStatus
 from domains.disputes.page_labels import PAGE_LABEL_PATTERN
 from domains.disputes.reference_detection import detect_exhibit_references
 from infrastructure.parsers.docx_correction_anchor import bound_locator, correction_anchor
+from infrastructure.parsers.docx_claim_discovery import discover_docx_claim_candidates
 from infrastructure.parsers.docx_reference_discovery import discover_docx_references
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from infrastructure.parsers.dossier_docx_export import annotated_docx, corrected_docx_preview
@@ -905,6 +906,40 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         if store is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return store, _token(header)
+
+    @router.get(base + "/claim-candidates")
+    def claim_candidates(
+        case_id: str,
+        brief_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> Response:
+        """Read-only proposal inventory derived from a signed, rights-checked snapshot.
+
+        Candidate text is neither evidence support nor a review decision.
+        """
+        s, bearer = active(authorization)
+        report, original = s.load(bearer, case_id, brief_id)
+        digest = hashlib.sha256(original).hexdigest()
+        drafts = [
+            row for row in report.get("sources", [])
+            if row.get("role") == "draft" and row.get("version_id") == brief_id
+        ]
+        if (len(drafts) != 1 or drafts[0].get("sha256") != digest
+                or report.get("case_id") != case_id or report.get("brief_id") != brief_id):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        discovery = discover_docx_claim_candidates(original)
+        if discovery.original_sha256 != digest or not report.get("snapshot_hash"):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return Response(
+            canonical({
+                **discovery.response(),
+                "case_id": case_id,
+                "brief_id": brief_id,
+                "snapshot_hash": report["snapshot_hash"],
+            }),
+            media_type="application/json",
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        )
 
     @router.get(base)
     def dossier(
