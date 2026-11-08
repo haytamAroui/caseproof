@@ -12,7 +12,7 @@ import re
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Header, HTTPException, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from pypdf import PdfReader, PdfWriter
 
@@ -911,34 +911,63 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
     def claim_candidates(
         case_id: str,
         brief_id: str,
+        snapshot_hash: str = Query(pattern=r"^[0-9a-f]{64}$"),
         authorization: str | None = Header(default=None),
     ) -> Response:
-        """Read-only proposal inventory derived from a signed, rights-checked snapshot.
+        """Read claim candidates from a frozen, current, signed dossier snapshot.
 
-        Candidate text is neither evidence support nor a review decision.
+        GET never calls the snapshot-creating load() operation. It validates
+        document rights and exact original bytes without promoting candidates
+        to factual or semantic findings.
         """
         s, bearer = active(authorization)
-        report, original = s.load(bearer, case_id, brief_id)
+        if s.current_draft_version(bearer, case_id) != brief_id:
+            raise HTTPException(409, "draft superseded")
+        frozen = s.frozen_report(bearer, case_id, brief_id, snapshot_hash)
+        gate = getattr(s, "rights_gate", None)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id,
+                sources=frozen.get("sources", []), action=Action.PROCESS,
+            )
+        report, original = s.reopen(bearer, case_id, brief_id, snapshot_hash)
         digest = hashlib.sha256(original).hexdigest()
         drafts = [
             row for row in report.get("sources", [])
             if row.get("role") == "draft" and row.get("version_id") == brief_id
         ]
         if (len(drafts) != 1 or drafts[0].get("sha256") != digest
-                or report.get("case_id") != case_id or report.get("brief_id") != brief_id):
+                or report.get("case_id") != case_id or report.get("brief_id") != brief_id
+                or report.get("snapshot_hash") != snapshot_hash):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         discovery = discover_docx_claim_candidates(original)
-        if discovery.original_sha256 != digest or not report.get("snapshot_hash"):
+        if discovery.original_sha256 != digest:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if gate is not None:
+            gate.require_bundle(
+                bearer=bearer, case_id=case_id,
+                sources=report.get("sources", []), action=Action.PROCESS,
+            )
+        if s.current_draft_version(bearer, case_id) != brief_id:
+            raise HTTPException(409, "draft superseded during read")
+        serialized = canonical({
+            **discovery.response(),
+            "case_id": case_id,
+            "brief_id": brief_id,
+            "snapshot_hash": snapshot_hash,
+        })
+        if len(serialized.encode()) > 750_000:
+            raise HTTPException(422, "claim-candidate output budget exceeded")
         return Response(
-            canonical({
-                **discovery.response(),
-                "case_id": case_id,
-                "brief_id": brief_id,
-                "snapshot_hash": report["snapshot_hash"],
-            }),
+            serialized,
             media_type="application/json",
-            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+                "Referrer-Policy": "no-referrer",
+            },
         )
 
     @router.get(base)
