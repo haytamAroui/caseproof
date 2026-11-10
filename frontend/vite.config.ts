@@ -8,7 +8,7 @@ export default defineConfig({
   build: { sourcemap: false },
   server: {
     strictPort: true,
-    proxy: { '/v2': { target: 'http://127.0.0.1:8000', changeOrigin: false } },
+    proxy: { '/v2': { target: 'http://127.0.0.1:8001', changeOrigin: false } },
   },
   preview: {
     strictPort: true,

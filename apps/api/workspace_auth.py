@@ -5,6 +5,7 @@ No cookies, refresh-token transport, session database, signup or admin capabilit
 from __future__ import annotations
 
 import http.client
+import os
 import threading
 import time
 from typing import Protocol
@@ -79,8 +80,13 @@ def create_workspace_auth_router(auth: WorkspaceAuth | None) -> APIRouter:
 
     def origin_guard(request: Request) -> None:
         origin = request.headers.get('origin')
-        # Browser writes must come from the serving origin. CLI callers omit Origin.
-        if origin is not None and origin != str(request.base_url).rstrip('/'):
+        expected_origin = str(request.base_url).rstrip('/')
+        allowed_origins = {expected_origin}
+        dev_origins = os.environ.get('CASEPROOF_DEV_ALLOWED_ORIGINS', '')
+        if dev_origins:
+            allowed_origins.update(o.strip() for o in dev_origins.split(',') if o.strip())
+        # Browser writes must come from the serving origin or an allowed dev origin. CLI callers omit Origin.
+        if origin is not None and origin not in allowed_origins:
             raise AccessRejected(AccessFailure.PERMISSION_DENIED)
         if request.headers.get('sec-fetch-site') in ('cross-site', 'none'):
             raise AccessRejected(AccessFailure.PERMISSION_DENIED)
