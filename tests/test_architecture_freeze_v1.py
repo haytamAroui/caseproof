@@ -8,8 +8,8 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 from fastapi.routing import APIRoute
+from pydantic import ValidationError
 
 from apps.api.access_control import CaseAction
 from apps.api.litigation_development_app import create_litigation_development_app
