@@ -61,7 +61,10 @@ def test_disposable_guard_and_cloud_verification_wiring() -> None:
 
 
 def test_no_installed_migration_or_prod_route() -> None:
-    assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} == {
+    assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} - {
+        # Version already applied on caseproof-dev; restore is tested separately.
+        "20261030150030_caseproof_phase4_signed_reference_review.sql",
+    } == {
         "20261031112127_signed_page_worker.sql",
         "20261031234906_dossier_draft_revisions.sql",
         "20261031235117_dossier_draft_revision_fk_indexes.sql",
