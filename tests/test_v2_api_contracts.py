@@ -422,7 +422,7 @@ def test_duplicate_idempotency_fingerprint_replay_is_not_a_legal_success() -> No
 
 
 def test_operation_matrix_matches_exported_schema_routes_and_permissions() -> None:
-    assert MATRIX["status"] == "typed_contract_only_all_v2_routes_disabled"
+    assert MATRIX["status"] == "typed_contract_only_six_named_operations_disabled"
     assert MATRIX["schema_version"] == SCHEMA_VERSION
     assert {
         f"{op['method']} {op['path']}" for op in MATRIX["operations"]
