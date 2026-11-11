@@ -42,3 +42,37 @@ A read-only comparison of the 19 deployed migration versions absent from the rep
 The evidence manifest `docs/security/caseproof_dev_migration_lineage_20261111.json` includes the exact `SHA-256` fingerprints of the applied SQL statements, their character lengths and candidate paths. `python -m scripts.verify_migration_lineage --report-only` validates the immutable source-classification evidence. Without `--report-only`, the command exits 2 to preserve the release blocker.
 
 **This is source provenance, not a corrected migration directory.** Do not duplicate renamed SQL under both versions inside `supabase/migrations` or execute all candidate files as if they were a safe chronological chain. The recorded historical contents of the four divergent and three unsourced migrations need exact controlled recovery and dependency review before any fresh replay or history repair.
+
+## Historical SQL recovery — 11 November 2026
+
+Seven previously unresolved SQL statements (four divergent candidates and
+three previously absent sources) have been recovered byte-for-byte from
+the development migration ledger to `db/historical_applied/`. All 19 unmatched
+live versions now have locatable and hash-checked historical SQL:
+12 through existing repository candidate files and 7 through the archive.
+
+This closes the **SQL provenance gap only**. It does **not** reconcile the
+18 repository-only versions, prove replay order, approve the current SQL
+privileges, or authorize a linked Supabase reset, deployment or history repair.
+The P0-3 migration release gate remains BLOCKED.
+
+### Same-version migration fingerprint verification — 11 November 2026
+
+A separate exact-content audit examined **all 55 applied versions** that
+already have matching-version local migration filenames. **54 match exactly**.
+The single exception is `20261106092710_caseproof_data_rights_ledger_shadow`.
+
+Its historical recorded SQL locks the case row with `FOR UPDATE OF c`;
+the local source contains `FOR UPDATE OF c FOR SHARE OF m,g`. The
+precise historical applied SQL has been archived separately with its SHA-256
+fingerprint. A read-only live function check confirms the **currently installed**
+`caseproof_rights_manage` includes the membership share lock; this finding
+concerns historical SQL provenance and is not proof of a current missing lock.
+
+All **74 deployed migration statements** now have a locally locatable,
+fingerprint-checked original SQL body (54 matching-version files, one
+same-version archive, 12 alternate-version sources, seven additional archives).
+This **does not** mean the 18 repo-only migration versions are reconciled or
+that a canonical fresh-install replay succeeds. The P0-3 release gate stays
+BLOCKED.
+

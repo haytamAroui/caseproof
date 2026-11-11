@@ -17,6 +17,12 @@ def test_all_nineteen_unmatched_receipts_are_adjudicated() -> None:
     assert report["exact_source_matches"] == 12
     assert report["divergent_sources"] == 4
     assert report["missing_sources"] == 3
+    assert report["recovered_applied_sql_receipts"] == 7
+    assert report["all_unmatched_applied_sql_locatable"] is True
+    assert report["matching_version_receipts_checked"] == 55
+    assert report["matching_version_exact_sql"] == 54
+    assert report["matching_version_divergent_sql"] == 1
+    assert report["all_applied_sql_receipts_locatable"] is True
     assert report["fresh_replay_verified"] is False
 
 
@@ -42,5 +48,63 @@ def test_malformed_provenance_is_rejected(tmp_path) -> None:
     doc["remote_only"][0]["source_state"] = "NO_SOURCE"
     altered = tmp_path / "tampered.json"
     altered.write_text(json.dumps(doc))
-    with pytest.raises(ValueError, match="NO_SOURCE has a candidate"):
+    with pytest.raises(ValueError, match="Missing archived SQL receipt"):
         verify_lineage(lineage=altered)
+
+def test_archived_sql_receipt_tampering_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
+    doc = json.loads(LINEAGE.read_text())
+    item = next(row for row in doc["remote_only"] if row["source_state"] == "DIVERGENT_SOURCE")
+    selected = (ROOT / item["applied_receipt_path"]).resolve()
+    real_read = Path.read_bytes
+
+    def tamper(path: Path) -> bytes:
+        raw = real_read(path)
+        return raw + b"-- injected alteration\\n" if path.resolve() == selected else raw
+
+    monkeypatch.setattr(Path, "read_bytes", tamper)
+    with pytest.raises(ValueError, match="Archived SQL receipt tampered"):
+        verify_lineage()
+
+
+def test_archived_receipts_never_enter_supabase_migrations() -> None:
+    doc = json.loads(LINEAGE.read_text())
+    archived = [row for row in doc["remote_only"] if row["source_state"] != "EXACT_SOURCE"]
+    assert len(archived) == 7
+    assert all(row["applied_receipt_path"].startswith("db/historical_applied/")
+               for row in archived)
+    assert all((ROOT / row["applied_receipt_path"]).is_file() for row in archived)
+
+def test_tampering_matched_migration_source_is_detected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    doc = json.loads(LINEAGE.read_text())
+    row = next(x for x in doc["matching_version_receipts"]
+               if x["source_state"] == "EXACT_SOURCE")
+    target = (ROOT / row["source_path"]).resolve()
+    read_original = Path.read_bytes
+
+    def tamper(path: Path) -> bytes:
+        data = read_original(path)
+        return data + b"-- tampered migration\\n" if path.resolve() == target else data
+
+    monkeypatch.setattr(Path, "read_bytes", tamper)
+    with pytest.raises(ValueError, match="Same-version SQL source drift"):
+        verify_lineage()
+
+
+def test_tampering_same_version_applied_archive_is_detected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    doc = json.loads(LINEAGE.read_text())
+    row = next(x for x in doc["matching_version_receipts"]
+               if x["source_state"] == "DIVERGENT_SOURCE")
+    target = (ROOT / row["applied_receipt_path"]).resolve()
+    read_original = Path.read_bytes
+
+    def tamper(path: Path) -> bytes:
+        data = read_original(path)
+        return data + b"-- tampered archive\\n" if path.resolve() == target else data
+
+    monkeypatch.setattr(Path, "read_bytes", tamper)
+    with pytest.raises(ValueError, match="Applied same-version SQL receipt tampered"):
+        verify_lineage()
