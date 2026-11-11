@@ -78,3 +78,25 @@ def test_sidecar_migration_precedes_its_table_creator_in_local_history() -> None
         / "db/historical_applied/20261030111946_m05_test_run_registry_and_ocr_cleanup.sql"
     )
     assert "alter table caseproof.ocr_geometry_sidecars" in historical.read_text()
+
+def test_probe_refuses_libpq_hostaddr_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CASEPROOF_DISPOSABLE_DB", "YES")
+    monkeypatch.setenv("PGHOST", "127.0.0.1")
+    monkeypatch.setenv("PGHOSTADDR", "203.0.113.10")
+    monkeypatch.setenv("PGDATABASE", "caseproof_s2_ci")
+    monkeypatch.setenv("PGUSER", "postgres")
+    monkeypatch.setenv("PGPORT", "5432")
+    with pytest.raises(RuntimeError, match="alternate PostgreSQL host address"):
+        probe_in_filename_order()
+
+
+def test_probe_refuses_libpq_service_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CASEPROOF_DISPOSABLE_DB", "YES")
+    monkeypatch.setenv("PGHOST", "127.0.0.1")
+    monkeypatch.delenv("PGHOSTADDR", raising=False)
+    monkeypatch.setenv("PGSERVICE", "remote_provider")
+    monkeypatch.setenv("PGDATABASE", "caseproof_s2_ci")
+    monkeypatch.setenv("PGUSER", "postgres")
+    monkeypatch.setenv("PGPORT", "5432")
+    with pytest.raises(RuntimeError, match="connection service override"):
+        probe_in_filename_order()
