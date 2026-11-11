@@ -1,13 +1,11 @@
 name: PR174 genuine signed historical report and raster acceptance
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   signed-historical:
-    if: github.repository == 'haytamAroui/caseproof' && github.head_ref == 'feat/f1-f2-backend-contract-hardening' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof'
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 25
@@ -23,6 +21,8 @@ jobs:
       CASEPROOF_OCR_IMAGE: caseproof-ocr-worker:ci
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: "3.11"

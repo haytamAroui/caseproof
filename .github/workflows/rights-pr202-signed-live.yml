@@ -1,8 +1,6 @@
 name: PR202 genuine signed rights acceptance (owned synthetic source)
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,10 +8,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   live:
-    if: >-
-      github.repository == 'haytamAroui/caseproof' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.head_ref == 'feat/data-rights-enforcement-pr2'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof'
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 20

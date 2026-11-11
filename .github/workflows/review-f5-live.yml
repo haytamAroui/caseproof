@@ -1,14 +1,11 @@
 name: F5 genuine signed correction acceptance
 on:
   workflow_dispatch:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches: [main]
 permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && (github.ref == 'refs/heads/feat/f5-correction-recheck-workspace' || (github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/f5-correction-recheck-workspace' || github.head_ref == 'feat/p2-p3-review-correction' || github.head_ref == 'feat/bounded-locator-snapshot-correspondence' || github.head_ref == 'feat/structured-docx-table-corrections' || github.head_ref == 'feat/word-document-editor-tracked-changes')))
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof'
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 20
