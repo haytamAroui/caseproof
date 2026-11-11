@@ -223,3 +223,49 @@ def test_extract_anchored_citations_binds_to_evidence_kernel_text_span() -> None
         assert isinstance(item.span, TextSpan)
         assert passage[item.span.start : item.span.end] == item.citation.raw_text
     assert extract_statute_citations(passage) == [item.citation for item in anchored]
+
+
+
+def test_reject_oversized_citation_with_domain_error() -> None:
+    oversized = "Art. 737" + " " * 600 + "Ger.W."
+    with pytest.raises(CitationParseError, match="maximum supported length"):
+        parse_statute_citation(oversized)
+
+
+def test_extraction_skips_oversized_candidate_but_keeps_following() -> None:
+    oversized = "Art. 737" + " " * 600 + "Ger.W."
+    passage = oversized + "; Article 8.4 du Code civil"
+    anchored = extract_anchored_statute_citations(passage)
+    assert len(anchored) == 1
+    assert anchored[0].citation.article == "8.4"
+    assert passage[anchored[0].span.start:anchored[0].span.end] == (
+        "Article 8.4 du Code civil"
+    )
+
+
+@pytest.mark.parametrize(
+    ("token", "expected_article"),
+    [
+        ("Art. 737 Ger.W.\n", "737"),
+        ("Wet van 13 april 2019\n", "13 april 2019"),
+    ],
+)
+def test_dense_citation_passage_extracts_each_once(
+    token: str, expected_article: str,
+) -> None:
+    # Both single-family cases previously repeatedly searched the entire suffix.
+    passage = token * 2000
+    anchored = extract_anchored_statute_citations(passage)
+    assert len(anchored) == 2000
+    assert all(item.citation.article == expected_article for item in anchored)
+    assert anchored[0].span.start == 0
+    assert anchored[-1].span.end == len(passage.rstrip())
+
+
+def test_nested_act_in_article_is_not_emitted_twice() -> None:
+    passage = "Article 737 de la Loi du 13 avril 2019; Loi du 14 avril 2019"
+    citations = extract_statute_citations(passage)
+    assert len(citations) == 2
+    assert [citation.article for citation in citations] == [
+        "737", "14 avril 2019",
+    ]
