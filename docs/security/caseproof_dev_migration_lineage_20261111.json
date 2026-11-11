@@ -58,7 +58,9 @@
       "recorded_chars": 320,
       "recorded_sha256": "88df8c524eae309408b1d0121c1d36b946d904a0651ad11e6413709577d0bca9",
       "candidate_path": "supabase/migrations/20261030141500_caseproof_phase3_geometry_text_payload.sql",
-      "source_state": "DIVERGENT_SOURCE"
+      "source_state": "DIVERGENT_SOURCE",
+      "applied_receipt_path": "db/historical_applied/20261030093520_caseproof_phase3_geometry_text_payload.sql",
+      "applied_receipt_verified": true
     },
     {
       "version": "20261030093532",
@@ -85,7 +87,9 @@
       "recorded_chars": 1443,
       "recorded_sha256": "39720677ef28e79e625026ce2fcc0b6dafec40d8d640686581fdc413274a458b",
       "candidate_path": null,
-      "source_state": "NO_SOURCE"
+      "source_state": "NO_SOURCE",
+      "applied_receipt_path": "db/historical_applied/20261030095233_caseproof_phase3_persistent_acceptance_registry.sql",
+      "applied_receipt_verified": true
     },
     {
       "version": "20261030100609",
@@ -94,7 +98,9 @@
       "recorded_chars": 4829,
       "recorded_sha256": "bb917e7124c2c553b7ecd6aeba6fd1366257cfce79308402286945bce8c61493",
       "candidate_path": "supabase/migrations/20261030153000_caseproof_phase3_four_source_draft_bundle.sql",
-      "source_state": "DIVERGENT_SOURCE"
+      "source_state": "DIVERGENT_SOURCE",
+      "applied_receipt_path": "db/historical_applied/20261030100609_caseproof_phase3_four_source_draft_bundle.sql",
+      "applied_receipt_verified": true
     },
     {
       "version": "20261030101036",
@@ -103,7 +109,9 @@
       "recorded_chars": 261,
       "recorded_sha256": "5c906a4f1535aea71242587110c33dea95b94fa961ad096a2d95a08d700180ec",
       "candidate_path": null,
-      "source_state": "NO_SOURCE"
+      "source_state": "NO_SOURCE",
+      "applied_receipt_path": "db/historical_applied/20261030101036_caseproof_phase3_allow_draft_bundle_role.sql",
+      "applied_receipt_verified": true
     },
     {
       "version": "20261030111946",
@@ -112,7 +120,9 @@
       "recorded_chars": 955,
       "recorded_sha256": "34a7105f2dc5befb5b842756f61b186c23b0ed4bbe6667d723a8dd851c651a45",
       "candidate_path": null,
-      "source_state": "NO_SOURCE"
+      "source_state": "NO_SOURCE",
+      "applied_receipt_path": "db/historical_applied/20261030111946_m05_test_run_registry_and_ocr_cleanup.sql",
+      "applied_receipt_verified": true
     },
     {
       "version": "20261030112317",
@@ -148,7 +158,9 @@
       "recorded_chars": 21499,
       "recorded_sha256": "c62bf43fd70bcb175d2d3a4a5775df27dc0668b8a034b35c0ae076b9d16e70d8",
       "candidate_path": "docs/security/DEV_ONLY_APPLIED_DOCX_AUTH_MIGRATION_20261105081249.sql",
-      "source_state": "DIVERGENT_SOURCE"
+      "source_state": "DIVERGENT_SOURCE",
+      "applied_receipt_path": "db/historical_applied/20261105081249_caseproof_document_wide_docx_editor_dev_authorization.sql",
+      "applied_receipt_verified": true
     },
     {
       "version": "20261105100916",
@@ -157,7 +169,9 @@
       "recorded_chars": 5581,
       "recorded_sha256": "57f5ab4a4d0aec63d62b9769359fc5ba0bfb855b1ca93e04c91c359428b9528b",
       "candidate_path": "docs/security/DEV_ONLY_APPLIED_DOCX_FIXTURE_CLEANUP_GUARD_20261105.sql",
-      "source_state": "DIVERGENT_SOURCE"
+      "source_state": "DIVERGENT_SOURCE",
+      "applied_receipt_path": "db/historical_applied/20261105100916_caseproof_dev_docx_owned_fixture_cleanup_guard_v2.sql",
+      "applied_receipt_verified": true
     },
     {
       "version": "20261105104752",

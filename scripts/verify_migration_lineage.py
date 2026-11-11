@@ -36,6 +36,7 @@ def verify_lineage(
     expected = remote.keys() - local.keys()
     listed: set[str] = set()
     totals = {key: 0 for key in STATES}
+    recovered_receipts = 0
     for item in doc["remote_only"]:
         version = item["version"]
         if version in listed or version not in expected:
@@ -50,6 +51,25 @@ def verify_lineage(
         if state not in STATES:
             raise ValueError(f"Unrecognized source class: {version}")
         totals[state] += 1
+        receipt = item.get("applied_receipt_path")
+        if state == "EXACT_SOURCE":
+            if receipt is not None or item.get("applied_receipt_verified"):
+                raise ValueError(f"Exact source must not have a second receipt: {version}")
+        else:
+            if not isinstance(receipt, str) or not receipt.startswith("db/historical_applied/"):
+                raise ValueError(f"Missing archived SQL receipt: {version}")
+            expected_receipt = f"db/historical_applied/{version}_{remote[version]}.sql"
+            if receipt != expected_receipt or item.get("applied_receipt_verified") is not True:
+                raise ValueError(f"Receipt version or name changed: {version}")
+            recovered_path = (root / receipt).resolve()
+            if not recovered_path.is_relative_to(root.resolve()) or not recovered_path.is_file():
+                raise ValueError(f"Missing or unsafe recovered SQL: {version}")
+            recovered = recovered_path.read_bytes()
+            if hashlib.sha256(recovered).hexdigest() != sha:
+                raise ValueError(f"Archived SQL receipt tampered: {version}")
+            if len(recovered.decode("utf-8")) != item["recorded_chars"]:
+                raise ValueError(f"Archived SQL receipt length changed: {version}")
+            recovered_receipts += 1
         candidate = item["candidate_path"]
         if state == "NO_SOURCE":
             if candidate is not None:
@@ -77,6 +97,8 @@ def verify_lineage(
         "divergent_sources": totals["DIVERGENT_SOURCE"],
         "missing_sources": totals["NO_SOURCE"],
         "historical_source_parity_verified": True,
+        "recovered_applied_sql_receipts": recovered_receipts,
+        "all_unmatched_applied_sql_locatable": recovered_receipts + totals["EXACT_SOURCE"] == len(expected),
         "fresh_replay_verified": False,
         "live_database_modified": False,
     }

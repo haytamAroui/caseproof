@@ -1,0 +1,1 @@
+alter table caseproof.document_versions drop constraint document_versions_bundle_role_check; alter table caseproof.document_versions add constraint document_versions_bundle_role_check check (bundle_role is null or bundle_role in ('draft','inventory','exhibit'))

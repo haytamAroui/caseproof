@@ -42,3 +42,16 @@ A read-only comparison of the 19 deployed migration versions absent from the rep
 The evidence manifest `docs/security/caseproof_dev_migration_lineage_20261111.json` includes the exact `SHA-256` fingerprints of the applied SQL statements, their character lengths and candidate paths. `python -m scripts.verify_migration_lineage --report-only` validates the immutable source-classification evidence. Without `--report-only`, the command exits 2 to preserve the release blocker.
 
 **This is source provenance, not a corrected migration directory.** Do not duplicate renamed SQL under both versions inside `supabase/migrations` or execute all candidate files as if they were a safe chronological chain. The recorded historical contents of the four divergent and three unsourced migrations need exact controlled recovery and dependency review before any fresh replay or history repair.
+
+## Historical SQL recovery — 11 November 2026
+
+Seven previously unresolved SQL statements (four divergent candidates and
+three previously absent sources) have been recovered byte-for-byte from
+the development migration ledger to `db/historical_applied/`. All 19 unmatched
+live versions now have locatable and hash-checked historical SQL:
+12 through existing repository candidate files and 7 through the archive.
+
+This closes the **SQL provenance gap only**. It does **not** reconcile the
+18 repository-only versions, prove replay order, approve the current SQL
+privileges, or authorize a linked Supabase reset, deployment or history repair.
+The P0-3 migration release gate remains BLOCKED.

@@ -17,6 +17,8 @@ def test_all_nineteen_unmatched_receipts_are_adjudicated() -> None:
     assert report["exact_source_matches"] == 12
     assert report["divergent_sources"] == 4
     assert report["missing_sources"] == 3
+    assert report["recovered_applied_sql_receipts"] == 7
+    assert report["all_unmatched_applied_sql_locatable"] is True
     assert report["fresh_replay_verified"] is False
 
 
@@ -44,3 +46,26 @@ def test_malformed_provenance_is_rejected(tmp_path) -> None:
     altered.write_text(json.dumps(doc))
     with pytest.raises(ValueError, match="NO_SOURCE has a candidate"):
         verify_lineage(lineage=altered)
+
+def test_archived_sql_receipt_tampering_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
+    doc = json.loads(LINEAGE.read_text())
+    item = next(row for row in doc["remote_only"] if row["source_state"] == "DIVERGENT_SOURCE")
+    selected = (ROOT / item["applied_receipt_path"]).resolve()
+    real_read = Path.read_bytes
+
+    def tamper(path: Path) -> bytes:
+        raw = real_read(path)
+        return raw + b"-- injected alteration\\n" if path.resolve() == selected else raw
+
+    monkeypatch.setattr(Path, "read_bytes", tamper)
+    with pytest.raises(ValueError, match="Archived SQL receipt tampered"):
+        verify_lineage()
+
+
+def test_archived_receipts_never_enter_supabase_migrations() -> None:
+    doc = json.loads(LINEAGE.read_text())
+    archived = [row for row in doc["remote_only"] if row["source_state"] != "EXACT_SOURCE"]
+    assert len(archived) == 7
+    assert all(row["applied_receipt_path"].startswith("db/historical_applied/")
+               for row in archived)
+    assert all((ROOT / row["applied_receipt_path"]).is_file() for row in archived)
