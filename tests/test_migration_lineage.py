@@ -48,7 +48,7 @@ def test_malformed_provenance_is_rejected(tmp_path) -> None:
     doc["remote_only"][0]["source_state"] = "NO_SOURCE"
     altered = tmp_path / "tampered.json"
     altered.write_text(json.dumps(doc))
-    with pytest.raises(ValueError, match="NO_SOURCE has a candidate"):
+    with pytest.raises(ValueError, match="Missing archived SQL receipt"):
         verify_lineage(lineage=altered)
 
 def test_archived_sql_receipt_tampering_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
