@@ -76,3 +76,19 @@ This **does not** mean the 18 repo-only migration versions are reconciled or
 that a canonical fresh-install replay succeeds. The P0-3 release gate stays
 BLOCKED.
 
+## 11 November 2026 — Literal natural-order replay diagnostic
+
+A separate disposable PostgreSQL job now attempts every tracked
+`supabase/migrations/*.sql` file in **unmodified filename order**, using
+the same synthetic Supabase role/auth/storage stubs as the existing retention
+CI. It stops at the first SQL error and uploads a bounded JSON result.
+
+The job is expressly named a **diagnostic**, and its `--diagnostic` exit zero
+means only that the experiment produced a result. The release-gate invocation
+returns nonzero without real Supabase CLI fresh-install/upgrade evidence.
+It does not silently reorder migrations, use the archived applied SQL,
+connect to the development Supabase instance, or approve any permissions.
+
+A PostgreSQL-stub pass would still **not** equal Supabase CLI `db reset`
+success. The official local CLI configuration, full auth/storage schema,
+and 18 repository-only version reconciliation require further work.
