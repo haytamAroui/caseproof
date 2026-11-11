@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from packages.evidence_kernel.domain.anchors import TextSpan
 
 PARSER_VERSION = "caseproof-statute-citation-parser-v1"
+MAX_CITATION_LENGTH = 512
 
 _ROMAN_BOOK = r"(?:XX|X(?:IX|IV|V?I{0,3})|IX|IV|V?I{1,3}|V)"
 _LATIN_SUFFIX = r"(?:bis|ter|quater|quinquies|sexies|septies|octies|novies|decies)"
@@ -219,6 +220,8 @@ def parse_statute_citation(text: str) -> StatuteCitation:
     candidate = text.strip()
     if not candidate:
         raise CitationParseError("citation text must not be empty")
+    if len(candidate) > MAX_CITATION_LENGTH:
+        raise CitationParseError("statutory citation exceeds maximum supported length")
 
     art_match = _ARTICLE_CITATION_PATTERN.fullmatch(candidate)
     if art_match is not None:
@@ -241,22 +244,36 @@ def extract_anchored_statute_citations(text: str) -> list[AnchoredStatuteCitatio
     if not isinstance(text, str) or not text:
         return []
     results: list[AnchoredStatuteCitation] = []
+    # Advance both iterators once through the passage: repeated suffix searches
+    # become quadratic when only one citation family occurs frequently.
+    article_matches = iter(_ARTICLE_CITATION_PATTERN.finditer(text))
+    act_matches = iter(_STANDALONE_ACT_PATTERN.finditer(text))
+    article_match = next(article_matches, None)
+    act_match = next(act_matches, None)
     cursor = 0
-    while cursor < len(text):
-        art_match = _ARTICLE_CITATION_PATTERN.search(text, cursor)
-        act_match = _STANDALONE_ACT_PATTERN.search(text, cursor)
 
-        chosen: re.Match[str] | None = None
-        is_article = True
-        if art_match is not None and (act_match is None or art_match.start() <= act_match.start()):
-            chosen = art_match
-            is_article = True
-        elif act_match is not None:
+    while article_match is not None or act_match is not None:
+        is_article = (
+            article_match is not None
+            and (act_match is None or article_match.start() <= act_match.start())
+        )
+        if is_article:
+            chosen = article_match
+            article_match = next(article_matches, None)
+        else:
             chosen = act_match
-            is_article = False
+            act_match = next(act_matches, None)
+        assert chosen is not None
 
-        if chosen is None:
-            break
+        # Standalone acts can also occur inside a complete article citation.
+        # Keep the article match and do not emit its nested act a second time.
+        if chosen.start() < cursor:
+            continue
+        cursor = chosen.end()
+        if len(chosen.group(0)) > MAX_CITATION_LENGTH:
+            # A single oversized candidate must not prevent extraction of
+            # later, otherwise valid citations.
+            continue
 
         try:
             citation = (
@@ -272,5 +289,4 @@ def extract_anchored_statute_citations(text: str) -> list[AnchoredStatuteCitatio
             )
         except CitationParseError:
             pass
-        cursor = chosen.end()
     return results
