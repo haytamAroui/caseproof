@@ -55,3 +55,24 @@ This closes the **SQL provenance gap only**. It does **not** reconcile the
 18 repository-only versions, prove replay order, approve the current SQL
 privileges, or authorize a linked Supabase reset, deployment or history repair.
 The P0-3 migration release gate remains BLOCKED.
+
+### Same-version migration fingerprint verification — 11 November 2026
+
+A separate exact-content audit examined **all 55 applied versions** that
+already have matching-version local migration filenames. **54 match exactly**.
+The single exception is `20261106092710_caseproof_data_rights_ledger_shadow`.
+
+Its historical recorded SQL locks the case row with `FOR UPDATE OF c`;
+the local source contains `FOR UPDATE OF c FOR SHARE OF m,g`. The
+precise historical applied SQL has been archived separately with its SHA-256
+fingerprint. A read-only live function check confirms the **currently installed**
+`caseproof_rights_manage` includes the membership share lock; this finding
+concerns historical SQL provenance and is not proof of a current missing lock.
+
+All **74 deployed migration statements** now have a locally locatable,
+fingerprint-checked original SQL body (54 matching-version files, one
+same-version archive, 12 alternate-version sources, seven additional archives).
+This **does not** mean the 18 repo-only migration versions are reconciled or
+that a canonical fresh-install replay succeeds. The P0-3 release gate stays
+BLOCKED.
+
