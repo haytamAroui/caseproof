@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
+from scripts.audit_migration_inventory import MIGRATIONS
 from scripts.disposable_replay_candidate import (
     PLAN,
     disposable_environment,
     replay_plan,
 )
-from scripts.audit_migration_inventory import MIGRATIONS
 
 
 def test_candidate_is_complete_and_exactly_pinned() -> None:
