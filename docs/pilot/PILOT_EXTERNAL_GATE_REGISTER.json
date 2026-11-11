@@ -1,0 +1,88 @@
+{
+  "schema": "caseproof-pilot-external-gates-v1",
+  "build_sha": "35a1d9016e574e76f38c2f70f1937fb0f4d8969f",
+  "environment": "caseproof-dev / synthetic-only observation",
+  "data_class": "synthetic_only_not_client_authorized",
+  "gates": {
+    "D01": {
+      "status": "BLOCKED",
+      "owner_role": "Product engineering + independent capacity owner",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": null,
+      "independent_receipt_sha256": null
+    },
+    "T61": {
+      "status": "OPEN",
+      "owner_role": "Practitioner / document compatibility reviewer",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": null,
+      "independent_receipt_sha256": null
+    },
+    "T70": {
+      "status": "EVIDENCED",
+      "owner_role": "Independent security reviewer",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": "docs/security/T70_READONLY_LIVE_CATALOG_AUDIT_2026-11-05.md",
+      "independent_receipt_sha256": null
+    },
+    "T72": {
+      "status": "OPEN",
+      "owner_role": "Dependency / supply-chain owner",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": null,
+      "independent_receipt_sha256": null
+    },
+    "T73": {
+      "status": "EVIDENCED",
+      "owner_role": "Privacy officer / authorized law-firm controller",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": "docs/security/PILOT_DATA_FLOW.md",
+      "independent_receipt_sha256": null
+    },
+    "T74": {
+      "status": "BLOCKED",
+      "owner_role": "Operations and retention owner",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": "docs/pilot/PILOT_EXTERNAL_ACCEPTANCE_RUNBOOK.md",
+      "independent_receipt_sha256": null
+    },
+    "T75": {
+      "status": "OPEN",
+      "owner_role": "Independent accessibility practitioner",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": null,
+      "independent_receipt_sha256": null
+    },
+    "T76": {
+      "status": "OPEN",
+      "owner_role": "Data rights holder and corpus adjudication lead",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": null,
+      "independent_receipt_sha256": null
+    },
+    "T78": {
+      "status": "OPEN",
+      "owner_role": "Two independent practitioner reviewers + study lead",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": null,
+      "independent_receipt_sha256": null
+    },
+    "T79": {
+      "status": "BLOCKED",
+      "owner_role": "Pilot sponsor and authorized firm decision-maker",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": null,
+      "independent_receipt_sha256": null
+    }
+  }
+}
