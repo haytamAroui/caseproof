@@ -50,6 +50,14 @@ PG_ERROR = re.compile(r"(?m)^(?:psql:[^\n]*?:\d+:\s*)?ERROR:\s*(.*)$")
 
 def probe_in_filename_order() -> dict[str, object]:
     env = _env()  # refuse any target other than caseproof_s2_ci on loopback
+    # libpq accepts PGHOSTADDR and service definitions as connection overrides.
+    # Reject them even when the human-readable PGHOST looks like localhost.
+    if env.get("PGHOSTADDR") not in (None, "", "127.0.0.1", "::1"):
+        raise RuntimeError("Refusing alternate PostgreSQL host address")
+    if env.get("PGSERVICE") or env.get("PGSERVICEFILE"):
+        raise RuntimeError("Refusing PostgreSQL connection service override")
+    if env.get("PGPORT") != "5432":
+        raise RuntimeError("Expected ephemeral PostgreSQL port 5432")
     inventory = local_inventory(MIGRATIONS)
     paths = sorted(MIGRATIONS.glob("*.sql"))
     if len(paths) != len(inventory) or not paths:
