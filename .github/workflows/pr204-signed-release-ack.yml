@@ -1,14 +1,11 @@
 name: PR204 genuine signed release acknowledgment and provenance
 on:
   workflow_dispatch:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches: [main]
 permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/pr204-release-acknowledgement-provenance'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof'
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 30

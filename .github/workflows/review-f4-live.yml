@@ -1,13 +1,11 @@
 name: F4 genuine signed reviewer acceptance
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   live:
-    if: github.repository == 'haytamAroui/caseproof' && github.event.pull_request.head.repo.full_name == github.repository && (github.head_ref == 'feat/m3-f4-v31-reviewer-closure' || github.head_ref == 'feat/p2-reviewer-workspace-reconciliation')
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'haytamAroui/caseproof'
     runs-on: ubuntu-latest
     environment: caseproof-dev
     timeout-minutes: 20

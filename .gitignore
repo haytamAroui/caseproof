@@ -8,3 +8,10 @@ __pycache__/
 
 frontend/viewer-dist/
 frontend/tests/viewer-comparison/generated/
+
+# Never track local credentials or runtime output.
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.log
