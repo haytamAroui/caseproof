@@ -166,7 +166,10 @@ def test_all_new_code_is_unwired_and_migration_unchanged() -> None:
     app = (root / "apps/api/main.py").read_text(encoding="utf-8")
     assert "postgres_evidence_reader" not in app
     assert "/v2/" not in app
-    assert {p.name for p in (root / "supabase/migrations").glob("*.sql")} == {
+    assert {p.name for p in (root / "supabase/migrations").glob("*.sql")} - {
+        # Version already applied on caseproof-dev; restore is tested separately.
+        "20261030150030_caseproof_phase4_signed_reference_review.sql",
+    } == {
         "20261031112127_signed_page_worker.sql",
         "20261031234906_dossier_draft_revisions.sql",
         "20261031235117_dossier_draft_revision_fk_indexes.sql",

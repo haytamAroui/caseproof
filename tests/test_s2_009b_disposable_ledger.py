@@ -75,7 +75,10 @@ def test_ci_has_ephemeral_fixture_only_and_no_remote_migration() -> None:
     for gate in ("AUDIT_STAGE", "RECEIPT_STAGE", "VERIFICATION_FAILURE_ROLLBACK",
                  "UNAVAILABLE_FAILURE_ROLLBACK", "FORGED_RECEIPT"):
         assert gate in runner
-    assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} == {
+    assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} - {
+        # Version already applied on caseproof-dev; restore is tested separately.
+        "20261030150030_caseproof_phase4_signed_reference_review.sql",
+    } == {
         "20261031112127_signed_page_worker.sql",
         "20261031234906_dossier_draft_revisions.sql",
         "20261031235117_dossier_draft_revision_fk_indexes.sql",

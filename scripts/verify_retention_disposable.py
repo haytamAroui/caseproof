@@ -83,7 +83,6 @@ grant select,insert on storage.objects to authenticated;
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
     _run(delayed.read_text(), env)
-    _run((ROOT / 'supabase/phase4_reviewed/caseproof_phase4_signed_reference_review.sql').read_text(), env)
     _run(retention.read_text(), env)
     _run(fence.read_text(), env)
     _run(dossier.read_text(), env)

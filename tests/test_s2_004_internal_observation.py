@@ -114,7 +114,10 @@ def test_no_new_live_route_or_staged_migration() -> None:
     assert "S2-004_disposable_observation.sql" not in (
         ROOT / "scripts/verify_s2_002_database.py"
     ).read_text(encoding="utf-8")
-    assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} == {
+    assert {p.name for p in (ROOT / "supabase/migrations").glob("*.sql")} - {
+        # Version already applied on caseproof-dev; restore is tested separately.
+        "20261030150030_caseproof_phase4_signed_reference_review.sql",
+    } == {
         "20261031112127_signed_page_worker.sql",
         "20261031234906_dossier_draft_revisions.sql",
         "20261031235117_dossier_draft_revision_fk_indexes.sql",
