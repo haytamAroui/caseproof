@@ -1,0 +1,181 @@
+{
+  "schema": "caseproof-applied-migration-lineage-v1",
+  "environment": "caseproof-dev",
+  "captured_date_utc": "2026-11-11",
+  "base_sha": "5141dfaba2b511edacd8993cc679f0e3975a9271",
+  "provenance": "Read-only live supabase_migrations.schema_migrations statements[1] SHA256; source equivalence checked with exact SQL equality, no SQL executed",
+  "interpretation": "Historical source matching only. NOT proof of chronological replay, valid deployed upgrade, security signoff, or approval to mutate live migration history.",
+  "remote_only": [
+    {
+      "version": "20261030075834",
+      "name": "caseproof_dev_atomic_bundle_registration",
+      "statement_count": 1,
+      "recorded_chars": 5327,
+      "recorded_sha256": "bf7dc998daa8f91d5b8552a928547cb7900857e2aa3179cabe19376834f864ed",
+      "candidate_path": "supabase/migrations/20261030110000_caseproof_dev_atomic_bundle_registration.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030084629",
+      "name": "caseproof_dev_bundle_cleanup",
+      "statement_count": 1,
+      "recorded_chars": 4319,
+      "recorded_sha256": "96aa57af2e292ce8bdb4acc329303c059f052f1d2fee9467e8be01d21ce327ee",
+      "candidate_path": "supabase/migrations/20261030095000_caseproof_dev_bundle_cleanup.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030085139",
+      "name": "caseproof_dev_bundle_manifest",
+      "statement_count": 1,
+      "recorded_chars": 2579,
+      "recorded_sha256": "977f4b3770eaca71066bfe1e72bf74d95b345ce229b996fe3d27623b779b8bd5",
+      "candidate_path": "supabase/migrations/20261030101500_caseproof_dev_bundle_manifest.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030085229",
+      "name": "caseproof_durable_bundle_roles",
+      "statement_count": 1,
+      "recorded_chars": 7308,
+      "recorded_sha256": "05fb68ba3b4f009ffe146046f3244011887367cedc79fb71e3e6c2f117409c96",
+      "candidate_path": "supabase/migrations/20261030103000_caseproof_durable_bundle_roles.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030093045",
+      "name": "caseproof_phase3_private_ocr_geometry",
+      "statement_count": 1,
+      "recorded_chars": 2076,
+      "recorded_sha256": "45c8a4a87412c4f0c5173cb1601bc33f820b696546787f032f767f3489293288",
+      "candidate_path": "supabase/migrations/20261030140000_caseproof_phase3_private_ocr_geometry.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030093520",
+      "name": "caseproof_phase3_geometry_text_payload",
+      "statement_count": 1,
+      "recorded_chars": 320,
+      "recorded_sha256": "88df8c524eae309408b1d0121c1d36b946d904a0651ad11e6413709577d0bca9",
+      "candidate_path": "supabase/migrations/20261030141500_caseproof_phase3_geometry_text_payload.sql",
+      "source_state": "DIVERGENT_SOURCE"
+    },
+    {
+      "version": "20261030093532",
+      "name": "caseproof_phase3_atomic_ocr_ingest",
+      "statement_count": 1,
+      "recorded_chars": 10756,
+      "recorded_sha256": "994b8ad207c5b4156270a34187499d35a2a5e13dab0be98713eacdf7c0eb183b",
+      "candidate_path": "supabase/migrations/20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030094529",
+      "name": "caseproof_phase3_signed_geometry_read",
+      "statement_count": 1,
+      "recorded_chars": 881,
+      "recorded_sha256": "f1d768a90806d645cb216ec6d3991cd23aaae2d39b8852eb73ca83947536d5ff",
+      "candidate_path": "supabase/migrations/20261030150000_caseproof_phase3_signed_geometry_read.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030095233",
+      "name": "caseproof_phase3_persistent_acceptance_registry",
+      "statement_count": 1,
+      "recorded_chars": 1443,
+      "recorded_sha256": "39720677ef28e79e625026ce2fcc0b6dafec40d8d640686581fdc413274a458b",
+      "candidate_path": null,
+      "source_state": "NO_SOURCE"
+    },
+    {
+      "version": "20261030100609",
+      "name": "caseproof_phase3_four_source_draft_bundle",
+      "statement_count": 1,
+      "recorded_chars": 4829,
+      "recorded_sha256": "bb917e7124c2c553b7ecd6aeba6fd1366257cfce79308402286945bce8c61493",
+      "candidate_path": "supabase/migrations/20261030153000_caseproof_phase3_four_source_draft_bundle.sql",
+      "source_state": "DIVERGENT_SOURCE"
+    },
+    {
+      "version": "20261030101036",
+      "name": "caseproof_phase3_allow_draft_bundle_role",
+      "statement_count": 1,
+      "recorded_chars": 261,
+      "recorded_sha256": "5c906a4f1535aea71242587110c33dea95b94fa961ad096a2d95a08d700180ec",
+      "candidate_path": null,
+      "source_state": "NO_SOURCE"
+    },
+    {
+      "version": "20261030111946",
+      "name": "m05_test_run_registry_and_ocr_cleanup",
+      "statement_count": 1,
+      "recorded_chars": 955,
+      "recorded_sha256": "34a7105f2dc5befb5b842756f61b186c23b0ed4bbe6667d723a8dd851c651a45",
+      "candidate_path": null,
+      "source_state": "NO_SOURCE"
+    },
+    {
+      "version": "20261030112317",
+      "name": "m05_protected_registry_rpc",
+      "statement_count": 1,
+      "recorded_chars": 1834,
+      "recorded_sha256": "7a7b6289f963d99e3a674caaa3aa60e6e388965717216d457e1de892b2ecffcb",
+      "candidate_path": "supabase/migrations/20261030115000_m05_protected_registry_rpc.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261102144749",
+      "name": "caseproof_historical_snapshot_read",
+      "statement_count": 1,
+      "recorded_chars": 1641,
+      "recorded_sha256": "b9737fce3e906199efb1a4c5db207cb65a2ff76c23e7dfc0c8470bdd823221db",
+      "candidate_path": "supabase/migrations/20261102150600_caseproof_historical_snapshot_read.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261103083932",
+      "name": "f6_reviewed_release_ledger",
+      "statement_count": 1,
+      "recorded_chars": 15478,
+      "recorded_sha256": "78e13eeaf48e4985ff4423e4c1d1c60505aa9b036b91330a675c23cc923a6741",
+      "candidate_path": "supabase/migrations/20261103080000_f6_reviewed_release_ledger.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261105081249",
+      "name": "caseproof_document_wide_docx_editor_dev_authorization",
+      "statement_count": 1,
+      "recorded_chars": 21499,
+      "recorded_sha256": "c62bf43fd70bcb175d2d3a4a5775df27dc0668b8a034b35c0ae076b9d16e70d8",
+      "candidate_path": "docs/security/DEV_ONLY_APPLIED_DOCX_AUTH_MIGRATION_20261105081249.sql",
+      "source_state": "DIVERGENT_SOURCE"
+    },
+    {
+      "version": "20261105100916",
+      "name": "caseproof_dev_docx_owned_fixture_cleanup_guard_v2",
+      "statement_count": 1,
+      "recorded_chars": 5581,
+      "recorded_sha256": "57f5ab4a4d0aec63d62b9769359fc5ba0bfb855b1ca93e04c91c359428b9528b",
+      "candidate_path": "docs/security/DEV_ONLY_APPLIED_DOCX_FIXTURE_CLEANUP_GUARD_20261105.sql",
+      "source_state": "DIVERGENT_SOURCE"
+    },
+    {
+      "version": "20261105104752",
+      "name": "signed_page_worker",
+      "statement_count": 1,
+      "recorded_chars": 11757,
+      "recorded_sha256": "fa41849dd9c3c601cd16bcbd92b9393f7b5c670daa886e37ab4019787c6551c1",
+      "candidate_path": "supabase/migrations/20261031112127_signed_page_worker.sql",
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106111609",
+      "name": "caseproof_rights_page_worker_fence",
+      "statement_count": 1,
+      "recorded_chars": 4317,
+      "recorded_sha256": "0bad27a55ae5af1b9e2cd575c9e7492b256e1880113695f29a98fd9a642d6506",
+      "candidate_path": "supabase/migrations/20261106114000_caseproof_rights_page_worker_fence.sql",
+      "source_state": "EXACT_SOURCE"
+    }
+  ]
+}

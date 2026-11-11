@@ -30,3 +30,15 @@ Before any CLI push, reset, baseline or history repair on a linked project:
 **BLOCKED** until all repository migration history and live receipt discrepancies are resolved or governed by an explicitly approved baselining plan, and a standard fresh-install process succeeds without hand-reordered, untracked SQL. Passing existing `verify_retention_disposable.py` alone does not satisfy this gate.
 
 This ADR is independent of SEC-01–16 pilot approvals.
+
+## 11 November 2026 — Historical SQL provenance ledger
+
+A read-only comparison of the 19 deployed migration versions absent from the repository's ordered migration directory against their original SQL sources has confirmed:
+
+- **12 byte-for-byte identical SQL sources** stored in the repository under different timestamped migration filenames.
+- **4 divergent source candidates** (Phase 3 geometry payload, Phase 3 four-source bundle, and two DOCX scripts). A matching logical name does **not** establish executable equivalence.
+- **3 versions without a same-name source candidate** (Phase 3 acceptance registry, Phase 3 draft-bundle role and the combined M0.5 run registry/OCR cleanup).
+
+The evidence manifest `docs/security/caseproof_dev_migration_lineage_20261111.json` includes the exact `SHA-256` fingerprints of the applied SQL statements, their character lengths and candidate paths. `python -m scripts.verify_migration_lineage --report-only` validates the immutable source-classification evidence. Without `--report-only`, the command exits 2 to preserve the release blocker.
+
+**This is source provenance, not a corrected migration directory.** Do not duplicate renamed SQL under both versions inside `supabase/migrations` or execute all candidate files as if they were a safe chronological chain. The recorded historical contents of the four divergent and three unsourced migrations need exact controlled recovery and dependency review before any fresh replay or history repair.
