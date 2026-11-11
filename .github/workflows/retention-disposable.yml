@@ -76,3 +76,42 @@ jobs:
           name: migration-natural-order-diagnostic
           path: /tmp/caseproof-natural-order.json
           retention-days: 30
+
+  replay-candidate:
+    name: Disposable dependency-ordered replay candidate (NOT Supabase CLI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: caseproof_s2_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: caseproof_ephemeral_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caseproof_s2_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 8
+    env:
+      CASEPROOF_DISPOSABLE_DB: "YES"
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: caseproof_s2_ci
+      PGUSER: postgres
+      PGPASSWORD: caseproof_ephemeral_ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Replay all 73 tracked SQL files in explicit dependency order
+        run: uv run --locked python -m scripts.disposable_replay_candidate --output /tmp/caseproof-replay-candidate.json
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: disposable-replay-candidate
+          path: /tmp/caseproof-replay-candidate.json
+          retention-days: 30

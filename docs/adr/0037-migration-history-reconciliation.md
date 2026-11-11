@@ -118,3 +118,23 @@ unexpected replay success cannot silently pass the diagnostic. This is a
 historical live migration receipts, or renumbering already-applied files.
 The approved canonical baseline/upgrade strategy remains to be selected.
 
+## 11 November 2026 — Version-pinned disposable replay candidate
+
+The existing retention test already applies **22 deferred migrations** after
+its sorted prefix and thereby avoids the verified OCR sidecar ordering failure.
+That order is captured explicitly in
+`docs/security/disposable_replay_candidate_v1.json`, with all 73 filenames
+pinned so new migrations cannot silently be included.
+
+A **separate** PostgreSQL 17 service job executes this candidate, recording a
+synthetic migration version receipt after each successful SQL file and
+producing a bounded first-failure or full-application report. This is a
+candidate, not a corrected Supabase migration directory: it is not the default
+Supabase CLI filename order, it uses simplified disposable auth/storage stubs,
+and it cannot authorize any deployment or `supabase_migrations` history edit.
+
+The candidate is allowed to pass without declaring the release gate open.
+Subsequent work must reconcile the historical version mapping, choose an
+approved canonical baseline, prove a **real Supabase CLI** local clean install,
+verify an upgrade from the recorded history, and obtain independent security
+approval. P0-3 stays BLOCKED.
