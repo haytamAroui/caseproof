@@ -1,8 +1,8 @@
 """Historical migration provenance is evidence, not permission to deploy."""
 from __future__ import annotations
 
-import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -20,17 +20,21 @@ def test_all_nineteen_unmatched_receipts_are_adjudicated() -> None:
     assert report["fresh_replay_verified"] is False
 
 
-def test_a_tampered_exact_candidate_is_detected(tmp_path) -> None:
+def test_a_tampered_exact_candidate_is_detected(monkeypatch: pytest.MonkeyPatch) -> None:
     doc = json.loads(LINEAGE.read_text())
     exact = next(x for x in doc["remote_only"] if x["source_state"] == "EXACT_SOURCE")
-    original = ROOT / exact["candidate_path"]
-    replacement = tmp_path / exact["candidate_path"]
-    replacement.parent.mkdir(parents=True)
-    replacement.write_bytes(original.read_bytes() + b"-- unexpected delta\n")
-    # Replacing the root is intentionally not enough to validate the full map,
-    # so inspect the same digest invariant used by verify_lineage.
-    assert hashlib.sha256(replacement.read_bytes()).hexdigest() != exact["recorded_sha256"]
-    assert hashlib.sha256(original.read_bytes()).hexdigest() == exact["recorded_sha256"]
+    original = (ROOT / exact["candidate_path"]).resolve()
+    actual_read_bytes = Path.read_bytes
+
+    def tamper(path: Path) -> bytes:
+        content = actual_read_bytes(path)
+        if path.resolve() == original:
+            return content + b"-- unexpected migration change\\n"
+        return content
+
+    monkeypatch.setattr(Path, "read_bytes", tamper)
+    with pytest.raises(ValueError, match="SQL source provenance changed"):
+        verify_lineage()
 
 
 def test_malformed_provenance_is_rejected(tmp_path) -> None:
