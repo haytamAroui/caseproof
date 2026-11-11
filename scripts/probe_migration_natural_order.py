@@ -78,6 +78,13 @@ def probe_in_filename_order() -> dict[str, object]:
                 "fresh_install_verified": False,
                 "upgraded_live_schema": False,
             }
+        # Reproduce the version receipt a migration runner records after each
+        # successful script; several later migrations fail closed if it is absent.
+        version = path.name.split("_", 1)[0]
+        _run(
+            f"insert into supabase_migrations.schema_migrations(version) values ('{version}');",
+            env,
+        )
         applied.append(path.name)
     return {
         "status": "NATURAL_ORDER_PG_PROBE_PASSED_NOT_CLI",
