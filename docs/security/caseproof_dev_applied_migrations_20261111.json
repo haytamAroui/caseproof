@@ -1,0 +1,305 @@
+{
+  "schema_version": "caseproof-migration-inventory-v1",
+  "environment": "caseproof-dev",
+  "captured_date_utc": "2026-11-11",
+  "repository_base_sha": "e4195a7c59b397cd1fbefd0b91a4fa37d74b6ad8",
+  "purpose": "read-only migration ledger inventory; never a deployment approval or history repair",
+  "applied": [
+    {
+      "version": "20261022001009",
+      "name": "caseproof_tenant_foundation"
+    },
+    {
+      "version": "20261027160745",
+      "name": "caseproof_m1_dev_atomic_private_grants"
+    },
+    {
+      "version": "20261027195417",
+      "name": "caseproof_m2_dev_atomic_private_review"
+    },
+    {
+      "version": "20261027195451",
+      "name": "caseproof_m1_signed_invoker_read_views"
+    },
+    {
+      "version": "20261027202734",
+      "name": "caseproof_m1_private_originals_storage"
+    },
+    {
+      "version": "20261027204343",
+      "name": "caseproof_m1_storage_upload_action_correction"
+    },
+    {
+      "version": "20261027214851",
+      "name": "caseproof_m1_dev_live_positive_fixture_rpc"
+    },
+    {
+      "version": "20261028065430",
+      "name": "caseproof_m1_private_exhibit_storage"
+    },
+    {
+      "version": "20261028070156",
+      "name": "caseproof_dev_signed_review_roundtrip"
+    },
+    {
+      "version": "20261028070231",
+      "name": "caseproof_dev_scoped_review_cleanup"
+    },
+    {
+      "version": "20261028071554",
+      "name": "caseproof_dev_signed_review_security_hardening"
+    },
+    {
+      "version": "20261028081227",
+      "name": "caseproof_dev_signed_matter_txt_ingestion"
+    },
+    {
+      "version": "20261028081347",
+      "name": "caseproof_dev_txt_review_binding"
+    },
+    {
+      "version": "20261028081408",
+      "name": "caseproof_dev_txt_revocation_cleanup"
+    },
+    {
+      "version": "20261028081528",
+      "name": "caseproof_dev_signed_create_org_discovery"
+    },
+    {
+      "version": "20261028082143",
+      "name": "caseproof_dev_txt_cleanup_uuid_fix"
+    },
+    {
+      "version": "20261028083533",
+      "name": "caseproof_dev_close_client_ingest_bypass"
+    },
+    {
+      "version": "20261028083622",
+      "name": "caseproof_dev_trusted_ingest_verified_promotion"
+    },
+    {
+      "version": "20261028083747",
+      "name": "caseproof_dev_cleanup_actor_isolation"
+    },
+    {
+      "version": "20261028105942",
+      "name": "caseproof_dev_separate_draft_write_grant"
+    },
+    {
+      "version": "20261028110031",
+      "name": "caseproof_dev_signed_reviewed_draft_correction"
+    },
+    {
+      "version": "20261028110102",
+      "name": "caseproof_dev_reversible_draft_cleanup"
+    },
+    {
+      "version": "20261028110233",
+      "name": "caseproof_dev_ordered_revised_brief_state"
+    },
+    {
+      "version": "20261028110604",
+      "name": "caseproof_dev_correction_review_head_fence"
+    },
+    {
+      "version": "20261028111543",
+      "name": "caseproof_dev_correct_owner_write_and_read_separation"
+    },
+    {
+      "version": "20261028111744",
+      "name": "caseproof_dev_require_org_write_for_brief"
+    },
+    {
+      "version": "20261028111820",
+      "name": "caseproof_dev_org_only_revoke_test_rpc"
+    },
+    {
+      "version": "20261028114522",
+      "name": "caseproof_dev_signed_pdf_docx_register_parse_manifest"
+    },
+    {
+      "version": "20261028114616",
+      "name": "caseproof_dev_service_verified_binary_parser_promotion"
+    },
+    {
+      "version": "20261028114940",
+      "name": "caseproof_dev_m2_preserve_partial_pdf_docx_unknown"
+    },
+    {
+      "version": "20261028114956",
+      "name": "caseproof_dev_cleanup_verified_binary_source"
+    },
+    {
+      "version": "20261030075834",
+      "name": "caseproof_dev_atomic_bundle_registration"
+    },
+    {
+      "version": "20261030084629",
+      "name": "caseproof_dev_bundle_cleanup"
+    },
+    {
+      "version": "20261030085139",
+      "name": "caseproof_dev_bundle_manifest"
+    },
+    {
+      "version": "20261030085229",
+      "name": "caseproof_durable_bundle_roles"
+    },
+    {
+      "version": "20261030093045",
+      "name": "caseproof_phase3_private_ocr_geometry"
+    },
+    {
+      "version": "20261030093520",
+      "name": "caseproof_phase3_geometry_text_payload"
+    },
+    {
+      "version": "20261030093532",
+      "name": "caseproof_phase3_atomic_ocr_ingest"
+    },
+    {
+      "version": "20261030094529",
+      "name": "caseproof_phase3_signed_geometry_read"
+    },
+    {
+      "version": "20261030095233",
+      "name": "caseproof_phase3_persistent_acceptance_registry"
+    },
+    {
+      "version": "20261030100609",
+      "name": "caseproof_phase3_four_source_draft_bundle"
+    },
+    {
+      "version": "20261030101036",
+      "name": "caseproof_phase3_allow_draft_bundle_role"
+    },
+    {
+      "version": "20261030111946",
+      "name": "m05_test_run_registry_and_ocr_cleanup"
+    },
+    {
+      "version": "20261030112317",
+      "name": "m05_protected_registry_rpc"
+    },
+    {
+      "version": "20261030150030",
+      "name": "caseproof_phase4_signed_reference_review"
+    },
+    {
+      "version": "20261030155817",
+      "name": "matter_retention"
+    },
+    {
+      "version": "20261030160341",
+      "name": "retention_storage_fence"
+    },
+    {
+      "version": "20261030161844",
+      "name": "complete_dossier_journey"
+    },
+    {
+      "version": "20261030235107",
+      "name": "representation_snapshot_read"
+    },
+    {
+      "version": "20261030235456",
+      "name": "regional_review_attestation"
+    },
+    {
+      "version": "20261031234906",
+      "name": "dossier_draft_revisions"
+    },
+    {
+      "version": "20261031235117",
+      "name": "dossier_draft_revision_fk_indexes"
+    },
+    {
+      "version": "20261101004423",
+      "name": "dossier_draft_revision_scoped_cleanup"
+    },
+    {
+      "version": "20261101205446",
+      "name": "workspace_f1_report_catalog"
+    },
+    {
+      "version": "20261102144749",
+      "name": "caseproof_historical_snapshot_read"
+    },
+    {
+      "version": "20261103033846",
+      "name": "f5_dossier_correction_recovery"
+    },
+    {
+      "version": "20261103034132",
+      "name": "f5_correction_fixture_ownership"
+    },
+    {
+      "version": "20261103083932",
+      "name": "f6_reviewed_release_ledger"
+    },
+    {
+      "version": "20261103105420",
+      "name": "f6_reject_null_release_action"
+    },
+    {
+      "version": "20261105081249",
+      "name": "caseproof_document_wide_docx_editor_dev_authorization"
+    },
+    {
+      "version": "20261105100916",
+      "name": "caseproof_dev_docx_owned_fixture_cleanup_guard_v2"
+    },
+    {
+      "version": "20261105104752",
+      "name": "signed_page_worker"
+    },
+    {
+      "version": "20261106092710",
+      "name": "caseproof_data_rights_ledger_shadow"
+    },
+    {
+      "version": "20261106093313",
+      "name": "caseproof_rights_grant_revocation_fence"
+    },
+    {
+      "version": "20261106105558",
+      "name": "caseproof_rights_enforcement_gates"
+    },
+    {
+      "version": "20261106110906",
+      "name": "caseproof_rights_active_bundle_fence"
+    },
+    {
+      "version": "20261106111609",
+      "name": "caseproof_rights_page_worker_fence"
+    },
+    {
+      "version": "20261106130418",
+      "name": "caseproof_rights_docx_revision_fence"
+    },
+    {
+      "version": "20261106132310",
+      "name": "caseproof_rights_legacy_rpc_fence"
+    },
+    {
+      "version": "20261106132316",
+      "name": "caseproof_rights_derivative_inheritance"
+    },
+    {
+      "version": "20261106132320",
+      "name": "caseproof_rights_signed_fixture_grant"
+    },
+    {
+      "version": "20261106132551",
+      "name": "caseproof_rights_effective_parent_projection"
+    },
+    {
+      "version": "20261106133128",
+      "name": "caseproof_rights_m05_cleanup_audit"
+    },
+    {
+      "version": "20261106172653",
+      "name": "caseproof_signed_export_rights_manifest_fence"
+    }
+  ]
+}
