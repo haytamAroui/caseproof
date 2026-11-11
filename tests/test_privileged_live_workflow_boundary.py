@@ -44,7 +44,7 @@ def test_no_administrative_secret_in_pr_triggered_workflows() -> None:
 def test_contained_live_workflows_are_dispatch_only_on_main() -> None:
     for name in CONTAINED_LIVE_WORKFLOWS:
         source = (WORKFLOWS / name).read_text(encoding="utf-8")
-        assert re.search(r"(?m)^  workflow_dispatch:\\s*$", source), name
+        assert re.search(r"(?m)^  workflow_dispatch:\s*$", source), name
         assert not PR_EVENT.search(source), name
         assert not re.search(r"(?m)^  push:", source), name
         assert MANUAL_MAIN in source, name
