@@ -12,7 +12,6 @@ from fastapi.routing import APIRoute
 from pydantic import ValidationError
 
 from apps.api.access_control import CaseAction
-from apps.api.litigation_development_app import create_litigation_development_app
 from apps.api.contracts_v2 import (
     EvidenceAnchorInput,
     PdfRegionLocator,
@@ -22,6 +21,7 @@ from apps.api.contracts_v2 import (
     to_kernel_locator,
 )
 from apps.api.evidence_locator_codec import decode_locator, encode_locator
+from apps.api.litigation_development_app import create_litigation_development_app
 from packages.evidence_kernel.domain.anchors import (
     PdfRegion,
     SheetRange,
