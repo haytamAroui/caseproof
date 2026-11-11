@@ -37,3 +37,42 @@ jobs:
         run: uv run --locked pytest -q tests/test_data_rights.py tests/test_data_rights_transport.py tests/test_data_rights_enforcement.py tests/test_signed_supabase_source_library.py
       - name: Verify rights ledger adversarial SQL and the unchanged retention purge
         run: uv run --locked python -m scripts.verify_retention_disposable
+
+  natural-order-diagnostic:
+    name: Disposable natural-order migration diagnostic (release BLOCKED)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: caseproof_s2_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: caseproof_ephemeral_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caseproof_s2_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 8
+    env:
+      CASEPROOF_DISPOSABLE_DB: "YES"
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: caseproof_s2_ci
+      PGUSER: postgres
+      PGPASSWORD: caseproof_ephemeral_ci
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Probe SQL in literal filename order (diagnostic, NOT release approval)
+        run: uv run --locked python -m scripts.probe_migration_natural_order --diagnostic --expected-first-failure 20261030114000_m05_ocr_sidecar_cleanup_fk.sql --output /tmp/caseproof-natural-order.json
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: migration-natural-order-diagnostic
+          path: /tmp/caseproof-natural-order.json
+          retention-days: 30
