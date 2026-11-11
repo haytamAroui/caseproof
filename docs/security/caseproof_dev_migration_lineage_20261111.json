@@ -191,5 +191,448 @@
       "candidate_path": "supabase/migrations/20261106114000_caseproof_rights_page_worker_fence.sql",
       "source_state": "EXACT_SOURCE"
     }
+  ],
+  "matching_version_receipts": [
+    {
+      "version": "20261022001009",
+      "name": "caseproof_tenant_foundation",
+      "source_path": "supabase/migrations/20261022001009_caseproof_tenant_foundation.sql",
+      "recorded_sha256": "02782c14182f7e53b0c967e404e9413cd0fb083ec3958d56d514987e1187ecd4",
+      "recorded_chars": 8419,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261027160745",
+      "name": "caseproof_m1_dev_atomic_private_grants",
+      "source_path": "supabase/migrations/20261027160745_caseproof_m1_dev_atomic_private_grants.sql",
+      "recorded_sha256": "c4d5cfa1e8e1150d0fd3e263f78817e4db9217e6422248170dacaa587b7bf909",
+      "recorded_chars": 10044,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261027195417",
+      "name": "caseproof_m2_dev_atomic_private_review",
+      "source_path": "supabase/migrations/20261027195417_caseproof_m2_dev_atomic_private_review.sql",
+      "recorded_sha256": "c27ccea860b2ec105b552e609ddc441caef908263a9e1d836036412712c08b9a",
+      "recorded_chars": 19085,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261027195451",
+      "name": "caseproof_m1_signed_invoker_read_views",
+      "source_path": "supabase/migrations/20261027195451_caseproof_m1_signed_invoker_read_views.sql",
+      "recorded_sha256": "2e56e049c4aa2facc6420a08db93408553eff439cb8049161b4bd5f8189b827d",
+      "recorded_chars": 5182,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261027202734",
+      "name": "caseproof_m1_private_originals_storage",
+      "source_path": "supabase/migrations/20261027202734_caseproof_m1_private_originals_storage.sql",
+      "recorded_sha256": "16b538e1eb71771f4167e0846b5e2573c8fb812b2cb0bb19ddbf906d89b9e222",
+      "recorded_chars": 5137,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261027204343",
+      "name": "caseproof_m1_storage_upload_action_correction",
+      "source_path": "supabase/migrations/20261027204343_caseproof_m1_storage_upload_action_correction.sql",
+      "recorded_sha256": "c34347580e4b3a030812ec84096989217ef48c478ec9b1ee8958d2faa8c9216d",
+      "recorded_chars": 2608,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261027214851",
+      "name": "caseproof_m1_dev_live_positive_fixture_rpc",
+      "source_path": "supabase/migrations/20261027214851_caseproof_m1_dev_live_positive_fixture_rpc.sql",
+      "recorded_sha256": "1cd5a42d2011dee51b5457714661a484ff614bfb5f126c6e671a92e4f18e91dd",
+      "recorded_chars": 7443,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028065430",
+      "name": "caseproof_m1_private_exhibit_storage",
+      "source_path": "supabase/migrations/20261028065430_caseproof_m1_private_exhibit_storage.sql",
+      "recorded_sha256": "d08c85be921005ef86fcc7eec6a3c8ae3846576cce0fad6cfe59ee0060fa10c1",
+      "recorded_chars": 2382,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028070156",
+      "name": "caseproof_dev_signed_review_roundtrip",
+      "source_path": "supabase/migrations/20261028070156_caseproof_dev_signed_review_roundtrip.sql",
+      "recorded_sha256": "350748bf05cdd12c8fa94eaacd3fe7fec9af2efe916cba98be6ba6b4f69de52b",
+      "recorded_chars": 15204,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028070231",
+      "name": "caseproof_dev_scoped_review_cleanup",
+      "source_path": "supabase/migrations/20261028070231_caseproof_dev_scoped_review_cleanup.sql",
+      "recorded_sha256": "8979dd899c8684b2743fd52fa43a83a324ac085cb12081393f10e31770e9136a",
+      "recorded_chars": 3862,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028071554",
+      "name": "caseproof_dev_signed_review_security_hardening",
+      "source_path": "supabase/migrations/20261028071554_caseproof_dev_signed_review_security_hardening.sql",
+      "recorded_sha256": "d0ae0257c6dd8afc667bcb1327e9f9484f3d923205f15e0eee4541bcfff22f0b",
+      "recorded_chars": 10729,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028081227",
+      "name": "caseproof_dev_signed_matter_txt_ingestion",
+      "source_path": "supabase/migrations/20261028081227_caseproof_dev_signed_matter_txt_ingestion.sql",
+      "recorded_sha256": "ee0f4fa8df20eb457743901a6a1b5b6ca82d3180b2870d8fefaa5ba8d9db9473",
+      "recorded_chars": 18205,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028081347",
+      "name": "caseproof_dev_txt_review_binding",
+      "source_path": "supabase/migrations/20261028081347_caseproof_dev_txt_review_binding.sql",
+      "recorded_sha256": "d830c39a3311779c65a46e851bd2dbb2d331a7cc88702cbfe42f5d278a5e2f13",
+      "recorded_chars": 23706,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028081408",
+      "name": "caseproof_dev_txt_revocation_cleanup",
+      "source_path": "supabase/migrations/20261028081408_caseproof_dev_txt_revocation_cleanup.sql",
+      "recorded_sha256": "9811d97f0f86211d8c0ee2fded6243fb88e349bad6a3872e5a48c3992490951f",
+      "recorded_chars": 4611,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028081528",
+      "name": "caseproof_dev_signed_create_org_discovery",
+      "source_path": "supabase/migrations/20261028081528_caseproof_dev_signed_create_org_discovery.sql",
+      "recorded_sha256": "c56b1309ed34e4b54d12c4954f40a6b9d3a371461a9ee00bc711ba26056b2e79",
+      "recorded_chars": 1064,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028082143",
+      "name": "caseproof_dev_txt_cleanup_uuid_fix",
+      "source_path": "supabase/migrations/20261028082143_caseproof_dev_txt_cleanup_uuid_fix.sql",
+      "recorded_sha256": "8b17a6a149f6d325070e4abbc410aa8fea264ffa3dbadaab3f29ec5ecd516942",
+      "recorded_chars": 3501,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028083533",
+      "name": "caseproof_dev_close_client_ingest_bypass",
+      "source_path": "supabase/migrations/20261028083533_caseproof_dev_close_client_ingest_bypass.sql",
+      "recorded_sha256": "96eb104fd83e830c10166bacf4c0e97ebb55a4bb8b622521010066a6eb377213",
+      "recorded_chars": 13341,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028083622",
+      "name": "caseproof_dev_trusted_ingest_verified_promotion",
+      "source_path": "supabase/migrations/20261028083622_caseproof_dev_trusted_ingest_verified_promotion.sql",
+      "recorded_sha256": "e11a9cd6058de46f77befb4a4e4f33aadd20027eb940187db243f9a9cd0edd8b",
+      "recorded_chars": 7069,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028083747",
+      "name": "caseproof_dev_cleanup_actor_isolation",
+      "source_path": "supabase/migrations/20261028083747_caseproof_dev_cleanup_actor_isolation.sql",
+      "recorded_sha256": "f867d90ee942e3708bb41c6aa72ff2cb9835e67473aabc8396c86fafd94cc014",
+      "recorded_chars": 4258,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028105942",
+      "name": "caseproof_dev_separate_draft_write_grant",
+      "source_path": "supabase/migrations/20261028105942_caseproof_dev_separate_draft_write_grant.sql",
+      "recorded_sha256": "2d5a6b452c8dc6c4b6893911fb1c33b3450428d25387549f17d6cbba2bdc9a35",
+      "recorded_chars": 15977,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028110031",
+      "name": "caseproof_dev_signed_reviewed_draft_correction",
+      "source_path": "supabase/migrations/20261028110031_caseproof_dev_signed_reviewed_draft_correction.sql",
+      "recorded_sha256": "a9e290c26f918fad3893d7f44b611fb75beb772ba9d78bad228c269e3996a95f",
+      "recorded_chars": 10480,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028110102",
+      "name": "caseproof_dev_reversible_draft_cleanup",
+      "source_path": "supabase/migrations/20261028110102_caseproof_dev_reversible_draft_cleanup.sql",
+      "recorded_sha256": "2bee55200cdd9da7d605815b855bcef3e2e6c115ac41d8b42ec4cf15e39b8388",
+      "recorded_chars": 4306,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028110233",
+      "name": "caseproof_dev_ordered_revised_brief_state",
+      "source_path": "supabase/migrations/20261028110233_caseproof_dev_ordered_revised_brief_state.sql",
+      "recorded_sha256": "7bcfa2367e8c85bae6850e8ad629989da0d3401e96324aa7dbb9537d16c106fc",
+      "recorded_chars": 13653,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028110604",
+      "name": "caseproof_dev_correction_review_head_fence",
+      "source_path": "supabase/migrations/20261028110604_caseproof_dev_correction_review_head_fence.sql",
+      "recorded_sha256": "3a221b1586da2246709b6fded7cda8c2af0f4fdd46ad55008085b58a195c5816",
+      "recorded_chars": 10422,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028111543",
+      "name": "caseproof_dev_correct_owner_write_and_read_separation",
+      "source_path": "supabase/migrations/20261028111543_caseproof_dev_correct_owner_write_and_read_separation.sql",
+      "recorded_sha256": "96f7f789af803c0c01639582c2044089f913f21ffdb0980a3aa74b864083fc53",
+      "recorded_chars": 13684,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028111744",
+      "name": "caseproof_dev_require_org_write_for_brief",
+      "source_path": "supabase/migrations/20261028111744_caseproof_dev_require_org_write_for_brief.sql",
+      "recorded_sha256": "b2956e375814f4ce6558f2237a28dc27821dbf03ae5a2721d2e175ff7c9cd509",
+      "recorded_chars": 14390,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028111820",
+      "name": "caseproof_dev_org_only_revoke_test_rpc",
+      "source_path": "supabase/migrations/20261028111820_caseproof_dev_org_only_revoke_test_rpc.sql",
+      "recorded_sha256": "8f321a1dc592fe06b41cbc7f285f3d98085b6f7ea792ad689d255c018429db06",
+      "recorded_chars": 1720,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028114522",
+      "name": "caseproof_dev_signed_pdf_docx_register_parse_manifest",
+      "source_path": "supabase/migrations/20261028114522_caseproof_dev_signed_pdf_docx_register_parse_manifest.sql",
+      "recorded_sha256": "d25acb95957f012c25db521736b9e675a0953c64dccdc63dcd33ddee8ca187f9",
+      "recorded_chars": 16196,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028114616",
+      "name": "caseproof_dev_service_verified_binary_parser_promotion",
+      "source_path": "supabase/migrations/20261028114616_caseproof_dev_service_verified_binary_parser_promotion.sql",
+      "recorded_sha256": "34f2ebca16e8d014595cb6e12e703da3612a109fe3cb1225eb298a887549d4fa",
+      "recorded_chars": 8833,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028114940",
+      "name": "caseproof_dev_m2_preserve_partial_pdf_docx_unknown",
+      "source_path": "supabase/migrations/20261028114940_caseproof_dev_m2_preserve_partial_pdf_docx_unknown.sql",
+      "recorded_sha256": "f711b57531abb3e90fae3e4b717ce340cf0089bffff92a9fd8cd972fb022aa49",
+      "recorded_chars": 11360,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261028114956",
+      "name": "caseproof_dev_cleanup_verified_binary_source",
+      "source_path": "supabase/migrations/20261028114956_caseproof_dev_cleanup_verified_binary_source.sql",
+      "recorded_sha256": "2f4e6b8cc6a5a52580b2d05b24e9e7f355f29688bb725bd901524b9b299950a4",
+      "recorded_chars": 4391,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030150030",
+      "name": "caseproof_phase4_signed_reference_review",
+      "source_path": "supabase/migrations/20261030150030_caseproof_phase4_signed_reference_review.sql",
+      "recorded_sha256": "25bfe14fddb255721ba5196dc080cb1dd708033af87c0466c0fa6cff9779c306",
+      "recorded_chars": 4722,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030155817",
+      "name": "matter_retention",
+      "source_path": "supabase/migrations/20261030155817_matter_retention.sql",
+      "recorded_sha256": "90f66044e081febc54c8ea508dee5eb63266b4ede09f2030cc545b62ced9ee19",
+      "recorded_chars": 15431,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030160341",
+      "name": "retention_storage_fence",
+      "source_path": "supabase/migrations/20261030160341_retention_storage_fence.sql",
+      "recorded_sha256": "01a96c3890ea1f312c92ba69d8e49a12445d8cea61a97f7517163e3cef82c9d9",
+      "recorded_chars": 7209,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030161844",
+      "name": "complete_dossier_journey",
+      "source_path": "supabase/migrations/20261030161844_complete_dossier_journey.sql",
+      "recorded_sha256": "a9bd24e35b21704cb029f038bf5962f91de635408138ca8828bdf09bc4237254",
+      "recorded_chars": 10050,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030235107",
+      "name": "representation_snapshot_read",
+      "source_path": "supabase/migrations/20261030235107_representation_snapshot_read.sql",
+      "recorded_sha256": "4a246e6d0cb9ed7baeb3e160d0f34f57b48da7b87965da48106836c262116b6a",
+      "recorded_chars": 1233,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261030235456",
+      "name": "regional_review_attestation",
+      "source_path": "supabase/migrations/20261030235456_regional_review_attestation.sql",
+      "recorded_sha256": "4edcf4e348ba65e33986ee25439c9d6d17cb93d56516019de6240d085ffbe2f2",
+      "recorded_chars": 10379,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261031234906",
+      "name": "dossier_draft_revisions",
+      "source_path": "supabase/migrations/20261031234906_dossier_draft_revisions.sql",
+      "recorded_sha256": "ba664acaea1693f29b776ac19bacdde785622216d490c52c869bd920c1dafe10",
+      "recorded_chars": 21087,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261031235117",
+      "name": "dossier_draft_revision_fk_indexes",
+      "source_path": "supabase/migrations/20261031235117_dossier_draft_revision_fk_indexes.sql",
+      "recorded_sha256": "e799dacfe1c5f35042b7ee3020fd658a2b04d2ff72c8cf19ed2fe743b8b0b6d4",
+      "recorded_chars": 224,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261101004423",
+      "name": "dossier_draft_revision_scoped_cleanup",
+      "source_path": "supabase/migrations/20261101004423_dossier_draft_revision_scoped_cleanup.sql",
+      "recorded_sha256": "1440445526a415fa99931c934bbf5921cb0f04062ffc01e19c2b63341701aa9f",
+      "recorded_chars": 4348,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261101205446",
+      "name": "workspace_f1_report_catalog",
+      "source_path": "supabase/migrations/20261101205446_workspace_f1_report_catalog.sql",
+      "recorded_sha256": "f7cc3377eb5e9daee2501c8650b5c8a99bebd13901cf8335d8c56757147983d9",
+      "recorded_chars": 2386,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261103033846",
+      "name": "f5_dossier_correction_recovery",
+      "source_path": "supabase/migrations/20261103033846_f5_dossier_correction_recovery.sql",
+      "recorded_sha256": "e7ff6de298c9e2a38637adcf5daec9a4a075c8ee7c4e73c99c09f67b78bd9df4",
+      "recorded_chars": 2167,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261103034132",
+      "name": "f5_correction_fixture_ownership",
+      "source_path": "supabase/migrations/20261103034132_f5_correction_fixture_ownership.sql",
+      "recorded_sha256": "26c7d250cfaa0675f69a4106fe391dfa42f64a1b1771923c97da45fc28c7bdcd",
+      "recorded_chars": 1376,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261103105420",
+      "name": "f6_reject_null_release_action",
+      "source_path": "supabase/migrations/20261103105420_f6_reject_null_release_action.sql",
+      "recorded_sha256": "a54d5955c0612c75c3f505289361163189206e5ebaac7657f655e83fb2abb0dd",
+      "recorded_chars": 11061,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106092710",
+      "name": "caseproof_data_rights_ledger_shadow",
+      "source_path": "supabase/migrations/20261106092710_caseproof_data_rights_ledger_shadow.sql",
+      "recorded_sha256": "f967de74d4427fa4c29c3f8a1478ee4b32a7cf0333af7a6d203c1465327f7ae8",
+      "recorded_chars": 12025,
+      "source_state": "DIVERGENT_SOURCE",
+      "applied_receipt_path": "db/historical_applied/20261106092710_caseproof_data_rights_ledger_shadow.sql"
+    },
+    {
+      "version": "20261106093313",
+      "name": "caseproof_rights_grant_revocation_fence",
+      "source_path": "supabase/migrations/20261106093313_caseproof_rights_grant_revocation_fence.sql",
+      "recorded_sha256": "5bc0be03360259728c7630423f4339919df3a8f6671dd815f4509ea8ef13d37e",
+      "recorded_chars": 5360,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106105558",
+      "name": "caseproof_rights_enforcement_gates",
+      "source_path": "supabase/migrations/20261106105558_caseproof_rights_enforcement_gates.sql",
+      "recorded_sha256": "1abf26eb8cf1d4177501d6430005d8798d3daf7bc13c6d28258f24b5823982c8",
+      "recorded_chars": 9146,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106110906",
+      "name": "caseproof_rights_active_bundle_fence",
+      "source_path": "supabase/migrations/20261106110906_caseproof_rights_active_bundle_fence.sql",
+      "recorded_sha256": "a75cb1685c1f7b2733ba0675652c52f988d21b448bff2b897096da1963a4e73a",
+      "recorded_chars": 3544,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106130418",
+      "name": "caseproof_rights_docx_revision_fence",
+      "source_path": "supabase/migrations/20261106130418_caseproof_rights_docx_revision_fence.sql",
+      "recorded_sha256": "ad54cd411416aee47624b5d107785db2ce39eef62c7349f2eb8860a50f643e4a",
+      "recorded_chars": 2853,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106132310",
+      "name": "caseproof_rights_legacy_rpc_fence",
+      "source_path": "supabase/migrations/20261106132310_caseproof_rights_legacy_rpc_fence.sql",
+      "recorded_sha256": "ffbadff76174aed35ae48199a291a0266b1fc1885dbc0bde2540e367c8896f83",
+      "recorded_chars": 4799,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106132316",
+      "name": "caseproof_rights_derivative_inheritance",
+      "source_path": "supabase/migrations/20261106132316_caseproof_rights_derivative_inheritance.sql",
+      "recorded_sha256": "30191ee33ef76c7f0409aefcccbaf6f8634245597995491a2dee1f6a5009e777",
+      "recorded_chars": 5904,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106132320",
+      "name": "caseproof_rights_signed_fixture_grant",
+      "source_path": "supabase/migrations/20261106132320_caseproof_rights_signed_fixture_grant.sql",
+      "recorded_sha256": "45d79871f4909febbc8e2c65ee93601f648e8521c0b8097099c907ade70280ca",
+      "recorded_chars": 2789,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106132551",
+      "name": "caseproof_rights_effective_parent_projection",
+      "source_path": "supabase/migrations/20261106132551_caseproof_rights_effective_parent_projection.sql",
+      "recorded_sha256": "67b2817ae86cf4046e890bbcc8de5665f16710b7eeb3dbe498af7705f3121ca4",
+      "recorded_chars": 3327,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106133128",
+      "name": "caseproof_rights_m05_cleanup_audit",
+      "source_path": "supabase/migrations/20261106133128_caseproof_rights_m05_cleanup_audit.sql",
+      "recorded_sha256": "e89fa4a6ae73627eb18baa9a9a84eda407cd412abd76ebe70d7357569f527719",
+      "recorded_chars": 5774,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106172653",
+      "name": "caseproof_signed_export_rights_manifest_fence",
+      "source_path": "supabase/migrations/20261106172653_caseproof_signed_export_rights_manifest_fence.sql",
+      "recorded_sha256": "ee38a33828496cf7b1c170909797a3e706f7e9142709167a99f00385f75202aa",
+      "recorded_chars": 5694,
+      "source_state": "EXACT_SOURCE"
+    }
   ]
 }
