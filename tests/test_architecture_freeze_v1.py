@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+import re
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from fastapi.routing import APIRoute
 
 from apps.api.access_control import CaseAction
+from apps.api.litigation_development_app import create_litigation_development_app
 from apps.api.contracts_v2 import (
     EvidenceAnchorInput,
     PdfRegionLocator,
@@ -120,9 +123,9 @@ def test_permission_catalog_equals_installed_typed_and_sql_grants() -> None:
     assert BASELINE["mvp_access_scope"] == "org_membership_with_action_grants_no_per_case_assignment"
 
 
-def test_uninstalled_permissions_are_blocked_and_no_v2_routing_exists() -> None:
+def test_uninstalled_permissions_are_blocked_and_six_proposed_v2_routes_absent() -> None:
     assert OPERATIONS["action_catalog"] == "contracts/action_catalog.v1.json"
-    assert OPERATIONS["status"] == "typed_contract_only_all_v2_routes_disabled"
+    assert OPERATIONS["status"] == "typed_contract_only_six_named_operations_disabled"
     for op in OPERATIONS["operations"]:
         required = set(op["permissions"])
         not_installed = required - set(CATALOG["installed_actions"])
@@ -133,7 +136,21 @@ def test_uninstalled_permissions_are_blocked_and_no_v2_routing_exists() -> None:
             assert not_installed <= set(CATALOG["future_actions_not_installed"])
         else:
             assert op["permission_installation"] == "installed_scopes_only_no_v2_route"
-    assert '"/v2/' not in (ROOT / "apps/api/main.py").read_text()
+    # Inspect the REAL mounted FastAPI composition, not apps/api/main.py (a v1 demo).
+    # Parameter names are not a distinct route: /cases/{id} and /cases/{case_id}
+    # have the same URL/method authority surface.
+    def normalized(path: str) -> str:
+        return re.sub(r"\\{[^{}]+\\}", "{}", path)
+
+    app = create_litigation_development_app()
+    runtime = {
+        (method, normalized(route.path))
+        for route in app.routes if isinstance(route, APIRoute)
+        for method in route.methods or ()
+    }
+    assert any(path.startswith("/v2/") for _, path in runtime), "real v2 API must be inspected"
+    for op in OPERATIONS["operations"]:
+        assert (op["method"], normalized(op["path"])) not in runtime, op["path"]
     assert BASELINE["release_gates"]["explicit_human_attestation_for_approval"]
 
 
@@ -192,7 +209,7 @@ def test_v2_proposal_locator_contract_tracks_executable_schema() -> None:
     assert "table_id" in anchor["locator_contracts"]["sheet_range"]["fields"]
     assert "path" in anchor["locator_contracts"]["structured_field"]["fields"]
     assert "spreadsheet_range" not in anchor["anchor_types"]
-    assert OPERATIONS["status"] == "typed_contract_only_all_v2_routes_disabled"
+    assert OPERATIONS["status"] == "typed_contract_only_six_named_operations_disabled"
 
 
 def test_v2_structured_field_rejects_unpersistable_locator_at_validation() -> None:

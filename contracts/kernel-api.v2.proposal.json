@@ -107,7 +107,7 @@
       },
       "invalidation": "Stale, missing, cross-tenant or unresolved anchors fail closed. Re-OCR/reparse requires a new anchor and support assessment; no fuzzy fallback resolution.",
       "canonical_executable_locator_contract": "apps/api/contracts_v2.py (typed v2 draft; unmounted)",
-      "wire_authority": "KRN-102 typed locators via to_kernel_locator + exact storage codec; no live v2 routes"
+      "wire_authority": "KRN-102 typed locators via to_kernel_locator + exact storage codec; no live routes for the six named kernel v2 proposal operations"
     },
     "FindingCandidate": {
       "required": [
