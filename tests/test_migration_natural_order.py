@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from scripts.probe_migration_natural_order import MIGRATIONS, PG_ERROR, probe_in_filename_order
+from scripts.probe_migration_natural_order import (
+    MIGRATIONS,
+    PG_ERROR,
+    matches_expected_blocker,
+    probe_in_filename_order,
+)
 from scripts.verify_s2_002_database import _env
 
 
@@ -50,3 +55,26 @@ def test_disposable_workflow_runs_diagnostic_separately() -> None:
     assert "caseproof_s2_ci" in workflow
     assert "postgres:17" in workflow
     assert "CASEPROOF_DEV_AUTH_ADMIN_KEY" not in workflow
+
+
+def test_expected_known_blocker_is_explicitly_pinned() -> None:
+    known = {
+        "status": "BLOCKED_NATURAL_ORDER_REPLAY",
+        "first_failed_migration": "20261030114000_m05_ocr_sidecar_cleanup_fk.sql",
+    }
+    assert matches_expected_blocker(known, "20261030114000_m05_ocr_sidecar_cleanup_fk.sql")
+    assert not matches_expected_blocker(known, "other_migration.sql")
+    assert not matches_expected_blocker({"status": "NATURAL_ORDER_PG_PROBE_PASSED_NOT_CLI"}, "20261030114000_m05_ocr_sidecar_cleanup_fk.sql")
+
+
+def test_sidecar_migration_precedes_its_table_creator_in_local_history() -> None:
+    cleanup = MIGRATIONS / "20261030114000_m05_ocr_sidecar_cleanup_fk.sql"
+    creator = MIGRATIONS / "20261030140000_caseproof_phase3_private_ocr_geometry.sql"
+    assert cleanup.name < creator.name
+    assert "alter table caseproof.ocr_geometry_sidecars" in cleanup.read_text()
+    assert "create table if not exists caseproof.ocr_geometry_sidecars" in creator.read_text()
+    historical = (
+        Path(__file__).resolve().parents[1]
+        / "db/historical_applied/20261030111946_m05_test_run_registry_and_ocr_cleanup.sql"
+    )
+    assert "alter table caseproof.ocr_geometry_sidecars" in historical.read_text()

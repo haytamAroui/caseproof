@@ -92,3 +92,29 @@ connect to the development Supabase instance, or approve any permissions.
 A PostgreSQL-stub pass would still **not** equal Supabase CLI `db reset`
 success. The official local CLI configuration, full auth/storage schema,
 and 18 repository-only version reconciliation require further work.
+
+### First reproduced natural-order blocker — 11 November 2026
+
+A real isolated PostgreSQL 17 run first failed after **36 successfully
+applied migration files** (out of 73), at
+`20261030114000_m05_ocr_sidecar_cleanup_fk.sql`:
+
+`ERROR: relation "caseproof.ocr_geometry_sidecars" does not exist`
+
+The failing SQL alters `caseproof.ocr_geometry_sidecars`. Its tracked
+table creator, `20261030140000_caseproof_phase3_private_ocr_geometry.sql`,
+sorts **later**. The actual recorded development migration chronology
+created the table at `20261030093045`, before the combined M0.5
+registry/OCR cleanup at `20261030111946`. The two repository timestamps
+have diverged from that deployed chronology.
+
+The first diagnostic run failed earlier because the disposable harness did
+not record completed migration versions; that harness error was corrected.
+The above missing-table error is the next reproduced blocker.
+
+CI now pins this **specific expected failure**, so a different regression or
+unexpected replay success cannot silently pass the diagnostic. This is a
+**recorded blocker**, not a fix: never hide it by disabling SQL, editing
+historical live migration receipts, or renumbering already-applied files.
+The approved canonical baseline/upgrade strategy remains to be selected.
+

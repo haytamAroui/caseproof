@@ -96,20 +96,37 @@ def probe_in_filename_order() -> dict[str, object]:
     }
 
 
+def matches_expected_blocker(report: dict[str, object], expected: str) -> bool:
+    """A green diagnostic means the *known blocker* was reproduced, not replay passed."""
+    return (
+        report.get("status") == "BLOCKED_NATURAL_ORDER_REPLAY"
+        and report.get("first_failed_migration") == expected
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--expected-first-failure",
+        help="Pin the known diagnostic blocker (only valid with --diagnostic)",
+    )
     parser.add_argument(
         "--diagnostic", action="store_true",
         help="Document blocker without approving release; default is a failing release gate",
     )
     args = parser.parse_args()
+    if args.expected_first_failure and not args.diagnostic:
+        parser.error("--expected-first-failure requires --diagnostic")
     # _env runs before opening output, so invalid connection settings fail closed.
     report = probe_in_filename_order()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
     if args.diagnostic:
+        # An unrecognized earlier failure must never look like the known blocker.
+        if args.expected_first_failure:
+            return 0 if matches_expected_blocker(report, args.expected_first_failure) else 3
         # Exit 0 means the diagnostic ran, NEVER that the release gate passed.
         return 0
     return 2  # no canonical Supabase CLI replay/upgrade proof has occurred
