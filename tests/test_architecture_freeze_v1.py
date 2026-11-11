@@ -140,7 +140,7 @@ def test_uninstalled_permissions_are_blocked_and_six_proposed_v2_routes_absent()
     # Parameter names are not a distinct route: /cases/{id} and /cases/{case_id}
     # have the same URL/method authority surface.
     def normalized(path: str) -> str:
-        return re.sub(r"\\{[^{}]+\\}", "{}", path)
+        return re.sub(r"\{[^{}]+\}", "{}", path)
 
     app = create_litigation_development_app()
     runtime = {
