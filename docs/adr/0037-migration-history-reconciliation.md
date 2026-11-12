@@ -157,3 +157,27 @@ CLI version is pinned to v3.1.0 (upstream release 9 November 2026).
 The test has no hosted database credentials, project links or remote flags.
 It does not approve production migration repair, fresh-install readiness or
 upgrade-path correctness. The existing development database remains unchanged.
+
+## 12 November 2026 — Proposed source-preserving Supabase CLI fresh profile
+
+PR #222 adds a positive full-stack local CLI proof rather than merely
+reproducing the negative filename-order diagnostic. It copies all 73 source
+SQL files without changing bytes into a temporary unlinked local project's
+migration directory, with version aliases in the dependency order already
+pinned in PR #220. New aliases exist **only** in the temporary profile and
+are not historical deployment versions. The original directory and remote
+applied receipts remain unchanged.
+
+CI must complete the real Supabase CLI reset and observe all 73 alias
+applications. Even a passing isolated clean install is not a schema-parity,
+live upgrade, security review, or pilot release acceptance. ADR remains
+PROPOSED until those separate gates are met.
+
+### Follow-up: preserve hardcoded early version gates
+
+The first positive CLI attempt failed at original M1 private storage (source
+`20261027202734`) because renaming its preceding migration hid the
+historical version `20261027160745` from the CLI history ledger. The
+revised candidate preserves the 51 sorted-prefix original timestamp labels
+and gives ephemeral aliases **only** to the 22 deferred migrations.
+This is an isolated test-profile correction, not a remote migration repair.
