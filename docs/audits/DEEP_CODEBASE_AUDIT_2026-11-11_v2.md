@@ -248,9 +248,13 @@ This **contradicts the repo's own runbook**, `docs/m1/REAL_DEV_AUTH_RUNBOOK.md:2
 
 **Mitigating compliance:** AGENTS.md's specific prohibition (no PostgreSQL admin DSN / CA PEM / role-bypass secret in CI) **is respected** — the only `PGPASSWORD` is the disposable `caseproof_ephemeral_ci` service-container password.
 
-### 5.3 P2 — `required_approving_review_count: 0`
+### 5.3 CORRECTED — `required_approving_review_count: 0` is the adopted solo-maintainer policy, not a defect
 
-Ruleset 25660385 requires 2 status checks and **zero** human approvals, with `require_code_owner_review: false`. `CONSTITUTION.md` C13/C16 assume review enforcement. **No document mentions this** — they instead carry a stale claim in the opposite direction.
+**This section previously reported the zero-approval count as a finding and recommended changing it. That was wrong.** `docs/engineering/merge-policy.md` (adopted 23 October 2026) states that an independent approving reviewer is **not mandatory while this is a solo-maintainer repository**, because GitHub disallows approving one's own pull request; requiring one would lock the sole maintainer out of merging their own work. The policy also prescribes exactly the current settings: require `architecture` and `Disposable PostgreSQL concurrency and audit regression`, do not require approving reviews during the solo-maintainer phase, keep pull requests required, prevent force-push and deletion. Ruleset 25660385 matches that policy exactly.
+
+The policy states the trigger for changing it: require independent approval **when additional maintainers join, when deployment or security risk warrants it, or before handling production customer data**. None of those conditions holds yet, so this is a future trigger, not a current finding.
+
+**Residual, correctly stated:** `CONSTITUTION.md` C13 says *human approval is required* for schema-breaking changes, auth/RLS changes and production releases. The solo-maintainer policy satisfies that through the documented self-review plus mandatory CI, and it says so explicitly rather than silently. The genuine gap is narrower than the approval count: **23 of ~25 CI workflows are non-blocking**, so most of the acceptance suite can fail without preventing a merge. That is a coverage question, not an approval question, and it is the part worth attention.
 
 ### 5.4 P2 — three conflicting SEC-01..16 registers
 
@@ -353,7 +357,7 @@ Weakest layer: **`apps/worker` — 1 test file, 8 test IDs** for 3 modules inclu
 |---|---|---|
 | **P1-1** | Completeness | **No production deployment target** for API, worker or add-in. Runnable locally; not productionizable. |
 | **P1-2** | Evidence | **Live signed-browser acceptance never runs on `main`** — 22 workflows gated by `github.head_ref == '<branch>'`; 10 have 0 successes ever. |
-| **P1-3** | Security | **`required_approving_review_count: 0`** on an active ruleset; 23 of ~25 CI checks non-blocking. |
+| **P1-3** | Truthfulness | `required_approving_review_count: 0` **matches the adopted solo-maintainer policy** and is not a defect; the real residual is that **23 of ~25 CI checks are non-blocking**. See §5.3. |
 | **P1-4** | Truthfulness | **Documentation lags the code by 13 merged PRs** and misstates the merge gate in three files. `STATUS.md` is the implementation-truth pointer and is stale. |
 | **P1-5** | Truthfulness | **`MEMORY.md` states the superseded finance-first product** and is a first-class required read. |
 | **P1-6** | Truthfulness | **Three conflicting SEC-01..16 registers.** |
@@ -374,7 +378,7 @@ Weakest layer: **`apps/worker` — 1 test file, 8 test IDs** for 3 modules inclu
 **26 enforceable clauses** (C01–C25 plus C09-A).
 
 **COMPLIANT (21):** C01, C02, C03, C04, C05, C06, C07, C08, C09, C09-A, C10, C12, C14, C15, C17, C18, C19, C20, C21, C22, C23.
-**PARTIAL (5):** C11 (no per-migration rollback artifacts), C13 (`required_approving_review_count: 0`), C16 (only 2 required checks; no release record artifact), C24 (`MEMORY.md` stale, `AGENTS.md` misstates the gate), C25 (code review not enforced).
+**PARTIAL (5):** C11 (no per-migration rollback artifacts), C13 (self-review is the documented substitute for an independent approval during the solo-maintainer phase; the policy is explicit about this), C16 (only 2 required checks; no release record artifact), C24 (`MEMORY.md` stale, `AGENTS.md` misstates the gate), C25 (no formal independent approval is possible while the repository has one maintainer).
 
 The engineering discipline is genuinely high. The failures are **governance and operations**, not code logic.
 
@@ -395,7 +399,7 @@ The engineering discipline is genuinely high. The failures are **governance and 
 
 **Track C — release assurance (governance)**
 6. Refresh `STATUS.md` to the current head; correct `AGENTS.md`, `CLAUDE.md`, `ROADMAP.md`, `README.md`, `BLUEPRINT.md` (F6 + Storyteller decision), `MEMORY.md`; collapse the five competing task lists into one; resolve the duplicate ADR 0020 and add an index; designate one canonical SEC register.
-7. Set `required_approving_review_count: 1`; add the remaining CI workflows as required checks.
+7. Add the remaining CI workflows as required checks, and record the solo-maintainer merge policy next to the ruleset so the next reader does not have to re-derive it. Require independent approval only when the policy's own trigger is met: additional maintainers, deployment or security risk, or production customer data.
 8. Replace the 22 branch-name gates with environment/scope gating so live acceptance **runs on `main`**; add `main` to the required checks; execute `evals/` in CI; commit a golden binary fixture set.
 9. Derive a dedicated receipt key (`CASEPROOF_RECEIPT_KEY`) with a manifest key ID and retained verification keys (ADR 0036).
 
