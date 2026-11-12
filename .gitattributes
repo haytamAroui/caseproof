@@ -1,0 +1,46 @@
+# Normalize text files to LF in the repository and in every checkout.
+#
+# Why this exists: without it, a Windows checkout with core.autocrlf=true
+# materialises CRLF working-tree bytes, and the repository's own byte-level
+# verifiers read those bytes directly. That made migration provenance
+# verification (scripts/verify_migration_lineage.py), the generated frontend
+# contract drift check (npm run contracts:check) and Prettier (npm run lint)
+# fail on Windows while passing on Linux CI.
+#
+# Binary assets are detected by git and are never rewritten.
+* text=auto eol=lf
+
+# Explicit, reviewable overrides for file types where LF must not be assumed.
+*.sql   text eol=lf
+*.py    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.xml   text eol=lf
+*.sh    text eol=lf
+*.txt   text eol=lf
+*.toml  text eol=lf
+*.lock  text eol=lf
+
+# Never line-ending translate binaries.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.zip   binary
+*.gz    binary
+*.eml   binary
