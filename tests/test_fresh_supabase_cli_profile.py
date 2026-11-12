@@ -23,7 +23,9 @@ def test_all_sources_have_deterministic_ordered_temp_aliases() -> None:
         originals.index("20261030114000_m05_ocr_sidecar_cleanup_fk.sql")
     )
     assert originals[-1] == "20261106210000_caseproof_release_acknowledgement_fence.sql"
-    assert all(old.name != new for old, new in pairs)
+    assert sum(old.name == new for old, new in pairs) == 51
+    assert sum(old.name != new for old, new in pairs) == 22
+    assert pairs[1][0].name == pairs[1][1]  # preserve the M1 version gate
 
 
 def test_sql_bytes_are_not_rewritten_and_aliases_are_immutable(tmp_path: Path) -> None:
