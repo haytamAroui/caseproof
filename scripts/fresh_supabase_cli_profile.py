@@ -16,7 +16,7 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from scripts.disposable_replay_candidate import replay_plan
+from scripts.disposable_replay_candidate import PLAN, replay_plan
 from scripts.probe_supabase_cli_local import (
     CLI_VERSION,
     assert_offline_cli_environment,
@@ -43,13 +43,27 @@ def validate_environment(env: dict[str, str]) -> None:
 
 def temporary_aliases() -> list[tuple[Path, str]]:
     sources = replay_plan()
+    manifest = json.loads(PLAN.read_text(encoding="utf-8"))
+    moved = set(manifest["deferred_suffix"])
+    if len(moved) != 22:
+        raise ValueError("Expected 22 reviewed dependency deferrals")
     result: list[tuple[Path, str]] = []
-    for idx, source in enumerate(sources):
+    moved_index = 0
+    for source in sources:
         if source.resolve().parent != SOURCE_DIR.resolve():
             raise ValueError("Profile source escaped tracked migration directory")
-        stamp = (BASE_TIME + timedelta(minutes=idx)).strftime("%Y%m%d%H%M%S")
-        original_label = source.name.split("_", 1)[1]
-        result.append((source, f"{stamp}_{original_label}"))
+        if source.name in moved:
+            stamp = (BASE_TIME + timedelta(minutes=moved_index)).strftime("%Y%m%d%H%M%S")
+            original_label = source.name.split("_", 1)[1]
+            alias = f"{stamp}_{original_label}"
+            moved_index += 1
+        else:
+            # SQL inside the early M1 source checks the actual historical
+            # 20261027160745 version in schema_migrations. Keep that version.
+            alias = source.name
+        result.append((source, alias))
+    if moved_index != 22:
+        raise ValueError("Not all reviewed dependency deferrals were processed")
     if len(result) != 73 or len({alias for _, alias in result}) != len(result):
         raise ValueError("Candidate file set changed; fresh profile needs review")
     if [name for _, name in result] != sorted(name for _, name in result):
