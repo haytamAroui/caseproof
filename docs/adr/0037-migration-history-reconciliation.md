@@ -138,3 +138,22 @@ Subsequent work must reconcile the historical version mapping, choose an
 approved canonical baseline, prove a **real Supabase CLI** local clean install,
 verify an upgrade from the recorded history, and obtain independent security
 approval. P0-3 stays BLOCKED.
+
+## 12 November 2026 — Official Supabase CLI v3.1.0 local replay checkpoint
+
+The positive 73-file PostgreSQL-with-stubs candidate from PR #220 does **not**
+establish a normal Supabase CLI installation because its dependency order differs
+from the tracked filename order. The next acceptance step is real CLI execution.
+
+`scripts.probe_supabase_cli_local` and its dedicated CI workflow create a
+new **unlinked, local-only Supabase project** in a temporary directory. They
+start the local stack with empty migrations, copy all tracked migration files
+without changing SQL bytes, and run `supabase db reset --local --no-seed`.
+A green **diagnostic** means the current known first-failure SQL has been
+reproduced; a different failure or unexpected success requires review. The
+output is a bounded JSON report, not a copy of CLI logs.
+
+CLI version is pinned to v3.1.0 (upstream release 9 November 2026).
+The test has no hosted database credentials, project links or remote flags.
+It does not approve production migration repair, fresh-install readiness or
+upgrade-path correctness. The existing development database remains unchanged.
