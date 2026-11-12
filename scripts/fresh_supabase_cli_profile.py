@@ -21,8 +21,8 @@ from scripts.probe_supabase_cli_local import (
     CLI_VERSION,
     assert_offline_cli_environment,
     error_category,
-    output_tail,
     execute,
+    output_tail,
 )
 from scripts.verify_migration_lineage import verify_lineage
 

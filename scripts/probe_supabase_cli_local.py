@@ -61,12 +61,14 @@ def error_category(output: str) -> str:
 
 
 def output_tail(output: str, limit: int = 2500) -> str:
-   """Return the tail of a CLI output for failure diagnosis.
+   """Return the diagnosable tail of a CLI output.
 
    A failed migration reports its own reason (the verification blocks in
-   supabase/migrations raise specific messages), so the tail is what makes a
-   replay failure diagnosable from the uploaded artifact alone. Any
-   credential-shaped substring is redacted before it is recorded.
+   supabase/migrations raise specific messages), but the Supabase CLI echoes
+   the whole failing statement after the error, so a raw tail is dominated by
+   the statement source and loses the error itself. The error-bearing lines
+   are therefore selected first; the raw tail is the fallback. Any
+   credential-shaped substring is redacted before the result is recorded.
    """
    redacted = re.sub(r"(?i)(://[^:/\s]+:)[^@\s]+@", r"\1***@", output)
    redacted = re.sub(
@@ -74,6 +76,17 @@ def output_tail(output: str, limit: int = 2500) -> str:
       r"\1=***",
       redacted,
    )
+   diagnostic = [
+      line for line in redacted.splitlines()
+      if re.search(
+         r"(?i)\b(error|fatal|panic|exception|denied|must be owner|"
+         r"does not exist|already exists|cannot|failed|context|statement|"
+         r"detail|hint)\b",
+         line,
+      )
+   ]
+   if diagnostic:
+      return "\n".join(diagnostic)[-limit:]
    return redacted[-limit:]
 
 
