@@ -136,10 +136,20 @@ $$;
 --    set per role instead. `postgres` covers direct and management
 --    connections; `authenticator` covers PostgREST sessions, which
 --    authenticate as `authenticator` and then assume a client role.
+--    `authenticator` is a Supabase-provided role and does not exist on a
+--    bare PostgreSQL instance, so each target is applied only when present.
+--    This keeps the migration replayable on a plain PostgreSQL 17 instance.
 do $$
+declare
+    target record;
 begin
-    execute 'alter role postgres set log_min_error_statement = ''fatal''';
-    execute 'alter role authenticator set log_min_error_statement = ''fatal''';
+    for target in
+        select rolname from pg_roles where rolname in ('postgres', 'authenticator')
+    loop
+        execute format(
+            'alter role %I set log_min_error_statement = %L', target.rolname, 'fatal'
+        );
+    end loop;
 end
 $$;
 
@@ -216,6 +226,16 @@ begin
                      and rolbypassrls = false
                      and rolcanlogin = true) then
         raise exception 'reader role attributes are not least-privilege'
+            using errcode = '42501';
+    end if;
+
+    if not exists (
+        select 1 from pg_db_role_setting s
+        join pg_roles r on r.oid = s.setrole
+        where r.rolname = 'postgres'
+          and array_to_string(s.setconfig, ',') like '%log_min_error_statement=fatal%'
+    ) then
+        raise exception 'log_min_error_statement was not applied to the postgres role'
             using errcode = '42501';
     end if;
 end

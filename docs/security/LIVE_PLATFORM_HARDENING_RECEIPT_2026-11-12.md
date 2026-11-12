@@ -40,7 +40,15 @@ Its own header required installation "only together with API release changes"; P
 3. **Revoke `SELECT` on `extensions.pg_stat_statements` and `extensions.pg_stat_statements_info` from `PUBLIC`.** The grant was held by `PUBLIC` (`=r/postgres` in `pg_class.relacl`), so revoking only from `anon` and `authenticated` was a no-op. `dashboard_user` and `postgres` retain their own grants.
 4. **`log_min_error_statement = 'fatal'`** for roles `postgres` and `authenticator`. `ALTER DATABASE ... SET` requires `SUPERUSER`, which the migration role does not hold on a managed project, so the parameter is set per role: `postgres` covers direct and management connections, `authenticator` covers PostgREST sessions. Normal traffic was already unlogged (`log_statement='ddl'`, `log_min_duration_statement=-1`), but any **errored** statement was written to the database log in full, and a PostgREST direct table read inlines filter values into the statement text.
 
-The migration ends with a fail-closed verification block: it raises if any `caseproof` relation lacks forced RLS, if the `pg_stat_statements` views remain readable by `anon`/`authenticated`, if the reader role holds write privileges on a protected relation, if it owns one, if it inherits a privileged role, or if its attributes are not least-privilege.
+The migration ends with a fail-closed verification block: it raises if any `caseproof` relation lacks forced RLS, if the `pg_stat_statements` views remain readable by `anon`/`authenticated`, if the reader role holds write privileges on a protected relation, if it owns one, if it inherits a privileged role, if its attributes are not least-privilege, or if `log_min_error_statement` was not applied to the `postgres` role.
+
+##### Correction applied after the first application (portability)
+
+The first application of this migration used an unconditional `alter role authenticator set log_min_error_statement = 'fatal'`. `authenticator` is a **Supabase-provided role** and does not exist on a bare PostgreSQL instance, so the migration **failed** when replayed against the `postgres:17` container used by the disposable replay candidate (`ERROR: role "authenticator" does not exist`). Every preceding statement — forced RLS, the reader role and its grants, the `pg_stat_statements` revokes — had already succeeded in that container, so the defect was isolated to the log-setting block.
+
+The migration was corrected to apply the setting **only to roles that exist**, and the corrected migration was **re-applied** to `caseproof-dev`. The re-application is idempotent: forced RLS re-applies, the existing reader role is reused, the revokes re-apply, and the log setting re-applies. The recorded `supabase_migrations` statement for version `20261113000000` was updated to the corrected text so that the repository file, the recorded statement and the applied SQL agree. The superseded first text remains in git history at commit `b1e85e3`, and the receipt records the change explicitly rather than silently.
+
+Live read-back after the correction: forced RLS 42/42 · reader role present · `pg_stat_statements` leak 0 · release triggers 4 · applied migrations 76 · `log_min_error_statement=fatal` on 2 roles · recorded statement length equals the repository file length.
 
 ### 1.3 Repository line-ending normalisation (`.gitattributes`, new)
 
