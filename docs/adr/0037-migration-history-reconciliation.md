@@ -172,3 +172,12 @@ CI must complete the real Supabase CLI reset and observe all 73 alias
 applications. Even a passing isolated clean install is not a schema-parity,
 live upgrade, security review, or pilot release acceptance. ADR remains
 PROPOSED until those separate gates are met.
+
+### Follow-up: preserve hardcoded early version gates
+
+The first positive CLI attempt failed at original M1 private storage (source
+`20261027202734`) because renaming its preceding migration hid the
+historical version `20261027160745` from the CLI history ledger. The
+revised candidate preserves the 51 sorted-prefix original timestamp labels
+and gives ephemeral aliases **only** to the 22 deferred migrations.
+This is an isolated test-profile correction, not a remote migration repair.
