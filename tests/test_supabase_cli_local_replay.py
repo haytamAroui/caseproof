@@ -17,7 +17,7 @@ from scripts.probe_supabase_cli_local import (
 def test_cli_probe_requires_isolated_ci() -> None:
     with pytest.raises(RuntimeError, match="GitHub Actions"):
         assert_offline_cli_environment({"CI": "true"})
-    assert_offline_cli_environment({"CI": "true", "GITHUB_ACTIONS": "true"}) is None
+    assert_offline_cli_environment({"CI": "true", "GITHUB_ACTIONS": "true"})
 
 
 def test_remote_credentials_and_routing_are_rejected() -> None:
