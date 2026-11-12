@@ -2,7 +2,7 @@
 
 **Version:** 4.1 (v4 update) · **Updated:** 10 November 2026 · **Status:** **PROPOSED TECHNICAL CONTRACT — NOT FULLY IMPLEMENTED OR PILOT-APPROVED**  
 **Base specification:** `caseproof-final-workflow (3).md` (v3), with corrections from the 8 November code-level review and the independent DeepSeek commentary.  
-**Code snapshot:** `haytamAroui/caseproof`, `main` including merged PR #209 (squash commit `af438c3771add91f3b4b83409d464a0c05031670`, verified 10 November 2026). The original v4 audit was performed 8 November; later acceptance claims must be supported by separate evidence.  
+**Code snapshot:** `haytamAroui/caseproof`, `main` at `8803215` (PR #210, 13 November 2026), which includes merged PR #209 (squash commit `af438c3771add91f3b4b83409d464a0c05031670`, verified 10 November 2026) and PRs #211-#224. The original v4 audit was performed 8 November; later acceptance claims must be supported by separate evidence.  
 **Change control:** This revision records that PR #209 was merged; it does **not** authorize production, real client-data processing, court filing, or silently supersede accepted [ADR 0018](https://github.com/haytamAroui/caseproof/blob/main/docs/adr/0018-pre-submission-verification-freeze.md). Adopting a broader mandatory commercial scope, or making Word mandatory for launch, requires an explicit owner decision and a reviewed superseding ADR.
 
 > **Core rule:** The **LLM proposes**; the **deterministic kernel verifies only bounded, technically checkable properties**; the **authorized lawyer decides semantic support**; and **the complete baseline review/export journey works with the LLM off**.
@@ -181,7 +181,35 @@ Its signed claim endpoint now binds to a named frozen snapshot instead of invoki
 
 **After-merge gates still open:** independent review of real signed-actor permissions/revocation and snapshot races, complex DOCX story-region coverage and human claim adjudication, no-evidence/partial labeling, claim-to-evidence integration, and representative NL/FR testing. Merge is **not** pilot or production approval. This document does not retroactively treat those gates as closed.
 
+Do not characterize earlier draft concerns as unresolved defects without checking current code and evidence.
+
 ---
+
+### 3.3 Decision catalogue and current technical boundary
+
+A decision catalogue is the first recommended deliverable. For every operation record: input fields and their origin; exact predicate, algorithm and version; output and reason codes; missing/ambiguous behavior; authority; source and snapshot binding; implementation and signed-path connection; tests and independent acceptance. The following is a starting map, not a complete ruleset or proof of end-to-end wiring:
+
+| Decision | Data and rule | Output / limit | Evidence |
+|---|---|---|---|
+| Preserved bytes | Compare a retrieved original's digest with its preserved source version. | Match or mismatch/unavailable; integrity relative to intake, not authenticity. | Signed intake and source-version adapters; verify each journey's readback. |
+| Exhibit identity | Resolve supported explicit Stuk/Pièce label and number against confirmed inventory and an authorized exhibit version. | Resolved, ambiguous or unresolved/not assessed; never infer identity from a filename. | `domains/disputes/dossier_verification.py`, `exhibit_identity.py`. |
+| Page location | Read explicit page space; resolve a physical PDF page in range or a unique confirmed printed/bundle mapping. | Mapped, conflicting or unmapped; plain `p.` is ambiguous, sequences and duplicate mappings require review. | `domains/disputes/dossier_verification.py`. |
+| Literal fidelity | Resolve a typed source/representation anchor and compare an exact expected quote or supported typed scalar. | Matched, mismatched or indeterminate; not semantic support. An evaluator's existence does not establish its execution for every dossier finding. | `packages/evidence_kernel/domain/fidelity.py`; audit signed-path use. |
+| Reference review scope | Validate unique finding identities and human receipts; count decisions over detected findings. | Complete/partial within detected-reference scope; text coverage and unmeasured recall remain separate warnings. | `application/litigation/release_completeness.py`. |
+| Claim candidates | Segment supported extracted DOCX regions using versioned bounded heuristics and digest-bound offsets. | Candidates only; classification, support and recall remain unassessed/unmeasured; omissions remain visible. | `infrastructure/parsers/docx_claim_discovery.py`, signed candidate endpoint. |
+| Human semantic support | Authorized reviewer assesses a specific claim/source passage in its frozen context. | Recorded human decision; model proposals and literal matches cannot authorize it. | Existing reference-review path; complete claim-review path is not established. |
+| Statutory status/applicability | No accepted statute corpus or applicable-law decision in the current product. | **Not checked**; no legal-validity or good-law claim. | ADR 0018/0019 and roadmap; discovery in section 12. |
+
+**Critical terminology:** In `build_findings`, `technical_check=checked` means the identity and physical pinpoint conditions succeeded; it does **not** assert quote fidelity, semantic support or legal validity. User-facing views and reports must spell out the dimensions and exclusions, not present a blanket green verdict.
+
+### 3.4 What to do first
+
+1. Produce the catalogue above and an exact-head signed-journey gap map; distinguish code present, wired, tested and independently accepted.
+2. Prove the current synthetic NL/FR lawyer task end to end: upload → inventory confirmation → check → original page/crop → human review → correction → recheck → scoped export → cold reopen. Include wrong source/page, duplicate mapping, quote mismatch, unreadable scan, missing source, revoked access and changed snapshot. Record actual outcomes and remaining limitations.
+3. Audit interface and export wording for detected-reference counts, excluded/unavailable sources, unscanned regions, unmeasured recall and the explicit absence of statutory/legal-applicability checks.
+4. Run five practitioner interviews and observe two manual workflows, including current legal-authority checking and willingness to pay. Use authorized synthetic or rights-cleared material only.
+5. Present the owner with a choice between the current reference-checking scope and the broader claim-review workflow. The latter requires an explicit scope decision and reviewed ADR/roadmap updates where it changes the accepted scope. Study statutory checking separately under section 12.
+
 ## 4. Per-matter workflow — nine stages, with stage gates
 
 Every stage is a **versioned operation** on a signed, currently authorized matter. Failure/unknown results must remain visible in later stages. A draft can contain uncited factual claims, and a cited reference may not relate to a factual claim; the two discovery streams are complementary.
@@ -399,6 +427,7 @@ The existing [SEC-01–SEC-16 checklist](https://github.com/haytamAroui/caseproo
 |---|---|---|---|
 | **0a** | Rights & recruitment | Begin approved firm outreach; rights-cleared corpus and privacy/security architecture review in parallel | Written permissions; named reviewers; no confidential upload until signoff. |
 | **0b (P0)** | Post-merge PR #209 acceptance | Re-verify the merged signed read contract and coverage semantics; test real-signed actor, stale rights, DOCX stories and no model egress | Independent review and negative signed-user evidence. **Merge/CI alone does not close this gate.** |
+| **0c (P0)** | Decision catalogue and current journey | Map rules to inputs, outputs, actual signed-path wiring, tests and limitations; verify the complete synthetic reference-review task | Exact-head evidence, no blanket verdict, negative cases, scoped export and cold reopen. |
 | **1 (P0)** | Claim identity/coverage | Formalize `ClaimUnit`, versioned story locator, omissions, human split/merge/exclude, revised snapshot binding | Independently reviewed contract; identical-input stable IDs, edits invalidate/link conservatively. |
 | **2 (P0)** | Evidence link model | Add source-bound candidate/link entities without duplicating kernel; preserve one-to-many/many-to-many relationships | Source/version/representation/page/hash integrity tests; permission and stale negatives. |
 | **3 (P0)** | Signed per-claim lexical search | Adapt authorized evidence search to existing signed dossier and rights path; frozen index and source provenance | Real signed-user test, current-grant before/after, missing/duplicate pages, no-match/partial not disproved. |
@@ -421,6 +450,8 @@ The existing [SEC-01–SEC-16 checklist](https://github.com/haytamAroui/caseproo
 4. Prevent oversized output and unbounded serialized candidate text; apply response budgets, content security headers and no-cache as appropriate.
 5. Prove no model calls, no confidential-data egress, and no expansion of signed matter grants. Tests must include lost/expired token, same-org denied case, revoked actor, replaced original, stale inventory and unchanged receipt states.
 6. Explicitly keep `claim_review_coverage` unmeasured/partial pending a later claim ledger. **Do not add a superficial `verified` property** just to align with the new workflow text.
+
+Claim candidates remain unassessed and do not constitute a signed claim-review ledger. Any claim-to-source links or release changes require the scope decision and reviewed contracts above.
 
 **Merged-code note:** PR #209 is no longer awaiting merge. The six checks above are continuing independent acceptance criteria; they must not be described as already independently accepted merely because the code and CI were merged.
 
@@ -519,6 +550,7 @@ The existing [SEC-01–SEC-16 checklist](https://github.com/haytamAroui/caseproo
 | Should Word be required for the first commercial test? | **Owner decision open**; architecture allows web/DOCX-first, real Word as separate channel. |
 | Should v4 replace ADR 0018 as commercial scope? | **Owner decision open**; a reviewed superseding ADR is required if scope changes. |
 | Is PR #209 ready to merge? | **Already merged** into `main` at `af438c37`; remaining independent signed-rights, coverage and practitioner acceptance is **not established**. |
+| Does merged PR #209 establish complete claim review? | **No**; it supplies bounded candidates from a signed frozen snapshot, not a complete claim-source review or measured claim recall. |
 | Does v4.1 verify that a corrected DOCX is the PDF a lawyer will file? | **Not yet implemented/accepted.** Final-PDF parity plus exact-hash lawyer approval is P0 before any `READY_TO_FILE` state; initial non-filing pilot must say `FINAL_PDF_NOT_CHECKED`. |
 | Can CaseProof prove the approved PDF was actually filed? | **No.** A future authorized filed-byte or trustworthy docket/submission receipt comparison is required; e-filing remains outside initial scope. |
 
@@ -597,4 +629,4 @@ This is a **decision proposal**, not an approval recorded by this file.
 
 ---
 
-**End of v4.1 (updated v4).** The immediate actionable engineering focus is **claim identity → signed evidence retrieval → versioned claim–source link → human decision → scope-safe release**, building on merged PR #209, with final-PDF parity as an additional **conditional P0** when any artifact is represented as ready to file. This is a requirements and acceptance document, **not evidence of deployed functionality or customer acceptance**.
+**End of v4.1 (updated v4).** The immediate actionable engineering focus is **claim identity → signed evidence retrieval → versioned claim–source link → human decision → scope-safe release**, building on merged PR #209, with final-PDF parity as an additional **conditional P0** when any artifact is represented as ready to file. The decision catalogue and the proven signed reference-review journey (**decision catalogue → proven signed reference-review journey → honest coverage and practitioner evidence**) remain the prerequisite for that expansion; claim-level expansion follows an explicit scope decision and statutory checking remains a separate discovery track. This is a requirements and acceptance document, **not evidence of deployed functionality or customer acceptance**.
