@@ -1,8 +1,8 @@
 {
   "schema_version": "caseproof-migration-inventory-v1",
   "environment": "caseproof-dev",
-  "captured_date_utc": "2026-11-11",
-  "repository_base_sha": "e4195a7c59b397cd1fbefd0b91a4fa37d74b6ad8",
+  "captured_date_utc": "2026-11-12",
+  "repository_base_sha": "a99e92126818f9f99e7d187bc1f380fde430ba29",
   "purpose": "read-only migration ledger inventory; never a deployment approval or history repair",
   "applied": [
     {
@@ -300,6 +300,14 @@
     {
       "version": "20261106172653",
       "name": "caseproof_signed_export_rights_manifest_fence"
+    },
+    {
+      "version": "20261106210000",
+      "name": "caseproof_release_acknowledgement_fence"
+    },
+    {
+      "version": "20261113000000",
+      "name": "caseproof_platform_hardening"
     }
   ]
 }

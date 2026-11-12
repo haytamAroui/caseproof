@@ -153,6 +153,8 @@ def test_cli_generated_canonical_migration_is_identical_to_reviewed_sql() -> Non
         "20261106172653_caseproof_signed_export_rights_manifest_fence.sql",
         # PR204: reviewer release acknowledgement bound to verified actor and snapshot.
         "20261106210000_caseproof_release_acknowledgement_fence.sql",
+        # Forced RLS, fixed least-privilege reader role, pg_stat_statements revoke.
+        "20261113000000_caseproof_platform_hardening.sql",
         "20261030140000_caseproof_phase3_private_ocr_geometry.sql",
         "20261030141500_caseproof_phase3_geometry_text_payload.sql",
         "20261030143000_caseproof_phase3_atomic_ocr_ingest.sql",

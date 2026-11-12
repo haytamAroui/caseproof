@@ -22,6 +22,7 @@ from scripts.probe_supabase_cli_local import (
     assert_offline_cli_environment,
     error_category,
     execute,
+    output_tail,
 )
 from scripts.verify_migration_lineage import verify_lineage
 
@@ -45,8 +46,8 @@ def temporary_aliases() -> list[tuple[Path, str]]:
     sources = replay_plan()
     manifest = json.loads(PLAN.read_text(encoding="utf-8"))
     moved = set(manifest["deferred_suffix"])
-    if len(moved) != 22:
-        raise ValueError("Expected 22 reviewed dependency deferrals")
+    if len(moved) != 23:
+        raise ValueError("Expected 23 reviewed dependency deferrals")
     result: list[tuple[Path, str]] = []
     moved_index = 0
     for source in sources:
@@ -62,9 +63,9 @@ def temporary_aliases() -> list[tuple[Path, str]]:
             # 20261027160745 version in schema_migrations. Keep that version.
             alias = source.name
         result.append((source, alias))
-    if moved_index != 22:
+    if moved_index != 23:
         raise ValueError("Not all reviewed dependency deferrals were processed")
-    if len(result) != 73 or len({alias for _, alias in result}) != len(result):
+    if len(result) != 74 or len({alias for _, alias in result}) != len(result):
         raise ValueError("Candidate file set changed; fresh profile needs review")
     if [name for _, name in result] != sorted(name for _, name in result):
         raise ValueError("Ephemeral alias order is nonmonotonic")
@@ -156,6 +157,7 @@ def run_fresh_profile() -> dict[str, object]:
                 "observed_apply_count": len(observed),
                 "first_failed_source": by_alias.get(failed),
                 "error_category": error_category(output),
+                "cli_output_tail": output_tail(output),
                 "source_layout_sha256": digest,
             }
         finally:

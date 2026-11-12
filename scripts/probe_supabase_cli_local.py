@@ -48,16 +48,50 @@ def execute(
 
 
 def error_category(output: str) -> str:
-    lowered = output.lower()
-    if "does not exist" in lowered:
-        return "MISSING_DATABASE_OBJECT"
-    if "permission denied" in lowered:
-        return "PERMISSION_DENIED"
-    if "docker" in lowered or "container" in lowered:
-        return "LOCAL_DOCKER_ERROR"
-    if "error" in lowered or "failed" in lowered:
-        return "CLI_ERROR"
-    return "UNKNOWN_FAILURE"
+   lowered = output.lower()
+   if "does not exist" in lowered:
+      return "MISSING_DATABASE_OBJECT"
+   if "permission denied" in lowered:
+      return "PERMISSION_DENIED"
+   if "docker" in lowered or "container" in lowered:
+      return "LOCAL_DOCKER_ERROR"
+   if "error" in lowered or "failed" in lowered:
+      return "CLI_ERROR"
+   return "UNKNOWN_FAILURE"
+
+
+def output_tail(output: str, limit: int = 2500) -> str:
+   """Return the diagnosable tail of a CLI output.
+
+   A failed migration reports its own reason (the verification blocks in
+   supabase/migrations raise specific messages), but the Supabase CLI echoes
+   the whole failing statement after the error, so a raw tail is dominated by
+   the statement source and loses the error itself. The error-bearing lines
+   are therefore selected first; the raw tail is the fallback. Any
+   credential-shaped substring is redacted before the result is recorded.
+   """
+   redacted = re.sub(r"(?i)(://[^:/\s]+:)[^@\s]+@", r"\1***@", output)
+   redacted = re.sub(
+      r"(?i)\b(password|secret|token|api[_-]?key|authorization)\b\s*[=:]\s*\S+",
+      r"\1=***",
+      redacted,
+   )
+   # Supabase CLI prints the PostgreSQL error first, followed by the full
+   # failing SQL statement. Select the first actual diagnostic, not matching
+   # words in the echoed SQL (which can exceed the output limit).
+   lines = redacted.splitlines()
+   markers = re.compile(
+      r"(?i)^\s*(?:ERROR(?:\s*\([A-Z0-9]+\))?:|FATAL:|PANIC:|"
+      r"Error:|failed to (?:apply|execute)|migration failed|"
+      r"SQLSTATE(?:\s*[:=])|DETAIL:|HINT:|CONTEXT:)"
+   )
+   hits = [i for i, line in enumerate(lines) if markers.search(line)]
+   if hits:
+      first = hits[0]
+      # Include adjacent context but avoid the entire echoed DO block.
+      excerpt = lines[max(0, first - 2):min(len(lines), first + 9)]
+      return "\n".join(excerpt)[:limit]
+   return redacted[-limit:]
 
 
 def first_failing_file(output: str) -> str | None:

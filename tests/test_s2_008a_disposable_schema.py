@@ -65,6 +65,8 @@ def test_no_installed_migration_or_prod_route() -> None:
         # Version already applied on caseproof-dev; restore is tested separately.
         "20261030150030_caseproof_phase4_signed_reference_review.sql",
     } == {
+        # Forced RLS, least-privilege reader role, pg_stat_statements revoke.
+        "20261113000000_caseproof_platform_hardening.sql",
         "20261031112127_signed_page_worker.sql",
         "20261031234906_dossier_draft_revisions.sql",
         "20261031235117_dossier_draft_revision_fk_indexes.sql",

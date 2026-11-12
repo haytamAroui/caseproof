@@ -2,7 +2,7 @@
 
 **Version:** 4.1 (v4 update) · **Updated:** 10 November 2026 · **Status:** **PROPOSED TECHNICAL CONTRACT — NOT FULLY IMPLEMENTED OR PILOT-APPROVED**  
 **Base specification:** `caseproof-final-workflow (3).md` (v3), with corrections from the 8 November code-level review and the independent DeepSeek commentary.  
-**Code snapshot:** `haytamAroui/caseproof`, `main` including merged PR #209 (squash commit `af438c3771add91f3b4b83409d464a0c05031670`, verified 10 November 2026). The original v4 audit was performed 8 November; later acceptance claims must be supported by separate evidence.  
+**Code snapshot:** `haytamAroui/caseproof`, `main` at `8803215` (PR #210, 12 November 2026), which includes merged PR #209 (squash commit `af438c3771add91f3b4b83409d464a0c05031670`, verified 10 November 2026) and PRs #211-#224. The original v4 audit was performed 8 November; later acceptance claims must be supported by separate evidence.  
 **Change control:** This revision records that PR #209 was merged; it does **not** authorize production, real client-data processing, court filing, or silently supersede accepted [ADR 0018](https://github.com/haytamAroui/caseproof/blob/main/docs/adr/0018-pre-submission-verification-freeze.md). Adopting a broader mandatory commercial scope, or making Word mandatory for launch, requires an explicit owner decision and a reviewed superseding ADR.
 
 > **Core rule:** The **LLM proposes**; the **deterministic kernel verifies only bounded, technically checkable properties**; the **authorized lawyer decides semantic support**; and **the complete baseline review/export journey works with the LLM off**.
@@ -144,6 +144,43 @@ Existing `application/litigation/release_completeness.py` counts decisions over 
 
 **Methodology:** The original audit checked actual modules on `main`, PR #209 before merge, and GitHub Actions status; the PR merge was separately verified on 10 November 2026. It did **not** run a confidential dossier, a real Word desktop host, an independent penetration test, or an external reviewer study. “Present” does not mean production-approved.
 
+### 3.0 Deployed state, CI, and two known product holes
+
+*Recorded 12 November 2026 against `main` at `8803215` (PR #210) plus PR #225. Every figure below was read back from the live project or the repository, not inferred.*
+
+**Release candidate**
+
+| Item | Value |
+|---|---|
+| Source head audited | `main` at `8803215` (PR #210), plus PR #225 (db hardening + docs) |
+| CI on that head | **38 success, 2 skipped, 0 failed** |
+| Applied migrations on `caseproof-dev` | **76** (the repository carries 74 migration files; 19 applied versions match no repository filename) |
+| Migration lineage | `historical_source_parity_verified: true`, `all_applied_sql_receipts_locatable: true` |
+| Fresh-install replay | **still unproven** (`fresh_replay_verified: false`) |
+
+**Live `caseproof-dev` state after PR #225**
+
+| Control | State |
+|---|---|
+| RLS | enabled **and forced** on all 42 `caseproof` relations |
+| `caseproof_m1_reader` | exists; `SELECT` on 5 protected relations, **0** write privileges, owns none, not superuser / not `BYPASSRLS` — **no password provisioned yet**, so it cannot authenticate |
+| `pg_stat_statements` | `SELECT` revoked from `PUBLIC`; no longer readable by `anon`/`authenticated` |
+| `log_min_error_statement` | `fatal` (roles `postgres`, `authenticator`) — routine failing statements no longer write their text into the database log |
+| Auth | `password_min_length=12`, four character classes required, `disable_signup=true`, re-authentication required to change a password |
+| Storage | S3 protocol **disabled**; project object limit 20 MiB, matching the private originals bucket |
+| Release acknowledgement | the PR #204 fence is **installed**; release intents are bound to the verified actor and snapshot |
+| Rights enforcement | **active** (`_rights_enforcement_control.enabled = true`, since 6 November). `docs/security/DATA_RIGHTS_ENFORCEMENT_PR2.md` still describes it as dormant and without activation — **that document is stale** |
+| Session expiry | **not configured** — `sessions_inactivity_timeout = 0`. Supabase restricts user-session settings to paid plans, so this is a plan decision, not an engineering one |
+
+**Two product holes that block a pilot decision, and are recorded nowhere else**
+
+1. **Nothing is deployable.** There is no API image, no worker supervisor, no TLS termination, no rollback path, no secret delivery. `apps/api` is loopback-pinned by middleware. §10 A13 asks for “SEC-01–16 decisions for exact build/environment/data class”; **no build or environment exists to decide about**.
+2. **The reviewer journey cannot be completed by a user.** The frontend exposes no explicit **Run check** action and no job-progress surface, and `POST /dossier/checks` is never called from the UI. §5 Stages 3–4 and §9 assume a complete synthetic reference-review task; **the shipped interface has no step that starts one**. The gap is in the interface, not the kernel: the check path exists server-side.
+
+**What this means for the acceptance contract.** The engineering recorded in §3.1–§3.4 is real, but §4–§9 describe a *target* product. Two of its preconditions — a runnable deployment, and a startable check — are not met. Neither is closed by this document; both are stated here so that no acceptance claim is made against a journey a user cannot actually walk.
+
+**Capability inventory:**
+
 | Capability | Exists in code | Connected to signed litigation journey | Evidence and remaining work |
 |---|---|---|---|
 | Secure signed intake, original hashes | **Yes** | **Yes, development-signed** | `apps/api/workspace_intake.py`, `signed_supabase_originals.py`; client-data permission remains gated. |
@@ -166,6 +203,8 @@ Existing `application/litigation/release_completeness.py` counts decisions over 
 | Decision-affecting ruleset registry/replay | **Partial** | **Partial** | Multiple versioned rules; unified digest and exact dependency manifest not established. |
 | Independently labeled, rights-cleared NL/FR corpus | **Protocols/synthetic** | **No actual study** | Recruitment, permissions, adjudicated labels and signed evaluation evidence open. |
 
+**Four-mark discipline (§1 principle 16).** The three columns above record *exists in code*, *connected to the signed path*, and *evidence and remaining work*. The fourth mark, **independently accepted**, is **not** asserted for any row of this table. No capability listed here has independent acceptance at the writing head; §10 records the accountable owner and the required evidence for each. A row marked *exists* is a statement about code, never about acceptance.
+
 ### 3.1 What the DeepSeek review got right—and wrong
 
 - **Right:** modular/hexagonal boundary, typed source anchors, hash-validated source objects, separation of fidelity and semantic truth; `apps/api/main.py` is a **development-only demonstration** with caller-controlled `X-Tenant-Id`.
@@ -181,7 +220,35 @@ Its signed claim endpoint now binds to a named frozen snapshot instead of invoki
 
 **After-merge gates still open:** independent review of real signed-actor permissions/revocation and snapshot races, complex DOCX story-region coverage and human claim adjudication, no-evidence/partial labeling, claim-to-evidence integration, and representative NL/FR testing. Merge is **not** pilot or production approval. This document does not retroactively treat those gates as closed.
 
+Do not characterize earlier draft concerns as unresolved defects without checking current code and evidence.
+
 ---
+
+### 3.3 Decision catalogue and current technical boundary
+
+A decision catalogue is the first recommended deliverable. For every operation record: input fields and their origin; exact predicate, algorithm and version; output and reason codes; missing/ambiguous behavior; authority; source and snapshot binding; implementation and signed-path connection; tests and independent acceptance. The following is a starting map, not a complete ruleset or proof of end-to-end wiring:
+
+| Decision | Data and rule | Output / limit | Evidence |
+|---|---|---|---|
+| Preserved bytes | Compare a retrieved original's digest with its preserved source version. | Match or mismatch/unavailable; integrity relative to intake, not authenticity. | Signed intake and source-version adapters; verify each journey's readback. |
+| Exhibit identity | Resolve supported explicit Stuk/Pièce label and number against confirmed inventory and an authorized exhibit version. | Resolved, ambiguous or unresolved/not assessed; never infer identity from a filename. | `domains/disputes/dossier_verification.py`, `exhibit_identity.py`. |
+| Page location | Read explicit page space; resolve a physical PDF page in range or a unique confirmed printed/bundle mapping. | Mapped, conflicting or unmapped; plain `p.` is ambiguous, sequences and duplicate mappings require review. | `domains/disputes/dossier_verification.py`. |
+| Literal fidelity | Resolve a typed source/representation anchor and compare an exact expected quote or supported typed scalar. | Matched, mismatched or indeterminate; not semantic support. An evaluator's existence does not establish its execution for every dossier finding. | `packages/evidence_kernel/domain/fidelity.py`; audit signed-path use. |
+| Reference review scope | Validate unique finding identities and human receipts; count decisions over detected findings. | Complete/partial within detected-reference scope; text coverage and unmeasured recall remain separate warnings. | `application/litigation/release_completeness.py`. |
+| Claim candidates | Segment supported extracted DOCX regions using versioned bounded heuristics and digest-bound offsets. | Candidates only; classification, support and recall remain unassessed/unmeasured; omissions remain visible. | `infrastructure/parsers/docx_claim_discovery.py`, signed candidate endpoint. |
+| Human semantic support | Authorized reviewer assesses a specific claim/source passage in its frozen context. | Recorded human decision; model proposals and literal matches cannot authorize it. | Existing reference-review path; complete claim-review path is not established. |
+| Statutory status/applicability | No accepted statute corpus or applicable-law decision in the current product. | **Not checked**; no legal-validity or good-law claim. | ADR 0018/0019 and roadmap; discovery in section 12. |
+
+**Critical terminology:** In `build_findings`, `technical_check=checked` means the identity and physical pinpoint conditions succeeded; it does **not** assert quote fidelity, semantic support or legal validity. User-facing views and reports must spell out the dimensions and exclusions, not present a blanket green verdict.
+
+### 3.4 What to do first
+
+1. Produce the catalogue above and an exact-head signed-journey gap map; distinguish code present, wired, tested and independently accepted.
+2. Prove the current synthetic NL/FR lawyer task end to end: upload → inventory confirmation → check → original page/crop → human review → correction → recheck → scoped export → cold reopen. Include wrong source/page, duplicate mapping, quote mismatch, unreadable scan, missing source, revoked access and changed snapshot. Record actual outcomes and remaining limitations.
+3. Audit interface and export wording for detected-reference counts, excluded/unavailable sources, unscanned regions, unmeasured recall and the explicit absence of statutory/legal-applicability checks.
+4. Run five practitioner interviews and observe two manual workflows, including current legal-authority checking and willingness to pay. Use authorized synthetic or rights-cleared material only.
+5. Present the owner with a choice between the current reference-checking scope and the broader claim-review workflow. The latter requires an explicit scope decision and reviewed ADR/roadmap updates where it changes the accepted scope. Study statutory checking separately under section 12.
+
 ## 4. Per-matter workflow — nine stages, with stage gates
 
 Every stage is a **versioned operation** on a signed, currently authorized matter. Failure/unknown results must remain visible in later stages. A draft can contain uncited factual claims, and a cited reference may not relate to a factual claim; the two discovery streams are complementary.
@@ -399,6 +466,7 @@ The existing [SEC-01–SEC-16 checklist](https://github.com/haytamAroui/caseproo
 |---|---|---|---|
 | **0a** | Rights & recruitment | Begin approved firm outreach; rights-cleared corpus and privacy/security architecture review in parallel | Written permissions; named reviewers; no confidential upload until signoff. |
 | **0b (P0)** | Post-merge PR #209 acceptance | Re-verify the merged signed read contract and coverage semantics; test real-signed actor, stale rights, DOCX stories and no model egress | Independent review and negative signed-user evidence. **Merge/CI alone does not close this gate.** |
+| **0c (P0)** | Decision catalogue and current journey | Map rules to inputs, outputs, actual signed-path wiring, tests and limitations; verify the complete synthetic reference-review task | Exact-head evidence, no blanket verdict, negative cases, scoped export and cold reopen. |
 | **1 (P0)** | Claim identity/coverage | Formalize `ClaimUnit`, versioned story locator, omissions, human split/merge/exclude, revised snapshot binding | Independently reviewed contract; identical-input stable IDs, edits invalidate/link conservatively. |
 | **2 (P0)** | Evidence link model | Add source-bound candidate/link entities without duplicating kernel; preserve one-to-many/many-to-many relationships | Source/version/representation/page/hash integrity tests; permission and stale negatives. |
 | **3 (P0)** | Signed per-claim lexical search | Adapt authorized evidence search to existing signed dossier and rights path; frozen index and source provenance | Real signed-user test, current-grant before/after, missing/duplicate pages, no-match/partial not disproved. |
@@ -411,7 +479,7 @@ The existing [SEC-01–SEC-16 checklist](https://github.com/haytamAroui/caseproo
 | **9 (P2, gated)** | Optional multilingual retrieval/Requesty | First prove candidate generation recall; diagnose Requesty `OUTCOME_UNKNOWN`; then apply approved reranker | Rights/DPA/retention, model schema/telemetry, LLM-off parity, NL/FR eval improvement, injection tests. |
 | **10 (external)** | Evaluation/pilot | Run independent falsification, human study and paid-pilot request | Measured results, stop conditions, actual signed partner evidence; no synthetic claims of approval. |
 
-**Parallel dependencies:** Recruitment, permission clearance and security review start immediately, even while draft PR #209 is repaired; product validation must not be deferred until all engineering is complete. Engineering can safely use **synthetic** data while legal approval is open.
+**Parallel dependencies:** Recruitment, permission clearance and security review start immediately, in parallel with the remaining engineering in §8; product validation must not be deferred until all engineering is complete. Engineering can safely use **synthetic** data while legal approval is open.
 
 ### 8.1 PR #209 — post-merge regression and independent acceptance
 
@@ -421,6 +489,8 @@ The existing [SEC-01–SEC-16 checklist](https://github.com/haytamAroui/caseproo
 4. Prevent oversized output and unbounded serialized candidate text; apply response budgets, content security headers and no-cache as appropriate.
 5. Prove no model calls, no confidential-data egress, and no expansion of signed matter grants. Tests must include lost/expired token, same-org denied case, revoked actor, replaced original, stale inventory and unchanged receipt states.
 6. Explicitly keep `claim_review_coverage` unmeasured/partial pending a later claim ledger. **Do not add a superficial `verified` property** just to align with the new workflow text.
+
+Claim candidates remain unassessed and do not constitute a signed claim-review ledger. Any claim-to-source links or release changes require the scope decision and reviewed contracts above.
 
 **Merged-code note:** PR #209 is no longer awaiting merge. The six checks above are continuing independent acceptance criteria; they must not be described as already independently accepted merely because the code and CI were merged.
 
@@ -434,7 +504,7 @@ The existing [SEC-01–SEC-16 checklist](https://github.com/haytamAroui/caseproo
 
 | Window | Engineering lane | Independent firm/security/evaluation lane | Exit criterion |
 |---|---|---|---|
-| **Weeks 1–2** | Audit exact head; PR #209 read/write fix; claim identity/coverage contract; replay/ruleset design | Recruit firms, classify data/rights, choose approved custody/OCR/LLM options; assemble synthetic/adjudication protocol | Reviewed contracts, no open P0 semantics, synthetic safe route. |
+| **Weeks 1–2** | Audit exact head and deployed state (§3.0); claim identity/coverage contract; replay/ruleset design | Recruit firms, classify data/rights, choose approved custody/OCR/LLM options; assemble synthetic/adjudication protocol | Reviewed contracts, no open P0 semantics, synthetic safe route. |
 | **Weeks 3–4** | Versioned claim/link entity; signed lexical per-claim search; rights/currentness tests | Independent label template; secure corpus intake prep; firm workflow observations | One claim → authorized candidate original page → manual selection, without model. |
 | **Weeks 5–6** | Reconciliation, separate claim/reference review status, initial claim evidence table | Begin blinded synthetic/genuine-format falsification; privacy review decision | No false `COMPLETE`, stable source link, false-confirm safety tests. |
 | **Weeks 7–8** | Add Fact Cite DOCX save/reopen, exact-snapshot recheck, ruleset digest/manifest; design final-PDF parity and exact-byte receipt contract | Pilot readiness/real rights signoffs where available; collect baseline manual task time | Complete synthetic LLM-off lawyer task end-to-end; correct original page in artifact; approved parity test design. |
@@ -519,6 +589,7 @@ The existing [SEC-01–SEC-16 checklist](https://github.com/haytamAroui/caseproo
 | Should Word be required for the first commercial test? | **Owner decision open**; architecture allows web/DOCX-first, real Word as separate channel. |
 | Should v4 replace ADR 0018 as commercial scope? | **Owner decision open**; a reviewed superseding ADR is required if scope changes. |
 | Is PR #209 ready to merge? | **Already merged** into `main` at `af438c37`; remaining independent signed-rights, coverage and practitioner acceptance is **not established**. |
+| Does merged PR #209 establish complete claim review? | **No**; it supplies bounded candidates from a signed frozen snapshot, not a complete claim-source review or measured claim recall. |
 | Does v4.1 verify that a corrected DOCX is the PDF a lawyer will file? | **Not yet implemented/accepted.** Final-PDF parity plus exact-hash lawyer approval is P0 before any `READY_TO_FILE` state; initial non-filing pilot must say `FINAL_PDF_NOT_CHECKED`. |
 | Can CaseProof prove the approved PDF was actually filed? | **No.** A future authorized filed-byte or trustworthy docket/submission receipt comparison is required; e-filing remains outside initial scope. |
 
@@ -571,7 +642,7 @@ This is a **decision proposal**, not an approval recorded by this file.
 |---|---|
 | Explicit byte integrity **versus** correct exhibit identity | A SHA-256 match cannot authenticate a third party's evidence or select the right Stuk/Pièce. |
 | Separate reference-review and claim-review completeness | Existing release policy counts detected references only. |
-| PR #209 `GET` side-effect and segmenter fixes | Verified read endpoint calls snapshot-writing `DossierStore.load()`; naïve punctuation splits legal abbreviations. |
+| PR #209 `GET` side-effect and segmenter fixes | **At the 8 November baseline** the read endpoint called snapshot-writing `DossierStore.load()` and the punctuation splitter broke legal abbreviations. Both were corrected in the merged PR #209 (§3.2); this row records what the change was, not what is live. |
 | Typed `ClaimUnit` / `EvidenceCandidate` / `ClaimEvidenceLink` / receipts | Make every stage interoperable without inventing a parallel kernel. |
 | Separate frozen snapshot claim ID and cross-revision lineage | Versioned identity cannot promise stable IDs across arbitrary editing. |
 | NL/FR retrieval **before** reranking | An LLM cannot rerank supporting passages missing from the candidate set. |
@@ -592,9 +663,9 @@ This is a **decision proposal**, not an approval recorded by this file.
 | Exact final-PDF SHA-256 and authenticated lawyer approval | Cross-format textual/visual parity and a reviewer's approval of **specific bytes** are different from general claim review or signed export. |
 | Explicit `FINAL_PDF_NOT_CHECKED` and `ACTUAL_FILING_NOT_VERIFIED` states | Prevent a non-filing pilot, checked DOCX or approval receipt from implying the actual court submission was verified. |
 | Conditional P0 readiness gate, tests, owners, privacy and roadmap | A filing-ready product claim must reject older, changed, unreadable or unapproved PDFs; no new e-filing or case-law verification scope is assumed. |
-| PR #209 historical status corrected | It is merged with 26 green synthetic CI checks; independent acceptance and real-user validation remain open. |
+| PR #209 historical status corrected | It is merged; its final pre-merge run was **26 passed, 9 skipped, 0 failed** — synthetic engineering evidence only. Independent acceptance and real-user validation remain open. The release-candidate CI at the writing head is recorded in §3.0. |
 | Source-scoped U.S. court example | The Farhat order demonstrates a possible last-mile version-control failure without proving which system generated every bad citation or changing Belgian-law requirements. |
 
 ---
 
-**End of v4.1 (updated v4).** The immediate actionable engineering focus is **claim identity → signed evidence retrieval → versioned claim–source link → human decision → scope-safe release**, building on merged PR #209, with final-PDF parity as an additional **conditional P0** when any artifact is represented as ready to file. This is a requirements and acceptance document, **not evidence of deployed functionality or customer acceptance**.
+**End of v4.1 (updated v4).** The immediate actionable engineering focus is **claim identity → signed evidence retrieval → versioned claim–source link → human decision → scope-safe release**, building on merged PR #209, with final-PDF parity as an additional **conditional P0** when any artifact is represented as ready to file. The decision catalogue and the proven signed reference-review journey (**decision catalogue → proven signed reference-review journey → honest coverage and practitioner evidence**) remain the prerequisite for that expansion; claim-level expansion follows an explicit scope decision and statutory checking remains a separate discovery track. This is a requirements and acceptance document, **not evidence of deployed functionality or customer acceptance**.

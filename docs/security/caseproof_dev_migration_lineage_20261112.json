@@ -1,8 +1,8 @@
 {
   "schema": "caseproof-applied-migration-lineage-v1",
   "environment": "caseproof-dev",
-  "captured_date_utc": "2026-11-11",
-  "base_sha": "5141dfaba2b511edacd8993cc679f0e3975a9271",
+  "captured_date_utc": "2026-11-12",
+  "base_sha": "a99e92126818f9f99e7d187bc1f380fde430ba29",
   "provenance": "Read-only live supabase_migrations.schema_migrations statements[1] SHA256; source equivalence checked with exact SQL equality, no SQL executed",
   "interpretation": "Historical source matching only. NOT proof of chronological replay, valid deployed upgrade, security signoff, or approval to mutate live migration history.",
   "remote_only": [
@@ -157,8 +157,8 @@
       "statement_count": 1,
       "recorded_chars": 21499,
       "recorded_sha256": "c62bf43fd70bcb175d2d3a4a5775df27dc0668b8a034b35c0ae076b9d16e70d8",
-      "candidate_path": "docs/security/DEV_ONLY_APPLIED_DOCX_AUTH_MIGRATION_20261105081249.sql",
-      "source_state": "DIVERGENT_SOURCE",
+      "candidate_path": null,
+      "source_state": "NO_SOURCE",
       "applied_receipt_path": "db/historical_applied/20261105081249_caseproof_document_wide_docx_editor_dev_authorization.sql",
       "applied_receipt_verified": true
     },
@@ -168,8 +168,8 @@
       "statement_count": 1,
       "recorded_chars": 5581,
       "recorded_sha256": "57f5ab4a4d0aec63d62b9769359fc5ba0bfb855b1ca93e04c91c359428b9528b",
-      "candidate_path": "docs/security/DEV_ONLY_APPLIED_DOCX_FIXTURE_CLEANUP_GUARD_20261105.sql",
-      "source_state": "DIVERGENT_SOURCE",
+      "candidate_path": null,
+      "source_state": "NO_SOURCE",
       "applied_receipt_path": "db/historical_applied/20261105100916_caseproof_dev_docx_owned_fixture_cleanup_guard_v2.sql",
       "applied_receipt_verified": true
     },
@@ -632,6 +632,22 @@
       "source_path": "supabase/migrations/20261106172653_caseproof_signed_export_rights_manifest_fence.sql",
       "recorded_sha256": "ee38a33828496cf7b1c170909797a3e706f7e9142709167a99f00385f75202aa",
       "recorded_chars": 5694,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261106210000",
+      "name": "caseproof_release_acknowledgement_fence",
+      "source_path": "supabase/migrations/20261106210000_caseproof_release_acknowledgement_fence.sql",
+      "recorded_sha256": "bd036598c36548af6182d2ee6910d89cedb0d6c49e46351308110b23ff007984",
+      "recorded_chars": 2142,
+      "source_state": "EXACT_SOURCE"
+    },
+    {
+      "version": "20261113000000",
+      "name": "caseproof_platform_hardening",
+      "source_path": "supabase/migrations/20261113000000_caseproof_platform_hardening.sql",
+      "recorded_sha256": "aeac5eada95080f88c84b0b2f29f555e3a717b1e5e3117626256b2b5bac5a16a",
+      "recorded_chars": 7156,
       "source_state": "EXACT_SOURCE"
     }
   ]
