@@ -1,0 +1,36 @@
+name: Isolated Supabase CLI clean replay (release BLOCKED)
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cli-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      GITHUB_ACTIONS: "true"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.1.0
+      - name: Verify Supabase CLI version and supported local flags
+        run: |
+          supabase --version
+          supabase start --help
+          supabase db reset --help
+      - name: Attempt real local reset with unchanged migration SQL
+        run: uv run --locked python -m scripts.probe_supabase_cli_local --output /tmp/caseproof-cli-replay.json
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: supabase-cli-local-replay-diagnostic
+          path: /tmp/caseproof-cli-replay.json
+          retention-days: 30
