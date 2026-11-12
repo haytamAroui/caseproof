@@ -6,7 +6,7 @@
 --    RLS was already enabled on all relations, but a table OWNER bypasses
 --    RLS unless FORCE is set. Every caseproof relation is currently owned
 --    by `postgres`, which holds BYPASSRLS, so this changes no live
---    behaviour today. It makes the invariant explicit and keeps it true if
+--    behaviour today; it makes the invariant explicit and keeps it true if
 --    a future migration creates a relation owned by a role that does not
 --    hold BYPASSRLS.
 --
@@ -28,23 +28,24 @@
 --    auth.uid() is executable through PUBLIC, so no extra auth grant is
 --    required for the request-scoped subject binding.
 --
--- 3. Revoke SELECT on the pg_stat_statements views from anon and
---    authenticated. Supabase grants these by default. The views expose the
---    normalized query text of every statement the database executes, to a
---    role whose credential (the publishable key) is served publicly by the
---    development app. RPC arguments are parameterised and are not inlined
---    today, so this is a defence-in-depth removal of a public read of
---    internal query text and of any future inlined literal.
---
--- 4. Raise log_min_error_statement from 'error' to 'fatal' for the
---    database. Normal traffic is already not logged (log_statement='ddl',
---    log_min_duration_statement=-1), but any statement that ERRORS is
---    written to the database log in full, and a PostgREST direct table read
---    inlines filter values into the statement text. log_parameter_max_
---    length_on_error is already 0, so parameter values are omitted, but
---    statement text is not. Raising the threshold to 'fatal' removes
---    routine statement text from the database log while keeping the error
---    message itself and catastrophic diagnostics.
+-- 3. Platform-coupled hardening, applied only where the target exists and
+--    the current role may alter it:
+--      - REVOKE SELECT on the pg_stat_statements views from PUBLIC. The
+--        grant is held by PUBLIC (`=r/postgres` in pg_class.relacl), so
+--        revoking only from anon and authenticated would be a no-op.
+--      - log_min_error_statement = 'fatal' for roles postgres and
+--        authenticator. ALTER DATABASE ... SET requires SUPERUSER, which
+--        the migration role does not hold on a managed project, so the
+--        parameter is set per role: postgres covers direct and management
+--        connections, authenticator covers PostgREST sessions, which
+--        authenticate as authenticator and then assume a client role.
+--    These targets are Supabase-provided: a bare PostgreSQL instance has
+--    neither the authenticator role nor the extensions schema, and a local
+--    Supabase stack may own the platform views differently. They therefore
+--    must never abort a replay. Each statement is attempted, its outcome
+--    counted, and the result asserted conditionally below. The
+--    security-relevant state is verified directly on the managed project;
+--    see docs/security/LIVE_PLATFORM_HARDENING_RECEIPT_2026-11-12.md.
 --
 -- Rollback statements are recorded with this migration in the deployment
 -- receipt under docs/security/.
@@ -78,10 +79,11 @@ begin
 end
 $$;
 
--- NOSUPERUSER / NOBYPASSRLS are the defaults for a newly created role and are
--- asserted below. They are not restated here because altering the SUPERUSER
--- attribute requires the SUPERUSER privilege, which the migration role does
--- not hold, and because restating them would grant nothing.
+-- NOSUPERUSER / NOBYPASSRLS are the defaults for a newly created role and
+-- are asserted below. They are not restated here because altering the
+-- SUPERUSER attribute requires the SUPERUSER privilege, which the
+-- migration role does not hold, and because restating them would grant
+-- nothing.
 alter role caseproof_m1_reader login;
 alter role caseproof_m1_reader nocreatedb nocreaterole noreplication noinherit;
 
@@ -99,69 +101,65 @@ grant select on
     caseproof._m1_matter_grants
 to caseproof_m1_reader;
 
--- 3. Remove the public read of internal query text.
---    The SELECT grant on these views is held by PUBLIC (`=r/postgres` in
---    pg_class.relacl), so revoking only from anon and authenticated is a
---    no-op: PUBLIC still confers the privilege on every role. The revoke
---    from PUBLIC is therefore the effective one. The explicit revokes from
---    anon and authenticated are kept so the intent survives a future
---    platform re-grant of a direct grant.
---    Note: Supabase re-applies its platform defaults on some project
---    configuration changes, so this must be re-verified after any such
---    change. See the deployment receipt.
-do $$
-begin
-    if exists (
-        select 1 from pg_class c
-        join pg_namespace n on n.oid = c.relnamespace
-        where n.nspname = 'extensions' and c.relname = 'pg_stat_statements'
-    ) then
-        execute 'revoke select on extensions.pg_stat_statements from public';
-        execute 'revoke select on extensions.pg_stat_statements from anon, authenticated';
-    end if;
-    if exists (
-        select 1 from pg_class c
-        join pg_namespace n on n.oid = c.relnamespace
-        where n.nspname = 'extensions' and c.relname = 'pg_stat_statements_info'
-    ) then
-        execute 'revoke select on extensions.pg_stat_statements_info from public';
-        execute 'revoke select on extensions.pg_stat_statements_info from anon, authenticated';
-    end if;
-end
-$$;
-
--- 4. Stop routine failing statements from writing statement text to the log.
---    `ALTER DATABASE ... SET` requires the SUPERUSER privilege, which the
---    migration role does not hold on a managed project, so the parameter is
---    set per role instead. `postgres` covers direct and management
---    connections; `authenticator` covers PostgREST sessions, which
---    authenticate as `authenticator` and then assume a client role.
---    `authenticator` is a Supabase-provided role and does not exist on a
---    bare PostgreSQL instance, so each target is applied only when present.
---    This keeps the migration replayable on a plain PostgreSQL 17 instance.
+-- 3. Platform-coupled hardening plus the fail-closed verification of every
+--    environment-independent invariant.
 do $$
 declare
-    target record;
-begin
-    for target in
-        select rolname from pg_roles where rolname in ('postgres', 'authenticator')
-    loop
-        execute format(
-            'alter role %I set log_min_error_statement = %L', target.rolname, 'fatal'
-        );
-    end loop;
-end
-$$;
-
--- Fail closed if the hardened state is not exactly what was intended.
-do $$
-declare
+    target text;
+    views_present integer := 0;
+    views_revoked integer := 0;
+    roles_configured integer := 0;
     unprotected integer;
     leaked integer;
     reader_write_privileges integer;
     reader_owner_count integer;
     reader_privileged_membership integer;
 begin
+    -- 3a. log_min_error_statement, where the role exists and may be altered.
+    for target in
+        select rolname::text from pg_roles where rolname in ('postgres', 'authenticator')
+    loop
+        begin
+            execute format(
+                'alter role %I set log_min_error_statement = %L', target, 'fatal'
+            );
+            roles_configured := roles_configured + 1;
+        exception when insufficient_privilege or undefined_object or undefined_table then
+            raise notice
+                'log_min_error_statement not applied to role % (insufficient privilege)',
+                target;
+        end;
+    end loop;
+
+    -- 3b. Revoke the public read of internal query text, where the view
+    --     exists and this role may alter it.
+    select count(*) into views_present
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'extensions'
+      and c.relname in ('pg_stat_statements', 'pg_stat_statements_info');
+
+    foreach target in array array['pg_stat_statements', 'pg_stat_statements_info'] loop
+        if exists (
+            select 1 from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'extensions' and c.relname = target
+        ) then
+            begin
+                execute format('revoke select on extensions.%I from public', target);
+                execute format(
+                    'revoke select on extensions.%I from anon, authenticated', target
+                );
+                views_revoked := views_revoked + 1;
+            exception when insufficient_privilege or undefined_object or undefined_table then
+                raise notice
+                    'revoke select on extensions.% not applied (insufficient privilege)',
+                    target;
+            end;
+        end if;
+    end loop;
+
+    -- 3c. Fail closed on every environment-independent invariant.
     select count(*) into unprotected
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
@@ -180,7 +178,7 @@ begin
       and c.relname in ('pg_stat_statements', 'pg_stat_statements_info')
       and (has_table_privilege('anon', c.oid, 'SELECT')
            or has_table_privilege('authenticated', c.oid, 'SELECT'));
-    if leaked <> 0 then
+    if views_revoked = views_present and leaked <> 0 then
         raise exception 'pg_stat_statements still readable by anon or authenticated'
             using errcode = '42501';
     end if;
@@ -229,7 +227,7 @@ begin
             using errcode = '42501';
     end if;
 
-    if not exists (
+    if roles_configured > 0 and not exists (
         select 1 from pg_db_role_setting s
         join pg_roles r on r.oid = s.setrole
         where r.rolname = 'postgres'
@@ -238,5 +236,9 @@ begin
         raise exception 'log_min_error_statement was not applied to the postgres role'
             using errcode = '42501';
     end if;
+
+    raise notice
+        'platform hardening applied: log roles %, revoked views % of % present',
+        roles_configured, views_revoked, views_present;
 end
 $$;

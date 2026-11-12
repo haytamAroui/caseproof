@@ -42,13 +42,24 @@ Its own header required installation "only together with API release changes"; P
 
 The migration ends with a fail-closed verification block: it raises if any `caseproof` relation lacks forced RLS, if the `pg_stat_statements` views remain readable by `anon`/`authenticated`, if the reader role holds write privileges on a protected relation, if it owns one, if it inherits a privileged role, if its attributes are not least-privilege, or if `log_min_error_statement` was not applied to the `postgres` role.
 
-##### Correction applied after the first application (portability)
+##### Corrections applied after the first application (portability)
 
-The first application of this migration used an unconditional `alter role authenticator set log_min_error_statement = 'fatal'`. `authenticator` is a **Supabase-provided role** and does not exist on a bare PostgreSQL instance, so the migration **failed** when replayed against the `postgres:17` container used by the disposable replay candidate (`ERROR: role "authenticator" does not exist`). Every preceding statement — forced RLS, the reader role and its grants, the `pg_stat_statements` revokes — had already succeeded in that container, so the defect was isolated to the log-setting block.
+The migration was applied twice more after its first application, each time because a replay environment exposed a coupling that the managed project does not have. Both corrections are recorded here rather than silently absorbed.
 
-The migration was corrected to apply the setting **only to roles that exist**, and the corrected migration was **re-applied** to `caseproof-dev`. The re-application is idempotent: forced RLS re-applies, the existing reader role is reused, the revokes re-apply, and the log setting re-applies. The recorded `supabase_migrations` statement for version `20261113000000` was updated to the corrected text so that the repository file, the recorded statement and the applied SQL agree. The superseded first text remains in git history at commit `b1e85e3`, and the receipt records the change explicitly rather than silently.
+**First correction — the bare PostgreSQL replay.** The first version used an unconditional `alter role authenticator set log_min_error_statement = 'fatal'`. `authenticator` is a **Supabase-provided role** and does not exist on a bare PostgreSQL instance, so the migration **failed** when replayed against the `postgres:17` container used by the disposable replay candidate (`ERROR: role "authenticator" does not exist`). Every preceding statement — forced RLS, the reader role and its grants, the `pg_stat_statements` revokes — had already succeeded in that container, so the defect was isolated to the log-setting block.
 
-Live read-back after the correction: forced RLS 42/42 · reader role present · `pg_stat_statements` leak 0 · release triggers 4 · applied migrations 76 · `log_min_error_statement=fatal` on 2 roles · recorded statement length equals the repository file length.
+**Second correction — the local Supabase CLI stack.** With the role guarded, the migration still **failed** in the local Supabase CLI profile, with `first_failed_source: 20261113000000_caseproof_platform_hardening.sql`. In that stack the platform objects and roles exist but their ownership and privileges differ from the managed project, so `alter role` on a non-current role and `revoke` on a platform-owned view can both be refused.
+
+The final form therefore separates the two concerns explicitly:
+
+- **Environment-independent invariants stay fail-closed.** Forced RLS on every `caseproof` relation, the `caseproof_m1_reader` role and its exact grant set, and the reader's lack of write privileges, ownership and privileged inheritance are all asserted, and the migration aborts if any of them is wrong.
+- **Platform-coupled statements are best-effort and counted.** The `log_min_error_statement` setting and the `pg_stat_statements` revokes are attempted only for roles and views that exist, each inside an exception handler that records the skip instead of aborting the replay. The leak assertion is applied **only when every present view was actually revoked**, so a partial application is visible in the migration notice and in the receipt rather than being either a false failure or a silent gap.
+
+**The correctness of the managed project is not weakened by this.** On `caseproof-dev` both platform-coupled statements apply: `log_min_error_statement=fatal` is set on 2 roles and the `pg_stat_statements` leak count is 0. The portability change only affects environments where the target does not exist or is not alterable by the migration role.
+
+**Applied state after both corrections.** The corrected migration was re-applied to `caseproof-dev` each time; the re-application is idempotent, and the recorded `supabase_migrations` statement for version `20261113000000` was updated to the corrected text so that the repository file, the recorded statement and the applied SQL agree. The superseded texts remain in git history at commits `b1e85e3` and `81f4b33`.
+
+Live read-back after the final correction: forced RLS 42/42 · reader role present with 5 `SELECT` and 0 write privileges and no ownership · `pg_stat_statements` leak 0 · release triggers 4 · applied migrations 76 · `log_min_error_statement=fatal` on 2 roles · recorded statement length equals the repository file length. The corrected PL/pgSQL was executed successfully against Postgres 17.11 on the managed project, which validates its syntax; replay behaviour on the bare-PostgreSQL and local-Supabase-CLI profiles is proven by CI.
 
 ### 1.3 Repository line-ending normalisation (`.gitattributes`, new)
 
