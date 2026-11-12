@@ -1,0 +1,36 @@
+name: Supabase CLI source-preserving fresh-profile acceptance
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-fresh-profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      GITHUB_ACTIONS: "true"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.1.0
+      - name: Verify local Supabase CLI interfaces
+        run: |
+          supabase --version
+          supabase start --help
+          supabase db reset --help
+      - name: Prove source-preserving fresh-profile installation
+        run: uv run --locked python -m scripts.fresh_supabase_cli_profile --output /tmp/caseproof-fresh-profile.json
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: supabase-cli-fresh-profile-evidence
+          path: /tmp/caseproof-fresh-profile.json
+          retention-days: 30
