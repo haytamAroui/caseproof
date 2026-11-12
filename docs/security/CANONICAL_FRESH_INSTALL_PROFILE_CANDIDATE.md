@@ -19,14 +19,13 @@ with synthetic auth/storage, but that is not equivalent to official CLI reset.
 SQL receipt integrity, creates a brand-new temporary **unlinked** Supabase
 project, and starts the official local stack without application migrations.
 
-It then copies the exact bytes of all 73 source migrations into temporary
-filename aliases with ascending, uniquely generated **test-only timestamps**
-corresponding to the reviewed dependency order. It runs
+It then copies the exact bytes of all 73 source migrations into a temporary migration directory: **51 files retain their original
+historical timestamps**, and only **22 dependency-deferred files** receive
+ascending, uniquely generated test-only timestamps after the 51-file prefix. It runs
 `supabase db reset --local --no-seed` under Supabase CLI **3.1.0**.
 The job must observe an application entry for each expected alias and return a
 successful real CLI reset, otherwise it fails and uploads a bounded JSON
-diagnostic. It records a SHA-256 receipt for the complete original-to-alias
-mapping and SQL bytes.
+diagnostic. It records a SHA-256 receipt for the complete original-to-temporary-name mapping and SQL bytes.
 
 **Nothing is renamed or overwritten in `supabase/migrations`.** The aliases
 never leave the temporary project. The test receives no remote credentials,
@@ -49,3 +48,12 @@ release-acknowledgement fence remains a separate coordinated deployment gate.
 
 References: PRs #218, #220, #221; Supabase documentation:
 https://supabase.com/docs/reference/cli/supabase-db-reset
+
+### Version-gate discovery
+
+The first real CLI run proved that renaming **all** 73 sources is incorrect:
+`20261027202734_caseproof_m1_private_originals_storage.sql` validates the
+presence of original migration version `20261027160745` in
+`supabase_migrations.schema_migrations`. The corrected test profile keeps
+all 51 prefix-version labels; only 22 deferred sources need new temporary
+names to make the dependency sequence valid. No SQL body is altered.
