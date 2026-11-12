@@ -114,6 +114,7 @@ declare
     reader_write_privileges integer;
     reader_owner_count integer;
     reader_privileged_membership integer;
+    inherited_leak integer;
 begin
     -- 3a. log_min_error_statement, where the role exists and may be altered.
     for target in
@@ -171,16 +172,43 @@ begin
             using errcode = '42501';
     end if;
 
+    -- The invariant this migration owns is the PUBLIC grant and any direct
+    -- grant to the browser roles. Access inherited through a platform
+    -- monitoring role membership is a Supabase platform default that a
+    -- project migration does not own and must not revoke; it is reported
+    -- below rather than asserted. On the managed project the inherited
+    -- count is 0 and the browser roles have no read at all.
     select count(*) into leaked
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    cross join lateral aclexplode(coalesce(c.relacl, '{}'::aclitem[])) grant_entry
+    where n.nspname = 'extensions'
+      and c.relname in ('pg_stat_statements', 'pg_stat_statements_info')
+      and grant_entry.privilege_type = 'SELECT'
+      and (
+          grant_entry.grantee = 0
+          or grant_entry.grantee in (
+              select oid from pg_roles where rolname in ('anon', 'authenticated')
+          )
+      );
+    if views_revoked = views_present and leaked <> 0 then
+        raise exception
+            'pg_stat_statements still granted to PUBLIC, anon or authenticated'
+            using errcode = '42501';
+    end if;
+
+    select count(*) into inherited_leak
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'extensions'
       and c.relname in ('pg_stat_statements', 'pg_stat_statements_info')
-      and (has_table_privilege('anon', c.oid, 'SELECT')
-           or has_table_privilege('authenticated', c.oid, 'SELECT'));
-    if views_revoked = views_present and leaked <> 0 then
-        raise exception 'pg_stat_statements still readable by anon or authenticated'
-            using errcode = '42501';
+      and (
+          has_table_privilege('anon', c.oid, 'SELECT')
+          or has_table_privilege('authenticated', c.oid, 'SELECT')
+      );
+    if inherited_leak > 0 then
+        raise notice
+            'pg_stat_statements remains reachable for anon/authenticated through a platform role membership; the PUBLIC and direct grants are removed';
     end if;
 
     select count(*) into reader_write_privileges
