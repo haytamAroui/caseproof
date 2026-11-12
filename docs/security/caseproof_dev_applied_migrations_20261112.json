@@ -2,7 +2,7 @@
   "schema_version": "caseproof-migration-inventory-v1",
   "environment": "caseproof-dev",
   "captured_date_utc": "2026-11-12",
-  "repository_base_sha": "775822cc0eef7e40175104109262e50affd78450",
+  "repository_base_sha": "a99e92126818f9f99e7d187bc1f380fde430ba29",
   "purpose": "read-only migration ledger inventory; never a deployment approval or history repair",
   "applied": [
     {

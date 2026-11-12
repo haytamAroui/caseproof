@@ -2,7 +2,7 @@
   "schema": "caseproof-applied-migration-lineage-v1",
   "environment": "caseproof-dev",
   "captured_date_utc": "2026-11-12",
-  "base_sha": "775822cc0eef7e40175104109262e50affd78450",
+  "base_sha": "a99e92126818f9f99e7d187bc1f380fde430ba29",
   "provenance": "Read-only live supabase_migrations.schema_migrations statements[1] SHA256; source equivalence checked with exact SQL equality, no SQL executed",
   "interpretation": "Historical source matching only. NOT proof of chronological replay, valid deployed upgrade, security signoff, or approval to mutate live migration history.",
   "remote_only": [
@@ -646,8 +646,8 @@
       "version": "20261113000000",
       "name": "caseproof_platform_hardening",
       "source_path": "supabase/migrations/20261113000000_caseproof_platform_hardening.sql",
-      "recorded_sha256": "e0e846e6683f89b2a31872e160c783fc04f7a5ce8d7191272872f8d30c65fc04",
-      "recorded_chars": 11478,
+      "recorded_sha256": "aeac5eada95080f88c84b0b2f29f555e3a717b1e5e3117626256b2b5bac5a16a",
+      "recorded_chars": 7156,
       "source_state": "EXACT_SOURCE"
     }
   ]
