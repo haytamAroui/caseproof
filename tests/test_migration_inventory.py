@@ -15,8 +15,8 @@ def test_known_historical_drift_is_explicitly_blocked() -> None:
     applied = applied_inventory()
     report = compare_migration_history(local, applied)
     assert report["status"] == "BLOCKED_MIGRATION_HISTORY_DRIFT"
-    assert report["local_count"] == 73
-    assert report["applied_count"] == 74
+    assert report["local_count"] == 74
+    assert report["applied_count"] == 76
     # Restoring the historically applied Phase 4 ledger eliminated one gap,
     # but timestamp and missing-SQL history must not be silently repaired.
     assert local["20261030150030"] == applied["20261030150030"]
@@ -39,4 +39,5 @@ def test_detects_version_and_name_drifts() -> None:
     )
     assert report["status"] == "BLOCKED_MIGRATION_HISTORY_DRIFT"
     assert len(report["name_mismatch"]) == 1
-    assert len(report["only_remote"]) == len(report["only_local"]) == 1
+    assert len(report["only_remote"]) == 1
+    assert len(report["only_local"]) == 1

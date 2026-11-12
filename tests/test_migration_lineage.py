@@ -13,14 +13,14 @@ def test_all_nineteen_unmatched_receipts_are_adjudicated() -> None:
     report = verify_lineage()
     assert report["status"] == "BLOCKED_MIGRATION_HISTORY_DRIFT"
     assert report["remote_only_versions"] == 19
-    assert report["local_only_versions"] == 18
+    assert report["local_only_versions"] == 17
     assert report["exact_source_matches"] == 12
-    assert report["divergent_sources"] == 4
-    assert report["missing_sources"] == 3
+    assert report["divergent_sources"] == 2
+    assert report["missing_sources"] == 5
     assert report["recovered_applied_sql_receipts"] == 7
     assert report["all_unmatched_applied_sql_locatable"] is True
-    assert report["matching_version_receipts_checked"] == 55
-    assert report["matching_version_exact_sql"] == 54
+    assert report["matching_version_receipts_checked"] == 57
+    assert report["matching_version_exact_sql"] == 56
     assert report["matching_version_divergent_sql"] == 1
     assert report["all_applied_sql_receipts_locatable"] is True
     assert report["fresh_replay_verified"] is False

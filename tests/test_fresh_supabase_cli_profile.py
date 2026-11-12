@@ -15,16 +15,16 @@ from scripts.fresh_supabase_cli_profile import (
 
 def test_all_sources_have_deterministic_ordered_temp_aliases() -> None:
     pairs = temporary_aliases()
-    assert len(pairs) == 73
-    assert len(set(alias for _, alias in pairs)) == 73
+    assert len(pairs) == 74
+    assert len(set(alias for _, alias in pairs)) == 74
     assert [name for _, name in pairs] == sorted(name for _, name in pairs)
     originals = [original.name for original, _ in pairs]
     assert originals.index("20261030140000_caseproof_phase3_private_ocr_geometry.sql") < (
         originals.index("20261030114000_m05_ocr_sidecar_cleanup_fk.sql")
     )
-    assert originals[-1] == "20261106210000_caseproof_release_acknowledgement_fence.sql"
+    assert originals[-1] == "20261113000000_caseproof_platform_hardening.sql"
     assert sum(old.name == new for old, new in pairs) == 51
-    assert sum(old.name != new for old, new in pairs) == 22
+    assert sum(old.name != new for old, new in pairs) == 23
     assert pairs[1][0].name == pairs[1][1]  # preserve the M1 version gate
 
 
@@ -32,7 +32,7 @@ def test_sql_bytes_are_not_rewritten_and_aliases_are_immutable(tmp_path: Path) -
     pairs = temporary_aliases()
     digest = copy_exact_sources(tmp_path, pairs)
     assert len(digest) == 64
-    assert len(list(tmp_path.glob("*.sql"))) == 73
+    assert len(list(tmp_path.glob("*.sql"))) == 74
     for source, alias in pairs:
         assert (tmp_path / alias).read_bytes() == source.read_bytes()
         assert len(hashlib.sha256(source.read_bytes()).hexdigest()) == 64

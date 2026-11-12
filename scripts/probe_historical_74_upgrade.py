@@ -1,4 +1,11 @@
-"""Reconstruct exact 74 applied SQL receipts and test a pending PR204 upgrade.
+"""Reconstruct the immutable 74-record applied history and test the pending upgrade.
+
+The recorded `caseproof-dev` history now holds 76 applied migrations. The
+previously verified 74-record base is still reconstructed byte-for-byte and
+replayed in a local Supabase CLI profile, and the two migrations applied after
+that base (the PR204 release-acknowledgement fence and the platform hardening
+migration) are then applied on top of it without a reset. That proves the
+upgrade path from the previously recorded history to the current one.
 
 Local Supabase CLI only: no live access, no writes to historical migrations,
 and no claim of schema parity with the currently running shared dev project.
@@ -20,6 +27,10 @@ from scripts.probe_supabase_cli_local import CLI_VERSION, error_category, execut
 from scripts.verify_migration_lineage import LINEAGE, ROOT, SNAPSHOT, verify_lineage
 
 PR204 = ROOT / "supabase/migrations/20261106210000_caseproof_release_acknowledgement_fence.sql"
+HARDENING = ROOT / "supabase/migrations/20261113000000_caseproof_platform_hardening.sql"
+PENDING = (PR204, HARDENING)
+BASE_COUNT = 74
+HISTORY_COUNT = 76
 APPLY = re.compile(r"Applying migration ([0-9]{14}_[A-Za-z0-9_-]+\.sql)")
 
 
@@ -34,11 +45,14 @@ def historical_sources() -> list[tuple[str, Path, str]]:
             ledger["remote_only"] + ledger["matching_version_receipts"]
         )
     }
-    if len(documented) != 74 or len(snapshot["applied"]) != 74:
-        raise ValueError("Expected immutable 74-record history")
+    if len(documented) != HISTORY_COUNT or len(snapshot["applied"]) != HISTORY_COUNT:
+        raise ValueError(f"Expected immutable {HISTORY_COUNT}-record history")
+    pending_versions = {pending.name.split("_", 1)[0] for pending in PENDING}
     manifest: list[tuple[str, Path, str]] = []
     for item in snapshot["applied"]:
         version, name = item["version"], item["name"]
+        if version in pending_versions:
+            continue
         receipt = documented[version]
         if receipt["name"] != name:
             raise ValueError("Historical migration names no longer match")
@@ -58,10 +72,13 @@ def historical_sources() -> list[tuple[str, Path, str]]:
         filename = f"{version}_{name}.sql"
         manifest.append((filename, absolute, sha))
     names = [name for name, _, _ in manifest]
-    if len(set(names)) != 74 or names != sorted(names):
+    if len(set(names)) != BASE_COUNT or names != sorted(names):
         raise ValueError("Deployed history does not have unique sorted versions")
-    if PR204.name in names:
-        raise ValueError("PR204 release fence unexpectedly part of applied history")
+    for pending in PENDING:
+        if pending.name in names:
+            raise ValueError(
+                f"Pending migration unexpectedly part of applied history: {pending.name}"
+            )
     return manifest
 
 
@@ -130,29 +147,31 @@ def probe_historical_upgrade() -> dict[str, object]:
                     "error_category": error_category(output),
                     "historical_profile_sha256": receipt,
                 }
-            if len(attempted) != 74 or set(attempted) != {x[0] for x in files}:
+            if len(attempted) != BASE_COUNT or set(attempted) != {x[0] for x in files}:
                 return result | {
                     "status": "HISTORICAL_APPLY_COUNT_UNPROVEN",
                     "observed_apply_count": len(attempted),
                 }
-            shutil.copyfile(PR204, folder / PR204.name)
-            if (folder / PR204.name).read_bytes() != PR204.read_bytes():
-                raise RuntimeError("Pending PR204 SQL bytes changed")
-            # Apply exactly the next pending migration without resetting.
+            for pending in PENDING:
+                shutil.copyfile(pending, folder / pending.name)
+                if (folder / pending.name).read_bytes() != pending.read_bytes():
+                    raise RuntimeError(f"Pending SQL bytes changed: {pending.name}")
+            # Apply exactly the next pending migrations without resetting.
             upgrade = execute(["supabase", "migration", "up", "--local"], root, env, 360)
             out = upgrade.stdout + "\n" + upgrade.stderr
             applied = APPLY.findall(out)
-            if upgrade.returncode or PR204.name not in applied:
+            pending_names = {pending.name for pending in PENDING}
+            if upgrade.returncode or not pending_names.issubset(set(applied)):
                 return result | {
-                    "status": "PR204_HISTORICAL_LOCAL_UPGRADE_BLOCKED",
-                    "observed_pr204_apply": PR204.name in applied,
+                    "status": "PENDING_HISTORICAL_LOCAL_UPGRADE_BLOCKED",
+                    "observed_pending_apply": sorted(pending_names & set(applied)),
                     "error_category": error_category(out),
                     "historical_profile_sha256": receipt,
                 }
             return result | {
-                "status": "HISTORICAL_74_TO_75_LOCAL_UPGRADE_PASSED",
-                "historical_applied_count": 74,
-                "pr204_applied_count": 1,
+                "status": "HISTORICAL_74_TO_76_LOCAL_UPGRADE_PASSED",
+                "historical_applied_count": BASE_COUNT,
+                "pending_applied_count": len(PENDING),
                 "historical_profile_sha256": receipt,
                 "historical_replay_verified": True,
                 "local_upgrade_path_verified": True,
@@ -169,7 +188,7 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
-    return 0 if report["status"] == "HISTORICAL_74_TO_75_LOCAL_UPGRADE_PASSED" else 2
+    return 0 if report["status"] == "HISTORICAL_74_TO_76_LOCAL_UPGRADE_PASSED" else 2
 
 
 if __name__ == "__main__":

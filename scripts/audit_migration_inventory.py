@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = ROOT / "supabase" / "migrations"
-SNAPSHOT = ROOT / "docs" / "security" / "caseproof_dev_applied_migrations_20261111.json"
+SNAPSHOT = ROOT / "docs" / "security" / "caseproof_dev_applied_migrations_20261112.json"
 VERSION = re.compile(r"^[0-9]{14}$")
 NAME = re.compile(r"^[a-z0-9_]+$")
 

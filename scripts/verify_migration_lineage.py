@@ -17,7 +17,7 @@ from scripts.audit_migration_inventory import (
     local_inventory,
 )
 
-LINEAGE = ROOT / "docs/security/caseproof_dev_migration_lineage_20261111.json"
+LINEAGE = ROOT / "docs/security/caseproof_dev_migration_lineage_20261112.json"
 STATES = {"EXACT_SOURCE", "DIVERGENT_SOURCE", "NO_SOURCE"}
 
 

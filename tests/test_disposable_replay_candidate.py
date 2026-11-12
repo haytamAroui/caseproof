@@ -17,12 +17,12 @@ from scripts.disposable_replay_candidate import (
 def test_candidate_is_complete_and_exactly_pinned() -> None:
     ordered = replay_plan()
     source = sorted(MIGRATIONS.glob("*.sql"))
-    assert len(ordered) == len(source) == 73
+    assert len(ordered) == len(source) == 74
     assert set(ordered) == set(source)
     assert len(ordered) == len(set(ordered))
     manifest = json.loads(PLAN.read_text())
     assert manifest["expected_sorted_files"] == [p.name for p in source]
-    assert len(manifest["deferred_suffix"]) == 22
+    assert len(manifest["deferred_suffix"]) == 23
 
 
 def test_known_ocr_table_dependency_is_ordered_correctly() -> None:
