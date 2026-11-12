@@ -1,0 +1,37 @@
+name: Supabase CLI historical 74-version replay and PR204 local upgrade
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  historical-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: "true"
+      GITHUB_ACTIONS: "true"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: "3.11"
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.1.0
+      - name: Verify local-only CLI interfaces
+        run: |
+          supabase --version
+          supabase start --help
+          supabase db reset --help
+          supabase migration up --help
+      - name: Replay exact 74 applied sources and upgrade PR204 in isolated Supabase
+        run: uv run --locked python -m scripts.probe_historical_74_upgrade --output /tmp/caseproof-historical-upgrade.json
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: supabase-historical-74-upgrade-evidence
+          path: /tmp/caseproof-historical-upgrade.json
+          retention-days: 30
