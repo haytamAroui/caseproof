@@ -81,16 +81,16 @@ def output_tail(output: str, limit: int = 2500) -> str:
    # words in the echoed SQL (which can exceed the output limit).
    lines = redacted.splitlines()
    markers = re.compile(
-      r"(?i)^\\s*(?:ERROR(?:\\s*\\([A-Z0-9]+\\))?:|FATAL:|PANIC:|"
+      r"(?i)^\s*(?:ERROR(?:\s*\([A-Z0-9]+\))?:|FATAL:|PANIC:|"
       r"Error:|failed to (?:apply|execute)|migration failed|"
-      r"SQLSTATE(?:\\s*[:=])|DETAIL:|HINT:|CONTEXT:)"
+      r"SQLSTATE(?:\s*[:=])|DETAIL:|HINT:|CONTEXT:)"
    )
    hits = [i for i, line in enumerate(lines) if markers.search(line)]
    if hits:
       first = hits[0]
       # Include adjacent context but avoid the entire echoed DO block.
       excerpt = lines[max(0, first - 2):min(len(lines), first + 9)]
-      return "\\n".join(excerpt)[:limit]
+      return "\n".join(excerpt)[:limit]
    return redacted[-limit:]
 
 
