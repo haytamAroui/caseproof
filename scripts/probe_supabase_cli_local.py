@@ -76,19 +76,22 @@ def output_tail(output: str, limit: int = 2500) -> str:
       r"\1=***",
       redacted,
    )
-   diagnostic = [
-      line for line in redacted.splitlines()
-      if re.search(
-         r"(?i)\b(error|fatal|panic|exception|denied|must be owner|"
-         r"does not exist|already exists|cannot|failed|context|statement|"
-         r"detail|hint)\b",
-         line,
-      )
-   ]
-   if diagnostic:
-      return "\n".join(diagnostic)[-limit:]
+   # Supabase CLI prints the PostgreSQL error first, followed by the full
+   # failing SQL statement. Select the first actual diagnostic, not matching
+   # words in the echoed SQL (which can exceed the output limit).
+   lines = redacted.splitlines()
+   markers = re.compile(
+      r"(?i)^\\s*(?:ERROR(?:\\s*\\([A-Z0-9]+\\))?:|FATAL:|PANIC:|"
+      r"Error:|failed to (?:apply|execute)|migration failed|"
+      r"SQLSTATE(?:\\s*[:=])|DETAIL:|HINT:|CONTEXT:)"
+   )
+   hits = [i for i, line in enumerate(lines) if markers.search(line)]
+   if hits:
+      first = hits[0]
+      # Include adjacent context but avoid the entire echoed DO block.
+      excerpt = lines[max(0, first - 2):min(len(lines), first + 9)]
+      return "\\n".join(excerpt)[:limit]
    return redacted[-limit:]
-
 
 
 def first_failing_file(output: str) -> str | None:
