@@ -2,7 +2,7 @@
 
 **Version:** 4.1 (v4 update) · **Updated:** 10 November 2026 · **Status:** **PROPOSED TECHNICAL CONTRACT — NOT FULLY IMPLEMENTED OR PILOT-APPROVED**  
 **Base specification:** `caseproof-final-workflow (3).md` (v3), with corrections from the 8 November code-level review and the independent DeepSeek commentary.  
-**Code snapshot:** `haytamAroui/caseproof`, `main` at `8803215` (PR #210, 13 November 2026), which includes merged PR #209 (squash commit `af438c3771add91f3b4b83409d464a0c05031670`, verified 10 November 2026) and PRs #211-#224. The original v4 audit was performed 8 November; later acceptance claims must be supported by separate evidence.  
+**Code snapshot:** `haytamAroui/caseproof`, `main` at `8803215` (PR #210, 12 November 2026), which includes merged PR #209 (squash commit `af438c3771add91f3b4b83409d464a0c05031670`, verified 10 November 2026) and PRs #211-#224. The original v4 audit was performed 8 November; later acceptance claims must be supported by separate evidence.  
 **Change control:** This revision records that PR #209 was merged; it does **not** authorize production, real client-data processing, court filing, or silently supersede accepted [ADR 0018](https://github.com/haytamAroui/caseproof/blob/main/docs/adr/0018-pre-submission-verification-freeze.md). Adopting a broader mandatory commercial scope, or making Word mandatory for launch, requires an explicit owner decision and a reviewed superseding ADR.
 
 > **Core rule:** The **LLM proposes**; the **deterministic kernel verifies only bounded, technically checkable properties**; the **authorized lawyer decides semantic support**; and **the complete baseline review/export journey works with the LLM off**.
@@ -144,6 +144,43 @@ Existing `application/litigation/release_completeness.py` counts decisions over 
 
 **Methodology:** The original audit checked actual modules on `main`, PR #209 before merge, and GitHub Actions status; the PR merge was separately verified on 10 November 2026. It did **not** run a confidential dossier, a real Word desktop host, an independent penetration test, or an external reviewer study. “Present” does not mean production-approved.
 
+### 3.0 Deployed state, CI, and two known product holes
+
+*Recorded 12 November 2026 against `main` at `8803215` (PR #210) plus PR #225. Every figure below was read back from the live project or the repository, not inferred.*
+
+**Release candidate**
+
+| Item | Value |
+|---|---|
+| Source head audited | `main` at `8803215` (PR #210), plus PR #225 (db hardening + docs) |
+| CI on that head | **38 success, 2 skipped, 0 failed** |
+| Applied migrations on `caseproof-dev` | **76** (the repository carries 74 migration files; 19 applied versions match no repository filename) |
+| Migration lineage | `historical_source_parity_verified: true`, `all_applied_sql_receipts_locatable: true` |
+| Fresh-install replay | **still unproven** (`fresh_replay_verified: false`) |
+
+**Live `caseproof-dev` state after PR #225**
+
+| Control | State |
+|---|---|
+| RLS | enabled **and forced** on all 42 `caseproof` relations |
+| `caseproof_m1_reader` | exists; `SELECT` on 5 protected relations, **0** write privileges, owns none, not superuser / not `BYPASSRLS` — **no password provisioned yet**, so it cannot authenticate |
+| `pg_stat_statements` | `SELECT` revoked from `PUBLIC`; no longer readable by `anon`/`authenticated` |
+| `log_min_error_statement` | `fatal` (roles `postgres`, `authenticator`) — routine failing statements no longer write their text into the database log |
+| Auth | `password_min_length=12`, four character classes required, `disable_signup=true`, re-authentication required to change a password |
+| Storage | S3 protocol **disabled**; project object limit 20 MiB, matching the private originals bucket |
+| Release acknowledgement | the PR #204 fence is **installed**; release intents are bound to the verified actor and snapshot |
+| Rights enforcement | **active** (`_rights_enforcement_control.enabled = true`, since 6 November). `docs/security/DATA_RIGHTS_ENFORCEMENT_PR2.md` still describes it as dormant and without activation — **that document is stale** |
+| Session expiry | **not configured** — `sessions_inactivity_timeout = 0`. Supabase restricts user-session settings to paid plans, so this is a plan decision, not an engineering one |
+
+**Two product holes that block a pilot decision, and are recorded nowhere else**
+
+1. **Nothing is deployable.** There is no API image, no worker supervisor, no TLS termination, no rollback path, no secret delivery. `apps/api` is loopback-pinned by middleware. §10 A13 asks for “SEC-01–16 decisions for exact build/environment/data class”; **no build or environment exists to decide about**.
+2. **The reviewer journey cannot be completed by a user.** The frontend exposes no explicit **Run check** action and no job-progress surface, and `POST /dossier/checks` is never called from the UI. §5 Stages 3–4 and §9 assume a complete synthetic reference-review task; **the shipped interface has no step that starts one**. The gap is in the interface, not the kernel: the check path exists server-side.
+
+**What this means for the acceptance contract.** The engineering recorded in §3.1–§3.4 is real, but §4–§9 describe a *target* product. Two of its preconditions — a runnable deployment, and a startable check — are not met. Neither is closed by this document; both are stated here so that no acceptance claim is made against a journey a user cannot actually walk.
+
+**Capability inventory:**
+
 | Capability | Exists in code | Connected to signed litigation journey | Evidence and remaining work |
 |---|---|---|---|
 | Secure signed intake, original hashes | **Yes** | **Yes, development-signed** | `apps/api/workspace_intake.py`, `signed_supabase_originals.py`; client-data permission remains gated. |
@@ -165,6 +202,8 @@ Existing `application/litigation/release_completeness.py` counts decisions over 
 | Final reviewed DOCX → exact final-PDF parity/approval | **No accepted end-to-end preflight established** | **No signed final-PDF approval gate** | New v4.1 requirement; actual uploaded/generated PDF, cross-format comparison, human exact-byte approval and later filing-byte matching need implementation and independent tests. |
 | Decision-affecting ruleset registry/replay | **Partial** | **Partial** | Multiple versioned rules; unified digest and exact dependency manifest not established. |
 | Independently labeled, rights-cleared NL/FR corpus | **Protocols/synthetic** | **No actual study** | Recruitment, permissions, adjudicated labels and signed evaluation evidence open. |
+
+**Four-mark discipline (§1 principle 16).** The three columns above record *exists in code*, *connected to the signed path*, and *evidence and remaining work*. The fourth mark, **independently accepted**, is **not** asserted for any row of this table. No capability listed here has independent acceptance at the writing head; §10 records the accountable owner and the required evidence for each. A row marked *exists* is a statement about code, never about acceptance.
 
 ### 3.1 What the DeepSeek review got right—and wrong
 
@@ -440,7 +479,7 @@ The existing [SEC-01–SEC-16 checklist](https://github.com/haytamAroui/caseproo
 | **9 (P2, gated)** | Optional multilingual retrieval/Requesty | First prove candidate generation recall; diagnose Requesty `OUTCOME_UNKNOWN`; then apply approved reranker | Rights/DPA/retention, model schema/telemetry, LLM-off parity, NL/FR eval improvement, injection tests. |
 | **10 (external)** | Evaluation/pilot | Run independent falsification, human study and paid-pilot request | Measured results, stop conditions, actual signed partner evidence; no synthetic claims of approval. |
 
-**Parallel dependencies:** Recruitment, permission clearance and security review start immediately, even while draft PR #209 is repaired; product validation must not be deferred until all engineering is complete. Engineering can safely use **synthetic** data while legal approval is open.
+**Parallel dependencies:** Recruitment, permission clearance and security review start immediately, in parallel with the remaining engineering in §8; product validation must not be deferred until all engineering is complete. Engineering can safely use **synthetic** data while legal approval is open.
 
 ### 8.1 PR #209 — post-merge regression and independent acceptance
 
@@ -465,7 +504,7 @@ Claim candidates remain unassessed and do not constitute a signed claim-review l
 
 | Window | Engineering lane | Independent firm/security/evaluation lane | Exit criterion |
 |---|---|---|---|
-| **Weeks 1–2** | Audit exact head; PR #209 read/write fix; claim identity/coverage contract; replay/ruleset design | Recruit firms, classify data/rights, choose approved custody/OCR/LLM options; assemble synthetic/adjudication protocol | Reviewed contracts, no open P0 semantics, synthetic safe route. |
+| **Weeks 1–2** | Audit exact head and deployed state (§3.0); claim identity/coverage contract; replay/ruleset design | Recruit firms, classify data/rights, choose approved custody/OCR/LLM options; assemble synthetic/adjudication protocol | Reviewed contracts, no open P0 semantics, synthetic safe route. |
 | **Weeks 3–4** | Versioned claim/link entity; signed lexical per-claim search; rights/currentness tests | Independent label template; secure corpus intake prep; firm workflow observations | One claim → authorized candidate original page → manual selection, without model. |
 | **Weeks 5–6** | Reconciliation, separate claim/reference review status, initial claim evidence table | Begin blinded synthetic/genuine-format falsification; privacy review decision | No false `COMPLETE`, stable source link, false-confirm safety tests. |
 | **Weeks 7–8** | Add Fact Cite DOCX save/reopen, exact-snapshot recheck, ruleset digest/manifest; design final-PDF parity and exact-byte receipt contract | Pilot readiness/real rights signoffs where available; collect baseline manual task time | Complete synthetic LLM-off lawyer task end-to-end; correct original page in artifact; approved parity test design. |
@@ -603,7 +642,7 @@ This is a **decision proposal**, not an approval recorded by this file.
 |---|---|
 | Explicit byte integrity **versus** correct exhibit identity | A SHA-256 match cannot authenticate a third party's evidence or select the right Stuk/Pièce. |
 | Separate reference-review and claim-review completeness | Existing release policy counts detected references only. |
-| PR #209 `GET` side-effect and segmenter fixes | Verified read endpoint calls snapshot-writing `DossierStore.load()`; naïve punctuation splits legal abbreviations. |
+| PR #209 `GET` side-effect and segmenter fixes | **At the 8 November baseline** the read endpoint called snapshot-writing `DossierStore.load()` and the punctuation splitter broke legal abbreviations. Both were corrected in the merged PR #209 (§3.2); this row records what the change was, not what is live. |
 | Typed `ClaimUnit` / `EvidenceCandidate` / `ClaimEvidenceLink` / receipts | Make every stage interoperable without inventing a parallel kernel. |
 | Separate frozen snapshot claim ID and cross-revision lineage | Versioned identity cannot promise stable IDs across arbitrary editing. |
 | NL/FR retrieval **before** reranking | An LLM cannot rerank supporting passages missing from the candidate set. |
@@ -624,7 +663,7 @@ This is a **decision proposal**, not an approval recorded by this file.
 | Exact final-PDF SHA-256 and authenticated lawyer approval | Cross-format textual/visual parity and a reviewer's approval of **specific bytes** are different from general claim review or signed export. |
 | Explicit `FINAL_PDF_NOT_CHECKED` and `ACTUAL_FILING_NOT_VERIFIED` states | Prevent a non-filing pilot, checked DOCX or approval receipt from implying the actual court submission was verified. |
 | Conditional P0 readiness gate, tests, owners, privacy and roadmap | A filing-ready product claim must reject older, changed, unreadable or unapproved PDFs; no new e-filing or case-law verification scope is assumed. |
-| PR #209 historical status corrected | It is merged with 26 green synthetic CI checks; independent acceptance and real-user validation remain open. |
+| PR #209 historical status corrected | It is merged; its final pre-merge run was **26 passed, 9 skipped, 0 failed** — synthetic engineering evidence only. Independent acceptance and real-user validation remain open. The release-candidate CI at the writing head is recorded in §3.0. |
 | Source-scoped U.S. court example | The Farhat order demonstrates a possible last-mile version-control failure without proving which system generated every bad citation or changing Belgian-law requirements. |
 
 ---
