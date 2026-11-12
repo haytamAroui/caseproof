@@ -21,6 +21,7 @@ from scripts.probe_supabase_cli_local import (
     CLI_VERSION,
     assert_offline_cli_environment,
     error_category,
+    output_tail,
     execute,
 )
 from scripts.verify_migration_lineage import verify_lineage
@@ -156,6 +157,7 @@ def run_fresh_profile() -> dict[str, object]:
                 "observed_apply_count": len(observed),
                 "first_failed_source": by_alias.get(failed),
                 "error_category": error_category(output),
+                "cli_output_tail": output_tail(output),
                 "source_layout_sha256": digest,
             }
         finally:

@@ -48,16 +48,34 @@ def execute(
 
 
 def error_category(output: str) -> str:
-    lowered = output.lower()
-    if "does not exist" in lowered:
-        return "MISSING_DATABASE_OBJECT"
-    if "permission denied" in lowered:
-        return "PERMISSION_DENIED"
-    if "docker" in lowered or "container" in lowered:
-        return "LOCAL_DOCKER_ERROR"
-    if "error" in lowered or "failed" in lowered:
-        return "CLI_ERROR"
-    return "UNKNOWN_FAILURE"
+   lowered = output.lower()
+   if "does not exist" in lowered:
+      return "MISSING_DATABASE_OBJECT"
+   if "permission denied" in lowered:
+      return "PERMISSION_DENIED"
+   if "docker" in lowered or "container" in lowered:
+      return "LOCAL_DOCKER_ERROR"
+   if "error" in lowered or "failed" in lowered:
+      return "CLI_ERROR"
+   return "UNKNOWN_FAILURE"
+
+
+def output_tail(output: str, limit: int = 2500) -> str:
+   """Return the tail of a CLI output for failure diagnosis.
+
+   A failed migration reports its own reason (the verification blocks in
+   supabase/migrations raise specific messages), so the tail is what makes a
+   replay failure diagnosable from the uploaded artifact alone. Any
+   credential-shaped substring is redacted before it is recorded.
+   """
+   redacted = re.sub(r"(?i)(://[^:/\s]+:)[^@\s]+@", r"\1***@", output)
+   redacted = re.sub(
+      r"(?i)\b(password|secret|token|api[_-]?key|authorization)\b\s*[=:]\s*\S+",
+      r"\1=***",
+      redacted,
+   )
+   return redacted[-limit:]
+
 
 
 def first_failing_file(output: str) -> str | None:

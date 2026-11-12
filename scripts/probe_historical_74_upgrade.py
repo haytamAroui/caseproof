@@ -23,7 +23,7 @@ import tempfile
 from pathlib import Path
 
 from scripts.fresh_supabase_cli_profile import validate_environment
-from scripts.probe_supabase_cli_local import CLI_VERSION, error_category, execute
+from scripts.probe_supabase_cli_local import CLI_VERSION, error_category, execute, output_tail
 from scripts.verify_migration_lineage import LINEAGE, ROOT, SNAPSHOT, verify_lineage
 
 PR204 = ROOT / "supabase/migrations/20261106210000_caseproof_release_acknowledgement_fence.sql"
@@ -145,6 +145,7 @@ def probe_historical_upgrade() -> dict[str, object]:
                     "observed_apply_count": len(attempted),
                     "first_failed_version": attempted[-1] if attempted else None,
                     "error_category": error_category(output),
+                    "cli_output_tail": output_tail(output),
                     "historical_profile_sha256": receipt,
                 }
             if len(attempted) != BASE_COUNT or set(attempted) != {x[0] for x in files}:
@@ -166,6 +167,7 @@ def probe_historical_upgrade() -> dict[str, object]:
                     "status": "PENDING_HISTORICAL_LOCAL_UPGRADE_BLOCKED",
                     "observed_pending_apply": sorted(pending_names & set(applied)),
                     "error_category": error_category(out),
+                    "cli_output_tail": output_tail(out),
                     "historical_profile_sha256": receipt,
                 }
             return result | {
