@@ -425,6 +425,9 @@
       if(generation!==state.generation||!state.session)return;
       if(response.status!==201)throw Error("unavailable");
       notice("Original uploaded to its pre-registered version. Reopen the verified source after indexing.","ok");
+      const digestBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
+      const digestHex=Array.from(digestBytes,(b)=>b.toString(16).padStart(2,"0")).join("");
+      $("upload-current").textContent="Current original: "+file.name+" · "+file.size+" bytes · SHA-256 "+digestHex.slice(0,16)+"\u2026 · version "+versionId;
       await load();
     }catch(error){if(generation===state.generation)
       notice("Upload was denied or its outcome is unknown. Verify the exact version before retrying.","danger");}
@@ -703,6 +706,19 @@
     $("matter-options").replaceChildren();
     $("password").value="";$("signout").hidden=true;clearView();notice("Session ended. No credentials were saved.");
   }
+  function disableRemoteJourney(){
+    // The /dev/live/* journey targets a configured remote Supabase project.
+    // In a loopback composition without a publishable key those controls are
+    // dead steps; disable them honestly instead of offering actions that
+    // can only fail. The signed workbench below stays fully usable.
+    const card=document.querySelector(".journey-card");
+    if(!card)return;
+    for(const el2 of card.querySelectorAll("input,select,button,textarea"))el2.disabled=true;
+    const note=el("p","Remote Supabase journey is not configured in this loopback composition. "+
+      "Matter upload, ingest and correction controls are disabled here; the signed workbench "+
+      "below runs against the isolated backend.","small");
+    card.insertBefore(note,card.querySelector(".journey-grid"));
+  }
   async function init(){
     $("connection-form").addEventListener("submit",startSession);
     $("journey-find-orgs").addEventListener("click",journeyOrganizations);
@@ -725,6 +741,7 @@
       $("credentials").hidden=true;$("auth-mode").textContent="Connected host session";
       $("case-id").value=window.caseproofSession.caseId||"";
       $("brief-id").value=window.caseproofSession.briefVersionId||"";
+      disableRemoteJourney();
       return;
     }
     try {
@@ -735,7 +752,8 @@
         state.publishable=config.publishable_key;$("auth-mode").textContent="Supabase dev authentication";
       }else{
         $("auth-mode").textContent="Backend session required";$("credentials").hidden=true;
-        $("connect").disabled=true;notice("No signed identity provider is configured. Connect a trusted host session.","danger");
+        $("connect").disabled=true;disableRemoteJourney();
+        notice("No signed identity provider is configured. Connect a trusted host session.","danger");
       }
     }catch{ $("auth-mode").textContent="Backend session required";$("credentials").hidden=true;
       $("connect").disabled=true;notice("The signed identity provider is unavailable.","danger");}
