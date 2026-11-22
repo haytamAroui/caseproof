@@ -356,3 +356,24 @@ def test_no_stale_success_after_document_change(client: TestClient) -> None:
     # Nouvelle exécution réelle sur le document courant : export à nouveau possible.
     assert _post(client, "/demo/api/run", {}, session).status_code == 200
     assert client.get("/demo/api/export.json", headers=headers).status_code == 200
+
+
+def test_fact_confirmation_reevaluates_rules(client: TestClient) -> None:
+    """Simulated reviewer fact confirmation: deterministic rules re-evaluate
+    live on the updated facts — a PASS rule degrades when its fact is
+    unconfirmed, and recovers when confirmed again."""
+    session = _session(client)
+    assert _post(client, "/demo/api/run", {}, session).status_code == 200
+
+    response = _post(client, "/demo/api/facts", {"name": "inconnu", "confirmed": True}, session)
+    assert response.status_code == 422
+
+    response = _post(client, "/demo/api/facts", {"name": "fait_confirme", "confirmed": False}, session)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["facts"][0]["confirmed"] is False
+    assert data["rule_results"][0]["status"] == "UNDETERMINED"
+
+    response = _post(client, "/demo/api/facts", {"name": "fait_confirme", "confirmed": True}, session)
+    assert response.status_code == 200
+    assert response.json()["rule_results"][0]["status"] == "PASS"

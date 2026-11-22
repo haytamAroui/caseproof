@@ -44,7 +44,7 @@ from application.litigation.review_cycle import (
     ready_for_release,
     revise_review,
 )
-from application.litigation.suitability_rules import evaluate_rule
+from application.litigation.suitability_rules import ConfirmedFact, evaluate_rule
 from application.litigation.unified_review import (
     BriefRepresentation,
     ObservationReview,
@@ -87,6 +87,11 @@ class RuleDecisionInput(BaseModel):
     disposition: str = Field(min_length=1, max_length=40)
     rationale: str = Field(min_length=1, max_length=600)
     scope: str = Field(min_length=1, max_length=400)
+
+
+class FactInput(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    confirmed: bool
 
 
 class CorrectionInput(BaseModel):
@@ -505,6 +510,33 @@ def create_demo_app(dossier: Path) -> FastAPI:
                 status_code=409,
             )
         return None
+
+    @app.post("/demo/api/facts")
+    def confirm_fact(payload: FactInput) -> Any:
+        """Confirm or unconfirm one case fact (simulated reviewer act, labeled
+        as such in the UI): deterministic rules are re-evaluated live on the
+        updated facts, and recorded rule decisions are re-validated."""
+        fact = state.facts.get(payload.name)
+        if fact is None:
+            return JSONResponse({"error": "unknown_fact"}, status_code=422)
+        state.facts[payload.name] = ConfirmedFact(fact.name, fact.value, payload.confirmed)
+        if state.started and state.run is not None and state.run_document_sha256 == state.document.sha256:
+            state.rule_results = [
+                evaluate_rule(rule, state.facts, state.corpus.article_keys) for _n, rule in state.rules
+            ]
+        validity_by_rule = {}
+        for rule_id, decision in state.lawyer_decisions.items():
+            result = next(r for r in state.rule_results if r.rule_id == rule_id)
+            validity_by_rule[rule_id] = validate_decision(decision, result)
+        return {
+            "facts": [
+                {"name": f.name, "value": f.value, "confirmed": f.confirmed} for f in state.facts.values()
+            ],
+            "rule_results": [
+                _rule_payload(r, state.lawyer_decisions.get(r.rule_id), validity_by_rule.get(r.rule_id))
+                for r in state.rule_results
+            ],
+        }
 
     @app.post("/demo/api/review")
     def review(payload: ReviewInput) -> Any:

@@ -132,11 +132,34 @@ function renderStatic(data) {
     <td><code>${esc(s.sha256.slice(0, 12))}…</code></td></tr>`).join("");
   document.getElementById("sources").innerHTML =
     `<table><tr><th>Pièce</th><th>Version</th><th>Origine</th><th>Empreinte</th></tr>${sourceRows}</table>`;
-  const factRows = data.facts.map((f) => `
+  renderFacts(data.facts);
+}
+
+function renderFacts(facts) {
+  const factRows = facts.map((f) => `
     <tr><td><code>${esc(f.name)}</code></td><td>${esc(f.value)}</td>
-    <td>${f.confirmed ? "confirmé" : "non confirmé"}</td></tr>`).join("");
+    <td>${f.confirmed ? "confirmé" : "non confirmé"}</td>
+    <td><button class="decision fact-toggle" data-name="${esc(f.name)}" data-confirmed="${f.confirmed ? "0" : "1"}">${f.confirmed ? "Retirer la confirmation" : "Confirmer (simulé)"}</button></td></tr>`).join("");
   document.getElementById("facts").innerHTML =
-    `<table><tr><th>Fait</th><th>Valeur</th><th>État</th></tr>${factRows}</table>`;
+    `<p class="meta">La confirmation est un acte de relecture simulé : les règles déterministes sont réévaluées réellement.</p>
+    <table><tr><th>Fait</th><th>Valeur</th><th>État</th><th></th></tr>${factRows}</table>`;
+  document.querySelectorAll("button.fact-toggle").forEach((b) => b.addEventListener("click", onFactToggle));
+}
+
+async function onFactToggle(event) {
+  clearError();
+  const button = event.target;
+  try {
+    const result = await post("/demo/api/facts", {
+      name: button.dataset.name, confirmed: button.dataset.confirmed === "1",
+    });
+    renderFacts(result.facts);
+    if (result.rule_results.length) {
+      document.getElementById("rules").innerHTML =
+        `<h3>Règles de fond (moteur déterministe)</h3>` + result.rule_results.map(ruleCard).join("");
+      bindDecisions();
+    }
+  } catch (err) { showError(err.message); }
 }
 
 function decisionButtons(observationId, kind) {
