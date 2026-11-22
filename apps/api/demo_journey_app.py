@@ -154,6 +154,33 @@ class DemoState:
         self.rule_results: list[Any] = []
         self.lawyer_decisions: dict[str, Any] = {}
         self.started = False
+        self.align_uploaded_version()
+
+    def align_uploaded_version(self) -> None:
+        """An uploaded document whose content matches the DECLARED corrected
+        passage (original gone, declared correction present) IS that corrected
+        version: register it, so the measured findings follow the actual
+        uploaded content. The correction stays declared/synthetic-labeled."""
+        correction = self.m2.correction
+        if not self.document.body_read or correction is None:
+            return
+        passage_id = correction["passage_id"]
+        passage = next((p for p in self.m2.passages if p["passage_id"] == passage_id), None)
+        if passage is None:
+            return
+        if passage["text"] in self.active_text or correction["after"] not in self.active_text:
+            return
+        self.versions.append(
+            {
+                "passage_id": passage_id,
+                "observation_id": passage["observation_id"],
+                "before": passage["text"],
+                "after": correction["after"],
+                "rationale": correction["rationale"] + " (version corrigée téléversée)",
+                "version": self.m2.brief_version_id,
+            }
+        )
+        self.active_version = f"{self.m2.brief_version_id}-corrige-1"
 
     def active_references(self) -> Any:
         quote_updates = {
@@ -176,10 +203,13 @@ class DemoState:
         if not self.document.body_read:
             return ["document body not read (fail-closed)"]
         text = self.document.text
-        for reference in self.m2.references:
+        for reference in self.active_references():
             if reference.exact_quote is not None and reference.exact_quote not in text:
                 missing.append(f"quote of {reference.reference_id}")
+        corrected = {entry["passage_id"] for entry in self.versions}
         for passage in self.m2.passages:
+            if passage["passage_id"] in corrected:
+                continue
             if passage["text"] not in text:
                 missing.append(f"passage {passage['passage_id']}")
         return missing
@@ -353,6 +383,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
                 "extraction_validated_against_read_text": state.validate_extraction() == [],
                 "extraction_missing": state.validate_extraction(),
                 "simulated_extraction": True,
+                "active_version": state.active_version,
             },
             "corpus": {
                 "articles": [
@@ -404,12 +435,20 @@ def create_demo_app(dossier: Path) -> FastAPI:
             )
         state.reset_run()
         missing = state.validate_extraction()
+        aligned = state.active_version != state.m2.brief_version_id
         return {
             "document": state.document.payload_view(),
             "body_read": state.document.body_read,
             "extraction_missing": missing,
+            "active_version": state.active_version,
             "note": (
-                "Corps du document lu par le lecteur produit."
+                "Corps du document lu par le lecteur produit"
+                + (
+                    " ; contenu identique à la version corrigée déclarée "
+                    f"({state.active_version}) — la vérification porte sur cette version."
+                    if aligned
+                    else "."
+                )
                 if state.document.body_read
                 else "Le lecteur produit refuse le corps de ce document (fail-closed) : voir les régions mesurées."
             ),

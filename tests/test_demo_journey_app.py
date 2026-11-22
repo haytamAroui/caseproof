@@ -65,6 +65,7 @@ def _dossier(tmp_path: Path) -> Path:
                 "passages": [
                     {"passage_id": "p-bad", "observation_id": "citation:ref-bad", "text": QUOTE_BAD}
                 ],
+                "correction": {"passage_id": "p-bad", "after": QUOTE_OK, "rationale": "alignée"},
                 "register_revision": 1,
                 "exhibits": [
                     {
@@ -269,3 +270,49 @@ def test_upload_clean_docx_is_actually_read(client: TestClient) -> None:
     assert response.json()["extraction_missing"] == []
     run = _post(client, "/demo/api/run", {}, session)
     assert run.status_code == 200
+
+
+def _docx_bytes(text: str) -> bytes:
+    import io
+
+    doc = Document()
+    doc.add_paragraph(text)
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()
+
+
+def test_uploaded_corrected_version_drives_findings(client: TestClient) -> None:
+    """Picker upload of the clean corrected DOCX: the measured finding flips
+    because the uploaded content matches the declared corrected version."""
+    session = _session(client)
+    corrected = _docx_bytes(BRIEF_TEXT.replace(QUOTE_BAD, QUOTE_OK))
+    response = _post(
+        client, "/demo/api/document", corrected, session, content_type="application/octet-stream"
+    )
+    assert response.status_code == 200
+    assert response.json()["extraction_missing"] == []
+    assert response.json()["active_version"].endswith("-corrige-1")
+    run = _post(client, "/demo/api/run", {}, session)
+    assert run.status_code == 200
+    citations = {c["reference_id"]: c["state"] for c in run.json()["findings"]["citations"]}
+    assert citations["ref-bad"] == "exact_match"
+    assert run.json()["brief_version"].endswith("-corrige-1")
+
+
+def test_uploaded_unrelated_clean_docx_blocks_run(client: TestClient) -> None:
+    """A clean DOCX whose content matches neither the declared brief nor the
+    declared corrected version cannot be verified: fail-closed, no guessing."""
+    session = _session(client)
+    response = _post(
+        client,
+        "/demo/api/document",
+        _docx_bytes("Un texte sans aucun rapport."),
+        session,
+        content_type="application/octet-stream",
+    )
+    assert response.status_code == 200
+    assert response.json()["extraction_missing"]
+    run = _post(client, "/demo/api/run", {}, session)
+    assert run.status_code == 422
+    assert run.json()["error"] == "extraction_mismatch"

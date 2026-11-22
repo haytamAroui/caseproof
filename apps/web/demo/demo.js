@@ -72,7 +72,7 @@ function renderDocument(doc) {
     .map((r) => `<li>${esc(REGION_KIND_LABELS[r.kind] || r.kind)} — ${esc(r.part)} : <strong>${esc(r.status)}</strong></li>`)
     .join("");
   document.getElementById("document").innerHTML = `
-    <p><strong>Fichier :</strong> ${esc(doc.name)} · sha256 <code>${esc(doc.sha256.slice(0, 12))}…</code></p>
+    <p><strong>Fichier :</strong> ${esc(doc.name)} · sha256 <code>${esc(doc.sha256.slice(0, 12))}…</code>${doc.active_version ? ` · version vérifiée : <code>${esc(doc.active_version)}</code>` : ""}</p>
     ${doc.body_read
       ? `<p class="ok-note">Corps lu par le lecteur Word du produit (mesure réelle).</p>`
       : `<p class="warn-note">Le lecteur Word du produit refuse le corps de ce document (fail-closed) :</p><ul>${regions}</ul>`}
@@ -98,7 +98,7 @@ async function onUpload(event) {
     });
     status.textContent = result.note;
     state.started = false;
-    renderDocument({ ...result.document, extraction_validated_against_read_text: result.extraction_missing.length === 0, extraction_missing: result.extraction_missing });
+    renderDocument({ ...result.document, active_version: result.active_version, extraction_validated_against_read_text: result.extraction_missing.length === 0, extraction_missing: result.extraction_missing });
     document.getElementById("findings").innerHTML = "";
     document.getElementById("rules").innerHTML = "";
     document.getElementById("run-status").textContent = "Nouveau document chargé : relancez les vérifications.";
