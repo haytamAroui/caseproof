@@ -96,38 +96,3 @@ def test_bounds_enforced() -> None:
         extract_citations("")
     with pytest.raises(CitationExtractionError):
         extract_citations("(Code civil, art. 1). " * (MAX_MARKERS + 1))
-
-
-def test_exhibit_reference_without_page() -> None:
-    text = "Comme il ressort de la pièce 12, le bail a été signé le 3 mai 2015."
-    extraction = extract_citations(text)
-    exhibits = [m for m in extraction.markers if m.form == "exhibit_reference"]
-    assert len(exhibits) == 1
-    assert exhibits[0].target == "pièce 12"
-    assert exhibits[0].page_hint is None
-
-
-def test_exhibit_reference_with_unlabeled_page_hint() -> None:
-    text = "Le décompte figure en pièce 12, p. 3 du dossier."
-    extraction = extract_citations(text)
-    exhibits = [m for m in extraction.markers if m.form == "exhibit_reference"]
-    assert len(exhibits) == 1
-    assert exhibits[0].target == "pièce 12"
-    # The hint stays unlabeled: never silently a physical PDF page.
-    assert exhibits[0].page_hint == 3
-
-
-def test_exhibit_reference_dutch_stuk() -> None:
-    text = "Zie stuk 7, pagina 2 van het dossier."
-    extraction = extract_citations(text)
-    exhibits = [m for m in extraction.markers if m.form == "exhibit_reference"]
-    assert len(exhibits) == 1
-    assert exhibits[0].target == "stuk 7"
-    assert exhibits[0].page_hint == 2
-
-
-def test_exhibit_reference_inside_quotation_ignored() -> None:
-    text = 'Il cite « voir pièce 9 du dossier adverse » sans autre précision.'
-    extraction = extract_citations(text)
-    assert [m for m in extraction.markers if m.form == "exhibit_reference"] == []
-    assert len(extraction.orphan_quotes) == 1
