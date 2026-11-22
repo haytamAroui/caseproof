@@ -72,10 +72,10 @@ function renderDocument(doc) {
     .map((r) => `<li>${esc(REGION_KIND_LABELS[r.kind] || r.kind)} — ${esc(r.part)} : <strong>${esc(r.status)}</strong></li>`)
     .join("");
   document.getElementById("document").innerHTML = `
-    <p><strong>Fichier :</strong> ${esc(doc.name)} · sha256 <code>${esc(doc.sha256.slice(0, 12))}…</code>${doc.body_read && doc.active_version ? ` · version vérifiée : <code>${esc(doc.active_version)}</code>` : ""}</p>
+    <p><strong>${doc.body_read ? "Document courant" : "Fichier sélectionné (lecture refusée)"} :</strong> ${esc(doc.name)} · sha256 <code>${esc(doc.sha256.slice(0, 12))}…</code>${doc.body_read && doc.active_version ? ` · version vérifiée : <code>${esc(doc.active_version)}</code>` : ""}</p>
     ${doc.body_read
       ? `<p class="ok-note">Corps lu par le lecteur Word du produit (mesure réelle).</p>`
-      : `<p class="warn-note">Le lecteur Word du produit refuse le corps de ce document (fail-closed) :</p><ul>${regions}</ul>`}
+      : `<p class="warn-note">Le lecteur Word du produit refuse le corps de ce fichier (fail-closed) — ce fichier n'est PAS le document vérifié et aucune vérification n'est possible tant qu'il est sélectionné :</p><ul>${regions}</ul>`}
     <p class="meta">Extraction des citations : simulée (déclarée) et vérifiée contre le texte réellement lu —
       ${doc.extraction_validated_against_read_text ? "toutes les citations déclarées sont présentes dans le texte lu." : `manquantes : ${esc((doc.extraction_missing || []).join(", "))}`}</p>
     <p>Téléverser un autre .docx pour le mesurer et le vérifier :
