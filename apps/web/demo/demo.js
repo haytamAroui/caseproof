@@ -66,6 +66,20 @@ function excerptHtml(excerpt) {
   return `<p>${excerpt.truncated_start ? "… " : ""}${esc(excerpt.before)}<span class="match">${esc(excerpt.match)}</span>${esc(excerpt.after)}${excerpt.truncated_end ? " …" : ""}</p>`;
 }
 
+function renderExtraction(extraction, warnings) {
+  if (!extraction) return "";
+  const rows = (extraction.citations || []).map((c) => `
+    <tr><td><code>${esc(c.marker_id)}</code></td><td>${esc(c.target)}</td>
+    <td>${c.has_quote ? "avec citation" : "sans citation textuelle"}</td>
+    <td>${esc(c.exhibit_label)}</td></tr>`).join("");
+  const warningList = (warnings || []).map((w) => `<li>${esc(w)}</li>`).join("");
+  return `
+    <p class="meta">Extraction des citations : automatique et déterministe depuis le texte réellement lu
+      (sans LLM, à valider par l'avocat) — ${(extraction.citations || []).length} référence(s) détectée(s)${extraction.orphan_quotes ? `, ${extraction.orphan_quotes} citation(s) sans référence` : ""}.</p>
+    ${rows ? `<table><tr><th>Réf.</th><th>Citation détectée</th><th>Citation textuelle</th><th>Pièce résolue</th></tr>${rows}</table>` : ""}
+    ${warningList ? `<ul class="warn-note">${warningList}</ul>` : ""}`;
+}
+
 function renderDocument(doc) {
   const regions = doc.regions
     .filter((r) => r.status !== "READ")
@@ -76,8 +90,7 @@ function renderDocument(doc) {
     ${doc.body_read
       ? `<p class="ok-note">Corps lu par le lecteur Word du produit (mesure réelle).</p>`
       : `<p class="warn-note">Le lecteur Word du produit refuse le corps de ce fichier (fail-closed) — ce fichier n'est PAS le document vérifié et aucune vérification n'est possible tant qu'il est sélectionné :</p><ul>${regions}</ul>`}
-    <p class="meta">Extraction des citations : simulée (déclarée) et vérifiée contre le texte réellement lu —
-      ${doc.extraction_validated_against_read_text ? "toutes les citations déclarées sont présentes dans le texte lu." : `manquantes : ${esc((doc.extraction_missing || []).join(", "))}`}</p>
+    ${doc.body_read ? renderExtraction(doc.extraction, doc.extraction_warnings) : ""}
     <p>Téléverser un autre .docx pour le mesurer et le vérifier :
       <input type="file" id="upload" accept=".docx"></p>
     <p class="meta" id="upload-status"></p>`;
@@ -103,7 +116,7 @@ async function onUpload(event) {
     });
     status.textContent = result.note;
     state.started = false;
-    renderDocument({ ...result.document, active_version: result.active_version, extraction_validated_against_read_text: result.extraction_missing.length === 0, extraction_missing: result.extraction_missing });
+    renderDocument({ ...result.document, active_version: result.active_version, extraction: result.extraction, extraction_warnings: result.extraction_warnings });
     // Tout résultat d'un document précédent est caduc : on l'efface partout.
     document.getElementById("findings").innerHTML = "";
     document.getElementById("rules").innerHTML = "";
@@ -241,7 +254,7 @@ async function onCorrect(referenceId) {
   if (!after || !rationale) { showError("Texte corrigé et motif requis."); return; }
   try {
     const result = await post("/demo/api/correction", {
-      passage_id: `p-${referenceId.replace(/^ref-/, "")}`,
+      passage_id: `passage:${referenceId}`,
       after, rationale,
     });
     const flips = Object.entries(result.flips).map(([ref, f]) =>

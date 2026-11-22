@@ -6,11 +6,12 @@ task-4 corpus, task-5 rules, task-3 decisions, task-6 Word measurement and
 the bounded DOCX text-region reader) over a local demo dossier. Uploaded
 DOCX files are actually read by the product reader: a clean document is
 read, a document with unresolved revisions is refused (fail-closed), and
-the UI shows the measured result. The dossier's references/facts are
-labelled simulated extraction and are validated against the text actually
-read; the reviewer is simulated. No auth, no persistence, no network, no
-LLM. This app exists so the user can technically test the complete path
-before any lawyer sees it.
+the UI shows the measured result. Citations are REALLY extracted from the
+text actually read (deterministic lexical parser, no LLM) and re-extracted
+after every correction; facts/rules stay declared test hypotheses and the
+reviewer is simulated, all labelled as such. No auth, no persistence, no
+network, no LLM. This app exists so the user can technically test the
+complete path before any lawyer sees it.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import hashlib
 import secrets
 import tempfile
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -28,7 +30,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from application.litigation.brief_checks import VersionedBrief
+from application.litigation.brief_checks import DraftReference, VersionedBrief
 from application.litigation.corpus import load_corpus
 from application.litigation.lawyer_decisions import (
     Disposition,
@@ -51,6 +53,7 @@ from application.litigation.unified_review import (
     ReviewDisposition,
     VerificationError,
 )
+from infrastructure.parsers.citation_markers import CitationExtraction, extract_citations
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from scripts.demo_belgian_dossier import (
     DEMO_RUNNER_VERSION,
@@ -63,7 +66,6 @@ from scripts.demo_belgian_dossier import (
     _load_meta,
     _load_rules,
     _locate,
-    _references_with_quote_updates,
     _run_check,
     render_html,
 )
@@ -161,6 +163,52 @@ class DemoState:
         self.started = False
         self.run_document_sha256: str | None = None
         self.align_uploaded_version()
+        self.refresh_citations()
+
+    def refresh_citations(self) -> None:
+        """Re-extract citation markers from the CURRENT text (after upload or
+        correction): references always come from what was actually read."""
+        self.extraction: CitationExtraction = (
+            extract_citations(self.active_text)
+            if self.document.body_read and self.active_text.strip()
+            else CitationExtraction((), ())
+        )
+
+    def _resolve_exhibit_label(self, target: str) -> str:
+        return _resolve_exhibit_label(self.m2.register, target)
+
+    def correctable_passages(self) -> list[dict[str, Any]]:
+        """Every extracted quotation is a correctable passage of the brief."""
+        return [
+            {
+                "passage_id": f"passage:{marker.marker_id}",
+                "observation_id": f"citation:{marker.marker_id}",
+                "text": marker.quote,
+            }
+            for marker in self.extraction.markers
+            if marker.quote is not None
+        ]
+
+    def extraction_payload(self) -> dict[str, Any]:
+        return {
+            "mode": "deterministic_from_read_text",
+            "simulated": False,
+            "note": (
+                "Extraction lexicale déterministe depuis le texte réellement lu "
+                "(sans LLM) ; à valider par l'avocat."
+            ),
+            "citations": [
+                {
+                    "marker_id": marker.marker_id,
+                    "target": marker.target,
+                    "form": marker.form,
+                    "has_quote": marker.quote is not None,
+                    "exhibit_label": self._resolve_exhibit_label(marker.target),
+                }
+                for marker in self.extraction.markers
+            ],
+            "orphan_quotes": len(self.extraction.orphan_quotes),
+        }
 
     def align_uploaded_version(self) -> None:
         """An uploaded document whose content matches the DECLARED corrected
@@ -174,6 +222,8 @@ class DemoState:
         passage = next((p for p in self.m2.passages if p["passage_id"] == passage_id), None)
         if passage is None:
             return
+        # Contenu déclaré (hypothèse de test) utilisé uniquement pour RECONNAÎTRE
+        # une version corrigée téléversée ; les références restent extraites du texte lu.
         if passage["text"] in self.active_text or correction["after"] not in self.active_text:
             return
         self.versions.append(
@@ -189,36 +239,63 @@ class DemoState:
         self.active_version = f"{self.m2.brief_version_id}-corrige-1"
 
     def active_references(self) -> Any:
-        quote_updates = {
-            entry["passage_id"]: entry["after"]
-            for entry in self.versions
-            if entry["observation_id"].startswith("citation:")
-        }
-        return _references_with_quote_updates(self.m2, quote_updates)
+        """References are derived from the citation markers extracted from the
+        current read text, never from a declared list."""
+        return tuple(
+            DraftReference(
+                marker.marker_id,
+                self._resolve_exhibit_label(marker.target),
+                marker.quote,
+                1 if marker.quote is not None else None,
+            )
+            for marker in self.extraction.markers
+        )
 
     def representation(self, text: str, version: str) -> BriefRepresentation:
         references = self.active_references()
         brief = VersionedBrief(self.m2.case_id, version, _sha(f"original:{version}"), references)
         return BriefRepresentation(brief, text, _sha(text), DEMO_RUNNER_VERSION, ())
 
-    def validate_extraction(self) -> list[str]:
-        """Locate every declared demo input (reference quotes, correction
-        passages) in the ACTUALLY READ text; missing items are reported, never
-        silently skipped."""
-        missing: list[str] = []
+    def extraction_warnings(self) -> list[str]:
+        """Honest extraction diagnostics, never silent: unreadable body,
+        quotations without a citation marker, markers without a quotation."""
         if not self.document.body_read:
             return ["document body not read (fail-closed)"]
-        text = self.document.text
-        for reference in self.active_references():
-            if reference.exact_quote is not None and reference.exact_quote not in text:
-                missing.append(f"quote of {reference.reference_id}")
-        corrected = {entry["passage_id"] for entry in self.versions}
-        for passage in self.m2.passages:
-            if passage["passage_id"] in corrected:
+        warnings: list[str] = []
+        if self.extraction.orphan_quotes:
+            warnings.append(
+                f"{len(self.extraction.orphan_quotes)} citation(s) entre guillemets sans référence détectée"
+            )
+        quoteless = [m.marker_id for m in self.extraction.markers if m.quote is None]
+        if quoteless:
+            warnings.append(f"références sans citation textuelle : {', '.join(quoteless)}")
+        return warnings
+
+
+def _resolve_exhibit_label(register: Any, target: str) -> str:
+    """Map an extracted citation target to a register alias. A hierarchical
+    citation goes from general to specific ("Code civil, ..., Section 2,
+    art. 3"): the most specific locator is the RIGHTMOST alias occurrence
+    (ties: longest). Unmapped targets stay as written and the engine
+    reports them unresolved (never silently guessed)."""
+    folded = target.casefold()
+    best: tuple[int, int, str] | None = None
+    for entry in register.entries:
+        for alias in (entry.display_label, *entry.aliases):
+            key = alias.strip().casefold()
+            if not key:
                 continue
-            if passage["text"] not in text:
-                missing.append(f"passage {passage['passage_id']}")
-        return missing
+            start = folded.find(key)
+            while start != -1:
+                end = start + len(key)
+                bounded = (
+                    (start == 0 or not folded[start - 1].isalnum())
+                    and (end == len(folded) or not folded[end].isalnum())
+                )
+                if bounded and (best is None or (start, len(key)) > (best[0], best[1])):
+                    best = (start, len(key), alias)
+                start = folded.find(key, start + 1)
+    return best[2] if best is not None else target
 
 
 def _excerpt(text: str, start: int | None, end: int | None, radius: int = 140) -> dict[str, Any] | None:
@@ -386,9 +463,8 @@ def create_demo_app(dossier: Path) -> FastAPI:
             "audience_note": state.meta.audience_note,
             "document": {
                 **state.document.payload_view(),
-                "extraction_validated_against_read_text": state.validate_extraction() == [],
-                "extraction_missing": state.validate_extraction(),
-                "simulated_extraction": True,
+                "extraction": state.extraction_payload(),
+                "extraction_warnings": state.extraction_warnings(),
                 "active_version": state.active_version,
             },
             "corpus": {
@@ -440,12 +516,12 @@ def create_demo_app(dossier: Path) -> FastAPI:
                 status_code=422,
             )
         state.reset_run()
-        missing = state.validate_extraction()
         aligned = state.active_version != state.m2.brief_version_id
         return {
             "document": state.document.payload_view(),
             "body_read": state.document.body_read,
-            "extraction_missing": missing,
+            "extraction": state.extraction_payload(),
+            "extraction_warnings": state.extraction_warnings(),
             "active_version": state.active_version,
             "note": (
                 "Corps du document lu par le lecteur produit"
@@ -470,17 +546,18 @@ def create_demo_app(dossier: Path) -> FastAPI:
                 },
                 status_code=409,
             )
-        missing = state.validate_extraction()
-        if missing:
+        state.reset_run()
+        if not state.extraction.markers:
             return JSONResponse(
                 {
-                    "error": "extraction_mismatch",
-                    "message": "L'extraction simulée ne correspond pas au texte réellement lu.",
-                    "missing": missing,
+                    "error": "no_citations_detected",
+                    "message": (
+                        "Aucune référence légale détectée dans le texte réellement lu : "
+                        "rien à vérifier."
+                    ),
                 },
                 status_code=422,
             )
-        state.reset_run()
         representation = state.representation(state.active_text, state.active_version)
         run = _run_check(state.m2, representation)
         state.run = run
@@ -605,15 +682,12 @@ def create_demo_app(dossier: Path) -> FastAPI:
         assert state.run is not None
         assert state.run is not None
         passage_spec: dict[str, Any] | None = None
-        for passage in state.m2.passages:
+        for passage in state.correctable_passages():
             if passage["passage_id"] == payload.passage_id:
                 passage_spec = passage
         if passage_spec is None:
             return JSONResponse({"error": "unknown_passage"}, status_code=422)
         current_text = passage_spec["text"]
-        for version in state.versions:
-            if version["passage_id"] == payload.passage_id:
-                current_text = version["after"]
         try:
             start, end = _locate(state.active_text, current_text, "passage")
         except DemoDossierError as exc:
@@ -644,6 +718,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
         )
         state.active_text = preview.proposed_text
         state.active_version = f"{state.m2.brief_version_id}-corrige-{len(state.versions)}"
+        state.refresh_citations()
         before_citations = {o.reference_id: o.state.value for o in state.run.citation_observations}
         representation2 = state.representation(state.active_text, state.active_version)
         state.run = _run_check(state.m2, representation2)
@@ -684,6 +759,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
             "brief_version": state.active_version,
             "snapshot": state.run.snapshot_hash,
             "versions": state.versions,
+            "extraction": {"mode": "deterministic_from_read_text", "simulated": False},
             "findings": _finding_payloads(state, state.run),
             "review": {
                 "simulated": True,
@@ -703,7 +779,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
             "rule_decisions": decisions,
             "release_ready": ready_for_release(state.run, state.packet),
             "limits": [
-                "Démonstration : faits, pièces, règles et relecture simulés, non approuvés par un avocat.",
+                "Démonstration : faits, pièces, règles et relecture simulés, non approuvés par un avocat ; extraction des citations déterministe depuis le texte lu, à valider.",
                 "Pas de conseil juridique, pas de pilote (tâche 7), pas de couverture exhaustive du droit belge.",
                 "La conséquence d'une dérogation (export / prêt avec exceptions) reste une décision ouverte (tâche 2).",
                 "Aucune donnée persistée ni envoyée ; session locale éphémère.",
@@ -747,7 +823,11 @@ def create_demo_app(dossier: Path) -> FastAPI:
                 "results": state.rule_results,
                 "decisions": list(state.lawyer_decisions.values()),
                 "validity": validity_map,
-                "m2": state.m2,
+                "m2": replace(
+                    state.m2,
+                    references=state.active_references(),
+                    passages=tuple(state.correctable_passages()),
+                ),
                 "journey": journey,
             },
             generated_at="session de démonstration interactive",

@@ -15,8 +15,18 @@ from fastapi.testclient import TestClient
 from httpx import Response as TestResponse
 
 from application.litigation.corpus import CORPUS_FORMAT_VERSION
-from apps.api.demo_journey_app import create_demo_app
-from tests.test_demo_belgian_dossier import BRIEF_TEXT, QUOTE_BAD, QUOTE_OK, RULE, SOURCE_TEXT, _corpus_entry
+from apps.api.demo_journey_app import _resolve_exhibit_label, create_demo_app
+from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
+from tests.test_demo_belgian_dossier import QUOTE_BAD, QUOTE_OK, RULE, SOURCE_TEXT, _corpus_entry
+
+# Brief de la fixture applicative : deux citations balisées (une exacte, une
+# erronée) et une mention de loi autonome hors registre. L'extraction réelle
+# doit retrouver ces trois références depuis le texte lu, sans déclaration.
+APP_BRIEF = (
+    f"Le preneur répond des dégradations : « {QUOTE_OK} » (Code civil, art. 1732). "
+    f"Par ailleurs, le préavis serait de « {QUOTE_BAD} » (Code civil, art. 1732) selon le brief. "
+    "Conformément à l'article 15 de la loi du 20 février 1991, le preneur conserve ses droits."
+)
 
 
 def _dossier(tmp_path: Path) -> Path:
@@ -36,7 +46,7 @@ def _dossier(tmp_path: Path) -> Path:
         json.dumps({"decided_at": "2026-11-22T21:00:00+01:00", "decisions": []}), encoding="utf-8"
     )
     doc = Document()
-    doc.add_paragraph(BRIEF_TEXT)
+    doc.add_paragraph(APP_BRIEF)
     doc.save(str(dossier / "brief.docx"))
     (dossier / "meta.json").write_text(
         json.dumps({"title": "fixture", "brief": "brief.docx"}), encoding="utf-8"
@@ -46,7 +56,7 @@ def _dossier(tmp_path: Path) -> Path:
             {
                 "case_id": "fixture-1",
                 "brief_version_id": "brief-v1",
-                "brief_text": BRIEF_TEXT,
+                "brief_text": APP_BRIEF,
                 "references": [
                     {
                         "reference_id": "ref-ok",
@@ -71,7 +81,7 @@ def _dossier(tmp_path: Path) -> Path:
                     {
                         "exhibit_id": "ex-1",
                         "display_label": "Pièce 1",
-                        "aliases": [],
+                        "aliases": ["Code civil"],
                         "confirmed": True,
                         "pages": [{"source_id": "src-1", "version_id": "v1", "pdf_page": 1}],
                     }
@@ -124,6 +134,39 @@ def _post(
     return response
 
 
+def test_hierarchical_citation_resolves_to_most_specific_exhibit() -> None:
+    """A 'Code civil, ..., Section 2, art. 3' citation resolves to the Section 2
+    exhibit (rightmost = most specific locator), not the general Code civil one;
+    an unknown target stays unresolved, never guessed."""
+    register = ExhibitRegister(
+        1,
+        (
+            ExhibitEntry(
+                "ex-section2",
+                "Section 2 du Code civil (WALLEX)",
+                (ExhibitPage("src-2", "v1", 1),),
+                ("Section 2",),
+                True,
+            ),
+            ExhibitEntry(
+                "ex-code-civil",
+                "Code civil, art. 1708 à 1762bis (WALLEX)",
+                (ExhibitPage("src-1", "v1", 1),),
+                ("Code civil",),
+                True,
+            ),
+        ),
+    )
+    assert (
+        _resolve_exhibit_label(register, "Code civil, Livre III, Titre VIII, Ch. II, Section 2, art. 3, §1er")
+        == "Section 2"
+    )
+    assert _resolve_exhibit_label(register, "Code civil, art. 1732") == "Code civil"
+    assert _resolve_exhibit_label(register, "Section 2, art. 10, §1er") == "Section 2"
+    unknown = "article 15 de la loi du 20 février 1991"
+    assert _resolve_exhibit_label(register, unknown) == unknown
+
+
 def test_index_and_assets_served(client: TestClient) -> None:
     assert client.get("/demo").status_code == 200
     assert client.get("/demo/assets/demo.js").status_code == 200
@@ -140,20 +183,27 @@ def test_full_journey(client: TestClient) -> None:
     session = _session(client)
     state = client.get("/demo/api/state").json()
     assert state["document"]["body_read"] is True
-    assert state["document"]["extraction_validated_against_read_text"] is True
+    extraction = state["document"]["extraction"]
+    assert extraction["mode"] == "deterministic_from_read_text"
+    assert extraction["simulated"] is False
+    assert [c["marker_id"] for c in extraction["citations"]] == ["cit-01", "cit-02", "cit-03"]
 
     run = _post(client, "/demo/api/run", {}, session)
     assert run.status_code == 200
     data = run.json()
     citations = {c["reference_id"]: c["state"] for c in data["findings"]["citations"]}
-    assert citations == {"ref-ok": "exact_match", "ref-bad": "quote_not_found"}
+    assert citations == {
+        "cit-01": "exact_match",
+        "cit-02": "quote_not_found",
+        "cit-03": "reference_unresolved",
+    }
     assert data["rule_results"][0]["status"] == "PASS"
 
     review = _post(
         client,
         "/demo/api/review",
         {
-            "observation_id": "citation:ref-bad",
+            "observation_id": "citation:cit-02",
             "disposition": "confirmed_candidate",
             "rationale": "écart confirmé",
         },
@@ -166,7 +216,7 @@ def test_full_journey(client: TestClient) -> None:
         client,
         "/demo/api/correction",
         {
-            "passage_id": "p-bad",
+            "passage_id": "passage:cit-02",
             "after": "six mois",
             "rationale": "citation alignée",
         },
@@ -174,7 +224,7 @@ def test_full_journey(client: TestClient) -> None:
     )
     assert correction.status_code == 200
     result = correction.json()
-    assert result["flips"] == {"ref-bad": {"before": "quote_not_found", "after": "exact_match"}}
+    assert result["flips"] == {"cit-02": {"before": "quote_not_found", "after": "exact_match"}}
     assert result["snapshot"] != data["snapshot"]
 
     export = client.get("/demo/api/export.json", headers={"x-demo-session": session})
@@ -195,7 +245,7 @@ def test_review_before_run_rejected(client: TestClient) -> None:
         client,
         "/demo/api/review",
         {
-            "observation_id": "citation:ref-bad",
+            "observation_id": "citation:cit-02",
             "disposition": "dismissed",
             "rationale": "x",
         },
@@ -259,7 +309,7 @@ def test_upload_clean_docx_is_actually_read(client: TestClient) -> None:
     import io
 
     doc = Document()
-    doc.add_paragraph(BRIEF_TEXT)
+    doc.add_paragraph(APP_BRIEF)
     buffer = io.BytesIO()
     doc.save(buffer)
     response = _post(
@@ -267,7 +317,7 @@ def test_upload_clean_docx_is_actually_read(client: TestClient) -> None:
     )
     assert response.status_code == 200
     assert response.json()["body_read"] is True
-    assert response.json()["extraction_missing"] == []
+    assert len(response.json()["extraction"]["citations"]) == 3
     run = _post(client, "/demo/api/run", {}, session)
     assert run.status_code == 200
 
@@ -286,17 +336,16 @@ def test_uploaded_corrected_version_drives_findings(client: TestClient) -> None:
     """Picker upload of the clean corrected DOCX: the measured finding flips
     because the uploaded content matches the declared corrected version."""
     session = _session(client)
-    corrected = _docx_bytes(BRIEF_TEXT.replace(QUOTE_BAD, QUOTE_OK))
+    corrected = _docx_bytes(APP_BRIEF.replace(QUOTE_BAD, QUOTE_OK))
     response = _post(
         client, "/demo/api/document", corrected, session, content_type="application/octet-stream"
     )
     assert response.status_code == 200
-    assert response.json()["extraction_missing"] == []
     assert response.json()["active_version"].endswith("-corrige-1")
     run = _post(client, "/demo/api/run", {}, session)
     assert run.status_code == 200
     citations = {c["reference_id"]: c["state"] for c in run.json()["findings"]["citations"]}
-    assert citations["ref-bad"] == "exact_match"
+    assert citations["cit-02"] == "exact_match"
     assert run.json()["brief_version"].endswith("-corrige-1")
 
 
@@ -312,10 +361,10 @@ def test_uploaded_unrelated_clean_docx_blocks_run(client: TestClient) -> None:
         content_type="application/octet-stream",
     )
     assert response.status_code == 200
-    assert response.json()["extraction_missing"]
+    assert response.json()["extraction"]["citations"] == []
     run = _post(client, "/demo/api/run", {}, session)
     assert run.status_code == 422
-    assert run.json()["error"] == "extraction_mismatch"
+    assert run.json()["error"] == "no_citations_detected"
 
 
 def test_no_stale_success_after_document_change(client: TestClient) -> None:
@@ -327,14 +376,14 @@ def test_no_stale_success_after_document_change(client: TestClient) -> None:
         _post(
             client,
             "/demo/api/correction",
-            {"passage_id": "p-bad", "after": QUOTE_OK, "rationale": "alignée"},
+            {"passage_id": "passage:cit-02", "after": QUOTE_OK, "rationale": "alignée"},
             session,
         ).status_code
         == 200
     )
     headers = {"x-demo-session": session}
     assert client.get("/demo/api/export.json", headers=headers).status_code == 200
-    corrected = _docx_bytes(BRIEF_TEXT.replace(QUOTE_BAD, QUOTE_OK))
+    corrected = _docx_bytes(APP_BRIEF.replace(QUOTE_BAD, QUOTE_OK))
     assert (
         _post(
             client, "/demo/api/document", corrected, session, content_type="application/octet-stream"
@@ -348,7 +397,7 @@ def test_no_stale_success_after_document_change(client: TestClient) -> None:
         _post(
             client,
             "/demo/api/review",
-            {"observation_id": "citation:ref-bad", "disposition": "dismissed", "rationale": "x"},
+            {"observation_id": "citation:cit-02", "disposition": "dismissed", "rationale": "x"},
             session,
         ).status_code
         == 409
