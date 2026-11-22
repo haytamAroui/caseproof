@@ -72,7 +72,7 @@ function renderDocument(doc) {
     .map((r) => `<li>${esc(REGION_KIND_LABELS[r.kind] || r.kind)} — ${esc(r.part)} : <strong>${esc(r.status)}</strong></li>`)
     .join("");
   document.getElementById("document").innerHTML = `
-    <p><strong>Fichier :</strong> ${esc(doc.name)} · sha256 <code>${esc(doc.sha256.slice(0, 12))}…</code>${doc.active_version ? ` · version vérifiée : <code>${esc(doc.active_version)}</code>` : ""}</p>
+    <p><strong>Fichier :</strong> ${esc(doc.name)} · sha256 <code>${esc(doc.sha256.slice(0, 12))}…</code>${doc.body_read && doc.active_version ? ` · version vérifiée : <code>${esc(doc.active_version)}</code>` : ""}</p>
     ${doc.body_read
       ? `<p class="ok-note">Corps lu par le lecteur Word du produit (mesure réelle).</p>`
       : `<p class="warn-note">Le lecteur Word du produit refuse le corps de ce document (fail-closed) :</p><ul>${regions}</ul>`}
@@ -82,6 +82,11 @@ function renderDocument(doc) {
       <input type="file" id="upload" accept=".docx"></p>
     <p class="meta" id="upload-status"></p>`;
   document.getElementById("upload").addEventListener("change", onUpload);
+  // Le bouton de vérification n'est actif que si le corps du document est lisible ;
+  // tout changement de document invalide l'export du résultat précédent.
+  document.getElementById("run").disabled = !doc.body_read;
+  document.getElementById("export-json").disabled = true;
+  document.getElementById("export-html").disabled = true;
 }
 
 async function onUpload(event) {
@@ -99,8 +104,10 @@ async function onUpload(event) {
     status.textContent = result.note;
     state.started = false;
     renderDocument({ ...result.document, active_version: result.active_version, extraction_validated_against_read_text: result.extraction_missing.length === 0, extraction_missing: result.extraction_missing });
+    // Tout résultat d'un document précédent est caduc : on l'efface partout.
     document.getElementById("findings").innerHTML = "";
     document.getElementById("rules").innerHTML = "";
+    document.getElementById("correction").innerHTML = "";
     document.getElementById("run-status").textContent = "Nouveau document chargé : relancez les vérifications.";
   } catch (err) {
     status.textContent = "";
@@ -272,6 +279,8 @@ async function onRun() {
     state.findings = result.findings;
     document.getElementById("run-status").textContent =
       `Exécution réelle terminée — instantané ${result.snapshot.slice(0, 12)}…`;
+    document.getElementById("export-json").disabled = false;
+    document.getElementById("export-html").disabled = false;
     document.getElementById("findings").innerHTML =
       result.findings.citations.map((c) => citationCard(c, false)).join("") +
       result.findings.facts.map((f) => factCard(f, false)).join("");

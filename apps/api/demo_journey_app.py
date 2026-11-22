@@ -154,6 +154,7 @@ class DemoState:
         self.rule_results: list[Any] = []
         self.lawyer_decisions: dict[str, Any] = {}
         self.started = False
+        self.run_document_sha256: str | None = None
         self.align_uploaded_version()
 
     def align_uploaded_version(self) -> None:
@@ -483,6 +484,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
             evaluate_rule(rule, state.facts, state.corpus.article_keys) for _n, rule in state.rules
         ]
         state.started = True
+        state.run_document_sha256 = state.document.sha256
         return {
             "snapshot": run.snapshot_hash,
             "brief_version": state.active_version,
@@ -495,6 +497,13 @@ def create_demo_app(dossier: Path) -> FastAPI:
     def _require_run() -> JSONResponse | None:
         if not state.started or state.run is None or state.packet is None:
             return JSONResponse({"error": "run_first"}, status_code=409)
+        if state.run_document_sha256 != state.document.sha256:
+            # Le résultat courant appartient à un autre document : jamais
+            # d'export ni de décision sur un instantané caduc.
+            return JSONResponse(
+                {"error": "stale_result", "message": "Document changé : relancez les vérifications."},
+                status_code=409,
+            )
         return None
 
     @app.post("/demo/api/review")

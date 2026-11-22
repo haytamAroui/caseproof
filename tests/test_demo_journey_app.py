@@ -316,3 +316,43 @@ def test_uploaded_unrelated_clean_docx_blocks_run(client: TestClient) -> None:
     run = _post(client, "/demo/api/run", {}, session)
     assert run.status_code == 422
     assert run.json()["error"] == "extraction_mismatch"
+
+
+def test_no_stale_success_after_document_change(client: TestClient) -> None:
+    """A verified/corrected result never survives a document change: exports
+    and decisions are blocked until the new document is actually verified."""
+    session = _session(client)
+    assert _post(client, "/demo/api/run", {}, session).status_code == 200
+    assert (
+        _post(
+            client,
+            "/demo/api/correction",
+            {"passage_id": "p-bad", "after": QUOTE_OK, "rationale": "alignée"},
+            session,
+        ).status_code
+        == 200
+    )
+    headers = {"x-demo-session": session}
+    assert client.get("/demo/api/export.json", headers=headers).status_code == 200
+    corrected = _docx_bytes(BRIEF_TEXT.replace(QUOTE_BAD, QUOTE_OK))
+    assert (
+        _post(
+            client, "/demo/api/document", corrected, session, content_type="application/octet-stream"
+        ).status_code
+        == 200
+    )
+    # Le succès précédent est caduc : export et relecture bloqués.
+    assert client.get("/demo/api/export.json", headers=headers).status_code == 409
+    assert client.get("/demo/api/export.html", headers=headers).status_code == 409
+    assert (
+        _post(
+            client,
+            "/demo/api/review",
+            {"observation_id": "citation:ref-bad", "disposition": "dismissed", "rationale": "x"},
+            session,
+        ).status_code
+        == 409
+    )
+    # Nouvelle exécution réelle sur le document courant : export à nouveau possible.
+    assert _post(client, "/demo/api/run", {}, session).status_code == 200
+    assert client.get("/demo/api/export.json", headers=headers).status_code == 200
