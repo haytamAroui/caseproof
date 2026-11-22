@@ -23,6 +23,15 @@ _AUTONOMOUS_RE = re.compile(
     re.IGNORECASE,
 )
 _GAP_RE = re.compile(r"^[\s:;,.\u2013-]{0,24}$")
+# Exhibit-inventory references ("pièce 12", "pièce n° 3, p. 4", "stuk 7").
+# The page number is captured UNLABELED: a bare citation page is not a
+# physical PDF page. The downstream adapter resolves the page space from
+# grounded metadata or a unique confirmed mapping, or abstains.
+_EXHIBIT_RE = re.compile(
+    r"\b(pi[eè]ce|stuk)\s+(?:n[°o]\s*)?(\d{1,3})(?:[a-z]\b)?"
+    r"(?:\s*[,;]?\s*(?:p\.|page|pagina)\s*(\d{1,5}))?",
+    re.IGNORECASE,
+)
 
 
 class CitationExtractionError(ValueError):
@@ -33,12 +42,16 @@ class CitationExtractionError(ValueError):
 class CitationMarker:
     marker_id: str
     target: str
-    form: str  # "parenthesized" | "autonomous_act"
+    form: str  # "parenthesized" | "autonomous_act" | "exhibit_reference"
     start: int
     end: int
     quote: str | None
     quote_start: int | None
     quote_end: int | None
+    # Unlabeled page number from an exhibit reference ("pièce 12, p. 3").
+    # Never pre-assigned to a page space (physical/printed/bundle): the
+    # adapter resolves the space from a confirmed unique mapping or abstains.
+    page_hint: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +73,8 @@ def extract_citations(text: str) -> CitationExtraction:
 
     quotes = [(m.start(), m.end(), m.group(1).strip()) for m in _QUOTE_RE.finditer(text)]
     consumed: set[int] = set()
-    found: list[tuple[int, int, str, str, str | None, int | None, int | None]] = []
+    # (start, end, form, target, quote, quote_start, quote_end, page_hint)
+    found: list[tuple[int, int, str, str, str | None, int | None, int | None, int | None]] = []
 
     for match in _PAREN_RE.finditer(text):
         inner = " ".join(match.group(1).split())
@@ -78,7 +92,7 @@ def extract_citations(text: str) -> CitationExtraction:
                 quote, quote_start, quote_end = content, start, end
         if quote_start is not None:
             consumed.add(next(i for i, (s, _e, _c) in enumerate(quotes) if s == quote_start))
-        found.append((match.start(), match.end(), "parenthesized", inner, quote, quote_start, quote_end))
+        found.append((match.start(), match.end(), "parenthesized", inner, quote, quote_start, quote_end, None))
 
     paren_spans = [(start, end) for start, end, *_ in found]
     for match in _AUTONOMOUS_RE.finditer(text):
@@ -87,7 +101,19 @@ def extract_citations(text: str) -> CitationExtraction:
         if any(start <= match.start() < end for start, end, _c in quotes):
             continue
         target = " ".join(match.group(0).split())
-        found.append((match.start(), match.end(), "autonomous_act", target, None, None, None))
+        found.append((match.start(), match.end(), "autonomous_act", target, None, None, None, None))
+
+    taken = [(start, end) for start, end, *_ in found]
+    for match in _EXHIBIT_RE.finditer(text):
+        if any(start <= match.start() < end for start, end in taken):
+            continue
+        if any(start <= match.start() < end for start, end, _c in quotes):
+            continue
+        word = match.group(1).lower()
+        number = match.group(2)
+        label = f"{word} {number}"
+        page_hint = int(match.group(3)) if match.group(3) is not None else None
+        found.append((match.start(), match.end(), "exhibit_reference", label, None, None, None, page_hint))
 
     if len(found) > MAX_MARKERS:
         raise CitationExtractionError(f"more than {MAX_MARKERS} citation markers")
@@ -95,9 +121,9 @@ def extract_citations(text: str) -> CitationExtraction:
     found.sort(key=lambda entry: entry[0])
     markers = tuple(
         CitationMarker(
-            f"cit-{position:02d}", target, form, start, end, quote, quote_start, quote_end
+            f"cit-{position:02d}", target, form, start, end, quote, quote_start, quote_end, page_hint
         )
-        for position, (start, end, form, target, quote, quote_start, quote_end) in enumerate(found, 1)
+        for position, (start, end, form, target, quote, quote_start, quote_end, page_hint) in enumerate(found, 1)
     )
     orphans = tuple((start, end) for start, end, _c in quotes if (start, end) not in {
         (m.quote_start, m.quote_end) for m in markers if m.quote_start is not None
