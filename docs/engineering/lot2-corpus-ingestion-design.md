@@ -42,10 +42,15 @@ are stored as separate artefacts with an explicit relation.
   timestamp, declared temporal version ("text as it stood on date D"), same
   hashing and relation discipline. Marked unofficial in the model, not just
   in docs.
-- `ArticleRecord`: act identity + article identifier + language; resolved
-  from the corpus only. An article absent from the case's chosen corpus is a
-  fact of the corpus, never "the article does not exist" (this is the
-  reserved UNVERIFIED semantics of the rule result contract, task 1).
+- `ArticleRecord`: act identity + article identifier + language + the
+  DECLARED temporal version of the text; resolved from the corpus only. The
+  corpus key is `article_key(act, article, language, version)` from
+  `application/litigation/suitability_rules.py` (canonical, lowercased,
+  trimmed) so rule-side membership and corpus-side identity cannot diverge
+  on formatting. An article absent from the case's chosen corpus is a fact
+  of the corpus, never "the article does not exist" (this is the reserved
+  UNVERIFIED semantics of the rule result contract, task 1); a version
+  mismatch is UNDETERMINED, never silently matched.
 - `AmendmentRecord` / errata: links between publications when the pilot set
   includes a modifying act or an erratum.
 
