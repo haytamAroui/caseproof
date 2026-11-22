@@ -8,7 +8,9 @@ from typing import Any
 from domains.disputes.exhibit_identity import InventoryStatus, resolve_exhibit_identity
 
 ALGORITHM = "caseproof-dossier-v4"
-_PAGE = re.compile(
+# Canonical page-suffix pattern after an exhibit reference. Public so the
+# signed-path reference adapter reuses the SAME accepted syntax; never fork it.
+PAGE_AFTER_REFERENCE = re.compile(
     r"^\s*[,;:]?\s*(?:(PDF|printed|gedrukte|imprimée|bundle|bundel|liasse)\s+)?(?:pp?|pages?)\.?\s*([0-9]+|[IVXLCDMivxlcdm]{1,12})\b",
     re.I,
 )
@@ -65,7 +67,7 @@ def build_findings(
             authorized_source_ids=frozenset({"entry-0"}) if source else frozenset(),
         )
         identity = decision.state.value.lower() if supported else "not_assessed"
-        page = _PAGE.match(regions.get(ref.region, "")[ref.end :])
+        page = PAGE_AFTER_REFERENCE.match(regions.get(ref.region, "")[ref.end :])
         requested = None
         unsupported_sequence = False
         if page:

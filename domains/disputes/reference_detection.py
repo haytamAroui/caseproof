@@ -10,8 +10,7 @@ from dataclasses import dataclass
 _REFERENCE = re.compile(
     r"(?<![\w])(?P<label>stuk(?:ken)?|pi[eè]ce(?:s)?)"
     r"\s*(?:n[°ºo.]?\s*)?(?P<number>[0-9]{1,4})"
-    r"(?P<suffix>\s*(?:bis|ter))?(?![0-9])"
-    r"(?:\s*[,;]?\s*(?:p\.|page|pagina)\s*(?P<page>[0-9]{1,5}))?",
+    r"(?P<suffix>\s*(?:bis|ter))?(?![0-9])",
     re.IGNORECASE,
 )
 
@@ -24,10 +23,6 @@ class ExhibitReference:
     start: int
     end: int
     region: str
-    # Unlabeled page number ("pièce 12, p. 3"). Never pre-assigned to a
-    # page space: physical/printed/bundle resolution needs a confirmed
-    # unique mapping downstream, otherwise abstain.
-    page_hint: int | None = None
 
 
 def detect_exhibit_references(text: str, *, region: str) -> tuple[ExhibitReference, ...]:
@@ -37,7 +32,6 @@ def detect_exhibit_references(text: str, *, region: str) -> tuple[ExhibitReferen
     found: list[ExhibitReference] = []
     for match in _REFERENCE.finditer(text):
         number = match.group("number") + (match.group("suffix") or "").strip().lower()
-        page = match.group("page")
         found.append(
             ExhibitReference(
                 label=match.group("label").lower(),
@@ -46,7 +40,6 @@ def detect_exhibit_references(text: str, *, region: str) -> tuple[ExhibitReferen
                 start=match.start(),
                 end=match.end(),
                 region=region,
-                page_hint=int(page) if page is not None else None,
             )
         )
     return tuple(found)
