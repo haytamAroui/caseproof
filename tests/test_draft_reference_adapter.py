@@ -1,4 +1,4 @@
-"""Adapter: exhibit markers -> DraftReference with abstain-first page grounding."""
+"""Adapter: detected exhibit references -> DraftReference, abstain-first pages."""
 from apps.api.draft_reference_adapter import adapt_text
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 
@@ -53,8 +53,7 @@ def test_unique_confirmed_mapping_grounds_hint_to_physical_page() -> None:
 
 def test_ambiguous_page_space_abstains() -> None:
     adapted = adapt_text("Voir pièce 13, p. 3.", _register())
-    ref = adapted.references[0]
-    assert ref.pdf_page is None
+    assert adapted.references[0].pdf_page is None
     assert [a.reason for a in adapted.page_abstentions] == ["page_space_ambiguous"]
 
 
@@ -70,8 +69,7 @@ def test_unconfirmed_exhibit_abstains() -> None:
     assert [a.reason for a in adapted.page_abstentions] == ["exhibit_unconfirmed"]
 
 
-def test_article_markers_reported_out_of_scope() -> None:
-    text = "Selon l'article 15 de la loi du 20 février 1991, voir pièce 12."
-    adapted = adapt_text(text, _register())
-    assert len(adapted.references) == 1
-    assert len(adapted.out_of_scope_markers) == 1
+def test_bis_suffix_and_plural_normalized() -> None:
+    adapted = adapt_text("Selon les pièces 12 et la pièce 13bis du dossier.", _register())
+    labels = [r.exhibit_label for r in adapted.references]
+    assert labels == ["pièce 12", "pièce 13bis"]
