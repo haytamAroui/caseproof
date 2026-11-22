@@ -407,6 +407,77 @@ def test_no_stale_success_after_document_change(client: TestClient) -> None:
     assert client.get("/demo/api/export.json", headers=headers).status_code == 200
 
 
+def _import_source(
+    client: TestClient, session: str, content: bytes, params: dict[str, str] | None = None
+) -> TestResponse:
+    return client.post(
+        "/demo/api/source",
+        content=content,
+        params=params or {},
+        headers={
+            "x-demo-session": session,
+            "origin": "http://testserver",
+            "content-type": "application/octet-stream",
+        },
+    )
+
+
+IMPORT_PARAMS = {
+    "act": "loi du 20 février 1991",
+    "article": "15",
+    "alias": "loi du 20 février 1991",
+    "source_uri": "https://example.invalid/loi-1991-art15",
+    "filename": "loi-1991-art15.txt",
+}
+
+
+def test_source_import_and_exhibit_confirmation(client: TestClient) -> None:
+    """Free source import: declared provenance required, bytes hashed, exhibit
+    starts UNCONFIRMED (citations stay ambiguous), simulated reviewer
+    confirmation unblocks actual checking; every step invalidates prior runs."""
+    session = _session(client)
+    assert _post(client, "/demo/api/run", {}, session).status_code == 200
+
+    missing = _import_source(client, session, b"texte sans en-tetes")
+    assert missing.status_code == 422
+    assert missing.json()["error"] == "declared_keys_required"
+
+    unreadable = _import_source(client, session, b"\xff\xfe\x00\x01", IMPORT_PARAMS)
+    assert unreadable.status_code == 422
+    assert unreadable.json()["error"] == "not_text"
+
+    text = "Article 15. Disposition synthétique de test pour l'import de source."
+    imported = _import_source(client, session, text.encode(), IMPORT_PARAMS)
+    assert imported.status_code == 200
+    exhibit_id = imported.json()["exhibit_id"]
+    assert imported.json()["exhibit_confirmed"] is False
+    # L'import invalide le résultat précédent : export bloqué jusqu'au nouveau run.
+    assert client.get("/demo/api/export.json", headers={"x-demo-session": session}).status_code == 409
+
+    assert _import_source(client, session, text.encode(), IMPORT_PARAMS).status_code == 409
+
+    run = _post(client, "/demo/api/run", {}, session)
+    assert run.status_code == 200
+    citations = {c["reference_id"]: c["state"] for c in run.json()["findings"]["citations"]}
+    assert citations["cit-03"] == "reference_ambiguous"
+
+    unknown = _post(client, "/demo/api/exhibits/confirm", {"exhibit_id": "ex-inconnu"}, session)
+    assert unknown.status_code == 422
+
+    confirmed = _post(client, "/demo/api/exhibits/confirm", {"exhibit_id": exhibit_id}, session)
+    assert confirmed.status_code == 200
+    run = _post(client, "/demo/api/run", {}, session)
+    assert run.status_code == 200
+    citations = {c["reference_id"]: c["state"] for c in run.json()["findings"]["citations"]}
+    # La pièce est identifiée et confirmée ; il n'y a toujours aucune citation
+    # textuelle à comparer : l'état nomme exactement ce qui a été vérifié.
+    assert citations["cit-03"] == "reference_checked_no_quotation"
+
+    state = client.get("/demo/api/state").json()
+    assert any(e["exhibit_id"] == exhibit_id and e["confirmed"] for e in state["exhibits"])
+    assert any(s["imported"] for s in state["sources"])
+
+
 def test_fact_confirmation_reevaluates_rules(client: TestClient) -> None:
     """Simulated reviewer fact confirmation: deterministic rules re-evaluate
     live on the updated facts — a PASS rule degrades when its fact is

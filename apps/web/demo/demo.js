@@ -7,9 +7,9 @@ const state = { session: null, started: false, findings: null, rules: [] };
 const CITATION_LABELS = {
   exact_match: ["Citation exacte", "pass"],
   quote_not_found: ["Citation introuvable", "fail"],
-  reference_checked_no_quotation: ["Référence vérifiée, sans citation", "undetermined"],
+  reference_checked_no_quotation: ["Pièce identifiée — aucune citation textuelle à comparer", "undetermined"],
   reference_unresolved: ["Référence hors registre des pièces", "unverified"],
-  reference_ambiguous: ["Référence ambiguë", "unverified"],
+  reference_ambiguous: ["Pièce ambiguë ou non confirmée", "unverified"],
   representation_conflict: ["Conflit de représentation", "unverified"],
   ocr_unreliable: ["OCR non fiable", "unverified"],
   page_unmapped: ["Page non mappée", "unverified"],
@@ -141,10 +141,27 @@ function renderStatic(data) {
     <table><tr><th>Texte</th><th>Langue</th><th>Version déclarée</th><th>Source</th><th>Empreinte</th></tr>${corpusRows}</table>`;
   const sourceRows = data.sources.map((s) => `
     <tr><td>${esc(s.label)}</td><td>${esc(s.version_id)}</td>
-    <td>${s.synthetic ? "synthétique (créé pour la démo)" : "source publique réelle"}</td>
+    <td>${s.imported ? "importée — provenance déclarée, non vérifiée" : s.synthetic ? "synthétique (créé pour la démo)" : "source publique réelle"}</td>
     <td><code>${esc(s.sha256.slice(0, 12))}…</code></td></tr>`).join("");
+  const exhibitRows = (data.exhibits || []).map((e) => `
+    <tr><td>${esc(e.display_label)}</td>
+    <td>${e.confirmed ? "confirmée" : "NON confirmée — les références vers elle restent ambiguës"}</td>
+    <td>${!e.confirmed && e.imported ? `<button class="decision exhibit-confirm" data-exhibit="${esc(e.exhibit_id)}">Confirmer la pièce (simulé)</button>` : ""}</td></tr>`).join("");
   document.getElementById("sources").innerHTML =
-    `<table><tr><th>Pièce</th><th>Version</th><th>Origine</th><th>Empreinte</th></tr>${sourceRows}</table>`;
+    `<table><tr><th>Pièce</th><th>Version</th><th>Origine</th><th>Empreinte</th></tr>${sourceRows}</table>
+    <h3>Registre des pièces</h3>
+    <table><tr><th>Pièce</th><th>État</th><th></th></tr>${exhibitRows}</table>
+    <h3>Importer une source (texte .txt/.md ou .docx)</h3>
+    <p class="meta">La provenance est déclarée par vous, jamais vérifiée par l'outil ; la pièce importée reste non confirmée tant que la relecture (simulée) ne l'a pas confirmée.</p>
+    <p><input type="file" id="source-file" accept=".txt,.md,.docx"></p>
+    <p><input type="text" id="source-act" placeholder="Acte (ex. loi du 20 février 1991)" size="30">
+    <input type="text" id="source-article" placeholder="Article (ex. 15)" size="10">
+    <input type="text" id="source-alias" placeholder="Nom cité dans les conclusions" size="24"></p>
+    <p><input type="text" id="source-uri" placeholder="URL de la source déclarée" size="60">
+    <button id="source-import">Importer</button></p>
+    <p class="meta" id="source-status"></p>`;
+  document.querySelectorAll("button.exhibit-confirm").forEach((b) => b.addEventListener("click", onExhibitConfirm));
+  document.getElementById("source-import").addEventListener("click", onSourceImport);
   renderFacts(data.facts);
 }
 
@@ -157,6 +174,59 @@ function renderFacts(facts) {
     `<p class="meta">La confirmation est un acte de relecture simulé : les règles déterministes sont réévaluées réellement.</p>
     <table><tr><th>Fait</th><th>Valeur</th><th>État</th><th></th></tr>${factRows}</table>`;
   document.querySelectorAll("button.fact-toggle").forEach((b) => b.addEventListener("click", onFactToggle));
+}
+
+function invalidateFindings(message) {
+  state.started = false;
+  document.getElementById("findings").innerHTML = "";
+  document.getElementById("rules").innerHTML = "";
+  document.getElementById("correction").innerHTML = "";
+  document.getElementById("export-json").disabled = true;
+  document.getElementById("export-html").disabled = true;
+  document.getElementById("run-status").textContent = message;
+}
+
+async function refreshState() {
+  const data = await api("/demo/api/state");
+  renderStatic(data);
+}
+
+async function onSourceImport() {
+  clearError();
+  const file = document.getElementById("source-file").files[0];
+  const fields = {
+    act: document.getElementById("source-act").value.trim(),
+    article: document.getElementById("source-article").value.trim(),
+    alias: document.getElementById("source-alias").value.trim(),
+    source_uri: document.getElementById("source-uri").value.trim(),
+  };
+  const status = document.getElementById("source-status");
+  if (!file || !fields.act || !fields.article || !fields.alias || !fields.source_uri) {
+    showError("Fichier et provenance déclarée (acte, article, nom cité, URL) requis.");
+    return;
+  }
+  status.textContent = "Import en cours…";
+  try {
+    const bytes = await file.arrayBuffer();
+    const params = new URLSearchParams({ ...fields, filename: file.name });
+    const result = await post(`/demo/api/source?${params}`, bytes, { "content-type": "application/octet-stream" });
+    status.textContent = result.note;
+    invalidateFindings("Nouvelle source importée : relancez les vérifications.");
+    await refreshState();
+    document.getElementById("source-status").textContent = result.note;
+  } catch (err) {
+    status.textContent = "";
+    showError(err.message);
+  }
+}
+
+async function onExhibitConfirm(event) {
+  clearError();
+  try {
+    const result = await post("/demo/api/exhibits/confirm", { exhibit_id: event.target.dataset.exhibit });
+    invalidateFindings(result.note);
+    await refreshState();
+  } catch (err) { showError(err.message); }
 }
 
 async function onFactToggle(event) {

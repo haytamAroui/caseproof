@@ -31,7 +31,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.litigation.brief_checks import DraftReference, VersionedBrief
-from application.litigation.corpus import load_corpus
+from application.litigation.corpus import ArticleRecord, load_corpus
 from application.litigation.lawyer_decisions import (
     Disposition,
     LawyerDecisionError,
@@ -53,6 +53,7 @@ from application.litigation.unified_review import (
     ReviewDisposition,
     VerificationError,
 )
+from domains.disputes.exhibits import ExhibitEntry, ExhibitPage
 from infrastructure.parsers.citation_markers import CitationExtraction, extract_citations
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from scripts.demo_belgian_dossier import (
@@ -60,6 +61,7 @@ from scripts.demo_belgian_dossier import (
     SIMULATED_ACTOR,
     DemoDossierError,
     M2Journey,
+    M2Source,
     _load_decision_specs,
     _load_facts,
     _load_m2,
@@ -89,6 +91,11 @@ class RuleDecisionInput(BaseModel):
     disposition: str = Field(min_length=1, max_length=40)
     rationale: str = Field(min_length=1, max_length=600)
     scope: str = Field(min_length=1, max_length=400)
+
+
+class ExhibitConfirmInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    exhibit_id: str = Field(min_length=1, max_length=128)
 
 
 class FactInput(BaseModel):
@@ -150,7 +157,36 @@ class DemoState:
         self.decided_at, _ = _load_decision_specs(dossier)
         default_name = self.meta.brief
         self.document = DocumentState(default_name, (dossier / default_name).read_bytes())
+        self.register = self.m2.register
+        self.extra_sources: list[Any] = []
+        self.extra_articles: list[ArticleRecord] = []
+        self.imported_exhibit_ids: set[str] = set()
         self.reset_run()
+
+    def current_m2(self) -> Any:
+        if not self.extra_sources and self.register is self.m2.register:
+            return self.m2
+        return replace(
+            self.m2,
+            sources=self.m2.sources + tuple(self.extra_sources),
+            register=self.register,
+        )
+
+    def current_corpus(self) -> Any:
+        if not self.extra_articles:
+            return self.corpus
+        return replace(self.corpus, records=self.corpus.records + tuple(self.extra_articles))
+
+    def exhibits_payload(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "exhibit_id": entry.exhibit_id,
+                "display_label": entry.display_label,
+                "confirmed": entry.confirmed,
+                "imported": entry.exhibit_id in self.imported_exhibit_ids,
+            }
+            for entry in self.register.entries
+        ]
 
     def reset_run(self) -> None:
         self.active_text = self.document.text if self.document.body_read else ""
@@ -175,7 +211,7 @@ class DemoState:
         )
 
     def _resolve_exhibit_label(self, target: str) -> str:
-        return _resolve_exhibit_label(self.m2.register, target)
+        return _resolve_exhibit_label(self.register, target)
 
     def correctable_passages(self) -> list[dict[str, Any]]:
         """Every extracted quotation is a correctable passage of the brief."""
@@ -455,7 +491,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
 
     @app.get("/demo/api/state")
     def overview() -> dict[str, Any]:
-        corpus = state.corpus
+        corpus = state.current_corpus()
         return {
             "session": session,
             "runner": DEMO_RUNNER_VERSION,
@@ -488,10 +524,23 @@ def create_demo_app(dossier: Path) -> FastAPI:
                     "version_id": s.version_id,
                     "label": s.label,
                     "synthetic": s.synthetic,
+                    "imported": False,
                     "sha256": hashlib.sha256(s.text.encode()).hexdigest(),
                 }
                 for s in state.m2.sources
+            ]
+            + [
+                {
+                    "source_id": s.source_id,
+                    "version_id": s.version_id,
+                    "label": s.label,
+                    "synthetic": s.synthetic,
+                    "imported": True,
+                    "sha256": hashlib.sha256(s.text.encode()).hexdigest(),
+                }
+                for s in state.extra_sources
             ],
+            "exhibits": state.exhibits_payload(),
             "facts": [
                 {"name": f.name, "value": f.value, "confirmed": f.confirmed} for f in state.facts.values()
             ],
@@ -559,11 +608,12 @@ def create_demo_app(dossier: Path) -> FastAPI:
                 status_code=422,
             )
         representation = state.representation(state.active_text, state.active_version)
-        run = _run_check(state.m2, representation)
+        run = _run_check(state.current_m2(), representation)
         state.run = run
         state.packet = ReviewPacket(run.snapshot_hash, 0, ())
         state.rule_results = [
-            evaluate_rule(rule, state.facts, state.corpus.article_keys) for _n, rule in state.rules
+            evaluate_rule(rule, state.facts, state.current_corpus().article_keys)
+            for _n, rule in state.rules
         ]
         state.started = True
         state.run_document_sha256 = state.document.sha256
@@ -574,6 +624,148 @@ def create_demo_app(dossier: Path) -> FastAPI:
             "rule_results": [_rule_payload(r, None, None) for r in state.rule_results],
             "processed": [list(p) for p in run.processed],
             "incomplete": [list(p) for p in run.incomplete],
+        }
+
+    @app.post("/demo/api/source")
+    async def upload_source(request: Request) -> Any:
+        """Import a reference source (legal text) into the session: the bytes
+        are hashed, a .docx is actually read by the fail-closed product
+        reader, and the declared act/article/language/version keys extend the
+        corpus. Provenance is DECLARED by the uploader, never verified; the
+        exhibit starts unconfirmed and citations to it stay ambiguous until
+        the (simulated) reviewer confirms the mapping."""
+        if len(state.extra_sources) >= 8:
+            return JSONResponse({"error": "too_many_sources"}, status_code=422)
+        payload = await request.body()
+        if not payload or len(payload) > 2_000_000:
+            return JSONResponse({"error": "empty_or_too_large"}, status_code=422)
+
+        def param(name: str, limit: int = 300) -> str | None:
+            value = request.query_params.get(name, "").strip()
+            return value[:limit] if value else None
+
+        act = param("act", 200)
+        article = param("article", 60)
+        alias = param("alias", 160)
+        source_uri = param("source_uri", 400)
+        if not (act and article and alias and source_uri):
+            return JSONResponse(
+                {
+                    "error": "declared_keys_required",
+                    "message": (
+                        "Provenance déclarée requise en paramètres : act, article, "
+                        "alias, source_uri."
+                    ),
+                },
+                status_code=422,
+            )
+        language = param("language", 16) or "fr"
+        version = param("version", 120) or "import-session"
+        name = param("filename", 128) or "source-importee"
+
+        if payload.startswith(b"PK\x03\x04"):
+            extraction = extract_docx_text_regions(payload)
+            if not any(region.part == "word/document.xml" for region in extraction.regions):
+                return JSONResponse(
+                    {
+                        "error": "source_unreadable",
+                        "message": "Le lecteur Word refuse le corps de cette source (fail-closed).",
+                    },
+                    status_code=422,
+                )
+            text = "\n".join(region.text for region in extraction.regions)
+        else:
+            try:
+                text = payload.decode("utf-8")
+            except UnicodeDecodeError:
+                return JSONResponse(
+                    {"error": "not_text", "message": "Source illisible : texte UTF-8 ou .docx requis."},
+                    status_code=422,
+                )
+        if not text.strip() or len(text) > 500_000:
+            return JSONResponse({"error": "source_text_out_of_bounds"}, status_code=422)
+
+        digest = hashlib.sha256(payload).hexdigest()
+        source_id = f"import-{digest[:12]}"
+        if any(s.source_id == source_id for s in state.extra_sources):
+            return JSONResponse({"error": "duplicate_source"}, status_code=409)
+
+        label = f"{act} art. {article} — importé ({name}), provenance déclarée non vérifiée"
+        state.extra_sources.append(
+            M2Source(source_id, f"doc-{source_id}", version, text, label[:200], False)
+        )
+        state.extra_articles.append(
+            ArticleRecord(
+                act,
+                article,
+                language,
+                version,
+                source_uri,
+                "import-session",
+                False,
+                digest,
+                text,
+                hashlib.sha256(text.encode()).hexdigest(),
+            )
+        )
+        exhibit_id = f"ex-{source_id}"
+        state.register = state.register.revise(
+            expected_revision=state.register.revision,
+            entries=state.register.entries
+            + (
+                ExhibitEntry(
+                    exhibit_id,
+                    f"{act} art. {article} (importé)",
+                    (ExhibitPage(source_id, version, 1),),
+                    (alias,),
+                    False,
+                    True,
+                ),
+            ),
+        )
+        state.imported_exhibit_ids.add(exhibit_id)
+        state.reset_run()
+        return {
+            "source_id": source_id,
+            "exhibit_id": exhibit_id,
+            "sha256": digest,
+            "exhibit_confirmed": False,
+            "exhibits": state.exhibits_payload(),
+            "note": (
+                "Source importée (provenance déclarée, non vérifiée) ; pièce NON "
+                "confirmée : les références vers elle restent ambiguës tant que la "
+                "relecture (simulée) ne l'a pas confirmée. Relancez les vérifications."
+            ),
+        }
+
+    @app.post("/demo/api/exhibits/confirm")
+    def confirm_exhibit(payload: ExhibitConfirmInput) -> Any:
+        """Simulated reviewer act (labelled as such): confirm an imported
+        exhibit's mapping so citations resolving to it can actually be checked."""
+        index = next(
+            (
+                i
+                for i, entry in enumerate(state.register.entries)
+                if entry.exhibit_id == payload.exhibit_id
+                and entry.exhibit_id in state.imported_exhibit_ids
+            ),
+            None,
+        )
+        if index is None:
+            return JSONResponse({"error": "unknown_imported_exhibit"}, status_code=422)
+        if state.register.entries[index].confirmed:
+            return JSONResponse({"error": "already_confirmed"}, status_code=409)
+        entries = list(state.register.entries)
+        entries[index] = replace(entries[index], confirmed=True)
+        state.register = state.register.revise(
+            expected_revision=state.register.revision, entries=tuple(entries)
+        )
+        state.reset_run()
+        return {
+            "exhibit_id": payload.exhibit_id,
+            "confirmed": True,
+            "exhibits": state.exhibits_payload(),
+            "note": "Pièce confirmée (acte de relecture simulé) : relancez les vérifications.",
         }
 
     def _require_run() -> JSONResponse | None:
@@ -599,7 +791,8 @@ def create_demo_app(dossier: Path) -> FastAPI:
         state.facts[payload.name] = ConfirmedFact(fact.name, fact.value, payload.confirmed)
         if state.started and state.run is not None and state.run_document_sha256 == state.document.sha256:
             state.rule_results = [
-                evaluate_rule(rule, state.facts, state.corpus.article_keys) for _n, rule in state.rules
+                evaluate_rule(rule, state.facts, state.current_corpus().article_keys)
+                for _n, rule in state.rules
             ]
         validity_by_rule = {}
         for rule_id, decision in state.lawyer_decisions.items():
@@ -721,7 +914,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
         state.refresh_citations()
         before_citations = {o.reference_id: o.state.value for o in state.run.citation_observations}
         representation2 = state.representation(state.active_text, state.active_version)
-        state.run = _run_check(state.m2, representation2)
+        state.run = _run_check(state.current_m2(), representation2)
         state.packet = ReviewPacket(state.run.snapshot_hash, 0, ())
         after_citations = {o.reference_id: o.state.value for o in state.run.citation_observations}
         flips = {
@@ -781,6 +974,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
             "limits": [
                 "Démonstration : faits, pièces, règles et relecture simulés, non approuvés par un avocat ; extraction des citations déterministe depuis le texte lu, à valider.",
                 "Pas de conseil juridique, pas de pilote (tâche 7), pas de couverture exhaustive du droit belge.",
+                "Sources importées en session : provenance déclarée par l'utilisateur, non vérifiée ; confirmation des pièces simulée.",
                 "La conséquence d'une dérogation (export / prêt avec exceptions) reste une décision ouverte (tâche 2).",
                 "Aucune donnée persistée ni envoyée ; session locale éphémère.",
             ],
@@ -810,7 +1004,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
         html_report = render_html(
             {
                 "meta": state.meta,
-                "corpus": state.corpus,
+                "corpus": state.current_corpus(),
                 "coverage": state.document.coverage,
                 "reader": {
                     "body_read": state.document.body_read,
@@ -824,7 +1018,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
                 "decisions": list(state.lawyer_decisions.values()),
                 "validity": validity_map,
                 "m2": replace(
-                    state.m2,
+                    state.current_m2(),
                     references=state.active_references(),
                     passages=tuple(state.correctable_passages()),
                 ),
