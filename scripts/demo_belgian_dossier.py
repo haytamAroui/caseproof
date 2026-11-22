@@ -79,6 +79,7 @@ from application.litigation.unified_review import (
     run_unified_check,
 )
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
+from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
 from scripts.measure_docx_coverage import measure_file
 
 DEMO_RUNNER_VERSION = "caseproof-demo-runner-v2"
@@ -127,7 +128,9 @@ def _load_meta(directory: Path) -> DossierMeta:
     return DossierMeta(
         title=_bounded(data.get("title"), "meta.title"),
         brief=_bounded(data.get("brief"), "meta.brief", 128),
-        audience_note=(lambda v: "" if v == "" else _bounded(v, "meta.audience_note", 600))(data.get("audience_note", "")),
+        audience_note=(lambda v: "" if v == "" else _bounded(v, "meta.audience_note", 600))(
+            data.get("audience_note", "")
+        ),
     )
 
 
@@ -225,7 +228,9 @@ def _load_m2(directory: Path) -> M2Dossier:
         raise DemoDossierError("m2.json must be an object")
     case_id = _bounded(data.get("case_id"), "m2.case_id", 128)
     brief_version_id = _bounded(data.get("brief_version_id"), "m2.brief_version_id", 128)
-    brief_label = (lambda v: "" if v == "" else _bounded(v, "m2.brief_label", 200))(data.get("brief_label", ""))
+    brief_label = (lambda v: "" if v == "" else _bounded(v, "m2.brief_label", 200))(
+        data.get("brief_label", "")
+    )
     brief_text = data.get("brief_text")
     if not isinstance(brief_text, str) or not brief_text.strip() or len(brief_text) > MAX_BRIEF:
         raise DemoDossierError(f"m2.brief_text must be 1..{MAX_BRIEF} characters")
@@ -237,12 +242,14 @@ def _load_m2(directory: Path) -> M2Dossier:
     for index, entry in enumerate(raw_refs):
         try:
             quote = entry.get("exact_quote")
-            references.append(DraftReference(
-                _bounded(entry.get("reference_id"), f"reference #{index} id", 128),
-                _bounded(entry.get("exhibit_label"), f"reference #{index} label", 160),
-                quote,
-                entry.get("pdf_page"),
-            ))
+            references.append(
+                DraftReference(
+                    _bounded(entry.get("reference_id"), f"reference #{index} id", 128),
+                    _bounded(entry.get("exhibit_label"), f"reference #{index} label", 160),
+                    quote,
+                    entry.get("pdf_page"),
+                )
+            )
         except Exception as exc:
             raise DemoDossierError(f"reference #{index}: {exc}") from exc
 
@@ -257,8 +264,12 @@ def _load_m2(directory: Path) -> M2Dossier:
         role = entry.get("role")
         language = entry.get("language", "fr")
         source_language = entry.get("source_language", "fr")
-        if not (isinstance(kind, str) and isinstance(role, str)
-                and isinstance(language, str) and isinstance(source_language, str)):
+        if not (
+            isinstance(kind, str)
+            and isinstance(role, str)
+            and isinstance(language, str)
+            and isinstance(source_language, str)
+        ):
             raise DemoDossierError(f"claim #{index}: kind/role/languages must be strings")
         try:
             FactKind(kind)
@@ -267,15 +278,17 @@ def _load_m2(directory: Path) -> M2Dossier:
             raise DemoDossierError(f"claim #{index}: unknown kind/role") from exc
         text = _bounded(entry.get("text"), f"claim #{index} text", 4000)
         _locate(brief_text, text, f"claim #{index} text")
-        claim_specs.append({
-            "claim_id": _bounded(entry.get("claim_id"), f"claim #{index} id", 160),
-            "reference_id": _bounded(entry.get("reference_id"), f"claim #{index} reference_id", 160),
-            "text": text,
-            "kind": kind,
-            "role": role,
-            "language": language,
-            "source_language": source_language,
-        })
+        claim_specs.append(
+            {
+                "claim_id": _bounded(entry.get("claim_id"), f"claim #{index} id", 160),
+                "reference_id": _bounded(entry.get("reference_id"), f"claim #{index} reference_id", 160),
+                "text": text,
+                "kind": kind,
+                "role": role,
+                "language": language,
+                "source_language": source_language,
+            }
+        )
 
     raw_passages = data.get("passages", [])
     if not isinstance(raw_passages, list) or len(raw_passages) > 32:
@@ -286,11 +299,15 @@ def _load_m2(directory: Path) -> M2Dossier:
             raise DemoDossierError(f"passage #{index} must be an object")
         text = _bounded(entry.get("text"), f"passage #{index} text", 4000)
         _locate(brief_text, text, f"passage #{index} text")
-        passages.append({
-            "passage_id": _bounded(entry.get("passage_id"), f"passage #{index} id", 160),
-            "observation_id": _bounded(entry.get("observation_id"), f"passage #{index} observation_id", 200),
-            "text": text,
-        })
+        passages.append(
+            {
+                "passage_id": _bounded(entry.get("passage_id"), f"passage #{index} id", 160),
+                "observation_id": _bounded(
+                    entry.get("observation_id"), f"passage #{index} observation_id", 200
+                ),
+                "text": text,
+            }
+        )
 
     raw_sources = data.get("sources")
     if not isinstance(raw_sources, list) or not 1 <= len(raw_sources) <= MAX_SOURCES:
@@ -300,14 +317,16 @@ def _load_m2(directory: Path) -> M2Dossier:
         text = entry.get("text")
         if not isinstance(text, str) or not text.strip() or len(text) > MAX_SOURCE:
             raise DemoDossierError(f"source #{index} text must be 1..{MAX_SOURCE} characters")
-        sources.append(M2Source(
-            _bounded(entry.get("source_id"), f"source #{index} id", 128),
-            _bounded(entry.get("document_id"), f"source #{index} document_id", 128),
-            _bounded(entry.get("version_id"), f"source #{index} version_id", 128),
-            text,
-            _bounded(entry.get("label", ""), f"source #{index} label", 200),
-            bool(entry.get("synthetic", True)),
-        ))
+        sources.append(
+            M2Source(
+                _bounded(entry.get("source_id"), f"source #{index} id", 128),
+                _bounded(entry.get("document_id"), f"source #{index} document_id", 128),
+                _bounded(entry.get("version_id"), f"source #{index} version_id", 128),
+                text,
+                _bounded(entry.get("label", ""), f"source #{index} label", 200),
+                bool(entry.get("synthetic", True)),
+            )
+        )
 
     raw_exhibits = data.get("exhibits")
     if not isinstance(raw_exhibits, list) or not 1 <= len(raw_exhibits) <= 32:
@@ -321,13 +340,15 @@ def _load_m2(directory: Path) -> M2Dossier:
                 if (page.get("source_id"), page.get("version_id")) not in source_keys:
                     raise DemoDossierError(f"exhibit #{index} maps an unknown source")
                 pages.append(ExhibitPage(page["source_id"], page["version_id"], page.get("pdf_page")))
-            entries.append(ExhibitEntry(
-                _bounded(entry.get("exhibit_id"), f"exhibit #{index} id", 128),
-                _bounded(entry.get("display_label"), f"exhibit #{index} label", 160),
-                tuple(pages),
-                tuple(entry.get("aliases", [])),
-                bool(entry.get("confirmed", False)),
-            ))
+            entries.append(
+                ExhibitEntry(
+                    _bounded(entry.get("exhibit_id"), f"exhibit #{index} id", 128),
+                    _bounded(entry.get("display_label"), f"exhibit #{index} label", 160),
+                    tuple(pages),
+                    tuple(entry.get("aliases", [])),
+                    bool(entry.get("confirmed", False)),
+                )
+            )
         except DemoDossierError:
             raise
         except Exception as exc:
@@ -346,8 +367,16 @@ def _load_m2(directory: Path) -> M2Dossier:
         raise DemoDossierError("m2.correction must be an object")
 
     return M2Dossier(
-        case_id, brief_version_id, brief_text, brief_label, tuple(references),
-        tuple(claim_specs), tuple(passages), register, tuple(sources), tuple(review_decisions),
+        case_id,
+        brief_version_id,
+        brief_text,
+        brief_label,
+        tuple(references),
+        tuple(claim_specs),
+        tuple(passages),
+        register,
+        tuple(sources),
+        tuple(review_decisions),
         correction,
     )
 
@@ -366,17 +395,23 @@ def _references_with_quote_updates(
         obs_id = f"citation:{reference.reference_id}"
         passage = next((p for p in m2.passages if p["observation_id"] == obs_id), None)
         if passage is not None and passage["passage_id"] in quote_updates:
-            updated.append(DraftReference(
-                reference.reference_id, reference.exhibit_label,
-                quote_updates[passage["passage_id"]], reference.pdf_page,
-            ))
+            updated.append(
+                DraftReference(
+                    reference.reference_id,
+                    reference.exhibit_label,
+                    quote_updates[passage["passage_id"]],
+                    reference.pdf_page,
+                )
+            )
         else:
             updated.append(reference)
     return tuple(updated)
 
 
 def _build_representation(
-    m2: M2Dossier, text: str, version_id: str,
+    m2: M2Dossier,
+    text: str,
+    version_id: str,
     claim_overrides: dict[str, str] | None = None,
 ) -> BriefRepresentation:
     brief = VersionedBrief(m2.case_id, version_id, _sha(f"original:{version_id}"), m2.references)
@@ -384,11 +419,19 @@ def _build_representation(
     for spec in m2.claim_specs:
         claim_text = (claim_overrides or {}).get(spec["claim_id"], spec["text"])
         start, end = _locate(text, claim_text, f"claim {spec['claim_id']}")
-        claims.append(FactAssertion(
-            spec["claim_id"], spec["reference_id"], claim_text, start, end,
-            FactKind(spec["kind"]), FactRole(spec["role"]),
-            spec["language"], spec["source_language"],
-        ))
+        claims.append(
+            FactAssertion(
+                spec["claim_id"],
+                spec["reference_id"],
+                claim_text,
+                start,
+                end,
+                FactKind(spec["kind"]),
+                FactRole(spec["role"]),
+                spec["language"],
+                spec["source_language"],
+            )
+        )
     return BriefRepresentation(brief, text, _sha(text), "caseproof-demo-runner-v2", tuple(claims))
 
 
@@ -396,9 +439,16 @@ def _previews(m2: M2Dossier) -> tuple[EvidencePreview, ...]:
     previews: list[EvidencePreview] = []
     for source in m2.sources:
         row = EvidenceRow(
-            source.source_id, source.document_id, source.version_id, _sha(source.text),
-            "application/pdf", "ready", "caseproof-demo-source-v1", f"repr-{source.source_id}",
-            (), (),
+            source.source_id,
+            source.document_id,
+            source.version_id,
+            _sha(source.text),
+            "application/pdf",
+            "ready",
+            "caseproof-demo-source-v1",
+            f"repr-{source.source_id}",
+            (),
+            (),
         )
         previews.append(EvidencePreview(row, source.text, ((0, len(source.text), "pdf-page-1", 0),)))
     return tuple(previews)
@@ -446,9 +496,13 @@ def _run_m2_journey(m2: M2Dossier) -> M2Journey:
         except ValueError as exc:
             raise DemoDossierError(f"review decision #{index}: unknown disposition") from exc
         packet = revise_review(
-            run=run1, packet=packet, expected_revision=packet.revision,
+            run=run1,
+            packet=packet,
+            expected_revision=packet.revision,
             decision=ObservationReview(
-                spec["observation_id"], SIMULATED_ACTOR, disposition,
+                spec["observation_id"],
+                SIMULATED_ACTOR,
+                disposition,
                 _bounded(spec.get("rationale"), f"review decision #{index} rationale", 2000),
             ),
         )
@@ -484,10 +538,16 @@ def _run_m2_journey(m2: M2Dossier) -> M2Journey:
         corrected_claim_id = claim_id
         corrected_text = correction_preview.proposed_text
         representation2 = BriefRepresentation(
-            VersionedBrief(m2.case_id, m2.brief_version_id + "-corrige",
-                           _sha("original:" + m2.brief_version_id + "-corrige"),
-                           _references_with_quote_updates(m2, {passage_spec["passage_id"]: after})),
-            corrected_text, _sha(corrected_text), "caseproof-demo-runner-v2", (),
+            VersionedBrief(
+                m2.case_id,
+                m2.brief_version_id + "-corrige",
+                _sha("original:" + m2.brief_version_id + "-corrige"),
+                _references_with_quote_updates(m2, {passage_spec["passage_id"]: after}),
+            ),
+            corrected_text,
+            _sha(corrected_text),
+            "caseproof-demo-runner-v2",
+            (),
         )
         run2 = _run_check(m2, representation2)
 
@@ -507,6 +567,13 @@ def _evaluate(directory: Path) -> dict[str, Any]:
     meta = _load_meta(directory)
     corpus_report = load_corpus(directory / "corpus")
     coverage = measure_file(directory / meta.brief)
+    extraction = extract_docx_text_regions((directory / meta.brief).read_bytes())
+    reader_text = "\n".join(region.text for region in extraction.regions)
+    reader = {
+        "body_read": any(region.part == "word/document.xml" for region in extraction.regions),
+        "unscanned_parts": list(extraction.unscanned_parts),
+        "coverage_complete": extraction.coverage_complete,
+    }
     facts = _load_facts(directory)
     rules = _load_rules(directory)
     results = [evaluate_rule(rule, facts, corpus_report.article_keys) for _name, rule in rules]
@@ -540,13 +607,17 @@ def _evaluate(directory: Path) -> dict[str, Any]:
             )
         except Exception as exc:
             raise DemoDossierError(f"decision #{index}: {exc}") from exc
-    validity = {decision.decision_id: validate_decision(decision, by_rule[decision.rule_id]) for decision in decisions}
+    validity = {
+        decision.decision_id: validate_decision(decision, by_rule[decision.rule_id]) for decision in decisions
+    }
     m2 = _load_m2(directory)
+    reader["text_matches_brief"] = reader["body_read"] and reader_text == m2.brief_text
     journey = _run_m2_journey(m2)
     return {
         "meta": meta,
         "corpus": corpus_report,
         "coverage": coverage,
+        "reader": reader,
         "facts": facts,
         "results": results,
         "decisions": decisions,
@@ -616,8 +687,11 @@ def _fact_obs_card(obs: FactObservation, corrected: bool) -> str:
             f"<strong>Source :</strong> <code>{_esc(obs.source_token)}</code></p>"
         )
     if obs.source_locator:
-        rows.append(f"<p><strong>Ancre source :</strong> {_esc(obs.source_locator)}"
-                    + (f" page {obs.source_pdf_page}" if obs.source_pdf_page else "") + "</p>")
+        rows.append(
+            f"<p><strong>Ancre source :</strong> {_esc(obs.source_locator)}"
+            + (f" page {obs.source_pdf_page}" if obs.source_pdf_page else "")
+            + "</p>"
+        )
     return (
         '<div class="card">'
         f"<h3>{_chip(label, css)} fait <code>{_esc(obs.claim_id)}</code>"
@@ -636,8 +710,12 @@ def _citation_card(obs: Any, corrected: bool) -> str:
         f"<h3>{_chip(label, css)} référence <code>{_esc(obs.reference_id)}</code>"
         f"{' — après correction' if corrected else ''}</h3>"
         f"<p>{_esc(obs.scope_note)}</p>"
-        + (f"<p><strong>Source :</strong> {_esc(obs.source_id)} · sha256 "
-           f"<code>{_esc((obs.source_sha256 or '')[:12])}…</code></p>" if obs.source_id else "")
+        + (
+            f"<p><strong>Source :</strong> {_esc(obs.source_id)} · sha256 "
+            f"<code>{_esc((obs.source_sha256 or '')[:12])}…</code></p>"
+            if obs.source_id
+            else ""
+        )
         + "</div>"
     )
 
@@ -658,20 +736,23 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
     for result in results:
         counts[result.status] += 1
 
-    article_rows = "\n".join(
-        "<tr>"
-        f"<td>{_esc(record.act)} art. {_esc(record.article)}</td>"
-        f"<td>{_esc(record.language)}</td>"
-        f"<td>{_esc(record.version)}</td>"
-        f'<td><a href="{_esc(record.source_uri)}">{_esc(record.source_uri)}</a></td>'
-        f"<td><code>{_esc(record.original_sha256[:12])}…</code></td>"
-        "</tr>"
-        for record in corpus.records
-    ) or '<tr><td colspan="5">Aucun article ingéré.</td></tr>'
+    article_rows = (
+        "\n".join(
+            "<tr>"
+            f"<td>{_esc(record.act)} art. {_esc(record.article)}</td>"
+            f"<td>{_esc(record.language)}</td>"
+            f"<td>{_esc(record.version)}</td>"
+            f'<td><a href="{_esc(record.source_uri)}">{_esc(record.source_uri)}</a></td>'
+            f"<td><code>{_esc(record.original_sha256[:12])}…</code></td>"
+            "</tr>"
+            for record in corpus.records
+        )
+        or '<tr><td colspan="5">Aucun article ingéré.</td></tr>'
+    )
 
     fact_rows = "\n".join(
         f"<tr><td><code>{_esc(fact.name)}</code></td><td>{_esc(fact.value)}</td>"
-        f'<td>{"confirmé" if fact.confirmed else "non confirmé"}</td></tr>'
+        f"<td>{'confirmé' if fact.confirmed else 'non confirmé'}</td></tr>"
         for fact in facts.values()
     )
 
@@ -692,8 +773,13 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
         precond = ""
         if result.preconditions:
             items = "".join(
-                "<li>" + _esc(p.name) + " (" + ("satisfaite" if p.met else "non satisfaite") + ") : "
-                + _esc(p.detail) + "</li>"
+                "<li>"
+                + _esc(p.name)
+                + " ("
+                + ("satisfaite" if p.met else "non satisfaite")
+                + ") : "
+                + _esc(p.detail)
+                + "</li>"
                 for p in result.preconditions
             )
             precond = f"<p><strong>Préconditions :</strong></p><ul>{items}</ul>"
@@ -718,21 +804,40 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
         "STRUCTURED_CONTENT": "contenu structuré",
         "UNKNOWN_WORD_PART": "partie Word inconnue",
     }
+    reader = run["reader"]
     omitted = [
         "<li>"
         + _esc(_REGION_KIND_LABELS.get(entry["kind"], entry["kind"]))
         + f" — {_esc(entry['part'])} : <strong>{_esc(entry['status'])}</strong> ({_esc(entry['reason'])})</li>"
         for entry in coverage["regions"]
-        if entry["status"] != "READ"
+        if entry["status"] != "READ" and not (reader["body_read"] and entry["kind"] == "MAIN_BODY")
     ]
-    omitted_html = (
-        "<p><strong>Le lecteur Word du produit ne lit PAS ce document tel quel :</strong></p>"
-        f"<ul>{''.join(omitted)}</ul>"
-        "<p>Le corps est refusé tant que les révisions ne sont pas figées (comportement de « fail-closed »). "
-        "Le texte vérifié dans cette démonstration est donc une extraction de démonstration "
-        "(simulée, sans les annotations de test), pas la sortie du lecteur produit.</p>"
-        if omitted else "<p>Aucune région omise.</p>"
-    )
+    if reader["body_read"]:
+        body_html = (
+            "<p><strong>Le corps du document EST lu par le lecteur Word du produit.</strong></p>"
+            + (
+                "<p>Le texte vérifié dans cette démonstration est exactement la sortie du lecteur "
+                "produit (comparaison réelle, caractère par caractère).</p>"
+                if reader["text_matches_brief"]
+                else "<p><strong>Attention :</strong> le texte vérifié (extraction de démonstration) "
+                "diffère de la sortie du lecteur produit — voir l'écart mesuré.</p>"
+            )
+            + "<p>Parties annexes non textuelles non traitées (styles, paramètres, thème), "
+            "sans incidence sur le corps lu :</p>"
+            f"<ul>{''.join(omitted)}</ul>"
+            if omitted
+            else "<p><strong>Le corps du document EST lu par le lecteur Word du produit</strong> "
+            "et aucune région n'est omise.</p>"
+        )
+    else:
+        body_html = (
+            "<p><strong>Le lecteur Word du produit ne lit PAS ce document tel quel :</strong></p>"
+            f"<ul>{''.join(omitted)}</ul>"
+            "<p>Le corps est refusé tant que les révisions ne sont pas figées (comportement de « fail-closed »). "
+            "Le texte vérifié dans cette démonstration est donc une extraction de démonstration "
+            "(simulée, sans les annotations de test), pas la sortie du lecteur produit.</p>"
+        )
+    omitted_html = body_html
 
     source_rows = "\n".join(
         "<tr>"
@@ -756,8 +861,10 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
         )
     review_html = (
         "<table><tr><th>Observation</th><th>Disposition (relecture simulée)</th><th>Motif</th></tr>"
-        + "\n".join(review_rows) + "</table>"
-        if review_rows else "<p>Aucune disposition enregistrée.</p>"
+        + "\n".join(review_rows)
+        + "</table>"
+        if review_rows
+        else "<p>Aucune disposition enregistrée.</p>"
     )
 
     correction_html = "<p>Aucune correction dans cette démonstration.</p>"
@@ -832,7 +939,7 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
 
   <h2>1. Le document analysé</h2>
   <div class="card">
-    <p><strong>Fichier :</strong> {_esc(meta.brief)} — <em>{_esc(m2.brief_label or 'document de démonstration (synthétique)')}</em></p>
+    <p><strong>Fichier :</strong> {_esc(meta.brief)} — <em>{_esc(m2.brief_label or "document de démonstration (synthétique)")}</em></p>
     <p><strong>Couverture du lecteur Word</strong> (mesure réelle, tâche 6 ; sha256 <code>{_esc(coverage["sha256"][:12])}…</code>) :</p>
     {omitted_html}
   </div>
@@ -860,8 +967,8 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
 
   <h2>5. La relecture (simulée)</h2>
   {review_html}
-  <p class="meta">Décisions : {summary.get('confirmed_candidate', 0)} confirmée(s),
-     {summary.get('dismissed', 0)} écartée(s), {summary.get('needs_information', 0)} en attente d'information.</p>
+  <p class="meta">Décisions : {summary.get("confirmed_candidate", 0)} confirmée(s),
+     {summary.get("dismissed", 0)} écartée(s), {summary.get("needs_information", 0)} en attente d'information.</p>
 
   <h2>6. Correction et revérification</h2>
   {correction_html}
@@ -878,7 +985,7 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
     <span>{_status_chip(RuleStatus.UNDETERMINED)} {counts[RuleStatus.UNDETERMINED]}</span>
     <span>{_status_chip(RuleStatus.UNVERIFIED)} {counts[RuleStatus.UNVERIFIED]}</span>
   </p>
-  {''.join(result_cards)}
+  {"".join(result_cards)}
 
   <h2>8. Ce qui reste à valider</h2>
   <ul>
@@ -922,7 +1029,9 @@ def main(argv: list[str] | None = None) -> int:
         "report_sha256": hashlib.sha256(report.encode("utf-8")).hexdigest(),
         "articles": len(run["corpus"].records),
         "ingestion_failures": len(run["corpus"].failures),
-        "rule_statuses": {status.value: sum(1 for r in results if r.status is status) for status in RuleStatus},
+        "rule_statuses": {
+            status.value: sum(1 for r in results if r.status is status) for status in RuleStatus
+        },
         "rule_decisions": len(run["decisions"]),
         "m2_run1": {
             "citations": [o.state.value for o in journey.run1.citation_observations],
@@ -930,7 +1039,9 @@ def main(argv: list[str] | None = None) -> int:
             "snapshot": journey.run1.snapshot_hash[:12],
         },
         "m2_recheck": (
-            None if journey.run2 is None else {
+            None
+            if journey.run2 is None
+            else {
                 "facts": [o.state.value for o in journey.run2.factual_observations],
                 "snapshot": journey.run2.snapshot_hash[:12],
             }
