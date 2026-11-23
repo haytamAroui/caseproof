@@ -46,7 +46,7 @@ function render(payload){current=payload;const result=document.getElementById('r
 result.append(el('p','Corpus de cette revue : '+payload.corpus_pack_sha256));if(payload.exhibit_note)result.append(el('p',payload.exhibit_note,'note'));
 result.append(el('p','Révision locale n° '+payload.revision+'. Les décisions ci-dessous portent une étiquette locale non authentifiée, ce ne sont pas des décisions d\u2019avocat et elles n\u2019autorisent aucun dépôt.'));
 payload.references.forEach((finding,index)=>{const section=el('section'),brief=el('pre',finding.quote||'Aucune citation liée'),article=el('pre',finding.article_text||(finding.reason.startsWith('exhibit_')?'Renvoi à une pièce : aucun article de corpus concerné.':'Version ou article non sélectionné : aucun passage de substitution.'));
-section.append(el('h2',finding.status+' · '+finding.raw_text),el('p',finding.scope),brief,article);
+section.append(el('h2',finding.status+' · '+finding.raw_text),el('p',finding.scope),brief,article);const ps=finding.passage;if(ps){section.append(el('p','Affirmation : '+ps.claim));ps.found.forEach(f=>section.append(el('pre','Pièce, p. '+f.page+' · '+f.key+'\n'+f.excerpt)));if(ps.missing_values.length)section.append(el('p','Différence candidate, valeur absente de la pièce : '+ps.missing_values.join(', ')+'. À examiner par l\u2019avocat.','note'));if(!ps.found.length&&!ps.missing_values.length)section.append(el('p','Aucune valeur comparable (date ou montant sans ambiguïté) dans l\u2019affirmation : aucun passage proposé.','note'));}
 const d=payload.decisions[index];
 if(d){section.append(el('p','Décision locale : '+LABELS[d.action]+(d.reason?' · '+d.reason:'')+' · étiquette « '+d.reviewer_label+' » (non authentifiée) · '+(d.origin==='carried'?'reprise d\u2019une revue antérieure, finding identique':'enregistrée dans cette révision'),'note'));}
 else{const f=el('form');f.dataset.index=index;const sel=el('select');sel.setAttribute('aria-label','Décision');for(const k of Object.keys(LABELS)){const o=el('option',LABELS[k]);o.value=k;sel.append(o);}
@@ -84,13 +84,15 @@ def _payload(data: bytes, checkpoint: str) -> dict[str, object]:
             "decisions": [by_print.get(fp) for fp in prints],
             "superseded": list(review.get("superseded", [])),
             "references": [{**row, "article_text": by_key.get(row["corpus_key"]),
-                            "scope": _SCOPE.get(row["reason"], row["reason"])} for row in body["references"]]}
+                            "scope": _SCOPE.get(row["reason"], row["reason"]),
+                            "passage": next((e for e in body.get("passages", []) if e["reference_id"] == row["reference_id"]), None)}
+                           for row in body["references"]]}
 
 
 def exhibit_note(body: dict) -> str:
     from application.litigation.exhibit_coverage import coverage
     cov = coverage(body["brief_text"], body["exhibits"])
-    return ("Pièces : renvois résolus dans le bordereau local et fichiers lus (empreintes SHA-256). Le CONTENU des pièces n'est PAS comparé aux conclusions. "
+    return ("Pièces : renvois résolus dans le bordereau local et fichiers lus (empreintes SHA-256). Le contenu des pièces n'est PAS lu pour son sens : seules les dates et montants identiques sont rapprochés, à titre de passages proposés. "
             f"Au bordereau : {cov['listed']} · jamais citées : {', '.join(cov['unreferenced']) or 'aucune'} · "
             f"fichiers absents : {', '.join(cov['missing_files']) or 'aucun'} · sans texte lisible : {', '.join(cov['unreadable']) or 'aucune'}.")
 

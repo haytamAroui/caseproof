@@ -25,6 +25,8 @@ from application.litigation.corpus import (
 )
 from application.litigation.exhibit_coverage import coverage as exhibit_coverage
 from application.litigation.exhibit_coverage import exhibit_observations
+from application.litigation.exhibit_passages import SCOPE as PASSAGE_SCOPE
+from application.litigation.exhibit_passages import validate_passages
 from application.litigation.legal_references import (
     _QUOTE_STRICT,
     _QUOTE_V3,
@@ -154,6 +156,18 @@ def _report(body: dict[str, Any]) -> bytes:
             parts += [f"<a href='#article-{row['index']}'>Rouvrir le passage exact du pack figé</a>"]
         elif obs["reason"].startswith("exhibit_"):
             parts += ["<p>Renvoi à une pièce : aucun article de corpus concerné.</p>"]
+            entry = next((e for e in body.get("passages", []) if e["reference_id"] == obs["reference_id"]), None)
+            if entry is not None:
+                parts += ["<p><strong>Affirmation :</strong> ", esc(entry["claim"]), "</p><p class='note'>", esc(PASSAGE_SCOPE), "</p>"]
+                parts += ["<p>Passages de la pièce avec la même valeur : ", ("" if entry["found"] else "aucun"), "</p>"]
+                parts += [f"<pre>p. {f['page']} · {esc(f['key'])}\n{esc(f['excerpt'])}</pre>" for f in entry["found"]]
+                if entry["missing_values"]:
+                    parts += ["<p><strong>Différence candidate :</strong> valeur absente de toutes les pages lues de la pièce : ",
+                              esc(", ".join(entry["missing_values"])), ". À examiner par l'avocat.</p>"]
+                if entry["ambiguous_values"]:
+                    parts += ["<p>Valeurs non interprétables sans ambiguïté (non comparées) : ", esc(", ".join(entry["ambiguous_values"])), ".</p>"]
+                if not entry["claim_values"]:
+                    parts += ["<p>Aucune date ni aucun montant dans l'affirmation : aucun passage proposé.</p>"]
         else:
             parts += ["<p>Pas de passage sélectionné. Aucune substitution par une autre version.</p>"]
         d = decided.get(fp)
@@ -216,7 +230,8 @@ def observe(text: str, config: LegalCorpusConfig, marker: object, exhibits: dict
 
 
 def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
-                     brief_text: str, review: dict[str, Any], exhibits: dict[str, Any] | None = None) -> tuple[bytes, str]:
+                     brief_text: str, review: dict[str, Any], exhibits: dict[str, Any] | None = None,
+                     passages: list[dict[str, Any]] | None = None) -> tuple[bytes, str]:
     if config.failures or not config.records or run.corpus_pack_sha256 != config.pack_sha256:
         raise CorpusError("complete exact chosen corpus required for export")
     if _hash(brief_text.encode()) != run.representation_sha256 or review.get("snapshot_hash") != run.snapshot_hash:
@@ -237,6 +252,10 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
             "articles": articles, "article_index": [{"key": r.key, "index": i} for i, r in enumerate(config.records)]}
     if exhibits is not None:
         body["exhibits"] = exhibits
+    if passages is not None:
+        if exhibits is None:
+            raise CorpusError("passages need an exhibit manifest")
+        body["passages"] = passages
     payload = _encode(body)
     checkpoint = _hash(payload)
     report = _report(body)
@@ -279,7 +298,11 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
         marker = body["review"].get("check_engine")
         if engine_exhibits(marker) != ("exhibits" in body):
             raise CorpusError("exhibit coverage section does not match the engine marker")
+        if "passages" in body and not engine_exhibits(marker):
+            raise CorpusError("passages without exhibit coverage")
         observed = observe(body["brief_text"], config, marker, body.get("exhibits"))
+        if "passages" in body:
+            validate_passages(body["brief_text"], [asdict(x) for x in observed], body["passages"])
         if _encode([asdict(x) for x in observed]) != _encode(body["references"]):
             raise CorpusError("legal checks do not replay")
         if body["article_index"] != [{"key": r.key, "index": i} for i, r in enumerate(config.records)]:

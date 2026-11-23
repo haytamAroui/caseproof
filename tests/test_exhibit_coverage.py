@@ -180,3 +180,44 @@ def test_changed_surrounding_assertion_withdraws_the_piece_decision_although_byt
     prior = _decided(tmp_path, paragraphs, first)
     review = _recheck_decisions(tmp_path, ["Le bail est résilié (pièce 1)."], prior)
     assert not review["decisions"] and review["superseded"]
+
+
+def passage_run(tmp_path: Path, paragraphs: list[str]):
+    d = tmp_path / "pieces"
+    d.mkdir(parents=True)
+    (d / "p1.pdf").write_bytes(make_pdf("Le contrat a ete envoye pour signature le 15/03/2024 pour 1.250,00 EUR."))
+    (d / "bordereau.toml").write_text('format = "caseproof-bordereau-v1"\n[[piece]]\nnumber = "1"\nlabel = "Bail"\nfile = "p1.pdf"\n')
+    p = tmp_path / "w.docx"
+    p.write_bytes(docx_without_custom_xml(paragraphs))
+    raw, cp = check_offline_docx(docx=p, corpus=pdf_corpus(tmp_path), exhibits=d)
+    return raw, cp, verify_legal_pack(raw, expected_sha256=cp)
+
+
+def test_passages_show_same_values_and_flag_absent_ones_without_a_verdict(tmp_path):
+    _, _, body = passage_run(tmp_path, ["Le bail a été signé le 15/03/2024 pour 1.250,00 EUR (pièce 1).",
+                                        "Le loyer de 9.999,00 EUR est dû (pièce 1)."])
+    first, second = body["passages"]
+    assert [f["page"] for f in first["found"]] == [1, 1] and first["missing_values"] == []
+    assert "envoye pour signature" in first["found"][0]["excerpt"]  # same date: wording is the lawyer's to read
+    assert second["missing_values"] and not second["found"]
+    assert all(r["status"] != "PASS" for r in body["references"] if r["reason"].startswith("exhibit_"))
+
+
+def test_altered_passage_excerpt_or_claim_is_refused(tmp_path):
+    raw, cp, _ = passage_run(tmp_path, ["Signé le 15/03/2024 (pièce 1)."])
+    z = zipfile.ZipFile(BytesIO(raw))
+    for edit in ("excerpt", "claim", "missing"):
+        body = json.loads(z.read("review.json"))
+        entry = body["passages"][0]
+        if edit == "excerpt":
+            entry["found"][0]["excerpt"] = "signe definitivement"
+        elif edit == "claim":
+            entry["claim"] = "Signé le 16/03/2024 (pièce 1)."
+        else:
+            entry["missing_values"], entry["found"] = entry["missing_values"] + [entry["found"][0]["key"]], entry["found"]
+        out = BytesIO()
+        with zipfile.ZipFile(out, "w") as w:
+            w.writestr("review.json", json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode())
+            w.writestr("report.html", z.read("report.html"))
+        with pytest.raises(CorpusError):
+            verify_legal_pack(out.getvalue(), expected_sha256=None)

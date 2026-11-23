@@ -304,3 +304,12 @@ def compare_fact(
         "same_role_typed_tokens_equal" if claim_value == source_value else "same_role_candidate_difference",
         brief=claim_token, source=token, anchor=(start, end),
     )
+
+
+def typed_values(text: str) -> list[tuple[str, str, int, int, str | None]]:
+    """(kind, token, start, end, normalised key or None when the token is ambiguous) for money and dates."""
+    out: list[tuple[str, str, int, int, str | None]] = []
+    for kind in (FactKind.MONEY, FactKind.DATE):
+        for token, start, end, value in _extract(text, kind, "fr"):
+            out.append((kind.value, token, start, end, None if value is None else f"{kind.value}:{value}"))
+    return sorted(out, key=lambda row: row[2])
