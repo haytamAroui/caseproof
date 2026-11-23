@@ -1135,6 +1135,9 @@
     $("refresh").addEventListener("click",()=>{void load();});
     $("recheck").addEventListener("click",()=>{void load();});
     if(window.caseproofSession?.getBearer){
+      // A trusted host session declares the signed workbench itself; no extra request.
+      signedWorkbench=window.caseproofSession.signedWorkbench===true;
+      {const cf=$("correction-form");if(cf)cf.hidden=!signedWorkbench;}
       $("credentials").hidden=true;$("auth-mode").textContent="Connected host session";
       $("case-id").value=window.caseproofSession.caseId||"";
       $("brief-id").value=window.caseproofSession.briefVersionId||"";
@@ -1146,7 +1149,7 @@
       const config=await response.json();
       if(response.ok&&config.schema==="caseproof-clearbrief-dev-config-v1"&&
          typeof config.publishable_key==="string"&&config.publishable_key.startsWith("sb_publishable_")){
-        state.publishable=config.publishable_key;signedWorkbench=config.signed_workbench===true;$("correction-form").hidden=!signedWorkbench;$("auth-mode").textContent="Supabase dev authentication";
+        state.publishable=config.publishable_key;signedWorkbench=config.signed_workbench===true;{const cf=$("correction-form");if(cf)cf.hidden=!signedWorkbench;}$("auth-mode").textContent="Supabase dev authentication";
       }else{
         $("auth-mode").textContent="Backend session required";$("credentials").hidden=true;
         $("connect").disabled=true;disableRemoteJourney();
@@ -1155,7 +1158,7 @@
     }catch{ $("auth-mode").textContent="Backend session required";$("credentials").hidden=true;
       $("connect").disabled=true;notice("The signed identity provider is unavailable.","danger");}
   }
-  $("correction-form").addEventListener("submit", previewCorrection);
+  $("correction-form")?.addEventListener("submit", previewCorrection);
   void init();
 })();
 
