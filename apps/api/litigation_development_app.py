@@ -64,6 +64,12 @@ class SignedPublishOutcome:
     published_revision: int
 
 
+@dataclass(frozen=True, slots=True)
+class SignedDocumentRegistration:
+    document_id: str
+    version_id: str
+
+
 class SignedBriefPublisher(Protocol):
     """Loopback-only port: publish one brief version bound to its verified
     uploaded original. Implementations must verify the bearer, read back the
@@ -77,6 +83,21 @@ class SignedBriefPublisher(Protocol):
     version)."""
 
     def list_documents(self, *, bearer: str, case_id: str) -> tuple[SignedDocumentSummary, ...]: ...
+
+    def register_source_version(
+        self,
+        *,
+        bearer: str,
+        case_id: str,
+        label: str,
+        media_type: str,
+        byte_length: int,
+        sha256_hex: str,
+    ) -> SignedDocumentRegistration:
+        """Declare a new document and first version (label, size, digest)
+        before any byte upload; the later upload must match the declared
+        digest or fail closed."""
+        ...
 
     def publish_uploaded(
         self,
@@ -485,6 +506,67 @@ def create_litigation_development_app(
                     for document in documents
                 ],
             }
+        )
+
+    @app.post("/dev/signed/matters/{case_id}/documents", status_code=201)
+    async def signed_document_register(
+        case_id: str,
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> JSONResponse:
+        if signed_brief_publisher is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=422, detail="invalid_request") from None
+        if not isinstance(payload, dict) or set(payload) != {
+            "label",
+            "media_type",
+            "byte_length",
+            "sha256_hex",
+        }:
+            raise HTTPException(status_code=422, detail="invalid_request")
+        label = payload["label"]
+        media_type = payload["media_type"]
+        byte_length = payload["byte_length"]
+        sha256_hex = payload["sha256_hex"]
+        if (
+            not isinstance(label, str)
+            or not 0 < len(label.strip()) <= 120
+            or "\r" in label
+            or "\n" in label
+            or not isinstance(media_type, str)
+            or not 1 <= len(media_type) <= 100
+            or type(byte_length) is not int
+            or byte_length <= 0
+            or not isinstance(sha256_hex, str)
+            or len(sha256_hex) != 64
+            or any(c not in "0123456789abcdef" for c in sha256_hex)
+        ):
+            raise HTTPException(status_code=422, detail="invalid_request")
+        try:
+            registration = signed_brief_publisher.register_source_version(
+                bearer=_token(authorization),
+                case_id=case_id,
+                label=label.strip(),
+                media_type=media_type,
+                byte_length=byte_length,
+                sha256_hex=sha256_hex,
+            )
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        except ValueError:
+            raise HTTPException(status_code=422, detail="invalid_request") from None
+        return JSONResponse(
+            {
+                "schema": "caseproof-signed-document-register-v1",
+                "document_id": registration.document_id,
+                "version_id": registration.version_id,
+            },
+            status_code=201,
         )
 
     @app.post("/dev/signed/matters/{case_id}/briefs/publish", status_code=201)

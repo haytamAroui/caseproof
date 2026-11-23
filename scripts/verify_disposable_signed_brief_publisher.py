@@ -159,6 +159,56 @@ class DisposableSignedBriefPublisherTests(unittest.TestCase):
         self.assertEqual(second.brief_id, first.brief_id)
         self.assertNotEqual(second.brief_version_id, first.brief_version_id)
 
+    def test_register_source_version_then_upload_and_publish(self) -> None:
+        registration = self.publisher.register_source_version(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            label="Source declaree par le signataire",
+            media_type="text/plain",
+            byte_length=len(ORIGINAL_V1),
+            sha256_hex=sha256(ORIGINAL_V1).hexdigest(),
+        )
+        self._upload(registration.document_id, registration.version_id, ORIGINAL_V1)
+        outcome = self.publisher.publish_uploaded(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=registration.document_id,
+            version_id=registration.version_id,
+            document_role="own_draft",
+            expected_revision=0,
+        )
+        self.assertEqual(outcome.published_revision, 1)
+        catalog = self.publisher.list_documents(bearer="synthetic-fixture-only", case_id=self.case_id)
+        labels = {d.label for d in catalog}
+        self.assertIn("Source declaree par le signataire", labels)
+
+    def test_register_source_version_rejects_bad_digest(self) -> None:
+        with self.assertRaises(ValueError):
+            self.publisher.register_source_version(
+                bearer="synthetic-fixture-only",
+                case_id=self.case_id,
+                label="digest invalide",
+                media_type="text/plain",
+                byte_length=10,
+                sha256_hex="zz" * 32,
+            )
+
+    def test_register_source_version_denied_without_grant(self) -> None:
+        with connect() as conn:
+            conn.execute(
+                "delete from caseproof._m1_matter_grants where case_id=%s and user_id=%s",
+                (self.f.scope.case_id, self.f.actor),
+            )
+        with self.assertRaises(PrivateStorageDenied):
+            self.publisher.register_source_version(
+                bearer="synthetic-fixture-only",
+                case_id=self.case_id,
+                label="sans autorisation",
+                media_type="text/plain",
+                byte_length=len(ORIGINAL_V1),
+                sha256_hex=sha256(ORIGINAL_V1).hexdigest(),
+            )
+
     def test_stale_expected_revision_conflicts(self) -> None:
         d1, v1 = self._register(ORIGINAL_V1, "brief v1")
         self._upload(d1, v1, ORIGINAL_V1)

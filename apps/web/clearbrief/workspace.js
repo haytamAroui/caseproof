@@ -422,6 +422,46 @@
       select.value=preferredVersion;
     $("publish").disabled=versions.length===0;
   }
+  async function registerSource(evt){
+    evt.preventDefault();
+    // Declare-then-upload in one flow: the server registers the digest first
+    // and the byte upload fails closed unless it matches the declaration.
+    const session=state.session,caseId=state.caseId;
+    const label=$("register-label").value.trim();
+    const file=$("register-file").files?.[0];
+    const mime=file?{txt:"text/plain",pdf:"application/pdf",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg"}[file.name.split(".").pop()?.toLowerCase()]:null;
+    if(!label||!file||file.size<=0||file.size>20*1024*1024||!mime){
+      notice("Enter a label and choose a supported original under 20 MiB.","danger");return;
+    }
+    $("register").disabled=true;
+    try{
+      const digestBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
+      const digestHex=Array.from(digestBytes,(b)=>b.toString(16).padStart(2,"0")).join("");
+      const d=await api("/dev/signed/matters/"+encodeURIComponent(caseId)+"/documents",{
+        method:"POST",json:{label,media_type:mime,byte_length:file.size,sha256_hex:digestHex}});
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(d.schema!=="caseproof-signed-document-register-v1"||!UUID.test(d.document_id)||!UUID.test(d.version_id))
+        throw Error("invalid_schema");
+      const token=await bearer();
+      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(caseId)+
+        "/documents/"+encodeURIComponent(d.document_id)+"/versions/"+encodeURIComponent(d.version_id)+"/original",{
+          method:"PUT",credentials:"omit",redirect:"error",cache:"no-store",
+          headers:{"Authorization":"Bearer "+token,"Content-Type":mime},body:file,
+        });
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(response.status!==201)throw Error("unavailable");
+      $("register-label").value="";$("register-file").value="";
+      $("register-status").textContent="Source declared and uploaded: "+file.name+" \u00b7 "+file.size+" bytes \u00b7 SHA-256 "+digestHex.slice(0,16)+"\u2026";
+      notice("New source declared, registered and uploaded; its bytes matched the declaration.","ok");
+      await loadCatalog();
+      if(state.catalog.some(doc=>doc.document_id===d.document_id)){
+        $("upload-document").value=d.document_id;
+        populateVersions(d.version_id);
+      }
+    }catch(error){if(state.session===session&&state.caseId===caseId)
+      notice("Source declaration failed: "+(error&&error.message?error.message:"unavailable"),"danger");}
+    finally{$("register").disabled=false;}
+  }
   async function loadCatalog() {
     const generation=state.generation;
     // Recharging the catalog must never silently move the publish target:
@@ -817,6 +857,7 @@
     $("find-matters").addEventListener("click",findMatters);
     $("review-form").addEventListener("submit",submitReview);
     $("search").addEventListener("click",search);
+    $("register-form").addEventListener("submit",registerSource);
     $("upload-form").addEventListener("submit",upload);
     $("upload-document").addEventListener("change",populateVersions);
     const publishForm=$("publish-form");if(publishForm)publishForm.addEventListener("submit",publishVersion);

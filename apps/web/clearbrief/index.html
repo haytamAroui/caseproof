@@ -106,8 +106,13 @@
         <div id="sources" class="source-list"><p class="empty">Load the authorized source inventory.</p></div>
         <div class="searchbox"><label for="query">Search within this brief's evidence</label><div class="inline"><input id="query" minlength="2" maxlength="120" placeholder="e.g. betaling, montant, date"><button id="search" type="button" class="secondary">Find</button></div></div>
         <div id="search-results" class="results" aria-live="polite"></div>
-        <details class="upload"><summary>Upload a pre-registered original (development)</summary>
-          <p class="small">Only sources the server has already registered for this matter and granted upload permission. This is not case creation.</p>
+        <details class="upload"><summary>Add a source or upload a pre-registered original (development)</summary>
+          <p class="small">Declare a new source: its digest is registered first and the uploaded bytes must match that declaration. This is not case creation.</p>
+          <form id="register-form"><label>Source label<input id="register-label" maxlength="120" required placeholder="e.g. Bail signé (annexe)"></label>
+          <label>Original file<input id="register-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
+          <button id="register" type="submit" class="secondary">Declare and upload new source</button></form>
+          <p id="register-status" class="small mono" aria-live="polite"></p>
+          <p class="small">Or upload bytes to a source the server already registered for this matter.</p>
           <form id="upload-form"><label>Registered document<select id="upload-document" required></select></label>
           <label>Registered version<select id="upload-version" required></select></label>
           <label>Original file<input id="original-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>

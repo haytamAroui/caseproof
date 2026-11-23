@@ -34,12 +34,13 @@ from apps.api.disposable_postgres_vault_ledger import Connection
 from apps.api.disposable_signed_source_library import DisposableSignedSourceLibrary, version_intent
 from apps.api.litigation_check_service import PrivateMatterAccess
 from apps.api.litigation_development_app import (
+    SignedDocumentRegistration,
     SignedDocumentSummary,
     SignedDocumentVersionSummary,
     SignedPublishOutcome,
 )
 from apps.api.signed_document_parse import parse_verified_original
-from apps.api.signed_supabase_originals import PrivateStorageDenied
+from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied
 
 __all__ = ["DisposableSignedBriefPublisher", "working_brief_id"]
 
@@ -175,6 +176,46 @@ class DisposableSignedBriefPublisher:
         return tuple(
             SignedDocumentSummary(key, labels[key], tuple(versions)) for key, versions in documents.items()
         )
+
+    def register_source_version(
+        self,
+        *,
+        bearer: str,
+        case_id: str,
+        label: str,
+        media_type: str,
+        byte_length: int,
+        sha256_hex: str,
+    ) -> SignedDocumentRegistration:
+        subject = self._subject(bearer, case_id)
+        scope = self._authorize(subject, case_id, MatterPermission.EVIDENCE_UPLOAD)
+        case = _uuid(case_id)
+        if (
+            not isinstance(label, str)
+            or not 0 < len(label.strip()) <= 120
+            or "\r" in label
+            or "\n" in label
+            or not isinstance(media_type, str)
+            or not 1 <= len(media_type) <= 100
+            or type(byte_length) is not int
+            or not 0 < byte_length <= MAX_BYTES
+            or not isinstance(sha256_hex, str)
+            or len(sha256_hex) != 64
+            or any(c not in "0123456789abcdef" for c in sha256_hex)
+        ):
+            raise ValueError("invalid registration")
+        document_id, version_id = uuid4(), uuid4()
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "insert into caseproof.documents(id,org_id,case_id,source_label) values(%s,%s,%s,%s)",
+                (document_id, _uuid(scope.org_id), case, label.strip()),
+            )
+            cur.execute(
+                "insert into caseproof.document_versions(id,org_id,document_id,version_number,"
+                "original_sha256_hex,byte_length,media_type) values(%s,%s,%s,1,%s,%s,%s)",
+                (version_id, _uuid(scope.org_id), document_id, sha256_hex, byte_length, media_type),
+            )
+        return SignedDocumentRegistration(document_id=str(document_id), version_id=str(version_id))
 
     def publish_uploaded(
         self,
