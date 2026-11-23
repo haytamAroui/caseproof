@@ -307,19 +307,22 @@ class DisposableSignedBriefPublisher:
             rows = cur.fetchall()
             if len(rows) != 1:
                 raise PrivateStorageDenied("Private source unavailable")
-            revision, document_head, expected_sha = rows[0]
-            import json as _json
-
-            digest = hashlib.sha256(
-                _json.dumps(document_head, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
-            ).hexdigest()
+            revision, document_head, stored_sha = rows[0]
+            # The register digest is DERIVED, never gated on the stored
+            # column: the write RPC (reachable by any authenticated user
+            # with confirm permission) cannot recompute sha256 without
+            # pgcrypto, so a well-formed false stored digest must not be
+            # able to poison availability. Content is the source of truth
+            # and is fully validated below and at write time; the stored
+            # column stays as audit correlation of the writer's claim.
+            if stored_sha is not None and type(stored_sha) is not str:
+                raise PrivateStorageDenied("Private source unavailable")
             if (
                 type(revision) is not int
                 or revision < 1
                 or not isinstance(document_head, dict)
                 or document_head.get("schema") != "caseproof-exhibit-register-v1"
                 or type(document_head.get("entries")) is not list
-                or digest != expected_sha
             ):
                 raise PrivateStorageDenied("Private source unavailable")
             try:

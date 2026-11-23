@@ -20,10 +20,14 @@
 -- The stored payload digest p_sha is asserted by the caller and CANNOT be
 -- recomputed here: sha256 needs pgcrypto, absent from the disposable test
 -- environments, and jsonb::text does not reproduce the Python canonical
--- bytes. This is a deliberate boundary, not a trust decision: every read
--- path recomputes the digest and fails closed on mismatch, so a forged
--- digest only makes the caller's own register unreadable; it cannot inject
--- content, because content is fully validated above.
+-- bytes. Availability poisoning is eliminated READ-SIDE: readers derive the
+-- digest from the content and never gate on this column, so a well-formed
+-- false digest cannot block the other authorized users of the matter.
+-- RESIDUAL OPEN GAP: the stored digest is an unverified actor claim at
+-- write time. Content injection remains impossible (everything above is
+-- validated against authorized state). Full fix on live (pgcrypto
+-- available): recompute digest(p_payload_canonical) here and reject any
+-- mismatch; the disposable harness then needs a pgcrypto-capable cluster.
 --
 -- security definer, search_path=''. Denials raise 42501 so PostgREST masks
 -- the matter. Contract errors return {ok:false,error:...} without writing:

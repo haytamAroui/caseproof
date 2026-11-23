@@ -1296,7 +1296,7 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
                      (user_a, org, user_b, org, user_c, org, user_d, org))
         conn.execute(
             "insert into caseproof.organization_members(org_id, user_id, actions)"
-            " values(%s, %s, array['case:read','review:request']::text[]),"
+            " values(%s, %s, array['case:read','evidence:read','review:request']::text[]),"
             " (%s, %s, array['case:read','review:request']::text[]),"
             " (%s, %s, array['case:read','review:request']::text[])",
             (org, user_a, org, user_b, org, user_d))
@@ -1305,7 +1305,8 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
             " values(%s, %s, %s, 'v1')", (case, org, user_a))
         conn.execute(
             "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
-            " values(%s, %s, %s, 'reviewer', array['case:read','exhibit:confirm']::text[]),"
+            " values(%s, %s, %s, 'reviewer',"
+            " array['case:read','evidence:read','exhibit:confirm']::text[]),"
             " (%s, %s, %s, 'viewer', array['case:read','exhibit:confirm']::text[])",
             (org, case, user_a, org, case, user_d))
         conn.execute(
@@ -1464,6 +1465,46 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
             with conn.transaction(force_rollback=True):
                 with pytest.raises(errors.InsufficientPrivilege):
                     confirm(sub, expected=2, payload=appended, sha="d" * 64, role=role)
+
+        # Same JSON content reserialized differently (key order, whitespace):
+        # jsonb comparison treats it as the identical command, so it replays
+        # without a new write and without a false conflict.
+        reorder = json.dumps({"entries": [first],
+                              "schema": "caseproof-exhibit-register-v1"},
+                             ensure_ascii=False, indent=2)
+        as_user(user_a)
+        replayed = conn.execute(
+            "select public.caseproof_signed_confirm_exhibit(%s, %s, %s, %s, 0, %s::jsonb, %s)",
+            (str(case), str(doc_pdf), str(ver_pdf), str(request),
+             reorder, register_sha)).fetchone()[0]
+        assert replayed == {"ok": True, "exhibit_revision": 1, "replay": True}
+        assert conn.execute(
+            "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
+            (str(case),)).fetchone()[0] == 2
+                # A well-formed but FALSE digest (64 hex) is accepted: the write RPC
+        # cannot recompute sha256 without pgcrypto. This cannot poison
+        # availability, because readers derive the digest from the content
+        # and never gate on the stored column (proven in the disposable
+        # publisher suite: false stored digest, reads continue). RESIDUAL
+        # OPEN GAP: the stored digest is an unverified actor claim until the
+        # live migration adds SQL-side recomputation (pgcrypto on live).
+        poison = uuid4()
+        outcome = confirm(user_a, request=poison, expected=2, payload={
+            "schema": "caseproof-exhibit-register-v1",
+            "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                        pdf_pages())]}, sha="9" * 64)
+        assert outcome == {"ok": True, "exhibit_revision": 3, "replay": False}
+        stored = conn.execute(
+            "select payload_sha256 from caseproof._m1_exhibit_heads where case_id=%s",
+            (str(case),)).fetchone()[0]
+        assert stored == "9" * 64  # false digest persists as an actor claim
+        # ...while content validation still rejects an invalid payload even
+        # with a "truthful-looking" digest:
+        assert confirm(user_a, expected=3, payload={
+            "schema": "caseproof-exhibit-register-v1",
+            "entries": [first, second, entry("piece-eee555fff666", "Falsifié",
+                        pdf_pages(count=4))]}, sha="8" * 64) == {
+            "ok": False, "error": "invalid"}
         with conn.transaction(force_rollback=True):
             as_user(user_a)
             with pytest.raises(errors.InsufficientPrivilege):
@@ -1472,3 +1513,36 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
                     " %s::jsonb, %s)",
                     (str(uuid4()), str(doc_pdf), str(ver_pdf), str(uuid4()),
                      json.dumps(appended), "d" * 64))
+
+        # Preparation read RPC: raw head + media/page inventory for the
+        # confirm flow, same masking rules.
+        read_proposal = (
+            Path(__file__).resolve().parents[1] / "db" / "proposals"
+            / "SIGNED_exhibit_register_read.sql"
+        ).read_text(encoding="utf-8")
+        conn.execute(read_proposal)
+
+        def read_register(sub, version=ver_pdf, role="authenticated"):
+            as_user(sub, role)
+            return conn.execute(
+                "select public.caseproof_signed_exhibit_register(%s, %s)",
+                (str(case), str(version) if version else None)).fetchone()[0]
+
+        state = read_register(user_a)
+        assert state["ok"] is True
+        assert state["register_revision"] == 3
+        assert state["media_type"] == "application/pdf"
+        assert state["page_count"] == 3
+        assert state["payload"]["schema"] == "caseproof-exhibit-register-v1"
+        assert len(state["payload"]["entries"]) == 3
+        txt_state = read_register(user_a, version=ver_txt)
+        assert txt_state["media_type"] == "text/plain"
+        assert txt_state["page_count"] is None
+        for sub, role in ((user_b, "authenticated"), (user_c, "authenticated"),
+                          (user_a, "anon"), (uuid4(), "authenticated")):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    read_register(sub, role=role)
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(errors.InsufficientPrivilege):
+                read_register(user_a, version=uuid4())

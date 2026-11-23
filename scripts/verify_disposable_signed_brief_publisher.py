@@ -217,6 +217,29 @@ class DisposableSignedBriefPublisherTests(unittest.TestCase):
         self.assertEqual(second.exhibit_revision, 3)
         self.assertNotEqual(first.exhibit_id, second.exhibit_id)
 
+    def test_false_stored_register_digest_does_not_poison_reads(self) -> None:
+        # A well-formed but false payload_sha256 (the RPC write path cannot
+        # recompute sha256 without pgcrypto) must not block authorized
+        # readers: the digest is derived from the content, never gated on
+        # the stored column.
+        src = b"SOURCE A LECTURE GARANTIE. quote gamma\n"
+        d, v = self._register(src, "source a lire")
+        self._upload(d, v, src)
+        with connect() as conn:
+            conn.execute(
+                "update caseproof._m1_exhibit_heads set payload_sha256=%s "
+                "where case_id=%s",
+                ("9" * 64, self.f.scope.case_id),
+            )
+        confirmed = self.publisher.confirm_exhibit(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=d,
+            version_id=v,
+            display_label="Source lisible",
+        )
+        self.assertGreaterEqual(confirmed.exhibit_revision, 2)
+
     def test_confirm_exhibit_unknown_document_masked(self) -> None:
         with self.assertRaises(PrivateStorageDenied):
             self.publisher.confirm_exhibit(
