@@ -113,5 +113,5 @@ window.CaseProofFidelity = {mount({root, api, context}) {
     }catch{if(seq===sequence){clear();fail();}}finally{if(seq===sequence)load.disabled=false;}
   });
   root.append(heading,node("p","Inspect uncertainty beside preserved source pixels. A matching quotation alone does not establish visual fidelity.","small"),load,status,coverage,list);
-  return {clear(){sequence++;clear();pending=null;busy=false;load.disabled=false;drafts.clear();status.textContent="Session cleared. Reauthenticate before inspecting.";}};
+  return {clear(){sequence++;clear();pending=null;busy=false;load.disabled=false;drafts.clear();status.textContent="Dossier comparison cleared for this scope. Inspect again when ready.";}};
 }};

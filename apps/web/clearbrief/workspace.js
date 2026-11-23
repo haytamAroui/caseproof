@@ -50,7 +50,8 @@
     state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null;
     state.previewSeq+=1;state.loading=false;
     $("check-scope").textContent="Check source scope not assessed.";
-    $("workspace").hidden=true; $("sources").replaceChildren(); $("observations").replaceChildren();
+    $("workspace").hidden=true; $("connection").hidden=false;
+    $("sources").replaceChildren(); $("observations").replaceChildren();
     $("search-results").replaceChildren(); $("source-preview").textContent="";
     $("review-history").replaceChildren(); $("selected").textContent="Select an observation.";
     $("save-review").disabled=true;
@@ -322,6 +323,7 @@
     $("source-preview").textContent="Source preview cleared while the current scope reloads.";
     $("observations").replaceChildren();$("review-history").replaceChildren();
     $("check-scope").textContent="Checking current source denominator…";
+    $("connection").hidden=true;
     $("workspace").hidden=false;
     $("matter-meta").textContent="Matter "+state.caseId+" · brief "+state.briefId;
     notice("Checking private access and current evidence scope…");
@@ -766,12 +768,10 @@
     // dead steps; disable them honestly instead of offering actions that
     // can only fail. The signed workbench below stays fully usable.
     const card=document.querySelector?.(".journey-card");
-    if(!card)return;
-    for(const el2 of card.querySelectorAll("input,select,button,textarea"))el2.disabled=true;
-    const note=el("p","Remote Supabase journey is not configured in this loopback composition. "+
-      "Matter upload, ingest and correction controls are disabled here; the signed workbench "+
-      "below runs against the isolated backend.","small");
-    card.insertBefore(note,card.querySelector(".journey-grid"));
+    if(card)card.replaceChildren(el("p","Remote Supabase journey unavailable in this composition. "+
+      "The signed workbench below is the functional path here.","small"));
+    const fidelity=$("fidelity-panel");
+    if(fidelity)fidelity.hidden=true;
   }
   async function init(){
     $("connection-form").addEventListener("submit",startSession);
