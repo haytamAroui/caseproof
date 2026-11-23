@@ -478,12 +478,19 @@ def test_unsigned_record_with_trusted_key_fails_closed():
 # User-declared exhibit page mappings: independent numbering spaces, no
 # inference, duplicate physical pages fail closed, hardcoded printed page
 # removed.
-def test_confirmed_pages_absent_mappings_claim_physical_page_one_only():
+def test_confirmed_pages_absent_mappings_claim_physical_page_one_only_on_pdf():
     from apps.api.disposable_signed_brief_publisher import _confirmed_pages
-    pages = _confirmed_pages("doc", "ver", None)
+    pages = _confirmed_pages("doc", "ver", None, is_pdf=True)
     assert len(pages) == 1
     assert pages[0].pdf_page == 1
     assert pages[0].printed_page is None and pages[0].bundle_page is None
+
+
+def test_confirmed_pages_absent_mappings_non_pdf_keeps_legacy_placeholder():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    pages = _confirmed_pages("doc", "ver", None, is_pdf=False)
+    assert len(pages) == 1
+    assert pages[0].pdf_page is None and pages[0].printed_page == 1
 
 
 def test_confirmed_pages_user_declared_distinct_spaces():
@@ -491,7 +498,7 @@ def test_confirmed_pages_user_declared_distinct_spaces():
     pages = _confirmed_pages("doc", "ver", [
         {"pdf_page": 1, "printed_page": 3, "bundle_page": 7},
         {"pdf_page": 2},
-    ])
+    ], is_pdf=True)
     assert (pages[0].pdf_page, pages[0].printed_page, pages[0].bundle_page) == (1, 3, 7)
     assert (pages[1].pdf_page, pages[1].printed_page, pages[1].bundle_page) == (2, None, None)
 
@@ -512,4 +519,4 @@ def test_confirmed_pages_reject_invalid_input():
     ]
     for payload in bad:
         with pytest.raises(ValueError):
-            _confirmed_pages("doc", "ver", payload)
+            _confirmed_pages("doc", "ver", payload, is_pdf=True)

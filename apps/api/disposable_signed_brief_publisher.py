@@ -53,18 +53,24 @@ def _page_value(value: object) -> bool:
 
 
 def _confirmed_pages(
-    document_id: str, version_id: str, page_mappings: object
+    document_id: str, version_id: str, page_mappings: object, *, is_pdf: bool
 ) -> tuple[ExhibitPage, ...]:
     """User-declared page mappings, each numbering space independent.
 
-    Nothing is inferred: absent mappings record only that physical page 1
-    exists (full parser page inventory is not wired into confirmation);
-    printed/bundle stay NOT MAPPED. Duplicate physical pages and unknown
-    keys fail closed, never silently overwrite. Printed labels are the
-    existing numeric domain type; Roman or prefixed labels stay unmapped.
+    Nothing is inferred: absent mappings on a PDF record only that physical
+    page 1 exists (full parser page inventory is not wired into
+    confirmation); printed/bundle stay NOT MAPPED. Absent mappings on a
+    non-paginated source keep the legacy printed_page=1 placeholder the
+    domain's non-empty inventory rule requires (widening the domain to an
+    explicit unpaginated marker is a separate domain decision). Duplicate
+    physical pages and unknown keys fail closed, never silently overwrite.
+    Printed labels are the existing numeric domain type; Roman or prefixed
+    labels stay unmapped.
     """
     if page_mappings is None:
-        return (ExhibitPage(document_id, version_id, pdf_page=1),)
+        if is_pdf:
+            return (ExhibitPage(document_id, version_id, pdf_page=1),)
+        return (ExhibitPage(document_id, version_id, printed_page=1),)
     if not isinstance(page_mappings, (list, tuple)) or not 1 <= len(page_mappings) <= 512:
         raise ValueError("invalid exhibit declaration")
     seen: set[int] = set()
@@ -243,16 +249,19 @@ class DisposableSignedBriefPublisher:
             or "\n" in display_label
         ):
             raise ValueError("invalid exhibit declaration")
-        pages = _confirmed_pages(str(document), str(version), page_mappings)
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                "select 1 from caseproof.document_versions v "
+                "select v.media_type from caseproof.document_versions v "
                 "join caseproof.documents d on d.id=v.document_id and d.org_id=v.org_id "
                 "where v.id=%s and d.id=%s and d.case_id=%s and d.org_id=%s",
                 (version, document, case, _uuid(scope.org_id)),
             )
-            if not cur.fetchall():
+            media_rows = cur.fetchall()
+            if len(media_rows) != 1 or not isinstance(media_rows[0][0], str):
                 raise PrivateStorageDenied("Private source unavailable")
+            media_type = media_rows[0][0]
+            pages = _confirmed_pages(str(document), str(version), page_mappings,
+                                     is_pdf=(media_type == "application/pdf"))
             cur.execute(
                 "select revision,payload,payload_sha256 from caseproof._m1_exhibit_heads "
                 "where org_id=%s and case_id=%s",
