@@ -745,8 +745,6 @@ def test_live_publisher_register_and_list_contract():
 def _raw_record_fixture(actor=None):
     import json as _json
 
-    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, _canonical, _digest
-
     actor = actor or _UUID_A
     version = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
     snapshot = "f" * 64
@@ -754,15 +752,17 @@ def _raw_record_fixture(actor=None):
     request_id = "cccccccc-3333-4333-8333-cccccccccccc"
     decision = {"actor_id": actor, "disposition": "verified",
                 "observation_id": "citation:ref-01", "rationale": "contrôle synthétique"}
-    event_sha = _digest(_canonical({
-        "run": snapshot, "revision": 1, "request": request_id,
-        "actor": actor, "previous_sha": ZERO_HASH, "decision": decision}))
+    # Known-answer vector, frozen out of the implementation under test: if
+    # the canonicalization or digest ever drifts, the assembly replay rejects
+    # this fixture instead of self-validating the same bug.
+    event_sha = "a9a3aa5c9c6ecfe5244696091622e64deafb0220d55cfef9923bde6d47e65ab9"
+    payload_sha = "a7254fa5a8ceedb1db20175b94f7b062f77c0c737728adb1fbe0798875ab506c"
     brief = {"brief_id": "dddddddd-4444-4444-8444-dddddddddddd", "head_revision": 1,
              "version_id": version, "graph_sha256": "1" * 64, "original_sha256": "2" * 64,
              "document_id": "eeeeeeee-5555-4555-8555-eeeeeeeeeeee",
              "document_version_id": "ffffffff-6666-4666-8666-ffffffffffff",
              "case_revision": 1, "exhibit_revision": 1}
-    checks = [{"snapshot_sha256": snapshot, "payload_sha256": _digest(payload),
+    checks = [{"snapshot_sha256": snapshot, "payload_sha256": payload_sha,
                "case_revision": 1, "exhibit_revision": 1, "payload": payload}]
     heads = [{"snapshot_sha256": snapshot, "event_sha256": event_sha}]
     events = [{"snapshot_sha256": snapshot, "revision": 1, "request_id": request_id,
@@ -1120,3 +1120,126 @@ def test_signed_review_record_rpc_access_and_contract():
             with pytest.raises(errors.InsufficientPrivilege):
                 conn.execute("select public.caseproof_signed_review_record(%s, 'own_draft')",
                              (str(uuid4()),))
+
+
+def test_signed_document_inventory_proposal_rpc_access_and_contract():
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals" / "SIGNED_document_inventory.sql"
+    ).read_text(encoding="utf-8")
+    org, case = uuid4(), uuid4()
+    user_a, user_b, user_c, user_d = uuid4(), uuid4(), uuid4(), uuid4()
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute(proposal)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s),(%s, %s),(%s, %s),"
+                     "(%s, %s) on conflict (id) do nothing",
+                     (user_a, org, user_b, org, user_c, org, user_d, org))
+        # user_a: full reviewer member; user_b: member without write actions;
+        # user_c: not a member; user_d: member with read actions but a viewer grant.
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','evidence:read','finding:write','review:request']::text[]),"
+            " (%s, %s, array['case:read','evidence:read']::text[]),"
+            " (%s, %s, array['case:read','evidence:read','finding:write','review:request']::text[])",
+            (org, user_a, org, user_b, org, user_d))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', array['case:read','evidence:read','evidence:upload']::text[]),"
+            " (%s, %s, %s, 'viewer', array['case:read','evidence:read']::text[])",
+            (org, case, user_a, org, case, user_d))
+
+        def as_user(sub, role="authenticated"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+
+        def register(sub, label="pièce synthétique", media="text/plain", size=4,
+                     sha="b" * 64, role="authenticated"):
+            as_user(sub, role)
+            return conn.execute(
+                "select public.caseproof_signed_register_source(%s, %s, %s, %s, %s)",
+                (str(case), label, media, size, sha)).fetchone()[0]
+
+        def listing(sub, role="authenticated"):
+            as_user(sub, role)
+            return conn.execute("select public.caseproof_signed_list_documents(%s)",
+                                (str(case),)).fetchone()[0]
+
+        # Happy path: register declares the document and its first version,
+        # the inventory lists them in the bounded contract shape.
+        created = register(user_a)
+        assert created["ok"] is True
+        document_id, version_id = created["document_id"], created["version_id"]
+        result = listing(user_a)
+        assert result["ok"] is True
+        assert len(result["documents"]) == 1
+        document = result["documents"][0]
+        assert document["document_id"] == document_id
+        assert document["label"] == "pièce synthétique"
+        assert document["versions"] == [{
+            "version_id": version_id, "version_number": 1, "media_type": "text/plain",
+            "byte_length": 4, "sha256_hex": "b" * 64}]
+
+        # Invalid declarations are contract errors, never silent inserts.
+        for label, media, size, sha in (
+            ("", "text/plain", 4, "b" * 64),
+            ("x" * 201, "text/plain", 4, "b" * 64),
+            ("saut\nde ligne", "text/plain", 4, "b" * 64),
+            ("pièce", "application/zip", 4, "b" * 64),
+            ("pièce", "text/plain", 0, "b" * 64),
+            ("pièce", "text/plain", 3145729, "b" * 64),
+            ("pièce", "text/plain", 4, "B" * 64),
+            ("pièce", "text/plain", 4, "b" * 63),
+        ):
+            with conn.transaction(force_rollback=True):
+                outcome = register(user_a, label=label, media=media, size=size, sha=sha)
+                assert outcome == {"ok": False, "error": "invalid"}
+        assert conn.execute("select count(*) from caseproof.documents where case_id=%s",
+                            (str(case),)).fetchone()[0] == 1
+
+        # Reads denied: member without grant, non-member, anonymous role, unknown case.
+        for sub, role in ((user_b, "authenticated"), (user_c, "authenticated"),
+                          (user_a, "anon"), (uuid4(), "authenticated")):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    listing(sub, role)
+        with conn.transaction(force_rollback=True):
+            as_user(user_a)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute("select public.caseproof_signed_list_documents(%s)",
+                             (str(uuid4()),))
+
+        # Writes denied: read-only member actions, viewer grant role, non-member,
+        # anonymous role; an unknown case is masked the same way.
+        for sub, role in ((user_b, "authenticated"), (user_d, "authenticated"),
+                          (user_c, "authenticated"), (user_a, "anon"),
+                          (uuid4(), "authenticated")):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    register(sub, role=role)
+        with conn.transaction(force_rollback=True):
+            as_user(user_a)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute(
+                    "select public.caseproof_signed_register_source(%s, 'pièce', 'text/plain',"
+                    " 4, %s)", (str(uuid4()), "b" * 64))
+        assert conn.execute("select count(*) from caseproof.documents where case_id=%s",
+                            (str(case),)).fetchone()[0] == 1
