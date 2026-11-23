@@ -1629,6 +1629,8 @@ def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
         conn.execute(
             "create or replace function auth.jwt() returns jsonb language sql stable as "
             "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
         conn.execute(proposal)
         conn.execute("create schema if not exists storage")
         conn.execute(
@@ -1712,10 +1714,9 @@ def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
         with conn.transaction(force_rollback=True):
             with pytest.raises(errors.InsufficientPrivilege):
                 ingest(version=ver_no_storage)
-        # Intent merely pending: masked denial.
+        # A disposable pending intent is irrelevant to the real storage model.
         with conn.transaction(force_rollback=True):
-            with pytest.raises(errors.InsufficientPrivilege):
-                ingest(version=ver_pending)
+            assert ingest(version=ver_pending)["original_sha"] == sha3
 
         # Happy path: exact digests, immutable registry row, service audit.
         outcome = ingest()
@@ -1823,6 +1824,34 @@ def test_live_workbench_entry_point_fails_closed():
     assert "assembl" in configured.stdout
 
 
+def _insert_storage_bound_brief(conn, *, org, case, user, doc, source_version, brief, version,
+                                representation="test", original_sha="b"*64):
+    """Isolated SQL fixture matching the existing trusted-ingestion model."""
+    import hashlib
+    from uuid import uuid4
+    audit=uuid4()
+    rep_sha=hashlib.sha256(representation.encode()).hexdigest()
+    conn.execute("insert into caseproof.audit_events(id,org_id,case_id,actor_type,actor_user_id,action,"
+                 "event_schema_version,correlation_id,input_sha256_hex) "
+                 "values(%s,%s,%s,'human',%s,'dev_txt_ingested','v1',%s,%s)",
+                 (audit,org,case,user,uuid4(),"e"*64))
+    conn.execute("insert into caseproof._dev_journey_sources(org_id,case_id,document_id,version_id,"
+                 "original_sha,representation_sha,snapshot_sha,representation,audit_id) "
+                 "values(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                 (org,case,doc,source_version,original_sha,rep_sha,"e"*64,representation,audit))
+    conn.execute("insert into storage.objects(bucket_id,name) values('caseproof-originals-dev',%s)",
+                 (f"{org}/{case}/{doc}/{source_version}/{original_sha}",))
+    conn.execute("insert into caseproof._m2_brief_versions(org_id,case_id,brief_id,version_id,revision,"
+                 "document_id,document_version_id,vault_intent_id,source_binding_kind,source_binding,"
+                 "original_sha256,representation_sha256,parser_id,representation,document_role,"
+                 "graph_sha256,case_revision,exhibit_revision,actor_id) "
+                 "values(%s,%s,%s,%s,1,%s,%s,null,'trusted_storage_source_v1',"
+                 "caseproof._signed_storage_source_binding(%s,%s,%s,%s),%s,%s,'synthetic-parser',%s,"
+                 "'own_draft',%s,1,1,%s)",
+                 (org,case,brief,version,doc,source_version,org,case,doc,source_version,
+                  original_sha,rep_sha,representation,"d"*64,user))
+
+
 def test_signed_review_record_rpc_access_and_contract():
     """Proposed read RPC (db/proposals): real access denial + bounded contract.
 
@@ -1859,6 +1888,8 @@ def test_signed_review_record_rpc_access_and_contract():
         conn.execute(
             "create or replace function auth.jwt() returns jsonb language sql stable as "
             "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
         conn.execute(proposal)
         conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
                      (org, "synthétique"))
@@ -1884,14 +1915,9 @@ def test_signed_review_record_rpc_access_and_contract():
             "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
             " original_sha256_hex, byte_length, media_type)"
             " values(%s, %s, %s, 1, %s, 4, 'text/plain')", (doc_version, org, doc, "b" * 64))
-        conn.execute(
-            "insert into caseproof._m2_brief_versions(org_id, case_id, brief_id, version_id,"
-            " revision, document_id, document_version_id, vault_intent_id, original_sha256,"
-            " representation_sha256, parser_id, representation, document_role, graph_sha256,"
-            " case_revision, exhibit_revision, actor_id)"
-            " values(%s,%s,%s,%s,1,%s,%s,%s,%s,%s,'synthetic-parser','{}','own_draft',%s,1,1,%s)",
-            (org, case, brief, version, doc, doc_version, uuid4(), "b" * 64, "c" * 64,
-             "d" * 64, user_a))
+        _insert_storage_bound_brief(conn,org=org,case=case,user=user_a,doc=doc,
+                                   source_version=doc_version,brief=brief,version=version,
+                                   representation="{}")
         conn.execute(
             "insert into caseproof._m2_brief_heads(org_id, case_id, brief_id, revision, version_id)"
             " values(%s, %s, %s, 1, %s)", (org, case, brief, version))
@@ -1974,6 +2000,8 @@ def test_signed_document_inventory_proposal_rpc_access_and_contract():
         conn.execute(
             "create or replace function auth.jwt() returns jsonb language sql stable as "
             "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
         conn.execute(proposal)
         conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
                      (org, "synthétique"))
@@ -2119,6 +2147,8 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
         conn.execute(
             "drop function if exists public.caseproof_signed_confirm_exhibit"
             "(uuid,uuid,uuid,uuid,bigint,jsonb,text,jsonb)")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
         conn.execute(proposal)
         conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
                      (org, "synthétique"))
@@ -2457,6 +2487,8 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
         conn.execute(
             "create or replace function auth.jwt() returns jsonb language sql stable as "
             "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
         conn.execute(proposal)
         conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
                      (org, "synthétique"))
@@ -2496,8 +2528,8 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
             conn.execute(
                 "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
                 " actor_user_id, action, event_schema_version, correlation_id,"
-                " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
-                (audit, org, case, user_a, uuid4(), "a" * 64))
+                " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'dev_txt_ingested', 'v1', %s, %s)",
+                (audit, org, case, user_a, uuid4(), "2" * 64))
         conn.execute(
             "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
             " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
@@ -2522,6 +2554,9 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
             " values(%s, %s, 1, %s::jsonb)",
             (org, case, json.dumps({"schema": "caseproof-exhibit-register-v1",
                                     "entries": [exhibit_entry]})))
+
+        conn.execute("insert into storage.objects(bucket_id,name) values('caseproof-originals-dev',%s)",
+                     (f"{org}/{case}/{doc_up}/{ver_up}/" + "d" * 64,))
 
         def as_user(sub, role="authenticated"):
             claims = json.dumps({"role": role, "is_anonymous": "false"})
@@ -2679,7 +2714,7 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
         assert len(bundle["sources"]) == 1
         source = bundle["sources"][0]
         assert source["document_id"] == str(doc_ex) and source["version_id"] == str(ver_ex)
-        assert source["intent_verified"] is False
+        assert source["source_binding"] is None
         assert source["representation"] == exhibit_rep
         # A version id spanning two brief heads (only reachable by bypassing
         # the write RPC) fails closed with the same masked denial.
@@ -2687,11 +2722,11 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
             conn.execute(
                 "insert into caseproof._m2_brief_versions(org_id,case_id,brief_id,"
                 "version_id,revision,parent_version_id,document_id,document_version_id,"
-                "vault_intent_id,original_sha256,representation_sha256,parser_id,"
+                "vault_intent_id,source_binding_kind,source_binding,original_sha256,representation_sha256,parser_id,"
                 "representation,document_role,graph_sha256,case_revision,exhibit_revision,"
                 "actor_id,created_at) "
                 "select org_id,case_id,%s,version_id,revision,parent_version_id,"
-                "document_id,document_version_id,vault_intent_id,original_sha256,"
+                "document_id,document_version_id,vault_intent_id,source_binding_kind,source_binding,original_sha256,"
                 "representation_sha256,parser_id,representation,document_role,graph_sha256,"
                 "case_revision,exhibit_revision,actor_id,created_at "
                 "from caseproof._m2_brief_versions "
@@ -2745,58 +2780,30 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
                     conn.execute("select public.caseproof_signed_matter_access(%s)",
                                  (str(target),))
 
-        # The verified vault intent is resolved server-side: the caller never
-        # supplies one, a merely pending intent never qualifies, and several
-        # verified intents on the same version resolve deterministically to
-        # the oldest one.
+        # An original without an exact object and trusted audit never publishes.
         rep_text2 = "Mémoire synthétique seconde version."
-        audit5, audit6 = uuid4(), uuid4()
-        for audit in (audit5, audit6):
-            conn.execute(
-                "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
-                " actor_user_id, action, event_schema_version, correlation_id,"
-                " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
-                (audit, org, case, user_a, uuid4(), "a" * 64))
+        audit5 = uuid4()
         conn.execute(
-            "insert into caseproof._dev_journey_sources(org_id, case_id, document_id,"
-            " version_id, original_sha, representation_sha, snapshot_sha, representation,"
-            " audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            (org, case, doc_up, ver_up2, "1" * 64,
-             hashlib.sha256(rep_text2.encode("utf-8")).hexdigest(), "5" * 64,
-             rep_text2, audit5))
+            "insert into caseproof.audit_events(id,org_id,case_id,actor_type,actor_user_id,action,"
+            "event_schema_version,correlation_id,input_sha256_hex) "
+            "values(%s,%s,%s,'human',%s,'dev_txt_ingested','v1',%s,%s)",
+            (audit5,org,case,user_a,uuid4(),"5"*64))
         conn.execute(
-            "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
-            " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
-            " byte_length, media_type, state, created_audit_id, created_case_revision,"
-            " last_audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, 4, 'text/plain',"
-            " 'pending', %s, 1, %s)",
-            (org, case, uuid4(), user_a, doc_up, ver_up2,
-             str(org) + "/" + str(case) + "/" + str(doc_up) + "/" + str(ver_up2)
-             + "/" + "1" * 64 + "-en-attente",
-             "1" * 64, audit5, audit6))
-        assert publish(user_a, doc_version=ver_up2, version=uuid4(), expected=1,
-                       text=rep_text2) == {"ok": False, "error": "invalid"}
-        intent_newer, intent_older = uuid4(), uuid4()
-        for intent_row, created in ((intent_newer, "now() + interval '1 hour'"),
-                                    (intent_older, "now()")):
-            conn.execute(
-                "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
-                " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
-                " byte_length, media_type, state, created_audit_id, created_case_revision,"
-                " last_audit_id, created_at) values(%s, %s, %s, %s, %s, %s, %s, %s, 4,"
-                " 'text/plain', 'verified', %s, 1, %s, " + created + ")",
-                (org, case, intent_row, user_a, doc_up, ver_up2,
-                 str(org) + "/" + str(case) + "/" + str(doc_up) + "/" + str(ver_up2)
-                 + "/" + "1" * 64 + "-" + str(intent_row),
-                 "1" * 64, audit5, audit6))
-        second_version = uuid4()
-        assert publish(user_a, doc_version=ver_up2, version=second_version, expected=1,
-                       text=rep_text2) == {"ok": True, "replay": False, "revision": 2}
-        assert conn.execute(
-            "select vault_intent_id from caseproof._m2_brief_versions"
-            " where case_id=%s and version_id=%s",
-            (str(case), str(second_version))).fetchone()[0] == intent_older
-
+            "insert into caseproof._dev_journey_sources(org_id,case_id,document_id,version_id,"
+            "original_sha,representation_sha,snapshot_sha,representation,audit_id) "
+            "values(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (org,case,doc_up,ver_up2,"1"*64,hashlib.sha256(rep_text2.encode()).hexdigest(),
+             "5"*64,rep_text2,audit5))
+        assert publish(user_a,doc_version=ver_up2,version=uuid4(),expected=1,text=rep_text2) == {
+            "ok":False,"error":"invalid"}
+        conn.execute("insert into storage.objects(bucket_id,name) values('caseproof-originals-dev',%s)",
+                     (f"{org}/{case}/{doc_up}/{ver_up2}/"+"1"*64,))
+        second_version=uuid4()
+        assert publish(user_a,doc_version=ver_up2,version=second_version,expected=1,text=rep_text2) == {
+            "ok":True,"replay":False,"revision":2}
+        assert conn.execute("select vault_intent_id,source_binding_kind,source_binding->>'audit_id' "
+            "from caseproof._m2_brief_versions where case_id=%s and version_id=%s",
+            (case,second_version)).fetchone() == (None,'trusted_storage_source_v1',str(audit5))
 
 def _live_check_store(result, library_bytes=None):
     from apps.api.signed_supabase_check_store import LiveMatterCheckStore
@@ -2855,6 +2862,11 @@ def _bundle_payload(rep_text, source_bytes):
     import hashlib
     rep_sha = hashlib.sha256(rep_text.encode("utf-8")).hexdigest()
     src_sha = hashlib.sha256(source_bytes).hexdigest()
+    def binding(document, version, representation):
+        return {"kind":"trusted_storage_source_v1","audit_id":_UUID_E,"snapshot_sha256":"a"*64,
+                "bucket":"caseproof-originals-dev", "object_key":f"{_UUID_A}/{_UUID_C}/{document}/{version}/{src_sha}",
+                "original_sha256":src_sha,"representation_sha256":representation,
+                "byte_length":len(source_bytes),"media_type":"text/plain"}
     return {
         "ok": True, "case_revision": 1, "register_revision": 1,
         "register": {"schema": "caseproof-exhibit-register-v1", "entries": [
@@ -2864,7 +2876,9 @@ def _bundle_payload(rep_text, source_bytes):
                         "printed_page": None, "bundle_page": None}]}]},
         "brief": {"brief_id": _UUID_A, "version_id": _UUID_B, "revision": 1,
                   "parent_version_id": None, "document_id": _UUID_C,
-                  "document_version_id": _UUID_D, "vault_intent_id": _UUID_E,
+                  "document_version_id": _UUID_D, "vault_intent_id": None,
+                  "source_binding_kind":"trusted_storage_source_v1",
+                  "source_binding":binding(_UUID_C,_UUID_D,rep_sha),
                   "original_sha256": src_sha, "representation_sha256": rep_sha,
                   "parser_id": "identity-utf8-v1", "representation": rep_text,
                   "document_role": "own_draft", "graph_sha256": "f" * 64,
@@ -2876,7 +2890,7 @@ def _bundle_payload(rep_text, source_bytes):
         "assertions": [],
         "sources": [{"document_id": _UUID_D, "version_id": _UUID_E,
                      "original_sha256_hex": src_sha, "byte_length": len(source_bytes),
-                     "media_type": "text/plain", "intent_verified": True,
+                     "media_type": "text/plain", "source_binding":binding(_UUID_D,_UUID_E,rep_sha),
                      "representation": rep_text, "representation_sha": rep_sha}],
     }
 
@@ -2995,6 +3009,7 @@ def test_signed_review_ledger_proposal_rpcs():
         conn.execute(
             "create or replace function auth.jwt() returns jsonb language sql stable as "
             "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((root / "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
         for name in ("SIGNED_review_run_publish", "SIGNED_review_state_read",
                      "SIGNED_review_decision_record"):
             conn.execute((root / f"{name}.sql").read_text(encoding="utf-8"))
@@ -3027,23 +3042,9 @@ def test_signed_review_ledger_proposal_rpcs():
         conn.execute("insert into caseproof.document_versions(id, org_id, document_id,"
                      " version_number, original_sha256_hex, byte_length, media_type)"
                      " values(%s, %s, %s, 1, %s, 4, 'text/plain')", (ver, org, doc, sha))
-        intent, audit1, audit2 = uuid4(), uuid4(), uuid4()
-        conn.execute(
-            "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
-            " actor_user_id, action, event_schema_version, correlation_id,"
-            " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s),"
-            " (%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
-            (audit1, org, case, user_a, uuid4(), "e" * 64,
-             audit2, org, case, user_a, uuid4(), "f" * 64))
-        conn.execute(
-            "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
-            " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
-            " byte_length, media_type, state, created_audit_id, created_case_revision,"
-            " last_audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, 4, 'text/plain',"
-            " 'verified', %s, 1, %s)",
-            (org, case, intent, user_a, doc, ver,
-             str(org) + "/" + str(case) + "/" + str(doc) + "/" + str(ver) + "/" + sha,
-             sha, audit1, audit2))
+        _insert_storage_bound_brief(conn,org=org,case=case,user=user_a,doc=doc,
+                                   source_version=ver,brief=uuid4(),version=brief_version,
+                                   original_sha=sha)
 
         def as_user(sub, role="authenticated"):
             claims = json.dumps({"role": role, "is_anonymous": "false"})
@@ -3084,17 +3085,8 @@ def test_signed_review_ledger_proposal_rpcs():
         assert publish(user_a, text=tampered, text_sha=_digest(tampered)) == {
             "ok": False, "error": "invalid"}
         with conn.transaction(force_rollback=True):
-            conn.execute("update caseproof._s2_009b_vault_intents"
-                         " set state='unavailable', intent_revision=intent_revision+1,"
-                         " last_audit_id=%s where org_id=%s",
-                         (conn.execute(
-                             "insert into caseproof.audit_events(id, org_id, case_id,"
-                             " actor_type, actor_user_id, action, event_schema_version,"
-                             " correlation_id, input_sha256_hex) values(%s, %s, %s,"
-                             " 'human', %s, 's2_009b_vault_unavailable', 'v1', %s, %s)"
-                             " returning id",
-                             (uuid4(), org, case, user_a, uuid4(), "7" * 64)).fetchone()[0],
-                          org))
+            conn.execute("delete from storage.objects where bucket_id='caseproof-originals-dev' and name=%s",
+                         (f"{org}/{case}/{doc}/{ver}/{sha}",))
             assert publish(user_a, snap="c" * 64) == {"ok": False, "error": "invalid"}
         with conn.transaction(force_rollback=True):
             wrong = json.loads(payload)
@@ -3163,17 +3155,8 @@ def test_signed_review_ledger_proposal_rpcs():
             assert state(user_a) == {"ok": False, "error": "stale"}
             assert record(user_a, expected=2) == {"ok": False, "error": "stale"}
         with conn.transaction(force_rollback=True):
-            conn.execute("update caseproof._s2_009b_vault_intents"
-                         " set state='unavailable', intent_revision=intent_revision+1,"
-                         " last_audit_id=%s where org_id=%s",
-                         (conn.execute(
-                             "insert into caseproof.audit_events(id, org_id, case_id,"
-                             " actor_type, actor_user_id, action, event_schema_version,"
-                             " correlation_id, input_sha256_hex) values(%s, %s, %s,"
-                             " 'human', %s, 's2_009b_vault_unavailable', 'v1', %s, %s)"
-                             " returning id",
-                             (uuid4(), org, case, user_a, uuid4(), "7" * 64)).fetchone()[0],
-                          org))
+            conn.execute("delete from storage.objects where bucket_id='caseproof-originals-dev' and name=%s",
+                         (f"{org}/{case}/{doc}/{ver}/{sha}",))
             assert state(user_a) == {"ok": False, "error": "conflict"}
 
         # Masked denials: viewer without reviewer grant, stranger and anon get
@@ -3895,7 +3878,7 @@ def test_signed_composed_workflow_on_disposable_postgres():
         assert listed[0]["source_sha256"] == hashlib.sha256(pdf).hexdigest()
         facts_port.confirm(request_id=str(uuid4()), **{**kw, "value": False})
         assert facts_port.list(case_id=str(case))[0]["value"] is False  # latest wins, history kept
-        assert conn.execute("select count(*) from caseproof._m3_matter_facts").fetchone()[0] == 2
+        assert conn.execute("select count(*) from caseproof._m3_matter_facts where org_id=%s and case_id=%s", (org,case)).fetchone()[0] == 2
         # The actor selects a passage that exists verbatim in the named source version.
         from types import SimpleNamespace
 
@@ -3913,8 +3896,38 @@ def test_signed_composed_workflow_on_disposable_postgres():
             _verified_passage(wb, "user-token-a", str(case), FactConfirmBody(
                 **{**pbody, "source_document_id": brief_reg.document_id,
                    "source_version_id": brief_reg.version_id}))
-        with pytest.raises(Exception, match="append-only"):
+        with pytest.raises(Exception, match="append-only"), conn.transaction():
             conn.execute("update caseproof._m3_matter_facts set confirmed=false")
+
+        # Real-model custody: no intent row exists for either uploaded source.
+        assert conn.execute("select count(*) from caseproof._s2_009b_vault_intents where org_id=%s", (org,)).fetchone()[0] == 0
+        bound = conn.execute("select vault_intent_id,source_binding_kind,source_binding from caseproof._m2_brief_versions where org_id=%s and version_id=%s", (org,out2.brief_version_id)).fetchone()
+        assert bound[0] is None and bound[1] == "trusted_storage_source_v1"
+        assert bound[2]["object_key"].endswith(hashlib.sha256(lib.blobs[(corrected_reg.document_id,corrected_reg.version_id)][0]).hexdigest())
+        # Tampered storage key immediately refuses a new check and review replay.
+        with conn.transaction(force_rollback=True):
+            conn.execute("delete from storage.objects where name=%s", (f"{org}/{case}/{contract.document_id}/{contract.version_id}/{hashlib.sha256(pdf).hexdigest()}",))
+            with pytest.raises(AccessRejected):
+                checker.check(bearer="user-token-a",case_id=str(case),brief_version_id=out2.brief_version_id)
+            assert rpc(publishable_key=PUBLISHABLE_KEY,bearer="user-token-a",name="caseproof_signed_review_state",args={"p_case":str(case),"p_snapshot_sha":run2.snapshot_hash})["ok"] is False
+            with pytest.raises(FactRefused):
+                facts_port.confirm(request_id=rid, **kw)
+        with conn.transaction(force_rollback=True):
+            conn.execute("alter table storage.objects add column if not exists archived_at timestamptz")
+            conn.execute("update storage.objects set archived_at=now() where name=%s",
+                         (bound[2]["object_key"],))
+            assert conn.execute("select caseproof._signed_brief_binding_current(%s,%s,%s)",
+                                (org,case,out2.brief_version_id)).fetchone()[0] is False
+            with pytest.raises(AccessRejected):
+                checker.check(bearer="user-token-a",case_id=str(case),brief_version_id=out2.brief_version_id)
+        # Legacy lineages remain present but cannot claim the new binding.
+        assert conn.execute("select caseproof._signed_brief_binding_current(%s,%s,%s)",
+                            (org,case,str(uuid4()))).fetchone()[0] is False
+        # Current authorization is rechecked even for an identical replay.
+        with conn.transaction(force_rollback=True):
+            conn.execute("update caseproof._m1_matter_grants set active=false where org_id=%s and case_id=%s and user_id=%s", (org,case,user))
+            with pytest.raises(FactRefused):
+                facts_port.confirm(request_id=rid, **kw)
 
 
 def test_configured_dev_entry_installs_the_signed_workbench(monkeypatch):
@@ -4278,3 +4291,19 @@ def test_blocker_inventory_is_not_readiness_and_human_review_does_not_waive():
     assert any(r["observation_id"] == oid and r["reason"] != "human_review_not_recorded" for r in after["items"])
     assert not any(r["observation_id"] == oid and r["reason"] == "human_review_not_recorded" for r in after["items"])
     assert after["verdict"] == "not_computed"
+
+
+def test_storage_binding_rejects_identity_digest_and_length_tamper():
+    from apps.api.signed_source_binding import valid_storage_binding
+    payload=_bundle_payload("contrat",b"contrat")
+    source=payload["sources"][0]
+    binding=source["source_binding"]
+    kw={"org":_UUID_A,"case":_UUID_C,"document":_UUID_D,"version":_UUID_E,
+        "original_sha":source["original_sha256_hex"],"byte_length":7,"media_type":"text/plain"}
+    assert valid_storage_binding(binding,**kw)
+    for field,value in (("kind","legacy_vault_intent"),("audit_id","not-an-id"),
+                        ("snapshot_sha256","bad"),("bucket","other"),("object_key","other/case"),
+                        ("original_sha256","0"*64),("representation_sha256","bad"),
+                        ("byte_length",8),("media_type","image/png")):
+        assert not valid_storage_binding({**binding,field:value},**kw)
+    assert not valid_storage_binding(None,**kw)

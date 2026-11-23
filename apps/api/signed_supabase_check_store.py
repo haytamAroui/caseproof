@@ -39,6 +39,7 @@ from apps.api.litigation_check_service import (
     PrivateMatterAccess,
 )
 from apps.api.postgres_litigation_check_store import PrivateCheckStoreError
+from apps.api.signed_source_binding import valid_storage_binding
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
@@ -171,7 +172,13 @@ class LiveMatterCheckStore:
             type(_uuid(version_id)) is not str
             or type(_uuid(document_id)) is not str
             or type(_uuid(document_version_id)) is not str
-            or type(_uuid(intent_id)) is not str
+            or intent_id is not None
+            or brief.get("source_binding_kind") != "trusted_storage_source_v1"
+            or not valid_storage_binding(
+                brief.get("source_binding"), org=access.org_id, case=access.case_id,
+                document=str(document_id), version=str(document_version_id),
+                original_sha=original_sha, representation_sha=rep_sha,
+            )
             or type(original_sha) is not str or not _SHA256_RE.fullmatch(original_sha)
             or type(rep_sha) is not str or not _SHA256_RE.fullmatch(rep_sha)
             or type(parser_id) is not str or not 1 <= len(parser_id) <= 256
@@ -222,7 +229,11 @@ class LiveMatterCheckStore:
             type(sha256_hex) is not str or not _SHA256_RE.fullmatch(sha256_hex)
             or media_type not in _MEDIA_TYPES
             or type(byte_length) is not int or not 1 <= byte_length <= 5_242_880
-            or source.get("intent_verified") is not True
+            or not valid_storage_binding(
+                source.get("source_binding"), org=access.org_id, case=access.case_id,
+                document=document_id, version=version_id, original_sha=sha256_hex,
+                byte_length=byte_length, media_type=media_type,
+            )
         ):
             raise PrivateCheckStoreError("verified source bytes unavailable")
         try:
@@ -232,7 +243,7 @@ class LiveMatterCheckStore:
             )
         except Exception:
             raise PrivateCheckStoreError("verified source bytes unavailable") from None
-        if (type(raw) is not bytes or len(raw) > 5_242_880
+        if (type(raw) is not bytes or len(raw) != byte_length
                 or hashlib.sha256(raw).hexdigest() != sha256_hex):
             raise PrivateCheckStoreError("verified source bytes changed")
         if self._indexer is not None and media_type in {

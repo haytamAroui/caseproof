@@ -33,10 +33,13 @@ begin
  where c.id=p_case;
  if v_org is null then raise exception 'matter unavailable' using errcode='42501'; end if;
 
- select r.payload,r.case_revision,r.exhibit_revision into v_run
+ select r.payload,r.brief_version_id,r.case_revision,r.exhibit_revision into v_run
  from caseproof._m2_check_runs r
  where r.org_id=v_org and r.case_id=p_case and r.snapshot_sha=p_snapshot_sha;
  if v_run.payload is null then raise exception 'matter unavailable' using errcode='42501'; end if;
+ if not caseproof._signed_brief_binding_current(v_org,p_case,v_run.brief_version_id::uuid)
+ then return jsonb_build_object('ok',false,'error','conflict'); end if;
+
 
  select e.revision into v_exhibit_rev from caseproof._m1_exhibit_heads e
  where e.org_id=v_org and e.case_id=p_case;
@@ -51,9 +54,7 @@ begin
  loop
    select dv.original_sha256_hex into v_sha from caseproof.documents d
    join caseproof.document_versions dv on dv.org_id=d.org_id and dv.document_id=d.id
-   join caseproof._s2_009b_vault_intents i on i.org_id=dv.org_id and i.case_id=d.case_id
-     and i.document_id=d.id and i.document_version_id=dv.id
-     and i.sha256_hex=dv.original_sha256_hex and i.state='verified'
+   join lateral (select caseproof._signed_storage_source_binding(d.org_id,d.case_id,d.id,dv.id) as binding) custody on custody.binding is not null
    where d.org_id=v_org and d.case_id=p_case and d.id=v_pair.s and dv.id=v_pair.v;
    if v_sha is null then return jsonb_build_object('ok',false,'error','conflict'); end if;
  end loop;

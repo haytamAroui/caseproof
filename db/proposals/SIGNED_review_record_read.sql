@@ -36,7 +36,7 @@ declare
   v_checks jsonb;
   v_review_heads jsonb;
   v_review_events jsonb;
-  v_count int;
+  v_count int; v_pair record;
 begin
   if p_case is null or p_role not in ('own_draft','opponent_brief')
     or v_actor is null or coalesce(auth.jwt()->>'role','')<>'authenticated'
@@ -68,6 +68,18 @@ begin
   if v_head.version_id is null then
     raise exception 'matter unavailable' using errcode='42501';
   end if;
+
+  if not caseproof._signed_brief_binding_current(v_org,p_case,v_head.version_id)
+  then raise exception 'matter unavailable' using errcode='42501'; end if;
+  for v_pair in
+   select distinct (p.value->>0)::uuid d,(p.value->>1)::uuid v
+   from caseproof._m2_check_runs r,
+    lateral jsonb_array_elements((r.payload::jsonb)->'sources'->'processed') p
+   where r.org_id=v_org and r.case_id=p_case and r.brief_version_id=v_head.version_id::text
+  loop
+   if caseproof._signed_storage_source_binding(v_org,p_case,v_pair.d,v_pair.v) is null
+   then raise exception 'matter unavailable' using errcode='42501'; end if;
+  end loop;
 
   select count(*) into v_count from caseproof._m2_check_runs r
   where r.org_id=v_org and r.case_id=p_case and r.brief_version_id=v_head.version_id::text;

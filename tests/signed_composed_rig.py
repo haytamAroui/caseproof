@@ -3,8 +3,8 @@
 EVIDENCE TRACK LABEL: every external boundary here is FAKE and explicit:
 - fake PostgREST transport (executes the real SQL RPC proposals in a
   disposable PostgreSQL under SET ROLE authenticated / service_role);
-- fake Storage (bytes held in memory, verified-intent rows inserted by the
-  rig, never a real bucket);
+- fake Storage (bytes held in memory and object metadata inserted by the
+  rig, never a real bucket; no disposable intent ledger);
 - fake auth (bearer tokens minted by the rig, mapped to JWT claims).
 It proves composition of the real Python adapters + real SQL proposals, not
 live Supabase behavior, not live Auth, not Storage policy.
@@ -15,7 +15,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from psycopg import errors
 from psycopg.types.json import Jsonb  # noqa: F401  (kept for adapters)
@@ -125,21 +125,6 @@ class FakeStorageLibrary:
         key = f"{self.org}/{case}/{doc}/{ver}/{sha}"
         self.conn.execute(
             "insert into storage.objects(bucket_id, name) values(%s, %s)", (BUCKET, key))
-        audit = uuid4()
-        self.conn.execute(
-            "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
-            " actor_user_id, action, event_schema_version, correlation_id,"
-            " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
-            (audit, self.org, case, actor, uuid4(), sha))
-        self.conn.execute(
-            "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
-            " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
-            " byte_length, media_type, state, created_audit_id, created_case_revision,"
-            " last_audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
-            " 'verified', %s, 1, %s)",
-            (self.org, case, uuid4(), actor, doc, ver, key, sha, len(data), media,
-             audit, audit))
-
     # --- adapter surface used by composer / check store -------------------
     def source(self, *, bearer: str, case_id: str, document_id: str, version_id: str) -> Any:
         from apps.api.signed_supabase_originals import OriginalRef
@@ -168,6 +153,7 @@ def install_shims(conn: Any, root: Any, proposals: tuple[str, ...]) -> None:
         " 'caseproof\\_registry\\_%')").fetchall()
     for (signature,) in stale:
         conn.execute(f"drop function {signature}")
+    conn.execute((root / "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
     for name in proposals:
         conn.execute((root / f"{name}.sql").read_text(encoding="utf-8"))
 

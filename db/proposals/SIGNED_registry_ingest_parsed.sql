@@ -11,8 +11,7 @@
 --  * the immutable Storage object exists at the exact custody path
 --    org/case/document/version/sha with that digest (mirrors the TXT
 --    ingest fidelity check against storage.objects);
---  * a vault intent in state 'verified' binds this version and digest
---    (the same contract caseproof_signed_publish_uploaded resolves);
+--  * the existing immutable source/audit record becomes the typed binding;
 --  * the registry row does not exist yet; the immutability trigger on
 --    _dev_journey_sources then freezes it;
 --  * the representation is bounded and its digest is computed in SQL from
@@ -55,12 +54,9 @@ begin
    and exists(
      select 1 from storage.objects o
      where o.bucket_id='caseproof-originals-dev'
-       and o.name=concat_ws('/',d.org_id,p_case,p_document,p_version,dv.original_sha256_hex))
-   and exists(
-     select 1 from caseproof._s2_009b_vault_intents i
-     where i.org_id=d.org_id and i.case_id=p_case and i.document_id=p_document
-       and i.document_version_id=p_version and i.sha256_hex=dv.original_sha256_hex
-       and i.state='verified');
+       and o.name=concat_ws('/',d.org_id,p_case,p_document,p_version,dv.original_sha256_hex)
+       and coalesce(to_jsonb(o)->>'is_delete_marker','false')='false'
+       and (to_jsonb(o)->>'archived_at') is null);
  if v_org is null then raise exception 'original source fidelity failure' using errcode='42501'; end if;
  if exists(select 1 from caseproof._dev_journey_sources s
    where s.org_id=v_org and s.case_id=p_case and s.version_id=p_version)

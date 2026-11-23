@@ -34,6 +34,13 @@ begin
  select v.* into v_version from caseproof._m2_brief_versions v
  where v.org_id=v_org and v.case_id=p_case and v.version_id=p_brief_version;
  if v_version.version_id is null then raise exception 'matter unavailable' using errcode='42501'; end if;
+ -- Legacy rows retain their original lineage, but are not silently promoted.
+ if v_version.source_binding_kind<>'trusted_storage_source_v1'
+ or v_version.vault_intent_id is not null
+ or v_version.source_binding is distinct from caseproof._signed_storage_source_binding(
+   v_org,p_case,v_version.document_id,v_version.document_version_id)
+ or v_version.source_binding is null
+ then raise exception 'matter unavailable' using errcode='42501'; end if;
  -- fail closed if legacy data ever made a version id span two brief heads
  if exists(select 1 from caseproof._m2_brief_versions v
    where v.org_id=v_org and v.case_id=p_case and v.version_id=p_brief_version
@@ -70,11 +77,7 @@ begin
    'document_id',d.id,'version_id',dv.id,
    'original_sha256_hex',dv.original_sha256_hex,'byte_length',dv.byte_length,
    'media_type',dv.media_type,
-   'intent_verified',exists(
-     select 1 from caseproof._s2_009b_vault_intents i
-     where i.org_id=v_org and i.case_id=p_case and i.document_id=d.id
-       and i.document_version_id=dv.id and i.sha256_hex=dv.original_sha256_hex
-       and i.state='verified'),
+   'source_binding',caseproof._signed_storage_source_binding(v_org,p_case,d.id,dv.id),
    'representation',s.representation,'representation_sha',s.representation_sha)
    order by d.id,dv.id) into v_sources
  from declared t
@@ -98,7 +101,8 @@ begin
      'brief_id',v_version.brief_id,'version_id',v_version.version_id,
      'revision',v_version.revision,'parent_version_id',v_version.parent_version_id,
      'document_id',v_version.document_id,'document_version_id',v_version.document_version_id,
-     'vault_intent_id',v_version.vault_intent_id,'original_sha256',v_version.original_sha256,
+     'vault_intent_id',v_version.vault_intent_id,
+     'source_binding_kind',v_version.source_binding_kind,'source_binding',v_version.source_binding,'original_sha256',v_version.original_sha256,
      'representation_sha256',v_version.representation_sha256,'parser_id',v_version.parser_id,
      'representation',v_version.representation,'document_role',v_version.document_role,
      'graph_sha256',v_version.graph_sha256,'case_revision',v_version.case_revision,

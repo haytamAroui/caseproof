@@ -54,9 +54,7 @@ begin
   then return jsonb_build_object('ok',false,'error','invalid'); end if;
   select dv.original_sha256_hex into v_sha from caseproof.documents d
   join caseproof.document_versions dv on dv.org_id=d.org_id and dv.document_id=d.id
-  join caseproof._s2_009b_vault_intents i on i.org_id=dv.org_id and i.case_id=d.case_id
-   and i.document_id=d.id and i.document_version_id=dv.id
-   and i.sha256_hex=dv.original_sha256_hex and i.state='verified'
+  join lateral (select caseproof._signed_storage_source_binding(d.org_id,d.case_id,d.id,dv.id) as binding) custody on custody.binding is not null
   where d.org_id=v_org and d.case_id=p_case and d.id=(f->>'source_document_id')::uuid
    and dv.id=(f->>'source_version_id')::uuid;
   if v_sha is null then return jsonb_build_object('ok',false,'error','conflict'); end if;
