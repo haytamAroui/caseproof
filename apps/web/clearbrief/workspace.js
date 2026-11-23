@@ -339,7 +339,8 @@
       state.check=checked;
       notice("Authorized check completed. Findings remain unreviewed until saved.","ok");
     }catch(error){if(generation!==state.generation)return;
-      state.check=null;notice(statusFor(error),"danger");}
+      state.check=null;
+      notice(error&&error.code===409 ? "This published snapshot is out of date after a source or exhibit change. Publish a new brief version, then re-run the check." : statusFor(error),"danger");}
     if(generation!==state.generation)return;
     try {
       const inv=await api(path()+"/sources");

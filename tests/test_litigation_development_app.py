@@ -93,3 +93,31 @@ def test_original_reader_requires_explicit_evidence_grant():
         AuthorizedOriginalReader(search.checker, originals).read(
             bearer="signed-dev-fixture", case_id=CASE, brief_version_id=DRAFT, source_id="s1", version_id="v1")
     assert originals.calls == 0
+
+
+def test_stale_published_snapshot_is_typed_conflict_not_unavailable():
+    from apps.api.litigation_check_service import MatterCheckUnavailable
+    client, _, store, _ = client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    root = f"/v2/matters/{CASE}/briefs/{DRAFT}"
+    assert client.post(f"{root}/check", headers=headers).status_code == 200
+    load_bundle = store.load_bundle
+
+    def stale_bundle(**kwargs):
+        raise MatterCheckUnavailable()
+
+    store.load_bundle = stale_bundle
+    try:
+        stale = client.post(f"{root}/check", headers=headers)
+    finally:
+        store.load_bundle = load_bundle
+    assert stale.status_code == 409
+    assert stale.json()["error"] == "stale_snapshot"
+    still_current = store.still_current
+    store.still_current = lambda **kwargs: False
+    try:
+        drifted = client.post(f"{root}/check", headers=headers)
+    finally:
+        store.still_current = still_current
+    assert drifted.status_code == 409
+    assert drifted.json()["error"] == "stale_snapshot"

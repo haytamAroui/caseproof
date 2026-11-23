@@ -26,8 +26,15 @@ from application.litigation.matter_policy import (
     OrganizationPermission,
 )
 from application.litigation.unified_review import SourceScope
-from apps.api.disposable_litigation_brief_graph import DisposableBriefGraphStore
-from apps.api.litigation_check_service import CheckBundle, PrivateMatterAccess
+from apps.api.disposable_litigation_brief_graph import (
+    BriefGraphConflict,
+    DisposableBriefGraphStore,
+)
+from apps.api.litigation_check_service import (
+    CheckBundle,
+    MatterCheckUnavailable,
+    PrivateMatterAccess,
+)
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 from packages.evidence_kernel.domain.source_versions import SourceVersion
 
@@ -259,10 +266,15 @@ class PostgresPrivateMatterCheckStore:
             ).fetchall()
         if len(rows) != 1:
             raise PrivateCheckStoreError("unknown or ambiguous private brief version")
-        graph = self._graph.load(
-            org_id=UUID(access.org_id), actor_id=UUID(access.member.actor_id),
-            case_id=UUID(case_id), brief_id=rows[0][0], version_id=version,
-        )
+        try:
+            graph = self._graph.load(
+                org_id=UUID(access.org_id), actor_id=UUID(access.member.actor_id),
+                case_id=UUID(case_id), brief_id=rows[0][0], version_id=version,
+            )
+        except BriefGraphConflict:
+            # Stale or absent published snapshot: surface the service's typed
+            # stale signal so the route answers 409, not an opaque 503.
+            raise MatterCheckUnavailable() from None
         declared = tuple(sorted({
             (p.source_id, p.version_id) for e in register.entries
             if e.confirmed for p in e.pages

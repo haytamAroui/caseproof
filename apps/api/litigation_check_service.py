@@ -167,5 +167,9 @@ class AuthorizedLitigationChecker:
             return report
         except AccessRejected:
             raise
+        except MatterCheckUnavailable:
+            # Snapshot changed under the caller (source/exhibit/revision drift):
+            # an expected typed conflict, never an opaque service failure.
+            raise AccessRejected(AccessFailure.STALE_SNAPSHOT) from None
         except Exception:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
