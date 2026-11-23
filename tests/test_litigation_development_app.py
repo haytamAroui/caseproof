@@ -1935,3 +1935,35 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
                 with pytest.raises(errors.InsufficientPrivilege):
                     conn.execute("select public.caseproof_signed_check_bundle(%s, %s)",
                                  (str(case), str(version)))
+
+        # Matter-access read proposal: trusted permission snapshot, masked gaps.
+        access_proposal = (
+            Path(__file__).resolve().parents[1] / "db" / "proposals"
+            / "SIGNED_matter_access_read.sql"
+        ).read_text(encoding="utf-8")
+        conn.execute(access_proposal)
+        stranger = uuid4()
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s)"
+                     " on conflict (id) do nothing", (stranger, org))
+        as_user(user_a)
+        access = conn.execute(
+            "select public.caseproof_signed_matter_access(%s)", (str(case),)).fetchone()[0]
+        assert access["ok"] is True and access["org_id"] == str(org)
+        assert access["case_revision"] == 1 and access["membership_revision"] >= 1
+        assert "draft:check" in access["grant_permissions"]
+        assert access["grant_role"] == "reviewer" and access["grant_revision"] >= 1
+        as_user(user_b)
+        access_b = conn.execute(
+            "select public.caseproof_signed_matter_access(%s)", (str(case),)).fetchone()[0]
+        assert access_b["ok"] is True and access_b["grant_role"] == "viewer"
+        assert "draft:check" not in access_b["grant_permissions"]
+        for sub, role, target in (
+            (stranger, "authenticated", case),
+            (user_a, "anon", case),
+            (user_a, "authenticated", uuid4()),
+        ):
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute("select public.caseproof_signed_matter_access(%s)",
+                                 (str(target),))
