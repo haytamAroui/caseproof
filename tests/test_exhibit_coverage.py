@@ -229,3 +229,23 @@ def test_thousands_dot_does_not_cut_a_fact_sentence():
     found = extract_fact_assertions(text, (("r1", 0),))
     assert all(len(a.text) > 40 for a in found)  # no assertion truncated at "1."
     assert not [a for a in found if a.kind.value == "date"]  # two dates in one sentence: abstain
+
+
+def test_workbench_page_scripts_are_valid_javascript(tmp_path):
+    """A syntax error silently kills the whole panel in a browser: parse every inline script with node."""
+    import re
+    import shutil
+    import subprocess
+
+    from scripts import serve_offline_legal_workbench as w
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not available")
+    scripts = re.findall(r"<script>(.*?)</script>", w.HTML.replace("TOKEN", "t"), re.S)
+    assert scripts and "function render" in scripts[0]
+    for i, js in enumerate(scripts):
+        f = tmp_path / f"s{i}.js"
+        f.write_text(js)
+        done = subprocess.run([node, "--check", str(f)], capture_output=True, text=True, timeout=30)
+        assert done.returncode == 0, done.stderr
