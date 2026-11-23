@@ -13,7 +13,7 @@ service keys are rejected by the transport itself.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -81,6 +81,38 @@ class RequestWorkbench:
     originals: AuthorizedOriginalReader
 
 
+def legal_corpus_provider(environ: Mapping[str, str]) -> Callable[[str], Any]:
+    """Per-matter corpus choice, explicit: CASEPROOF_LEGAL_CORPUS_BY_CASE is a
+    JSON object mapping a case id to a corpus directory. A matter not listed
+    has no corpus (its articles are reported unchecked); there is no default."""
+    import json
+    from pathlib import Path
+
+    from application.litigation.legal_references import load_corpus_config
+    raw = environ.get("CASEPROOF_LEGAL_CORPUS_BY_CASE", "")
+    mapping: dict[str, str] = {}
+    if raw:
+        try:
+            decoded = json.loads(raw)
+        except ValueError:
+            raise ValueError("CASEPROOF_LEGAL_CORPUS_BY_CASE must be JSON") from None
+        if not isinstance(decoded, dict) or not all(
+                isinstance(k, str) and isinstance(v, str) for k, v in decoded.items()):
+            raise ValueError("CASEPROOF_LEGAL_CORPUS_BY_CASE must map case id to directory")
+        mapping = decoded
+    cache: dict[str, Any] = {}
+
+    def provider(case_id: str) -> Any:
+        directory = mapping.get(str(case_id))
+        if directory is None:
+            return None
+        if directory not in cache:
+            cache[directory] = load_corpus_config(Path(directory))
+        return cache[directory]
+
+    return provider
+
+
 def assemble_request_workbench(environ: Mapping[str, str], bearer: str) -> RequestWorkbench:
     """Assemble the bearer-bound live ports, refusing silently-mixed boots."""
     publishable = environ.get(_PUBLISHABLE_ENV, "")
@@ -108,6 +140,7 @@ def assemble_request_workbench(environ: Mapping[str, str], bearer: str) -> Reque
         verifier=verifier, store=store,
         issuer=f"https://{PROJECT_REF}.supabase.co/auth/v1",
         audience="authenticated", publisher=ledger,
+        legal_corpus_for=legal_corpus_provider(environ),
     )
     # M2LedgerState carries revision+packet and satisfies ReviewState
     # structurally; the ledger keeps its richer return type for callers.

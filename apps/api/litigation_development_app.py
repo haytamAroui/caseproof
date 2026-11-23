@@ -163,7 +163,6 @@ def create_litigation_development_app(
     reviews: SignedReviewWorkspace | None = None,
     signed_workbench_factory: Callable[[str], Any] | None = None,
     signed_source_ingest: Callable[..., object] | None = None,
-    legal_corpus: Callable[[], Any] | None = None,
     publishable_key: str | None = None,
     trusted_ingest_key: str | None = None,
     ocr: LocalPDFOCR | None = None,
@@ -193,7 +192,7 @@ def create_litigation_development_app(
         )
     )
 
-    app.include_router(create_signed_workbench_router(signed_workbench_factory, legal_corpus))
+    app.include_router(create_signed_workbench_router(signed_workbench_factory))
 
     if publishable_key is not None and (
         not publishable_key.startswith("sb_publishable_")

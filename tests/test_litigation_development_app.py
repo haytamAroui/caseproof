@@ -3908,7 +3908,66 @@ def test_legal_reference_check_statuses_and_honest_boundaries():
                chosen_versions={"synthetic-civ": "v2"})[0].corpus_version == "v2"
     # A mention in a form the parser cannot read is surfaced, never skipped.
     lower = run("Selon l'article 12 du Code civil, ...")
-    assert lower and all(o.status is S.UNDETERMINED for o in lower)
-    assert lower[0].reason == "article_mention_not_readable_by_level1_parser"
+    assert [o.status for o in lower] == [S.PASS] and lower[0].article == "12"
+    unreadable = run("Selon l'article 12 précité, ...")
+    assert unreadable and all(o.status is S.UNDETERMINED for o in unreadable)
+    assert unreadable[0].reason == "article_mention_not_readable_by_level1_parser"
     # Deterministic and bounded to explicit inputs.
     assert run("Article 12 du Code civil.") == run("Article 12 du Code civil.")
+
+
+def test_legal_observations_are_part_of_the_frozen_run_and_reviewable():
+    import json
+    from dataclasses import replace
+
+    from application.litigation.legal_references import check_legal_references
+    from application.litigation.unified_review import (
+        ObservationReview,
+        ReviewDisposition,
+        run_unified_check,
+        verification_record,
+    )
+    from tests.test_litigation_m2_unified_review import rig
+    b, register, previews, scope = rig()
+    legal = check_legal_references(
+        "Article 12 du Code civil : « le preneur ne répond de rien ».",
+        _legal_corpus(), {"C.civ.": "synthetic-civ"})
+    kw = {"representation": b, "register": register, "previews": previews,
+          "source_scope": scope, "authorized_case_id": "case-1",
+          "authorized_register_revision": 4}
+    plain = run_unified_check(**kw)
+    with_legal = run_unified_check(**kw, legal_observations=legal)
+    # No legal observation: the historical snapshot hash is unchanged.
+    assert plain.legal_observations == () and run_unified_check(**kw).snapshot_hash == plain.snapshot_hash
+    # Legal results are bound into the snapshot, so a corpus change is a new run.
+    assert with_legal.snapshot_hash != plain.snapshot_hash
+    other = replace(legal[0], corpus_text_sha256="1" * 64)
+    assert run_unified_check(**kw, legal_observations=(other,)).snapshot_hash != with_legal.snapshot_hash
+    oid = "legal:" + legal[0].reference_id
+    review = ObservationReview(oid, "actor-1", ReviewDisposition.CONFIRMED, "citation a corriger")
+    record = json.loads(verification_record(with_legal, reviews=(review,)))
+    assert record["legal_references"][0]["status"] == "FAIL"
+    # A decision on a legal id the run does not contain is refused.
+    import pytest
+
+    from application.litigation.unified_review import VerificationError
+    with pytest.raises(VerificationError):
+        verification_record(plain, reviews=(review,))
+
+
+def test_legal_corpus_is_chosen_per_matter_never_by_default(tmp_path):
+    import json
+
+    import pytest
+
+    from apps.api.signed_live_composition import legal_corpus_provider
+    assert legal_corpus_provider({})("case-a") is None
+    (tmp_path / "corpus-manifest.toml").write_text("")
+    chosen = legal_corpus_provider({"CASEPROOF_LEGAL_CORPUS_BY_CASE": json.dumps({"case-a": str(tmp_path)})})
+    assert chosen("case-b") is None
+    # A chosen but unreadable corpus fails closed instead of silently reading as "no corpus".
+    from application.litigation.corpus import CorpusError
+    with pytest.raises(CorpusError):
+        chosen("case-a")
+    with pytest.raises(ValueError):
+        legal_corpus_provider({"CASEPROOF_LEGAL_CORPUS_BY_CASE": "[1]"})

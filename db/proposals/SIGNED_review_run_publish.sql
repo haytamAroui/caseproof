@@ -57,6 +57,15 @@ begin
    or jsonb_typeof(v_payload->'sources'->'excluded')<>'array'
    or jsonb_typeof(v_payload->'citations')<>'array'
    or jsonb_typeof(v_payload->'factual_candidates')<>'array'
+   or (v_payload ? 'legal_references' and (
+         jsonb_typeof(v_payload->'legal_references')<>'array'
+         or jsonb_array_length(v_payload->'legal_references')>512
+         or exists(select 1 from jsonb_array_elements(v_payload->'legal_references') l
+                   where jsonb_typeof(l.value)<>'object'
+                      or jsonb_typeof(l.value->'reference_id')<>'string'
+                      or (l.value->>'status') not in ('PASS','FAIL','UNDETERMINED','UNVERIFIED')
+                      or ((l.value->>'status')='UNVERIFIED'
+                          and (l.value->>'reason')<>'article_absent_from_chosen_corpus'))))
    then return jsonb_build_object('ok',false,'error','invalid'); end if;
 
    -- source denominator: bounded uuid pairs, subsets and disjointness

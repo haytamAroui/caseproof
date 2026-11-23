@@ -20,11 +20,6 @@ from uuid import UUID
 from fastapi import APIRouter, Header
 from pydantic import BaseModel, ConfigDict, Field
 
-from application.litigation.legal_references import (
-    LegalCorpusConfig,
-    check_legal_references,
-)
-from application.litigation.legal_references import to_wire as legal_to_wire
 from application.litigation.review_cycle import CorrectionProposal, preview_correction
 from application.litigation.unified_review import ReviewDisposition
 from apps.api.access_control import AccessFailure, AccessRejected
@@ -69,9 +64,13 @@ class CorrectionPreviewBody(BaseModel):
     rationale: str = Field(min_length=1, max_length=2000)
 
 
+def _corpus_for(wb: Any, case_id: str) -> Any:
+    provider = getattr(wb.checker, "legal_corpus_for", None)
+    return provider(case_id) if callable(provider) else None
+
+
 def create_signed_workbench_router(
     factory: Callable[[str], _Workbench] | None,
-    legal_corpus: Callable[[], LegalCorpusConfig] | None = None,
 ) -> APIRouter:
     router = APIRouter()
     base = "/dev/signed/matters/{case_id}/briefs/{brief_version_id}"
@@ -100,22 +99,46 @@ def create_signed_workbench_router(
         case_id: str, brief_version_id: str,
         authorization: Annotated[str | None, Header()] = None,
     ) -> dict[str, Any]:
-        """Cited articles checked against the CHOSEN corpus, version-bound.
+        """Cited articles of THIS run, version-bound (same snapshot as the check).
 
-        Without a configured corpus the route says so and returns no verdicts:
-        there is no default corpus and no network lookup.
+        The results are observations of the frozen run, so they are reviewable
+        and exported with it. Without a corpus chosen for the matter the route
+        says so and returns no verdicts: no default corpus, no network lookup.
         """
         bearer, wb = bench(authorization)
         run = wb.checker.check(
             bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
-        head = {
+        config = _corpus_for(wb, case_id)
+        return {
             "schema": "caseproof-signed-legal-references-v1",
             "brief_version_id": brief_version_id,
             "snapshot_hash": run.snapshot_hash,
             "note": _LEGAL_NOTE,
+            "corpus": "configured" if config is not None else "not_configured",
+            "corpus_articles": len(config.records) if config is not None else 0,
+            "corpus_failures": list(config.failures) if config is not None else [],
+            "references": [
+                {**asdict(x), "observation_id": f"legal:{x.reference_id}",
+                 "claim_support": "not_assessed"} for x in run.legal_observations
+            ],
         }
-        if legal_corpus is None:
-            return {**head, "corpus": "not_configured", "references": []}
+
+    @router.get(base + "/legal-references/{reference_id}/passage")
+    def signed_legal_passage(
+        case_id: str, brief_version_id: str, reference_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Side by side: the lawyer's sentence and the exact corpus article text.
+
+        The article text is served only when its hash equals the hash frozen
+        in the run; otherwise the corpus changed and the run must be redone.
+        """
+        bearer, wb = bench(authorization)
+        run = wb.checker.check(
+            bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        obs = next((x for x in run.legal_observations if x.reference_id == reference_id), None)
+        if obs is None:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         subject = wb.checker._verified(bearer)
         scope = wb.checker._scope(subject, case_id)
         try:
@@ -123,15 +146,28 @@ def create_signed_workbench_router(
                 case_id=case_id, brief_version_id=brief_version_id, access=scope)
         except Exception:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
-        config = legal_corpus()
-        refs = check_legal_references(
-            bundle.representation.text, config.records, config.act_aliases,
-            chosen_versions=config.chosen_versions)
+        text = bundle.representation.text
+        lo, hi = max(0, obs.start - 160), min(len(text), obs.end + 240)
+        article_text = None
+        config = _corpus_for(wb, case_id)
+        if config is not None and obs.corpus_key is not None:
+            rec = next((r for r in config.records if r.key == obs.corpus_key), None)
+            if rec is not None and rec.derived_sha256 == obs.corpus_text_sha256:
+                article_text = rec.derived_text
+            else:
+                raise AccessRejected(AccessFailure.STALE_SNAPSHOT)
         return {
-            **head, "corpus": "configured",
-            "corpus_articles": len(config.records),
-            "corpus_failures": list(config.failures),
-            "references": [legal_to_wire(r) for r in refs],
+            "schema": "caseproof-signed-legal-passage-v1",
+            "observation_id": f"legal:{obs.reference_id}",
+            "snapshot_hash": run.snapshot_hash,
+            "brief_excerpt": text[lo:hi],
+            "citation_span": [obs.start - lo, obs.end - lo],
+            "article_text": article_text,
+            "corpus_key": obs.corpus_key, "corpus_version": obs.corpus_version,
+            "corpus_text_sha256": obs.corpus_text_sha256,
+            "corpus_source_uri": obs.corpus_source_uri,
+            "status": obs.status, "reason": obs.reason,
+            "note": _LEGAL_NOTE,
         }
 
     @router.get(base + "/sources")

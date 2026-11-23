@@ -9,8 +9,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol
 
+from application.litigation.legal_references import check_legal_references
 from application.litigation.library import EvidencePreview
 from application.litigation.matter_policy import (
     CurrentMatterGrant,
@@ -85,12 +86,16 @@ class AuthorizedLitigationChecker:
         self, *, verifier: BearerIdentityVerifier, store: PrivateMatterCheckStore,
         issuer: str, audience: str, clock: Callable[[], datetime] | None = None,
         publisher: CheckedRunPublisher | None = None,
+        legal_corpus_for: Callable[[str], Any] | None = None,
     ) -> None:
         if not issuer or not audience:
             raise ValueError("trusted Supabase issuer and audience required")
         self.verifier = verifier
         self.store = store
         self.publisher = publisher
+        # Per-matter chosen corpus: case_id -> LegalCorpusConfig | None. No
+        # default corpus; a matter without one has its articles unchecked.
+        self.legal_corpus_for = legal_corpus_for
         self.issuer = issuer
         self.audience = audience
         self.clock = clock or (lambda: datetime.now(UTC))
@@ -148,11 +153,18 @@ class AuthorizedLitigationChecker:
             )
             if not isinstance(bundle, CheckBundle) or bundle.representation.brief.version_id != brief_version_id:
                 raise MatterCheckUnavailable()
+            legal: tuple[Any, ...] = ()
+            config = self.legal_corpus_for(scope.case_id) if self.legal_corpus_for else None
+            if config is not None:
+                legal = check_legal_references(
+                    bundle.representation.text, config.records, config.act_aliases,
+                    chosen_versions=config.chosen_versions)
             report = run_unified_check(
                 representation=bundle.representation, register=bundle.register,
                 previews=bundle.previews, source_scope=bundle.source_scope,
                 authorized_case_id=scope.case_id,
                 authorized_register_revision=bundle.register.revision,
+                legal_observations=legal,
             )
             # Prevent accidental use of a revoked/grant-changed or source-stale result.
             current = self._scope(self._verified(bearer), case_id)

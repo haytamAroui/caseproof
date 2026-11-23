@@ -34,6 +34,7 @@ from typing import Any
 from application.litigation.corpus import ArticleRecord, load_corpus
 from application.litigation.rule_results import RuleStatus
 from application.litigation.suitability_rules import article_key
+from application.litigation.unified_review import LegalObservation
 from domains.disputes.statute_parser import (
     AnchoredStatuteCitation,
     extract_anchored_statute_citations,
@@ -48,22 +49,7 @@ _BIND_GAP_MAX = 40
 _QUOTE_MAX = 4000
 
 
-@dataclass(frozen=True, slots=True)
-class LegalReferenceObservation:
-    reference_id: str
-    raw_text: str
-    start: int
-    end: int
-    act_code: str | None
-    article: str | None
-    language: str | None
-    status: RuleStatus
-    reason: str
-    corpus_key: str | None = None
-    corpus_version: str | None = None
-    corpus_text_sha256: str | None = None
-    corpus_source_uri: str | None = None
-    quote: str | None = None
+LegalReferenceObservation = LegalObservation
 
 
 def _norm(text: str) -> str:
@@ -230,7 +216,7 @@ def to_wire(obs: LegalReferenceObservation) -> dict[str, object]:
         "reference_id": obs.reference_id, "raw_text": obs.raw_text,
         "span": [obs.start, obs.end], "act_code": obs.act_code,
         "article": obs.article, "language": obs.language,
-        "status": obs.status.value, "reason": obs.reason,
+        "status": str(obs.status), "reason": obs.reason,
         "corpus_key": obs.corpus_key, "corpus_version": obs.corpus_version,
         "corpus_text_sha256": obs.corpus_text_sha256,
         "corpus_source_uri": obs.corpus_source_uri, "quote": obs.quote,

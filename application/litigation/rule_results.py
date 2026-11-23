@@ -35,7 +35,7 @@ from application.litigation.brief_checks import CitationCheckState, CitationObse
 from application.litigation.dossier_contracts import CONTRACT
 from application.litigation.factual_values import FactObservation, FactState
 from application.litigation.paraphrase_guard import GUARD_VERSION
-from application.litigation.unified_review import ENGINE, VerificationRun
+from application.litigation.unified_review import ENGINE, LegalObservation, VerificationRun
 from domains.disputes.dossier_verification import ALGORITHM
 
 CONTRACT_VERSION = "caseproof-rule-result-contract-v1"
@@ -503,6 +503,37 @@ def coverage_issue_result(
     )
 
 
+def legal_result(
+    observation: LegalObservation,
+    *,
+    brief_sha256: str | None = None,
+    representation_sha256: str | None = None,
+) -> RuleResult:
+    """Project a legal-reference check. UNVERIFIED keeps its single meaning."""
+    status = RuleStatus(observation.status)
+    corpus_ok = observation.status != RuleStatus.UNVERIFIED.value
+    return RuleResult(
+        rule_id="legal.reference_in_corpus",
+        rule_version="caseproof-legal-reference-check-v1",
+        status=status,
+        reference=observation.reference_id,
+        scope=("Article presence in the matter's chosen corpus and literal "
+               "quotation integrity only; not applicability, adequacy or support."),
+        preconditions=(
+            RulePrecondition("article_present_in_chosen_corpus", corpus_ok, observation.reason),
+            RulePrecondition("explicit_quotation_present", observation.quote is not None,
+                             observation.reason),
+        ),
+        input_hashes=_hashes(
+            ("brief_original_sha256", brief_sha256),
+            ("brief_representation_sha256", representation_sha256),
+            ("corpus_text_sha256", observation.corpus_text_sha256),
+        ),
+        reason=observation.reason,
+        subresults=(("legal_reference_state", observation.reason),),
+    )
+
+
 def run_rule_results(run: VerificationRun) -> tuple[RuleResult, ...]:
     """Project every citation and factual observation of a frozen unified run.
 
@@ -518,6 +549,9 @@ def run_rule_results(run: VerificationRun) -> tuple[RuleResult, ...]:
         + [fact_result(x, brief_sha256=run.brief_sha256,
                        representation_sha256=run.representation_sha256)
            for x in run.factual_observations]
+        + [legal_result(x, brief_sha256=run.brief_sha256,
+                        representation_sha256=run.representation_sha256)
+           for x in run.legal_observations]
     )
 
 

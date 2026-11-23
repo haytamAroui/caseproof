@@ -308,6 +308,10 @@
         source:a.source_id,version:a.source_version_id,sourceSha:a.source_sha256,
         representation:a.representation_id,span:"Version-bound candidate",raw:a,
       })),
+      ...(state.check.legal_observations||[]).map(a=>({
+        id:"legal:"+a.reference_id,kind:"Legal reference",state:a.status,source:null,
+        span:"Offsets "+a.start+"\u2013"+a.end+" \u00b7 "+a.raw_text,raw:a,
+      })),
     ];
   }
   function renderChecks() {
@@ -337,7 +341,7 @@
     $("fact-count").textContent=String(state.check?.factual_observations?.length??0);
     if(!state.check){$("observations-filter").hidden=true;node.append(el("p","Check is unavailable. No success or correctness is implied.","empty"));return;}
     if(!values.length){$("observations-filter").hidden=true;node.append(el("p","No observations in this declared scope. This is not a certification.","empty"));return;}
-    const cleanStates=new Set(["exact_match","ready"]);
+    const cleanStates=new Set(["exact_match","ready","PASS"]);
     const attention=values.filter(v=>!cleanStates.has(v.state));
     const clean=values.filter(v=>cleanStates.has(v.state));
     state.showAll=state.showAll===true;
@@ -352,12 +356,39 @@
       const button=el("button","","observation");button.type="button";
       button.setAttribute("aria-pressed",String(state.selected?.id===item.id));
       button.append(el("span",item.kind+" / "+label(item.state),"tag"));
-      button.append(el("strong",item.id.replace("citation:","Reference ").replace("fact:","Fact ")));
+      button.append(el("strong",item.id.replace("citation:","Reference ").replace("fact:","Fact ").replace("legal:","Legal reference ")));
       button.append(el("small",(labelOf(item.source)||"No confirmed source")+" · "+item.span));
       button.addEventListener("click",()=>{if(state.loading||state.busy||state.pending)return;
         state.selected=item;renderChecks();renderSelected();});
       node.append(button);
     }
+  }
+  async function renderLegalPassage(selected){
+    const generation=state.generation,box=$("source-preview");
+    box.replaceChildren(el("p","Loading the cited article from the chosen corpus\u2026","small"));
+    try{
+      const d=await api(reviewPath()+"/legal-references/"+encodeURIComponent(selected.raw.reference_id)+"/passage");
+      if(generation!==state.generation||state.selected!==selected)return;
+      if(d.schema!=="caseproof-signed-legal-passage-v1"||d.observation_id!==selected.id||d.snapshot_hash!==state.check?.snapshot_hash)
+        throw Error("invalid_schema");
+      box.replaceChildren();
+      const grid=el("div","","side-by-side");
+      const left=el("div"),right=el("div");
+      left.append(el("strong","Your brief"));
+      const [s,e]=d.citation_span,ex=d.brief_excerpt;
+      const p=el("p","","brief-excerpt");
+      p.append(document.createTextNode(ex.slice(0,s)));
+      const mark=el("mark",ex.slice(s,e));p.append(mark);
+      p.append(document.createTextNode(ex.slice(e)));left.append(p);
+      right.append(el("strong","Chosen corpus article"));
+      if(d.article_text===null)right.append(el("p","The article is not in the corpus chosen for this matter. Nothing was looked up elsewhere.","small"));
+      else{right.append(el("p",d.article_text,"article-text"));
+        right.append(el("p",(d.corpus_key||"")+" \u00b7 version "+(d.corpus_version||"")+" \u00b7 SHA-256 "+(d.corpus_text_sha256||"").slice(0,16)+"\u2026","small mono"));
+        right.append(el("p",d.corpus_source_uri||"","small mono"));}
+      grid.append(left,right);box.append(grid);
+      box.append(el("p","Result: "+d.status+" \u00b7 "+d.reason+". "+d.note,"small"));
+      state.previewReady=true;$("save-review").disabled=!state.review||state.loading||state.busy;
+    }catch(error){if(generation===state.generation&&state.selected===selected)box.textContent="Article passage unavailable: "+statusFor(error);}
   }
   function renderSelected(){
     const selected=state.selected;
@@ -372,6 +403,7 @@
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
     // A claim may be reviewed only against the exact checked source version,
     // digest and representation, never a newer catalog entry sharing its source_id.
+    if(selected.kind==="Legal reference"){void renderLegalPassage(selected);return;}
     if(!selected.source){
       $("source-preview").textContent="No source resolved for this observation. Evidence support is unknown.";
       state.previewReady=true;$("save-review").disabled=!state.review||state.loading||state.busy;return;
