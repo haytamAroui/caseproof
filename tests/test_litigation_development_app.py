@@ -1113,7 +1113,8 @@ def test_workbench_publish_route_error_mapping():
     assert _publish_post(_publish_route_client(_Conflict())).status_code == 409
 
 
-def _composer_rig(data, register_payload, *, media="text/plain", head_mismatch=False):
+def _composer_rig(data, register_payload, *, media="text/plain", head_mismatch=False,
+                  sources=None):
     import hashlib
     from uuid import UUID
 
@@ -1142,12 +1143,15 @@ def _composer_rig(data, register_payload, *, media="text/plain", head_mismatch=F
 
     class _Library:
         def source(self, *, bearer, case_id, document_id, version_id):
+            blob, blob_media = (sources or {}).get(
+                (str(document_id), str(version_id)), (data, media))
             ref = OriginalRef(org, UUID(case_id), UUID(document_id), UUID(version_id),
-                              hashlib.sha256(data).hexdigest(), media)
-            return ref, len(data)
+                              hashlib.sha256(blob).hexdigest(), blob_media)
+            return ref, len(blob)
 
         def read(self, *, bearer, case_id, document_id, version_id):
-            return data
+            return (sources or {}).get(
+                (str(document_id), str(version_id)), (data, media))[0]
 
     composer = ComposedSignedBriefPublisher(
         library=_Library(),
@@ -1403,10 +1407,17 @@ def test_composed_publisher_docx_path_derives_from_trusted_parser():
 
 
 def test_composed_publisher_pdf_text_native_complete_only():
+    import copy
+
     from apps.api.signed_supabase_originals import PrivateStorageFailure
 
     data = _pdf_fixture_bytes([_BRIEF_TEXT.split(". ")])
-    composer, captured = _composer_rig(data, _REGISTER, media="application/pdf")
+    # Pièce sans inventaire physique vérifié (corpus TXT) : non mappée.
+    unpaginated = copy.deepcopy(_REGISTER)
+    for entry in unpaginated["entries"]:
+        entry["pages"] = [{"source_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+                           "pdf_page": None, "printed_page": None, "bundle_page": None}]
+    composer, captured = _composer_rig(data, unpaginated, media="application/pdf")
     outcome = composer.publish_uploaded(
         bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
         version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
@@ -1418,11 +1429,55 @@ def test_composed_publisher_pdf_text_native_complete_only():
     assert [r["pdf_page"] for r in captured["p_references"]] == [None, None]
     # Page image (scannée) ou visuelle : refus visible, jamais de partiel.
     gap = _pdf_fixture_bytes([["Page texte native."], []], image_page=1)
-    refusing, _captured = _composer_rig(gap, _REGISTER, media="application/pdf")
+    refusing, _captured = _composer_rig(gap, unpaginated, media="application/pdf")
     with pytest.raises(PrivateStorageFailure):
         refusing.publish_uploaded(
             bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
             version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+
+
+def test_composed_publisher_resolves_unambiguous_pdf_page_only():
+    exhibit_doc = "dddddddd-1111-4111-8111-dddddddddddd"
+    exhibit_ver = "eeeeeeee-2222-4222-8222-eeeeeeeeeeee"
+    exhibit_pdf = _pdf_fixture_bytes([
+        ["Contrat-cadre synthétique.", "Clause introductive."],
+        ["Clause prix:", "paiement sous 30 jours", "et livraison incluse"],
+    ])
+    register = {
+        "schema": "caseproof-exhibit-register-v1",
+        "entries": [
+            {"exhibit_id": "piece-pdf", "display_label": "Contrat",
+             "aliases": ["le contrat"], "confirmed": True, "manual_inclusion": False,
+             "pages": [
+                 {"source_id": exhibit_doc, "version_id": exhibit_ver, "pdf_page": 1,
+                  "printed_page": None, "bundle_page": None},
+                 {"source_id": exhibit_doc, "version_id": exhibit_ver, "pdf_page": 2,
+                  "printed_page": None, "bundle_page": None}]},
+        ],
+    }
+    brief = ("Le juge constate que «paiement sous 30 jours» (Contrat), que "
+             "«livraison incluse» (Le Contrat) et que «Clause» (Contrat).")
+    composer, captured = _composer_rig(
+        brief.encode("utf-8"), register,
+        sources={(exhibit_doc, exhibit_ver): (exhibit_pdf, "application/pdf")})
+    outcome = composer.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert outcome.published_revision == 1
+    pages = {r["exact_quote"]: r["pdf_page"] for r in captured["p_references"]}
+    # Occurrence unique sur la page physique 2 : page réelle résolue.
+    assert pages["paiement sous 30 jours"] == 2
+    assert pages["livraison incluse"] == 2
+    # « Clause » apparaît sur les deux pages : abstention, jamais de page devinée.
+    assert pages["Clause"] is None
+    # Rejeu déterministe : même publication, mêmes pages.
+    composer2, captured2 = _composer_rig(
+        brief.encode("utf-8"), register,
+        sources={(exhibit_doc, exhibit_ver): (exhibit_pdf, "application/pdf")})
+    composer2.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert captured2["p_references"] == captured["p_references"]
 
 
 def test_registry_ingest_service_transport_contract():

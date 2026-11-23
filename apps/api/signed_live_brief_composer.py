@@ -92,8 +92,12 @@ class ComposedSignedBriefPublisher:
         ):
             raise ValueError("Use a Supabase publishable key, never a service key")
 
-    def _confirmed_labels(self, bearer: str, case_id: str, version_id: str) -> dict[str, str]:
-        """Confirmed register labels (display + aliases), lowercase → display."""
+    def _confirmed_labels(
+        self, bearer: str, case_id: str, version_id: str
+    ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
+        """Confirmed register labels (lowercase → display) and, per display
+        label, the cited source identity with whether the register entry
+        carries a real physical page inventory (PDF manifest pages)."""
         result = self.publisher._call(
             bearer,
             "caseproof_signed_exhibit_register",
@@ -104,13 +108,14 @@ class ComposedSignedBriefPublisher:
         if payload is None:
             if revision != 0:
                 raise PrivateStorageFailure("RPC result outside the signed contract")
-            return {}
+            return {}, {}
         if not isinstance(payload, dict):
             raise PrivateStorageFailure("RPC result outside the signed contract")
         entries_raw = payload.get("entries")
         if not isinstance(entries_raw, list) or len(entries_raw) > 512:
             raise PrivateStorageFailure("RPC result outside the signed contract")
         labels: dict[str, str] = {}
+        sources: dict[str, dict[str, Any]] = {}
         for entry in entries_raw:
             if not isinstance(entry, dict) or entry.get("confirmed") is not True:
                 continue
@@ -121,14 +126,40 @@ class ComposedSignedBriefPublisher:
             labels.setdefault(display.lower(), display)
             aliases = entry.get("aliases")
             if aliases is None:
-                continue
+                aliases = []
             if not isinstance(aliases, list) or len(aliases) > 64:
                 raise PrivateStorageFailure("RPC result outside the signed contract")
             for alias in aliases:
                 if type(alias) is not str or not 0 < len(alias.strip()) <= _MAX_LABEL:
                     raise PrivateStorageFailure("RPC result outside the signed contract")
                 labels.setdefault(alias.strip().lower(), display)
-        return labels
+            if display in sources:
+                continue
+            pages = entry.get("pages")
+            if (
+                not isinstance(pages, list)
+                or not 1 <= len(pages) <= 512
+                or any(not isinstance(page, dict) for page in pages)
+            ):
+                raise PrivateStorageFailure("RPC result outside the signed contract")
+            first = pages[0]
+            source_id, source_version = first.get("source_id"), first.get("version_id")
+            if type(source_id) is not str or type(source_version) is not str:
+                raise PrivateStorageFailure("RPC result outside the signed contract")
+            paginated = all(
+                type(page.get("pdf_page")) is int
+                or (
+                    type(page.get("pdf_page")) is float
+                    and float(page.get("pdf_page")).is_integer()
+                )
+                for page in pages
+            )
+            sources[display] = {
+                "document_id": source_id,
+                "version_id": source_version,
+                "paginated": paginated,
+            }
+        return labels, sources
 
     def _extract_references(
         self, text: str, labels: dict[str, str]
@@ -155,6 +186,69 @@ class ComposedSignedBriefPublisher:
             if len(references) > _MAX_REFERENCES:
                 raise PrivateStorageFailure("brief citations outside the signed contract")
         return references, citations
+
+    def _resolve_quote_page(
+        self,
+        *,
+        bearer: str,
+        case_key: str,
+        document_id: str,
+        version_id: str,
+        quote: str,
+    ) -> int | None:
+        """Physical PDF page of an exact quote, only when unambiguous.
+
+        Re-derived from the exhibit's verified bytes with the bounded
+        parser — never from a stored manifest. The page is resolved only
+        when every occurrence of the quote lies entirely inside exactly
+        one physical page's blocks; any ambiguity, read/parse failure or
+        non-PDF source abstains to None (displayed « not mapped »).
+        """
+        try:
+            ref, _length = self.library.source(
+                bearer=bearer, case_id=case_key,
+                document_id=_uuid(document_id, "document_id"),
+                version_id=_uuid(version_id, "version_id"),
+            )
+            if ref.content_type != _PDF_MIME:
+                return None
+            data = self.library.read(
+                bearer=bearer, case_id=case_key,
+                document_id=_uuid(document_id, "document_id"),
+                version_id=_uuid(version_id, "version_id"),
+            )
+            text, manifest = parse_verified_original(
+                document_id=document_id, version_id=version_id,
+                data=data, media_type=ref.content_type,
+            )
+        except (ExtractionError, PrivateStorageFailure, ValueError):
+            # Abstention, jamais de mapping inventé : la page reste nulle.
+            return None
+        blocks = manifest.get("blocks")
+        if not isinstance(blocks, list) or not blocks:
+            return None
+        pages: set[int] = set()
+        start = text.find(quote)
+        if start < 0:
+            return None
+        while start >= 0:
+            end = start + len(quote)
+            for block in blocks:
+                if (
+                    isinstance(block, dict)
+                    and type(block.get("page_index")) is int
+                    and type(block.get("start")) is int
+                    and type(block.get("end")) is int
+                    and block["start"] < end
+                    and start < block["end"]
+                ):
+                    pages.add(block["page_index"])
+            if len(pages) > 1:
+                return None
+            start = text.find(quote, start + 1)
+        if len(pages) != 1:
+            return None
+        return pages.pop() + 1
 
     @staticmethod
     def _parse_verified_text(
@@ -255,8 +349,20 @@ class ComposedSignedBriefPublisher:
         if not 0 < len(text.encode("utf-8")) <= _MAX_REPRESENTATION_BYTES:
             raise PrivateStorageFailure("representation outside the signed contract")
 
-        labels = self._confirmed_labels(bearer, case_key, version_key)
+        labels, sources = self._confirmed_labels(bearer, case_key, version_key)
         references, citations = self._extract_references(text, labels)
+        for reference in references:
+            source = sources.get(reference["exhibit_label"])
+            if source is None or source["paginated"] is not True:
+                continue
+            page = self._resolve_quote_page(
+                bearer=bearer, case_key=case_key,
+                document_id=source["document_id"],
+                version_id=source["version_id"],
+                quote=reference["exact_quote"],
+            )
+            if page is not None:
+                reference["pdf_page"] = page
         assertions = [
             {
                 "claim_id": assertion.claim_id,
