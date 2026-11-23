@@ -300,13 +300,28 @@
       notice("Original downloaded. Its source identity must still be independently validated.","ok");
     }catch(error){if(generation===state.generation)notice(statusFor(error),"danger");}
   }
+  function citationLocation(a){
+    const loc=state.inventory?.reference_locations?.[a.reference_id];
+    const matched=loc?.identity_confirmed===true && loc.source_id===a.source_id &&
+      loc.version_id===a.source_version_id;
+    return matched?loc:null;
+  }
+  function citationAnchorLabel(a){
+    if(Number.isInteger(a.text_start)&&Number.isInteger(a.text_end))return "Offsets "+a.text_start+"–"+a.text_end;
+    if(!a.source_id)return "Exhibit/source unresolved; no quotation anchor";
+    const loc=citationLocation(a);
+    const where=loc&&Number.isInteger(loc.pdf_page)?" · physical PDF page "+loc.pdf_page:" · physical page not mapped";
+    if(a.state==="reference_checked_no_quotation")return "Source resolved"+where+" · no quotation to anchor; support not assessed";
+    if(a.state==="quote_not_found")return "Source resolved"+where+" · quotation not found; no matched offsets";
+    return "Source resolved"+where+" · no aligned quotation offsets";
+  }
   function allObservations() {
     if(!state.check)return [];
     return [
       ...(state.check.citation_observations||[]).map(a=>({
         id:"citation:"+a.reference_id,kind:"Citation",state:a.state,source:a.source_id,
         version:a.source_version_id, sourceSha:a.source_sha256, representation:a.representation_id,
-        span:a.text_start===null?"Unresolved anchor":"Offsets "+a.text_start+"–"+a.text_end,
+        span:citationAnchorLabel(a),
         raw:a,
       })),
       ...(state.check.factual_observations||[]).map(a=>({
@@ -525,6 +540,7 @@
     $("selected").append(el("p",resultLabel(selected)+" · Check state: "+label(selected.state)));
     $("selected").append(el("p","Source: "+(labelOf(selected.source)||"not resolved"),"small"));
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
+    if(selected.kind==="Citation")$("selected").append(el("p",citationAnchorLabel(selected.raw),"small"));
     if(selected.kind==="Human-reported passage"){
       const a=selected.raw;
       $("selected").append(el("strong","Appréciation requise · human reported"));
@@ -639,7 +655,7 @@
         }
       }else{
         if(String(state.selected?.id||"").startsWith("citation:"))
-          preview.append(el("p","No aligned passage offsets are recorded for this observation; the source text is shown without highlight.","small"));
+          preview.append(el("p",citationAnchorLabel(obs)+". The source text is shown without highlight; no assertion support is inferred.","small"));
         preview.append(el("p",text||"Source has no available text representation."));
       }
       state.previewReady=true;$("save-review").disabled=!state.review||state.busy||state.loading;

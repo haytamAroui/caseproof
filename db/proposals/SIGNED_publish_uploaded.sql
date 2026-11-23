@@ -10,10 +10,8 @@
 --    server-side into an explicit source binding; no synthetic intent ID;
 --  * representation_sha256 and graph_sha256 are verified at write with the
 --    core sha256(bytea) primitive against the exact submitted text;
---  * every reference resolves against the current CONFIRMED exhibit register
---    (label/alias, case-insensitive); its quote must occur in the referenced
---    exhibit's registered source representation; pdf_page, when present, must
---    belong to that entry's confirmed pages;
+--  * references retain unresolved labels and nullable quotes for checking;
+--    a physical page, when supplied, must belong to a confirmed entry;
 --  * every assertion's text must equal the exact slice of the published
 --    representation it spans and must cite a passed reference; kind/fact_role/
 --    language/source_language must satisfy the live enum checks;
@@ -37,8 +35,8 @@ declare
  v_register jsonb; v_case_rev bigint; v_exhibit_rev bigint; v_original_sha text;
  v_raw bytea; v_working uuid; v_h text; v_ref jsonb; v_ast jsonb;
  v_ref_ids text[]:='{}';
- v_entry jsonb; v_entry_version uuid; v_entry_rep text;
- v_label text; v_quote text; v_pdf_page jsonb; v_ok boolean;
+ v_entry jsonb; v_entry_version uuid;
+ v_label text; v_pdf_page jsonb; v_ok boolean;
  v_new_rev bigint; v_now timestamptz:=now(); v_audit uuid:=gen_random_uuid();
  v_replay_version uuid;
 begin
@@ -136,10 +134,10 @@ begin
    or length(v_ref->>'reference_id') not between 1 and 128
    or jsonb_typeof(v_ref->'exhibit_label')<>'string'
    or length(v_ref->>'exhibit_label') not between 1 and 160
-   or jsonb_typeof(v_ref->'exact_quote')<>'string' or v_ref->>'exact_quote'=''
+   or jsonb_typeof(v_ref->'exact_quote') not in ('string','null') or v_ref->>'exact_quote'=''
    or length(v_ref->>'exact_quote')>4000
    then return jsonb_build_object('ok',false,'error','invalid'); end if;
-   v_label:=lower(v_ref->>'exhibit_label'); v_quote:=v_ref->>'exact_quote'; v_ok:=false;
+   v_label:=lower(v_ref->>'exhibit_label'); v_ok:=false;
    for v_entry in select value from jsonb_array_elements(coalesce(v_register,'[]'::jsonb)) loop
      if jsonb_typeof(v_entry)<>'object' or jsonb_typeof(v_entry->'confirmed')<>'boolean'
      or (v_entry->>'confirmed')::boolean is not true then continue; end if;
@@ -150,9 +148,7 @@ begin
      select (p->>'version_id')::uuid into v_entry_version
      from jsonb_array_elements(coalesce(v_entry->'pages','[]'::jsonb)) p limit 1;
      if v_entry_version is null then continue; end if;
-     select s.representation into v_entry_rep from caseproof._dev_journey_sources s
-     where s.org_id=v_org and s.case_id=p_case and s.version_id=v_entry_version;
-     if v_entry_rep is null or position(v_quote in v_entry_rep)=0 then continue; end if;
+     -- Quote presence is checked after publication, never used to hide a finding.
      v_pdf_page:=v_ref->'pdf_page';
      if v_pdf_page is not null and jsonb_typeof(v_pdf_page)='number' then
        if v_pdf_page::numeric<>trunc(v_pdf_page::numeric)
@@ -163,7 +159,8 @@ begin
      end if;
      v_ok:=true; exit;
    end loop;
-   if not v_ok then return jsonb_build_object('ok',false,'error','invalid'); end if;
+   if not v_ok and jsonb_typeof(v_ref->'pdf_page')='number'
+   then return jsonb_build_object('ok',false,'error','invalid'); end if;
    if v_ref->>'reference_id'=any(v_ref_ids) then return jsonb_build_object('ok',false,'error','invalid'); end if;
    v_ref_ids:=array_append(v_ref_ids,v_ref->>'reference_id');
  end loop;

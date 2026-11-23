@@ -12,12 +12,11 @@ Derivation, fail-closed at every step:
    revocation-drift re-check), restricted to ``text/plain`` originals in
    strict UTF-8, matching the trusted-registry parser ``strict-utf8-txt-v1``;
 2. the confirmed exhibit register via ``caseproof_signed_exhibit_register``;
-3. citation references extracted from the representation
-   (« citation » (label)) whose label names a confirmed exhibit or one of
-   its aliases — the same citation grammar as the demo workbench;
-4. a graph preimage with the same canonical fields as the disposable graph
-   identity, minus the vault intent, which the publish RPC resolves
-   server-side and stores on the version row;
+3. quoted references and canonical Pièce/Stuk references, preserving
+   unresolved identities and null quotations for explicit checker findings;
+   physical/printed/bundle pages map only through the confirmed register;
+4. a graph preimage derived from those inputs; the publish RPC resolves
+   trusted-ingestion/Storage lineage server-side without a synthetic intent;
 5. a post-publish head read (``caseproof_signed_brief_head``) compared
    with the RPC outcome: any mismatch is an unknown outcome, never a
    silent success.
@@ -37,11 +36,13 @@ from uuid import uuid4
 
 from application.extraction.contracts import ExtractionError
 from application.litigation.fact_extraction import extract_fact_assertions
+from apps.api.draft_reference_adapter import adapt_text
 from apps.api.signed_document_parse import parse_verified_original, resolve_quote_page
 from apps.api.signed_supabase_brief_publisher import (
     LiveSignedBriefPublisher,
     SignedPublishOutcome,
     _int,
+    _parse_entry,
     _uuid,
     _working_brief_id,
 )
@@ -51,6 +52,8 @@ from apps.api.signed_supabase_originals import (
     PrivateStorageOutcomeUnknown,
 )
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
+from domains.disputes.exhibits import ExhibitRegister
+from domains.disputes.reference_detection import detect_exhibit_references
 
 PARSER_ID = "strict-utf8-txt-v1"
 _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -65,7 +68,7 @@ _PDF_MIME = "application/pdf"
 # claimed and no page is guessed.
 _PDF_PUBLISHABLE_WARNINGS: frozenset[str] = frozenset()
 _MAX_REPRESENTATION_BYTES = 480_000
-_MAX_REFERENCES = 512
+_MAX_REFERENCES = 128
 _MAX_QUOTE = 4000
 _MAX_LABEL = 160
 _MAX_GRAPH_TEXT = 200_000
@@ -125,7 +128,7 @@ class ComposedSignedBriefPublisher:
 
     def _confirmed_labels(
         self, bearer: str, case_id: str, version_id: str
-    ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
+    ) -> tuple[dict[str, str], dict[str, dict[str, Any]], ExhibitRegister]:
         """Confirmed register labels (lowercase → display) and, per display
         label, the cited source identity with whether the register entry
         carries a real physical page inventory (PDF manifest pages)."""
@@ -139,8 +142,8 @@ class ComposedSignedBriefPublisher:
         if payload is None:
             if revision != 0:
                 raise PrivateStorageFailure("RPC result outside the signed contract")
-            return {}, {}
-        if not isinstance(payload, dict):
+            return {}, {}, ExhibitRegister(1, ())
+        if type(revision) is not int or revision < 1 or not isinstance(payload, dict):
             raise PrivateStorageFailure("RPC result outside the signed contract")
         entries_raw = payload.get("entries")
         if not isinstance(entries_raw, list) or len(entries_raw) > 512:
@@ -190,17 +193,24 @@ class ComposedSignedBriefPublisher:
                 "version_id": source_version,
                 "paginated": paginated,
             }
-        return labels, sources
+        try:
+            register = ExhibitRegister(revision, tuple(_parse_entry(e) for e in entries_raw))
+        except (TypeError, ValueError):
+            raise PrivateStorageFailure("invalid exhibit register") from None
+        return labels, sources, register
 
     def _extract_references(
-        self, text: str, labels: dict[str, str]
+        self, text: str, labels: dict[str, str], register: ExhibitRegister
     ) -> tuple[list[dict[str, Any]], list[tuple[str, int]]]:
         references: list[dict[str, Any]] = []
         citations: list[tuple[str, int]] = []
+        quote_ranges: list[tuple[int, int]] = []
         for match in _QUOTE_RE.finditer(text):
-            display = labels.get(match.group("label").strip().lower())
-            if display is None:
-                continue
+            raw_label = match.group("label").strip()
+            resolution = register.resolve(raw_label)
+            display = (labels.get(raw_label.lower(), raw_label)
+                       if resolution.identity_confirmed else raw_label)
+            quote_ranges.append((match.start(), match.end()))
             quote = match.group("quote").strip()
             if not quote or len(quote) > _MAX_QUOTE:
                 continue
@@ -216,6 +226,26 @@ class ComposedSignedBriefPublisher:
             citations.append((reference_id, match.end()))
             if len(references) > _MAX_REFERENCES:
                 raise PrivateStorageFailure("brief citations outside the signed contract")
+        # Reuse canonical Pièce/Stuk page-space semantics. References are kept
+        # even unresolved/unconfirmed, so the checker can report the gap.
+        adapted = adapt_text(text, register)
+        detected = detect_exhibit_references(text, region="brief")
+        for reference, occurrence in zip(adapted.references, detected, strict=True):
+            if any(start <= occurrence.start and occurrence.end <= end for start, end in quote_ranges):
+                continue
+            reference_id = f"ref-{len(references) + 1:02d}"
+            references.append({"reference_id": reference_id,
+                               "exhibit_label": reference.exhibit_label,
+                               "exact_quote": None, "pdf_page": reference.pdf_page})
+            citations.append((reference_id, occurrence.end))
+        if len(references) > _MAX_REFERENCES:
+            raise PrivateStorageFailure("brief citations outside the signed contract")
+        ordered = sorted(zip(references, citations, strict=True), key=lambda item: item[1][1])
+        references, citations = [], []
+        for index, (raw_reference, (_old_id, end)) in enumerate(ordered, 1):
+            reference_id = f"ref-{index:02d}"
+            references.append({**raw_reference, "reference_id": reference_id})
+            citations.append((reference_id, end))
         return references, citations
 
     def _resolve_quote_page(
@@ -359,11 +389,13 @@ class ComposedSignedBriefPublisher:
         if not 0 < len(text.encode("utf-8")) <= _MAX_REPRESENTATION_BYTES:
             raise PrivateStorageFailure("representation outside the signed contract")
 
-        labels, sources = self._confirmed_labels(bearer, case_key, version_key)
-        references, citations = self._extract_references(text, labels)
+        labels, sources, register = self._confirmed_labels(bearer, case_key, version_key)
+        references, citations = self._extract_references(text, labels, register)
         for reference in references:
             source = sources.get(reference["exhibit_label"])
-            if source is None or source["paginated"] is not True:
+            if (source is None or source["paginated"] is not True
+                or reference["exact_quote"] is None
+                or not register.resolve(reference["exhibit_label"]).identity_confirmed):
                 continue
             page = self._resolve_quote_page(
                 bearer=bearer, case_key=case_key,

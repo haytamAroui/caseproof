@@ -84,6 +84,20 @@ class SignedBriefSources:
             "brief_version_id": brief_version_id,
             "rows": [asdict(x) for x in rows],
             "labels": _labels(bundle),
+            # Explicit reference location from THIS authorized frozen register.
+            # Not a quote anchor and never evidence of assertion support.
+            "reference_locations": {
+                ref.reference_id: {
+                    "exhibit_label": ref.exhibit_label,
+                    "identity_confirmed": resolved.identity_confirmed,
+                    "mapping_state": resolved.state.value,
+                    "source_id": resolved.page.source_id if resolved.page else None,
+                    "version_id": resolved.page.version_id if resolved.page else None,
+                    "pdf_page": resolved.page.pdf_page if resolved.page else None,
+                }
+                for ref in bundle.representation.brief.references
+                for resolved in (bundle.register.resolve(ref.exhibit_label, pdf_page=ref.pdf_page),)
+            },
             "complete": not missing and not excluded and len(rows)==len(expected),
             "failed_count": sum(x.status=="failed" for x in rows),
             "partial_count": incomplete+len(expected-{(x.source_id,x.version_id) for x in rows}),

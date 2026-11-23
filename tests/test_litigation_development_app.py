@@ -1192,6 +1192,10 @@ def test_composed_publisher_derives_every_artifact_from_verified_reads():
          "exact_quote": "paiement sous 30 jours", "pdf_page": None},
         {"reference_id": "ref-02", "exhibit_label": "Contrat",
          "exact_quote": "livraison incluse", "pdf_page": None},
+        {"reference_id": "ref-03", "exhibit_label": "Inconnu",
+         "exact_quote": "citation orpheline", "pdf_page": None},
+        {"reference_id": "ref-04", "exhibit_label": "Brouillon",
+         "exact_quote": "passage non confirmé", "pdf_page": None},
     ]
     assert captured["p_representation"] == _BRIEF_TEXT
     assert captured["p_representation_sha"] == hashlib.sha256(
@@ -1403,7 +1407,7 @@ def test_composed_publisher_docx_path_derives_from_trusted_parser():
     assert outcome.published_revision == 1
     assert captured["p_parser_id"].startswith("caseproof-parser-v1;")
     assert "«paiement sous 30 jours» (Contrat)" in captured["p_representation"]
-    assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02"]
+    assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02", "ref-03", "ref-04"]
 
 
 def test_composed_publisher_pdf_text_native_complete_only():
@@ -1424,9 +1428,9 @@ def test_composed_publisher_pdf_text_native_complete_only():
     assert outcome.published_revision == 1
     assert "pypdf" in captured["p_parser_id"]
     assert "«paiement sous 30 jours» (Contrat)" in captured["p_representation"]
-    assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02"]
+    assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02", "ref-03", "ref-04"]
     # Page de citation : jamais inférée côté démo, toujours « non mappée ».
-    assert [r["pdf_page"] for r in captured["p_references"]] == [None, None]
+    assert [r["pdf_page"] for r in captured["p_references"]] == [None, None, None, None]
     # Page image (scannée) ou visuelle : refus visible, jamais de partiel.
     gap = _pdf_fixture_bytes([["Page texte native."], []], image_page=1)
     refusing, _captured = _composer_rig(gap, unpaginated, media="application/pdf")
@@ -2590,12 +2594,14 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
             "ok": False, "error": "invalid"}
         # Correct representation but a digest over other bytes.
         assert publish(user_a, text_sha="0" * 64) == {"ok": False, "error": "invalid"}
-        # Reference whose quote does not occur in the exhibit's source.
-        assert publish(user_a, references=refs(quote_text="citation absente")) == {
-            "ok": False, "error": "invalid"}
-        # Reference to an exhibit label absent from the confirmed register.
-        assert publish(user_a, references=refs(label="Inconnu")) == {
-            "ok": False, "error": "invalid"}
+        # Missing quote and unresolved label must reach the checker instead of
+        # disappearing at publish. No physical page is claimed for unresolved labels.
+        with conn.transaction(force_rollback=True):
+            assert publish(user_a, references=refs(quote_text="citation absente"))["ok"] is True
+        with conn.transaction(force_rollback=True):
+            assert publish(user_a, references=refs(label="Inconnu",pdf_page=None))["ok"] is True
+        with conn.transaction(force_rollback=True):
+            assert publish(user_a, references=refs(quote_text=None))["ok"] is True
         # pdf_page outside the confirmed pages of the entry.
         assert publish(user_a, references=refs(pdf_page=9)) == {"ok": False, "error": "invalid"}
         # Assertion whose text does not match the claimed slice.
@@ -3597,7 +3603,9 @@ def test_signed_composed_workflow_on_disposable_postgres():
     sentence_a = "Le juge retient « paiement sous 30 jours » (Contrat). "
     sentence_b = "Le paiement de 12.500,00 EUR est invoqué par le demandeur. "
     sentence_c = "Selon « Le prix est payable » (Contrat), le paiement est dû le 22 mai 2026."
-    brief_text = sentence_a + sentence_b + sentence_c
+    brief_text = sentence_a + sentence_b + sentence_c + (
+        " Voir Pièce 1, pdf p. 2. Voir Stuk 1, pdf p. 1. Voir Pièce 99. "
+        "Voir « citation absente de la source » (Contrat).")
     pdf = _pdf_fixture_bytes([
         ["Contrat-cadre synthétique."],
         ["Article 5 - Prix et paiement",
@@ -3646,6 +3654,10 @@ def test_signed_composed_workflow_on_disposable_postgres():
         pub.confirm_exhibit(
             bearer="user-token-a", case_id=str(case), document_id=contract.document_id,
             version_id=contract.version_id, display_label="Contrat")
+        pub.confirm_exhibit(bearer="user-token-a",case_id=str(case),document_id=contract.document_id,
+                            version_id=contract.version_id,display_label="Pièce 1")
+        pub.confirm_exhibit(bearer="user-token-a",case_id=str(case),document_id=contract.document_id,
+                            version_id=contract.version_id,display_label="Stuk 1")
         composer = ComposedSignedBriefPublisher(library=lib, publisher=pub, publishable_key=PUBLISHABLE_KEY)
         out1 = composer.publish_uploaded(
             bearer="user-token-a", case_id=str(case), document_id=brief_reg.document_id,
@@ -3673,7 +3685,10 @@ def test_signed_composed_workflow_on_disposable_postgres():
         abst = [f for f in facts.values() if f.state.value in {"needs_context", "not_assessed"}]
         assert diff and abst, {k: v.state.value for k, v in facts.items()}
         assert diff[0].source_pdf_page == 2  # verified PDF inventory, not invented
-        assert all(c.state.value == "exact_match" for c in run1.citation_observations)
+        citation_states = [c.state.value for c in run1.citation_observations]
+        assert citation_states.count("exact_match") == 2
+        assert citation_states.count("reference_checked_no_quotation") == 2
+        assert "reference_unresolved" in citation_states and "quote_not_found" in citation_states
 
         # Review: decide on the contradiction, replay, then a stale revision.
         obs = f"fact:{diff[0].claim_id}"
@@ -3773,6 +3788,10 @@ def test_signed_composed_workflow_on_disposable_postgres():
         assert client.post(base1 + "/correction-preview", json=body_cp).status_code == 401
         inv = client.get(base2 + "/sources", headers=auth).json()
         assert inv["brief_version_id"] == out2.brief_version_id and inv["rows"]
+        locs=inv["reference_locations"]
+        assert locs["ref-03"]["identity_confirmed"] is True and locs["ref-03"]["pdf_page"]==2
+        assert locs["ref-04"]["identity_confirmed"] is True and locs["ref-04"]["pdf_page"]==1
+        assert locs["ref-05"]["identity_confirmed"] is False
         src_id = inv["rows"][0]["source_id"]
         assert inv["labels"][src_id] == "Contrat"  # confirmed register label, not a UUID
         assert client.get(f"{base2}/sources/{src_id}", headers=auth).status_code == 200
@@ -4307,3 +4326,25 @@ def test_storage_binding_rejects_identity_digest_and_length_tamper():
                         ("byte_length",8),("media_type","image/png")):
         assert not valid_storage_binding({**binding,field:value},**kw)
     assert not valid_storage_binding(None,**kw)
+
+
+def test_composed_piece_stuk_references_keep_unresolved_and_page_spaces():
+    import copy
+    register=copy.deepcopy(_REGISTER)
+    register["entries"][0]["display_label"]="Pièce 1"
+    register["entries"][0]["aliases"]=["Stuk 1"]
+    register["entries"][0]["pages"]=[
+        {"source_id":_PUBLISH_DOC,"version_id":_PUBLISH_VER,
+         "pdf_page":n,"printed_page":n+6,"bundle_page":n+19} for n in (1,2,3)]
+    text=("Voir Pièce 1, imprimée p. 8. Zie Stuk 1, bundle p. 22. "
+          "Voir Pièce 1, p. 8. Voir Pièce 99. "
+          "Citation « terme introuvable » (Pièce 1).")
+    composer,captured=_composer_rig(text.encode(),register)
+    composer.publish_uploaded(bearer="jwt",case_id=_PUBLISH_CASE,document_id=_PUBLISH_DOC,
+                              version_id=_PUBLISH_VER,document_role="own_draft",expected_revision=0)
+    refs=captured["p_references"]
+    assert len(refs)==5
+    assert [r["pdf_page"] for r in refs[:4]]==[2,3,None,None]
+    assert [r["exact_quote"] for r in refs[:4]]==[None]*4
+    assert refs[3]["exhibit_label"]=="pièce 99"
+    assert refs[4]["exact_quote"]=="terme introuvable"

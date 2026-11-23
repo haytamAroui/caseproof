@@ -212,3 +212,15 @@ test("observations render exceptions first with an explicit show-all toggle",asy
   await toggle.onclick();
   assert.deepEqual(order(),["Reference r-unmapped","Reference r-missing","Reference r-clean"]);
 });
+
+
+test("quote-free reference has a resolved source but no quotation anchor or support claim",async()=>{
+  const preview=await runObservationPreview({reference_id:"ref-01",state:"reference_checked_no_quotation",
+    source_id:"source",source_version_id:"version-a",source_sha256:"a".repeat(64),
+    representation_id:"representation-a",text_start:null,text_end:null});
+  const caption=preview.children.find(x=>x.textContent.includes("no quotation to anchor"));
+  assert(caption && caption.textContent.includes("Source resolved"));
+  assert(caption.textContent.includes("support not assessed"));
+  assert(!caption.textContent.includes("Unresolved anchor"));
+  assert(!preview.children.some(x=>x.className==="matched-passage"));
+});

@@ -209,8 +209,10 @@ def _validated_references(references: object) -> list[dict[str, Any]]:
             or reference["reference_id"] in seen
             or type(reference["exhibit_label"]) is not str
             or not 1 <= len(reference["exhibit_label"]) <= 160
-            or type(reference["exact_quote"]) is not str
-            or not 1 <= len(reference["exact_quote"]) <= 4000
+            or (reference["exact_quote"] is not None and (
+                type(reference["exact_quote"]) is not str
+                or not 1 <= len(reference["exact_quote"]) <= 4000
+            ))
         ):
             raise ValueError("invalid publish declaration")
         pdf_page = reference.get("pdf_page")
