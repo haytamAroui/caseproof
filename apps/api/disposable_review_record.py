@@ -1,13 +1,13 @@
-"""Loopback/disposable signed review receipt port.
+"""Loopback/disposable review record port.
 
 Same identity/authorization discipline as DisposableSignedBriefPublisher,
 backed only by the disposable PostgreSQL stores. Never mounted in the main
 API: it exists so the loopback development composition can export a genuine,
-content-addressed receipt of the recorded state of a matter's working brief
+content-addressed record of the recorded state of a matter's working brief
 (published head, recorded check runs, hash-chained human review events)
 without any Supabase credential.
 
-The receipt is a faithful transcript of recorded state, never a
+The record is a faithful transcript of recorded state, never a
 reassessment: payload digests are recomputed and the review event hash
 chain is replayed from the genesis hash, so a tampered row fails closed
 instead of exporting. It approves nothing and files nothing.
@@ -29,7 +29,7 @@ from apps.api.disposable_signed_brief_publisher import working_brief_id
 from apps.api.litigation_check_service import PrivateMatterAccess
 from apps.api.signed_supabase_originals import PrivateStorageDenied
 
-__all__ = ["DisposableSignedReviewReceipt", "ReceiptConflict"]
+__all__ = ["DisposableSignedReviewRecord", "RecordConflict"]
 
 _MAX_BEARER = 8192
 _MAX_RUNS = 20
@@ -37,20 +37,20 @@ _MAX_EVENTS = 256
 _ROLES = {"own_draft", "opponent_brief"}
 
 
-class ReceiptConflict(ValueError):
+class RecordConflict(ValueError):
     """Recorded state is missing, inconsistent or tampered."""
 
 
 def _uuid(value: object) -> UUID:
     if not isinstance(value, (UUID, str)):
-        raise ReceiptConflict("invalid stored identity")
+        raise RecordConflict("invalid stored identity")
     try:
         return UUID(str(value))
     except ValueError:
-        raise ReceiptConflict("invalid stored identity") from None
+        raise RecordConflict("invalid stored identity") from None
 
 
-class DisposableSignedReviewReceipt:
+class DisposableSignedReviewRecord:
     """PostgreSQL transcript adapter; no production wiring."""
 
     persistence = "disposable_postgres_only"
@@ -76,7 +76,7 @@ class DisposableSignedReviewReceipt:
         try:
             case = _uuid(case_id)
             subject = self._verify(bearer)
-        except ReceiptConflict:
+        except RecordConflict:
             raise PrivateStorageDenied("Missing or invalid signed identity") from None
         except Exception:
             raise PrivateStorageDenied("Missing or invalid signed identity") from None
@@ -103,7 +103,7 @@ class DisposableSignedReviewReceipt:
             raise PrivateStorageDenied("Private matter unavailable")
         return _uuid(scope.org_id), case
 
-    def receipt(self, *, bearer: str, case_id: str, document_role: str) -> dict[str, Any]:
+    def record(self, *, bearer: str, case_id: str, document_role: str) -> dict[str, Any]:
         if document_role not in _ROLES:
             raise PrivateStorageDenied("Unknown document role")
         org, case = self._authorize(bearer, case_id)
@@ -143,7 +143,7 @@ class DisposableSignedReviewReceipt:
             )
             runs = cur.fetchall()
             if len(runs) > _MAX_RUNS:
-                raise ReceiptConflict("unbounded recorded check history")
+                raise RecordConflict("unbounded recorded check history")
             cur.execute(
                 "select snapshot_sha, event_sha from caseproof._m2_review_heads "
                 "where org_id=%s and case_id=%s",
@@ -159,7 +159,7 @@ class DisposableSignedReviewReceipt:
             )
             events = cur.fetchall()
             if len(events) > _MAX_EVENTS:
-                raise ReceiptConflict("unbounded recorded review history")
+                raise RecordConflict("unbounded recorded review history")
 
         checks: list[dict[str, Any]] = []
         for snapshot_sha, payload_sha, payload, run_case_rev, run_exhibit_rev in runs:
@@ -169,11 +169,11 @@ class DisposableSignedReviewReceipt:
                 or type(run_case_rev) is not int
                 or type(run_exhibit_rev) is not int
             ):
-                raise ReceiptConflict("recorded check payload digest mismatch")
+                raise RecordConflict("recorded check payload digest mismatch")
             try:
                 decoded = json.loads(payload)
             except ValueError:
-                raise ReceiptConflict("recorded check payload unreadable") from None
+                raise RecordConflict("recorded check payload unreadable") from None
             checks.append(
                 {
                     "snapshot_sha256": str(snapshot_sha),
@@ -201,9 +201,9 @@ class DisposableSignedReviewReceipt:
                     try:
                         decision = json.loads(decision)
                     except ValueError:
-                        raise ReceiptConflict("unreadable recorded review event") from None
+                        raise RecordConflict("unreadable recorded review event") from None
                 if revision_no != expected or not isinstance(decision, dict):
-                    raise ReceiptConflict("broken recorded review chain")
+                    raise RecordConflict("broken recorded review chain")
                 actor = str(_uuid(actor_id))
                 digest = _digest(
                     _canonical(
@@ -218,7 +218,7 @@ class DisposableSignedReviewReceipt:
                     )
                 )
                 if digest != event_sha or decision.get("actor_id") != actor:
-                    raise ReceiptConflict("tampered recorded review event")
+                    raise RecordConflict("tampered recorded review event")
                 decisions.append(
                     {
                         "revision": revision_no,
@@ -231,7 +231,7 @@ class DisposableSignedReviewReceipt:
                 current = digest
             head_sha = review_heads.get(snapshot_sha)
             if head_sha is None or head_sha != current:
-                raise ReceiptConflict("recorded review head mismatch")
+                raise RecordConflict("recorded review head mismatch")
             reviews.append(
                 {
                     "snapshot_sha256": snapshot_sha,
@@ -242,7 +242,7 @@ class DisposableSignedReviewReceipt:
             )
 
         body: dict[str, Any] = {
-            "schema": "caseproof-review-receipt-v1",
+            "schema": "caseproof-review-record-v1",
             "case_id": str(case),
             "document_role": document_role,
             "brief": {
@@ -263,5 +263,5 @@ class DisposableSignedReviewReceipt:
                 "review hash chain replayed. Not a legal approval or filing."
             ),
         }
-        body["receipt_sha256"] = _hash(body)
+        body["record_sha256"] = _hash(body)
         return body

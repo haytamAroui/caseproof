@@ -50,8 +50,8 @@
     state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null;
     state.previewSeq+=1;state.loading=false;
     $("check-scope").textContent="Check source scope not assessed.";
-    $("workspace").hidden=true; $("connection").hidden=false; $("receipt").disabled=true;
-    $("receipt-status").textContent="";
+    $("workspace").hidden=true; $("connection").hidden=false; $("record").disabled=true;
+    $("record-status").textContent="";
     $("sources").replaceChildren(); $("observations").replaceChildren();
     $("search-results").replaceChildren(); $("source-preview").textContent="";
     $("review-history").replaceChildren(); $("selected").textContent="Select an observation.";
@@ -326,7 +326,7 @@
     $("check-scope").textContent="Checking current source denominator…";
     $("connection").hidden=true;
     $("workspace").hidden=false;
-    $("receipt").disabled=false;
+    $("record").disabled=false;
     $("matter-meta").textContent="Matter "+state.caseId+" · brief "+state.briefId;
     notice("Checking private access and current evidence scope…");
     try{
@@ -775,24 +775,24 @@
     const fidelity=$("fidelity-panel");
     if(fidelity)fidelity.hidden=true;
   }
-  async function downloadReceipt(){
+  async function downloadRecord(){
     if(!state.session)return;
-    $("receipt").disabled=true;
+    $("record").disabled=true;
     try{
-      const data=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/receipt");
-      if(data.schema!=="caseproof-review-receipt-v1"||!sha.test(data.receipt_sha256)||
+      const data=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/review-record");
+      if(data.schema!=="caseproof-review-record-v1"||!sha.test(data.record_sha256)||
          data.case_id!==state.caseId)
         throw Error("invalid_schema");
       const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
       const link=document.createElement("a");
       link.href=URL.createObjectURL(blob);
-      link.download="caseproof-review-receipt.json";link.rel="noopener";link.click();
+      link.download="caseproof-review-record.json";link.rel="noopener";link.click();
       URL.revokeObjectURL(link.href);
-      $("receipt-status").textContent="Receipt SHA-256 "+data.receipt_sha256.slice(0,16)+
+      $("record-status").textContent="Record SHA-256 "+data.record_sha256.slice(0,16)+
         "\u2026 · revision "+data.brief.head_revision+" · "+data.checks.length+" recorded check(s) · "+
         data.reviews.reduce((n,r)=>n+r.decisions.length,0)+" review decision(s). Transcript of recorded state, not an approval.";
     }catch(error){if(error?.message!=="no_session")notice(statusFor(error),"danger");}
-    finally{$("receipt").disabled=!state.session;}
+    finally{$("record").disabled=!state.session;}
   }
   async function init(){
     $("connection-form").addEventListener("submit",startSession);
@@ -812,7 +812,7 @@
     $("upload-document").addEventListener("change",populateVersions);
     const publishForm=$("publish-form");if(publishForm)publishForm.addEventListener("submit",publishVersion);
     $("signout").addEventListener("click",signout);
-    $("receipt").addEventListener("click",downloadReceipt);
+    $("record").addEventListener("click",downloadRecord);
     $("refresh").addEventListener("click",()=>{void load();});
     $("recheck").addEventListener("click",()=>{void load();});
     if(window.caseproofSession?.getBearer){

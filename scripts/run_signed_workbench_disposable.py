@@ -100,7 +100,7 @@ def main() -> None:
     from application.litigation.exhibit_confirmation import serialized_entries
     from apps.api.disposable_litigation_brief_graph import DisposableBriefGraphStore
     from apps.api.disposable_litigation_review_ledger import DisposableM2ReviewLedger
-    from apps.api.disposable_review_receipt import DisposableSignedReviewReceipt
+    from apps.api.disposable_review_record import DisposableSignedReviewRecord
     from apps.api.disposable_signed_brief_publisher import DisposableSignedBriefPublisher
     from apps.api.disposable_signed_source_library import DisposableSignedSourceLibrary
     from apps.api.evidence_vault_protocol import VaultScope
@@ -184,7 +184,7 @@ def main() -> None:
         extract_references=extract_references,
         build_representation=build_representation,
     )
-    receipt_port = DisposableSignedReviewReceipt(
+    record_port = DisposableSignedReviewRecord(
         connect=connect,
         verify_bearer=verifier.verify_bearer,
         access_lookup=store.current_access,
@@ -218,7 +218,7 @@ def main() -> None:
         reviews=workspace,
         signed_originals=library,
         signed_brief_publisher=publisher,
-        signed_review_receipt=receipt_port,
+        signed_review_record=record_port,
         workspace_directory=REPO / "apps/web/clearbrief",
     )
     import uvicorn

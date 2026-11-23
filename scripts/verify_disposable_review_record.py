@@ -1,8 +1,8 @@
-"""Disposable SignedReviewReceipt port: real PostgreSQL contract tests.
+"""Disposable SignedReviewRecord port: real PostgreSQL contract tests.
 
 Runs only against the isolated disposable CI database (127.0.0.1, fixture
 password), never a shared Supabase project. Proves the loopback review
-receipt port: the exported receipt transcribes the published working-brief
+record port: the exported record transcribes the published working-brief
 head, the recorded check run (payload digest recomputed) and the recorded
 human review decisions (hash chain replayed from genesis). Tampering with a
 stored row fails closed; forged bearers and unpublished matters are denied.
@@ -26,7 +26,7 @@ from application.litigation.exhibit_confirmation import serialized_entries
 from application.litigation.unified_review import BriefRepresentation, ReviewDisposition
 from apps.api.disposable_litigation_brief_graph import DisposableBriefGraphStore
 from apps.api.disposable_litigation_review_ledger import DisposableM2ReviewLedger
-from apps.api.disposable_review_receipt import DisposableSignedReviewReceipt
+from apps.api.disposable_review_record import DisposableSignedReviewRecord
 from apps.api.disposable_signed_brief_publisher import (
     DisposableSignedBriefPublisher,
     working_brief_id,
@@ -133,7 +133,7 @@ class DisposableReviewReceiptTests(unittest.TestCase):
             extract_references=extract,
             build_representation=represent,
         )
-        self.receipts = DisposableSignedReviewReceipt(
+        self.records = DisposableSignedReviewRecord(
             connect=connect,
             verify_bearer=self.verifier.verify_bearer,
             access_lookup=store.current_access,
@@ -194,12 +194,12 @@ class DisposableReviewReceiptTests(unittest.TestCase):
         )
         return outcome.brief_version_id
 
-    def test_receipt_transcribes_head_check_and_review(self) -> None:
+    def test_record_transcribes_head_check_and_review(self) -> None:
         brief_version_id = self._publish_checked_reviewed()
-        body = self.receipts.receipt(
+        body = self.records.record(
             bearer="synthetic-fixture-only", case_id=self.case_id, document_role="own_draft"
         )
-        self.assertEqual(body["schema"], "caseproof-review-receipt-v1")
+        self.assertEqual(body["schema"], "caseproof-review-record-v1")
         self.assertEqual(body["case_id"], self.case_id)
         brief = body["brief"]
         self.assertEqual(brief["brief_id"], str(working_brief_id(self.case_id, "own_draft")))
@@ -216,22 +216,22 @@ class DisposableReviewReceiptTests(unittest.TestCase):
         decision = review["decisions"][0]["decision"]
         self.assertEqual(decision["observation_id"], "citation:ref-01")
         self.assertEqual(decision["disposition"], "confirmed_candidate")
-        self.assertRegex(body["receipt_sha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(body["record_sha256"], r"^[0-9a-f]{64}$")
 
-    def test_receipt_before_publication_is_denied(self) -> None:
+    def test_record_before_publication_is_denied(self) -> None:
         with self.assertRaises(PrivateStorageDenied):
-            self.receipts.receipt(
+            self.records.record(
                 bearer="synthetic-fixture-only", case_id=self.case_id, document_role="own_draft"
             )
 
     def test_forged_bearer_is_denied(self) -> None:
         self._publish_checked_reviewed()
         with self.assertRaises(PrivateStorageDenied):
-            self.receipts.receipt(bearer="forged-token", case_id=self.case_id, document_role="own_draft")
+            self.records.record(bearer="forged-token", case_id=self.case_id, document_role="own_draft")
 
     def test_recorded_history_is_immutable(self) -> None:
         # The store itself denies mutation of recorded runs and review events;
-        # the receipt's digest/chain re-verification is defense in depth.
+        # the record's digest/chain re-verification is defense in depth.
         self._publish_checked_reviewed()
         with self.assertRaises(psycopg.Error), connect() as conn:
             conn.execute(
@@ -248,7 +248,7 @@ class DisposableReviewReceiptTests(unittest.TestCase):
                 "delete from caseproof._m2_review_events where org_id=%s and case_id=%s",
                 (self.f.scope.org_id, self.f.scope.case_id),
             )
-        body = self.receipts.receipt(
+        body = self.records.record(
             bearer="synthetic-fixture-only", case_id=self.case_id, document_role="own_draft"
         )
         self.assertEqual(len(body["reviews"]), 1)
@@ -259,8 +259,8 @@ def main() -> None:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(DisposableReviewReceiptTests)
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     if not result.wasSuccessful():
-        raise SystemExit("DISPOSABLE_REVIEW_RECEIPT_FAILED")
-    print("DISPOSABLE_REVIEW_RECEIPT_CONTRACT_PASSED")
+        raise SystemExit("DISPOSABLE_REVIEW_RECORD_FAILED")
+    print("DISPOSABLE_REVIEW_RECORD_CONTRACT_PASSED")
 
 
 if __name__ == "__main__":

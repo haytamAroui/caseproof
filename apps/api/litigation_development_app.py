@@ -90,17 +90,17 @@ class SignedBriefPublisher(Protocol):
     ) -> SignedPublishOutcome: ...
 
 
-class SignedReviewReceipt(Protocol):
-    """Loopback-only port: export a content-addressed receipt of the recorded
+class SignedReviewRecord(Protocol):
+    """Loopback-only port: export a content-addressed record of the recorded
     state of a matter's working brief (published head, recorded check runs,
     hash-chained human review events). Implementations must verify the bearer
     and matter grant, recompute recorded digests and replay the review hash
-    chain, and fail closed on any mismatch. The receipt is a transcript of
+    chain, and fail closed on any mismatch. The record is a transcript of
     recorded state, never a reassessment, approval or filing. Raises
     PrivateStorageDenied for masked or unauthorized access and ValueError for
     inconsistent recorded state."""
 
-    def receipt(self, *, bearer: str, case_id: str, document_role: str) -> dict[str, object]: ...
+    def record(self, *, bearer: str, case_id: str, document_role: str) -> dict[str, object]: ...
 
 
 def create_litigation_development_app(
@@ -109,7 +109,7 @@ def create_litigation_development_app(
     originals: AuthorizedOriginalReader | None = None,
     signed_originals: SignedSourceLibrary | None = None,
     signed_brief_publisher: SignedBriefPublisher | None = None,
-    signed_review_receipt: SignedReviewReceipt | None = None,
+    signed_review_record: SignedReviewRecord | None = None,
     evidence: EvidenceReader | None = None,
     reviews: SignedReviewWorkspace | None = None,
     publishable_key: str | None = None,
@@ -539,16 +539,16 @@ def create_litigation_development_app(
             status_code=201,
         )
 
-    @app.get("/dev/signed/matters/{case_id}/receipt")
-    def signed_receipt(
+    @app.get("/dev/signed/matters/{case_id}/review-record")
+    def signed_review_record_read(
         case_id: str,
         role: str = Query(default="own_draft", pattern="^(own_draft|opponent_brief)$"),
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
-        if signed_review_receipt is None:
+        if signed_review_record is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
-            body = signed_review_receipt.receipt(
+            body = signed_review_record.record(
                 bearer=_token(authorization), case_id=case_id, document_role=role
             )
         except PrivateStorageDenied:
