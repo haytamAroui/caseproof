@@ -36,6 +36,15 @@ sys.path.insert(0, str(REPO))
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PORT = 8377
 
+# Texte législatif belge PUBLIC (consolidation JUSTEL / SPF Justice, loi du
+# 21 mars 1804) : domaine public, aucune donnée privée. Références :
+# ejustice.just.fgov.be/eli/loi/1804/03/21/1804032154/justel et
+# wallex.wallonie.be (reprise JUSTEL). Vérifié le 2026-11-23.
+BELGIAN_PUBLIC_ART_1732 = (
+    "Art. 1732. Il répond des dégradations ou des pertes qui arrivent "
+    "pendant sa jouissance, à moins qu'il ne prouve qu'elles ont eu lieu sans sa faute."
+)
+
 CORPUS = {
     "Source A (synthétique)": (
         "SOURCE A SYNTHETIQUE - aucune affaire reelle.\nLe delai de resiliation est de six mois.\n"
@@ -43,6 +52,7 @@ CORPUS = {
     "Source B (synthétique)": (
         "SOURCE B SYNTHETIQUE - aucune affaire reelle.\nLe preavis court du premier jour du mois suivant.\n"
     ),
+    "Code civil belge, art. 1732 (texte public)": BELGIAN_PUBLIC_ART_1732 + "\n",
 }
 
 BRIEF_V1_TEXT = (
@@ -52,6 +62,20 @@ BRIEF_V1_TEXT = (
 BRIEF_V2_TEXT = (
     "BRIEF SYNTHETIQUE v2 - demonstration sans affaire reelle.\n"
     "Le contrat prevoit «un delai de six mois» (Source A (synthétique)).\n"
+)
+
+# Brief citant le texte public belge : v1 paraphrase (citation inexacte),
+# v2 citation exacte. Démontre la détection sur un texte légal réel public.
+BRIEF_BE_V1_TEXT = (
+    "BRIEF DEMO (texte public) - aucune affaire reelle.\n"
+    "Le locataire répond «des dégradations survenues pendant son occupation» "
+    "(Code civil belge, art. 1732 (texte public)).\n"
+)
+BRIEF_BE_V2_TEXT = (
+    "BRIEF DEMO (texte public) - aucune affaire reelle.\n"
+    "Le locataire : «Il répond des dégradations ou des pertes qui arrivent pendant sa "
+    "jouissance, à moins qu'il ne prouve qu'elles ont eu lieu sans sa faute.» "
+    "(Code civil belge, art. 1732 (texte public)).\n"
 )
 
 QUOTE_RE = re.compile(r"«\s*(?P<quote>[^«»]{4,600}?)\s*»\s*\((?P<label>[^)]{4,120})\)")
@@ -193,7 +217,12 @@ def main() -> None:
     fixtures = root / "fixtures"
     fixtures.mkdir()
     paths = {}
-    for name, text in (("brief-v1.docx", BRIEF_V1_TEXT), ("brief-v2.docx", BRIEF_V2_TEXT)):
+    for name, text in (
+        ("brief-v1.docx", BRIEF_V1_TEXT),
+        ("brief-v2.docx", BRIEF_V2_TEXT),
+        ("brief-belge-v1.docx", BRIEF_BE_V1_TEXT),
+        ("brief-belge-v2.docx", BRIEF_BE_V2_TEXT),
+    ):
         data = _docx_bytes(text)
         path = fixtures / name
         path.write_bytes(data)

@@ -45,9 +45,24 @@ from scripts.verify_vault_integration import begin, connect, coordinator, seed
 
 ORIGINAL = "BRIEF SYNTHETIQUE - aucune affaire reelle. «quote alpha» (Source A)\n".encode()
 
+# Texte législatif belge PUBLIC (consolidation JUSTEL / SPF Justice) :
+# ejustice.just.fgov.be/eli/loi/1804/03/21/1804032154/justel et wallex.wallonie.be.
+BELGIAN_LABEL = "Code civil belge, art. 1732 (texte public)"
+BELGIAN_QUOTE = (
+    "Il répond des dégradations ou des pertes qui arrivent pendant sa jouissance, "
+    "à moins qu'il ne prouve qu'elles ont eu lieu sans sa faute."
+)
+BELGIAN_CORPUS = ("Art. 1732. " + BELGIAN_QUOTE + "\n").encode()
+BELGIAN_ORIGINAL = (
+    "BRIEF DEMO - texte public belge. «" + BELGIAN_QUOTE + "» (" + BELGIAN_LABEL + ")\n"
+).encode()
+
 
 def extract(text: str) -> list[tuple[str, str, str]]:
-    return [("ref-01", "Source A", "quote alpha")] if "quote alpha" in text else []
+    refs = [("ref-01", "Source A", "quote alpha")] if "quote alpha" in text else []
+    if BELGIAN_QUOTE in text:
+        refs.append(("ref-be", BELGIAN_LABEL, BELGIAN_QUOTE))
+    return refs
 
 
 def represent(*, case_id, version_id, text, references, original_sha256_hex):
@@ -67,11 +82,19 @@ class DisposableReviewReceiptTests(unittest.TestCase):
         vault.upload(scope=self.f.scope, intent_id=self.f.intent, data=self.f.data)
         corpus = add_verified_version(self.root, self.f, b"SOURCE A SYNTHETIQUE. quote alpha\n")
         binding = new_binding(corpus)
+        belgian = add_verified_version(self.root, self.f, BELGIAN_CORPUS)
+        belgian_binding = new_binding(belgian)
         entries = (
             ExhibitEntry(
                 "piece-1",
                 "Source A",
                 (ExhibitPage(str(binding.document_id), str(corpus.version), printed_page=1),),
+                confirmed=True,
+            ),
+            ExhibitEntry(
+                "piece-2",
+                BELGIAN_LABEL,
+                (ExhibitPage(str(belgian_binding.document_id), str(belgian.version), printed_page=1),),
                 confirmed=True,
             ),
         )
@@ -217,6 +240,48 @@ class DisposableReviewReceiptTests(unittest.TestCase):
         self.assertEqual(decision["observation_id"], "citation:ref-01")
         self.assertEqual(decision["disposition"], "confirmed_candidate")
         self.assertRegex(body["record_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_belgian_public_article_resolves_exact_match(self) -> None:
+        document, version = uuid4(), uuid4()
+        with connect() as conn:
+            conn.execute(
+                "insert into caseproof.documents(id,org_id,case_id,source_label) values(%s,%s,%s,%s)",
+                (document, self.f.scope.org_id, self.f.scope.case_id, "brief belge v1"),
+            )
+            conn.execute(
+                "insert into caseproof.document_versions(id,org_id,document_id,version_number,"
+                "original_sha256_hex,byte_length,media_type) values(%s,%s,%s,1,%s,%s,%s)",
+                (
+                    version,
+                    self.f.scope.org_id,
+                    document,
+                    sha256(BELGIAN_ORIGINAL).hexdigest(),
+                    len(BELGIAN_ORIGINAL),
+                    "text/plain",
+                ),
+            )
+        self.library.put_once(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=str(document),
+            version_id=str(version),
+            data=BELGIAN_ORIGINAL,
+        )
+        outcome = self.publisher.publish_uploaded(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=str(document),
+            version_id=str(version),
+            document_role="own_draft",
+            expected_revision=0,
+        )
+        run = self.service.check(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            brief_version_id=outcome.brief_version_id,
+        )
+        states = {obs.reference_id: obs.state.value for obs in run.citation_observations}
+        self.assertEqual(states, {"ref-be": "exact_match"})
 
     def test_record_before_publication_is_denied(self) -> None:
         with self.assertRaises(PrivateStorageDenied):
