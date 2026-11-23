@@ -18,11 +18,12 @@ from zipfile import ZIP_STORED, BadZipFile, ZipFile
 from application.litigation.corpus import ArticleRecord, CorpusError, check_derived_binding
 from application.litigation.legal_references import (
     _QUOTE_STRICT,
-    ENGINE_STRICT,
+    _QUOTE_V3,
     LegalCorpusConfig,
     check_legal_references,
+    engine_mode,
 )
-from application.litigation.legal_review_decisions import fingerprints, validate_review
+from application.litigation.legal_review_decisions import body_fingerprints, validate_review
 from application.litigation.unified_review import LegalObservation
 
 MAX_BYTES = 40 * 1024 * 1024
@@ -72,6 +73,7 @@ _SCOPE = {
     "quotation_starts_or_ends_mid_word": "Fragment qui commence ou finit au milieu d'un mot. Appréciation de l'avocat requise.",
     "article_exists_in_corpus_no_quotation_checked_claim_not_verified": "Article présent dans le corpus. Aucune citation n'a été contrôlée : l'affirmation n'est pas vérifiée.",
     "sub_article_locator_not_checked_in_corpus": "Alinéa, paragraphe ou autre subdivision cité : non contrôlé, le corpus ne contient pas ce niveau.",
+    "quotation_delimiter_not_recognised_text_not_checked": "Guillemet ouvrant non reconnu : le texte qui suit n'est pas contrôlé.",
     "quotation_not_bound_to_a_checked_reference": "Citation entre guillemets non rattachée à un article contrôlé : non vérifiée.",
 }
 
@@ -90,18 +92,18 @@ def _report(body: dict[str, Any]) -> bytes:
              "</style><h1>Revue juridique hors ligne</h1><p class='note'>", esc(NOTE), "</p>",
              "<p>Pack figé <code>", esc(body["corpus_pack_sha256"]), "</code></p>",
              "<p>Revue <code>", esc(body["snapshot_hash"]), "</code></p><h2>Références vérifiées</h2>"]
-    strict = body["review"].get("check_engine") == ENGINE_STRICT
+    strict, v3 = engine_mode(body["review"].get("check_engine"))
     if strict:
-        quotes = [m for m in _QUOTE_STRICT.finditer(body["brief_text"])]
+        quotes = [m for m in (_QUOTE_V3 if v3 else _QUOTE_STRICT).finditer(body["brief_text"])]
         accounted = sum(any(o.get("quote") and " ".join(o["quote"].split()) == " ".join(next(g for g in m.groups() if g is not None).split())
                             for o in body["references"]) for m in quotes)
-        parts += ["<p class='note'>Moteur de contrôle strict (v2). Les exports plus anciens, sans cette mention, utilisent un moteur plus large. ",
+        parts += ["<p class='note'>Moteur de contrôle strict (", "v3" if v3 else "v2", "). Les exports plus anciens, sans cette mention, utilisent un moteur plus large. ",
                   "Un PASS signifie seulement : extrait littéralement présent dans le texte conservé. Le contexte, les réserves, la portée et ",
                   "l'applicabilité restent à l'avocat.</p><h2>Couverture</h2><p>Citations entre guillemets dans le Word : ", str(len(quotes)),
                   ". Citations avec un constat visible ci-dessous : ", str(accounted), ". Références d'article : ",
                   str(sum(1 for o in body["references"] if o["act_code"] is not None)), ".</p>"]
     by_key = {r["key"]: r for r in body["article_index"]}
-    prints = fingerprints(body["references"], body["articles"], body["article_index"], body["corpus_pack_sha256"])
+    prints = body_fingerprints(body)
     layered = body["review"].get("decision_layer") == 1
     decided = {d["fingerprint"]: d for d in body["review"].get("decisions", [])}
     for obs, fp in zip(body["references"], prints, strict=True):
@@ -136,7 +138,11 @@ def _report(body: dict[str, Any]) -> bytes:
                   " · Consolidation : ", esc(row["consolidated"]), "</small></p><pre>", esc(row["derived_text"]),
                   "</pre><small>Texte SHA-256 : <code>", esc(row["derived_sha256"]),
                   "</code></small><small>Artefact source SHA-256 : <code>", esc(row["original_sha256"]),
-                  "</code></small><p>Type : ", esc(row["source_artifact_kind"]), "</p><p>", esc(row["source_notes"]), "</p></section>"]
+                  "</code></small><p>Type : ", esc(row["source_artifact_kind"]), "</p><p>", esc(row["source_notes"]), "</p>"]
+        if body["review"].get("fingerprint_scheme", 1) >= 2:
+            parts += ["<p>Début du corps de l'article, déclaré par le préparateur du corpus et borné par le texte conservé, non attesté par l'éditeur : <code>",
+                      esc(row.get("body_start") or "non déclaré (la première phrase n'est pas supposée complète)"), "</code></p>"]
+        parts += ["</section>"]
     parts += ["</html>"]
     return "".join(parts).encode()
 
@@ -213,13 +219,13 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
             raise CorpusError("review snapshot changed")
         observed = check_legal_references(body["brief_text"], config.records, config.act_aliases,
                                          chosen_versions=config.chosen_versions,
-                                         strict=body["review"].get("check_engine") == ENGINE_STRICT)
+                                         strict=engine_mode(body["review"].get("check_engine"))[0],
+                                         v3=engine_mode(body["review"].get("check_engine"))[1])
         if _encode([asdict(x) for x in observed]) != _encode(body["references"]):
             raise CorpusError("legal checks do not replay")
         if body["article_index"] != [{"key": r.key, "index": i} for i, r in enumerate(config.records)]:
             raise CorpusError("article passage index changed")
-        validate_review(body["review"], fingerprints(body["references"], body["articles"],
-                                                    body["article_index"], body["corpus_pack_sha256"]))
+        validate_review(body["review"], body_fingerprints(body))
         if report != _report(body):
             raise CorpusError("offline reading view changed")
         return body

@@ -165,7 +165,7 @@ class AuthorizedLitigationChecker:
             if config is not None:
                 legal = check_legal_references(
                     bundle.representation.text, config.records, config.act_aliases,
-                    chosen_versions=config.chosen_versions)
+                    chosen_versions=config.chosen_versions, strict=True, v3=True)
                 if config.suitability is not None:
                     rules_config = config.suitability
                     if self.fact_ledger_for is not None:

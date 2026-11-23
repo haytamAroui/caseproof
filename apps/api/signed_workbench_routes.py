@@ -178,6 +178,7 @@ def create_signed_workbench_router(
     ) -> Response:
         """Authorized legal slice with locally preserved corpus, no online fallback."""
         from application.litigation.corpus import CorpusError
+        from application.litigation.legal_references import ENGINE_STRICT3
         from application.litigation.offline_legal_pack import build_legal_pack
         bearer, wb = bench(authorization)
         run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
@@ -192,7 +193,8 @@ def create_signed_workbench_router(
         review = wb.workspace.state(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
         try:
             data, checkpoint = build_legal_pack(config=config, run=run,
-                                                brief_text=bundle.representation.text, review=review)
+                                                brief_text=bundle.representation.text,
+                                                review={**review, "check_engine": ENGINE_STRICT3})
         except CorpusError:
             raise HTTPException(status_code=409, detail="offline_corpus_bytes_unavailable_or_changed") from None
         if (wb.checker._scope(wb.checker._verified(bearer), case_id) != access

@@ -20,19 +20,59 @@ ATTRIBUTION = "local_unauthenticated_label"
 _REASON_REQUIRED = ("qualify", "reject", "waive")
 
 
-def finding_fingerprint(ref: Mapping[str, Any], article_sha: Mapping[str, str], pack_sha: str) -> str:
+FINGERPRINT_SCHEME = 2
+
+
+def finding_fingerprint(ref: Mapping[str, Any], article_sha: Mapping[str, str], pack_sha: str,
+                        context: str | None = None, ordinal: int = 0) -> str:
+    """Scheme 1 (older exports): content only. Scheme 2 adds the claim paragraph and the occurrence number."""
     key = ref.get("corpus_key")
-    identity = {"raw_text": ref["raw_text"], "status": ref["status"], "quote": ref.get("quote"),
-                "corpus_key": key, "article_text_sha256": article_sha.get(key) if key else None,
-                "corpus_pack_sha256": pack_sha}
+    identity: dict[str, Any] = {"raw_text": ref["raw_text"], "status": ref["status"], "quote": ref.get("quote"),
+                                "corpus_key": key, "article_text_sha256": article_sha.get(key) if key else None,
+                                "corpus_pack_sha256": pack_sha}
+    if context is not None:
+        identity["claim_context_sha256"] = hashlib.sha256(context.encode()).hexdigest()
+        identity["occurrence"] = ordinal
     return hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False,
                                      separators=(",", ":")).encode()).hexdigest()
 
 
+def claim_context(brief_text: str, start: int, end: int) -> str:
+    """The whole paragraph holding the finding, whitespace-normalised. Any change in it is a changed finding."""
+    lo = brief_text.rfind("\n", 0, start) + 1
+    hi = brief_text.find("\n", end)
+    return " ".join(brief_text[lo:len(brief_text) if hi < 0 else hi].split())
+
+
+def occurrence_fingerprints(references: Sequence[Mapping[str, Any]], article_sha: Mapping[str, str],
+                            pack_sha: str, brief_text: str) -> list[str]:
+    seen: dict[str, int] = {}
+    out = []
+    for r in references:
+        ctx = claim_context(brief_text, int(r["start"]), int(r["end"]))
+        base = finding_fingerprint(r, article_sha, pack_sha, ctx, 0)
+        n = seen.get(base, 0)
+        seen[base] = n + 1
+        out.append(base if n == 0 else finding_fingerprint(r, article_sha, pack_sha, ctx, n))
+    return out
+
+
 def fingerprints(references: Sequence[Mapping[str, Any]], articles: Sequence[Mapping[str, Any]],
-                 article_index: Sequence[Mapping[str, Any]], pack_sha: str) -> list[str]:
+                 article_index: Sequence[Mapping[str, Any]], pack_sha: str,
+                 brief_text: str | None = None, scheme: int = 1) -> list[str]:
     by_key = {row["key"]: articles[row["index"]]["derived_sha256"] for row in article_index}
+    if scheme >= FINGERPRINT_SCHEME:
+        if brief_text is None:
+            raise CorpusError("occurrence fingerprints need the brief text")
+        return occurrence_fingerprints(references, by_key, pack_sha, brief_text)
     return [finding_fingerprint(r, by_key, pack_sha) for r in references]
+
+
+def body_fingerprints(body: Mapping[str, Any]) -> list[str]:
+    """Fingerprints under the scheme the review itself declares. Older exports keep their original scheme."""
+    scheme = int(body["review"].get("fingerprint_scheme", 1))
+    return fingerprints(body["references"], body["articles"], body["article_index"], body["corpus_pack_sha256"],
+                        body["brief_text"], scheme)
 
 
 def make_decision(*, fingerprint: str, action: str, reason: str, reviewer_label: str,

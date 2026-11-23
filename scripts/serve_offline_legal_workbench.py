@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from application.litigation.corpus import CorpusError
 from application.litigation.legal_references import load_corpus_config
-from application.litigation.legal_review_decisions import fingerprints
+from application.litigation.legal_review_decisions import body_fingerprints
 from application.litigation.local_corpus_library import LocalCorpusLibrary, encode_corpus_pack
 from application.litigation.offline_legal_pack import _SCOPE, verify_legal_pack
 from apps.api.offline_docx_check import check_offline_docx
@@ -76,7 +76,7 @@ def _payload(data: bytes, checkpoint: str) -> dict[str, object]:
     by_key = {row["key"]: body["articles"][row["index"]]["derived_text"] for row in body["article_index"]}
     review = body["review"]
     by_print = {d["fingerprint"]: d for d in review.get("decisions", [])}
-    prints = fingerprints(body["references"], body["articles"], body["article_index"], body["corpus_pack_sha256"])
+    prints = body_fingerprints(body)
     return {"checkpoint": checkpoint, "summary": summary, "revision": review.get("revision", 1),
             "corpus_pack_sha256": body["corpus_pack_sha256"],
             "archive_base64": base64.b64encode(data).decode(),

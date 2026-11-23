@@ -127,3 +127,53 @@ def test_recheck_refuses_forged_prior_review(tmp_path, monkeypatch):
     corpus, raw, cp = _first(tmp_path, monkeypatch, "invented quotation")
     with pytest.raises(CorpusError):
         recheck(docx=tmp_path / "a.docx", corpus=corpus, prior_pack=raw, prior_checkpoint="0" * 64)
+
+
+def _two(tmp_path: Path, a: str, b: str, name: str) -> Path:
+    path = tmp_path / name
+    path.write_bytes(docx_without_custom_xml([a, b]))
+    return path
+
+
+def test_identical_quote_in_two_requests_confirms_only_the_first(tmp_path, monkeypatch):
+    monkeypatch.setattr(socket, "socket", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no network")))
+    corpus = _corpus(tmp_path)
+    q = "Article 12 du Code civil : « citation inventée »."
+    d = _two(tmp_path, "Demande 1. " + q, "Demande 2, autre affirmation. " + q, "t.docx")
+    raw, cp = check_offline_docx(docx=d, corpus=corpus)
+    refs = verify_legal_pack(raw, expected_sha256=cp)["references"]
+    assert [r["status"] for r in refs] == ["FAIL", "FAIL"]
+    new, cp2 = record_decisions(pack=raw, checkpoint=cp, decisions=[
+        {"reference_index": 0, "action": "reject", "reason": "inexacte", "reviewer_label": "L"}])
+    review = verify_legal_pack(new, expected_sha256=cp2)["review"]
+    from application.litigation.legal_review_decisions import body_fingerprints
+    prints = body_fingerprints(verify_legal_pack(new, expected_sha256=cp2))
+    assert prints[0] != prints[1]
+    assert [x["fingerprint"] for x in review["decisions"]] == [prints[0]]
+    # The neighbouring claim of the confirmed one changes: its decision is superseded, not kept.
+    d2 = _two(tmp_path, "Demande 1 modifiée. " + q, "Demande 2, autre affirmation. " + q, "t2.docx")
+    again, cp3 = recheck(docx=d2, corpus=corpus, prior_pack=new, prior_checkpoint=cp2)
+    review = verify_legal_pack(again, expected_sha256=cp3)["review"]
+    assert review["decisions"] == [] and len(review["superseded"]) == 1
+
+
+def test_second_false_quote_with_single_curly_quotes_is_visible(tmp_path, monkeypatch):
+    corpus = _corpus(tmp_path)
+    d = tmp_path / "c.docx"
+    d.write_bytes(docx_without_custom_xml(
+        [f"Article 12 du Code civil : « {TEXT} ». Puis article 12 du Code civil : ‘texte faux’."]))
+    raw, cp = check_offline_docx(docx=d, corpus=corpus)
+    body = verify_legal_pack(raw, expected_sha256=cp)
+    assert len(body["references"]) == 2 and body["references"][0]["status"] == "PASS"
+    assert body["references"][1]["status"] != "PASS"
+
+
+@pytest.mark.parametrize("opener,closer", [("‘", "’"), ("‚", "‘"), ("‹", "›"), ("'", "'")])
+def test_second_false_quote_in_any_delimiter_is_never_silent(tmp_path, opener, closer):
+    corpus = _corpus(tmp_path)
+    d = tmp_path / "c.docx"
+    d.write_bytes(docx_without_custom_xml(
+        [f"Article 12 du Code civil : « {TEXT} ». Puis article 12 du Code civil : {opener}texte faux{closer}."]))
+    raw, cp = check_offline_docx(docx=d, corpus=corpus)
+    refs = verify_legal_pack(raw, expected_sha256=cp)["references"]
+    assert refs[0]["status"] == "PASS" and any(r["status"] != "PASS" for r in refs[1:])

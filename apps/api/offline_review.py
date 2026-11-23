@@ -11,7 +11,7 @@ from typing import Any
 
 from application.litigation.corpus import CorpusError
 from application.litigation.legal_references import LegalCorpusConfig
-from application.litigation.legal_review_decisions import fingerprints, make_decision
+from application.litigation.legal_review_decisions import body_fingerprints, make_decision
 from application.litigation.offline_legal_pack import _config, build_legal_pack, verify_legal_pack
 from application.litigation.unified_review import LegalObservation
 from apps.api.offline_docx_check import check_offline_docx
@@ -32,7 +32,9 @@ def record_decisions(*, pack: bytes, checkpoint: str,
     review = dict(body["review"])
     if review.get("decision_layer") != 1:
         raise CorpusError("this export predates local decisions; run a fresh check")
-    prints = fingerprints(body["references"], body["articles"], body["article_index"], body["corpus_pack_sha256"])
+    if int(review.get("fingerprint_scheme", 1)) < 2:
+        raise CorpusError("this export binds decisions to content, not to the occurrence; run a fresh check")
+    prints = body_fingerprints(body)
     existing = {d["fingerprint"] for d in review["decisions"]}
     revision = int(review["revision"]) + 1
     added = []

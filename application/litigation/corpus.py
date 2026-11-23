@@ -38,6 +38,23 @@ class CorpusError(ValueError):
     """Malformed corpus manifest or corpus content."""
 
 
+
+_PLAIN_HEADING = re.compile(r"^(?:art\w*\.?\s*)?[\w./-]*?\d\.?\s+(?P<title>.*)$", re.IGNORECASE | re.DOTALL)
+
+
+def _require_plain_heading(text: str, body_start: str) -> None:
+    """The declared body start cannot move into the sentence: what precedes it must be a plain heading.
+
+    A heading is the article number and a short title with no sentence punctuation and no capitalised word
+    after the first. A declaration that swallows the opening words of the article is refused. This bounds the
+    declaration; it does not turn it into publisher evidence.
+    """
+    head = text[:text.index(body_start)].strip()
+    m = _PLAIN_HEADING.match(head)
+    title = m.group("title") if m else None
+    if title is None or len(title) > 100 or re.search(r"[.,;:!?]", title) or re.search(r"\s[A-ZÀ-ÝÀ-Þ]", title):
+        raise CorpusError("body_start must follow a plain article heading, not words of the article itself")
+
 def _ws(text: str) -> str:
     return re.sub(r"\s+", " ", text.replace("\u00a0", " ")).strip()
 
@@ -192,6 +209,8 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
         raise CorpusError("bounded body_start required")
     if body_start and (_ws(derived_text).count(body_start) != 1 or _ws(derived_text).startswith(body_start)):
         raise CorpusError("body_start must occur exactly once, after the heading, in the derived text")
+    if body_start:
+        _require_plain_heading(_ws(derived_text), body_start)
     return ArticleRecord(
         act=act,
         article=article,

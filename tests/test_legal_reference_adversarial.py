@@ -178,4 +178,18 @@ def test_report_accounts_for_every_quotation_and_labels_scope(tmp_path):
         [ARTICLE, "La preuve est toujours inutile.", "Citation orpheline."])
     html = ZipFile(io.BytesIO(raw)).read("report.html").decode()
     assert "Citations entre guillemets dans le Word : 3. Citations avec un constat visible ci-dessous : 3" in html
-    assert "Contexte, réserves, portée et applicabilité non évalués" in html and "Moteur de contrôle strict (v2)" in html
+    assert "Contexte, réserves, portée et applicabilité non évalués" in html and "Moteur de contrôle strict (v3)" in html
+
+
+def test_moving_body_start_into_the_sentence_is_refused(tmp_path):
+    """Audit: moving body_start alone must not turn an omitted reserve into a PASS."""
+    with pytest.raises(CorpusError):
+        check_offline_docx(docx=_docx(tmp_path, "Article 8.5 du Code civil : « la preuve doit être rapportée "
+                                      "avec un degré raisonnable de certitude. »"),
+                           corpus=corpus(tmp_path, body="la preuve doit être rapportée"))
+
+
+def _docx(tmp_path: Path, text: str) -> Path:
+    p = tmp_path / "x.docx"
+    p.write_bytes(docx_without_custom_xml([text]))
+    return p
