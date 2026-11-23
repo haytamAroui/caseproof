@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const state = {session:null, external:false, caseId:"", briefId:"", inventory:null, check:null,
     review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null, justPublished:false,
-    catalog:null, publishRevision:0, pageImageUrl:null, pageImageNode:null, pageZoomNode:null};
+    catalog:null, publishRevision:0, pageImageUrl:null, pageImageNode:null, pageZoomNode:null, pageZoomReturn:null, pageZoomKey:null};
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const sha = /^[0-9a-f]{64}$/;
   const el = (tag, content, className) => {
@@ -48,9 +48,16 @@
   function closePageZoom() {
     const dialog = state.pageZoomNode;
     state.pageZoomNode = null;
+    if (state.pageZoomKey) {
+      document.removeEventListener("keydown", state.pageZoomKey);
+      state.pageZoomKey = null;
+    }
+    const returnTo = state.pageZoomReturn;
+    state.pageZoomReturn = null;
     if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
+    if (returnTo && returnTo.parentNode && typeof returnTo.focus === "function") returnTo.focus();
   }
-  function openPageZoom(url, physical) {
+  function openPageZoom(url, physical, returnTo) {
     closePageZoom();
     const dialog = el("div", "", "page-zoom");
     dialog.setAttribute("role", "dialog");
@@ -68,6 +75,9 @@
     scroller.append(img);
     dialog.append(bar, scroller);
     dialog.addEventListener("click", event => { if (event.target === dialog) closePageZoom(); });
+    state.pageZoomReturn = returnTo || null;
+    state.pageZoomKey = event => { if (event && event.key === "Escape") closePageZoom(); };
+    document.addEventListener("keydown", state.pageZoomKey);
     document.body.append(dialog);
     state.pageZoomNode = dialog;
     close.focus();
@@ -377,7 +387,7 @@
             img.src=url;
             const zoomHint=el("button","Open readable full-size page view","ghost page-zoom-open");
             zoomHint.type="button";
-            zoomHint.addEventListener("click",()=>openPageZoom(url,physical));
+            zoomHint.addEventListener("click",()=>openPageZoom(url,physical,zoomHint));
             imgBox.replaceChildren(
               el("p","Physical page rendering of the verified original bytes · a rendering, not a verification.","small"),
               img,zoomHint);

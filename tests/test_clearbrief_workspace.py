@@ -262,3 +262,18 @@ def test_publish_race_node_suite_is_executed():
         cwd=root, capture_output=True, text=True, timeout=120, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_page_image_node_suite_is_executed():
+    """Bridge the committed node page-image/zoom suite into this CI-listed pytest file."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node runtime unavailable in this environment")
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [node, "--test", "tests/clearbrief_page_image.test.js"],
+        cwd=root, capture_output=True, text=True, timeout=120, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
