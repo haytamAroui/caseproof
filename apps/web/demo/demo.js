@@ -141,7 +141,7 @@ function renderStatic(data) {
     <table><tr><th>Texte</th><th>Langue</th><th>Version déclarée</th><th>Source</th><th>Empreinte</th></tr>${corpusRows}</table>`;
   const sourceRows = data.sources.map((s) => `
     <tr><td>${esc(s.label)}</td><td>${esc(s.version_id)}</td>
-    <td>${s.imported ? "importée — provenance déclarée, non vérifiée" : s.synthetic ? "synthétique (créé pour la démo)" : "source publique réelle"}</td>
+    <td>${s.imported ? "importée — provenance déclarée, non vérifiée" : s.synthetic ? "synthétique (créé pour la démo)" : "source déclarée publique — original préservé"}</td>
     <td><code>${esc(s.sha256.slice(0, 12))}…</code></td></tr>`).join("");
   const exhibitRows = (data.exhibits || []).map((e) => `
     <tr><td>${esc(e.display_label)}</td>

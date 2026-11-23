@@ -1075,6 +1075,8 @@ def create_demo_app(dossier: Path) -> FastAPI:
             validity_map[decision.decision_id] = validate_decision(decision, result)
         html_report = render_html(
             {
+                "session_versions": list(state.versions),
+                "session_active_version": state.active_version,
                 "meta": state.meta,
                 "corpus": state.current_corpus(),
                 "coverage": state.document.coverage,

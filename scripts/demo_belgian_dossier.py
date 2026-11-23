@@ -847,7 +847,7 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
         "<tr>"
         f"<td>{_esc(source.label or source.source_id)}</td>"
         f"<td>{_esc(source.version_id)}</td>"
-        f"<td>{'synthétique (créé pour la démo)' if source.synthetic else 'source publique réelle'}</td>"
+        f"<td>{'synthétique (créé pour la démo)' if source.synthetic else 'source déclarée publique — original préservé'}</td>"
         f"<td><code>{_esc(_sha(source.text)[:12])}…</code></td>"
         "</tr>"
         for source in m2.sources
@@ -872,7 +872,27 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
     )
 
     correction_html = "<p>Aucune correction dans cette démonstration.</p>"
-    if journey.correction_preview is not None and journey.run2 is not None:
+    session_versions = run.get("session_versions") or []
+    if session_versions:
+        version_rows = "".join(
+            "<tr>"
+            f"<td><code>{_esc(str(version.get('passage_id', ''))[:160])}</code></td>"
+            f"<td><code>{_esc(str(version.get('before', ''))[:4000])}</code></td>"
+            f"<td><code>{_esc(str(version.get('after', ''))[:4000])}</code></td>"
+            f"<td>{_esc(str(version.get('rationale', ''))[:2000])}</td>"
+            "</tr>"
+            for version in session_versions[:32]
+        )
+        active_version = _esc(str(run.get("session_active_version", ""))[:120])
+        correction_html = (
+            "<p>Correction(s) appliquée(s) pendant cette session : chaque correction a "
+            "déclenché une revérification réelle et complète du dossier. Les constats "
+            "des sections précédentes reflètent la version corrigée courante"
+            f" (<code>{active_version}</code>).</p>"
+            "<table><tr><th>Passage</th><th>Avant</th><th>Après</th><th>Motif (déclaré)</th></tr>"
+            f"{version_rows}</table>"
+        )
+    elif journey.correction_preview is not None and journey.run2 is not None:
         claim_id = journey.corrected_claim_id
         spec = next((c for c in m2.passages if c["passage_id"] == claim_id), None)
         before = spec["text"] if spec else ""
@@ -948,7 +968,7 @@ def render_html(run: dict[str, Any], *, generated_at: str) -> str:
     {omitted_html}
   </div>
 
-  <h2>2. Le corpus de référence (sources publiques réelles)</h2>
+  <h2>2. Le corpus de référence (provenance déclarée pour chaque source)</h2>
   <p class="meta">{len(corpus.records)} article(s) ingéré(s), {len(corpus.failures)} échec(s) d'ingestion,
      {len(corpus.ambiguous_versions)} version(s) ambiguë(s). Originals préservés, empreinte vérifiée.</p>
   <table>
