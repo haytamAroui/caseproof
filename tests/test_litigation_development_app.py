@@ -822,3 +822,68 @@ def test_qr_png_renders_and_is_deterministic():
     assert png == render_qr_png(payload)
     assert render_qr_png(payload + "x") != png
     assert len(png) < 16384
+
+
+def test_live_ports_absent_without_configuration():
+    from apps.api.signed_live_composition import live_signed_ports
+
+    assert live_signed_ports({}) is None
+    assert live_signed_ports({"CASEPROOF_REVIEW_RECORD_SIGNING_KEY_HEX": "ab" * 32}) is None
+
+
+def test_live_ports_composition_validation():
+    from apps.api.signed_live_composition import live_signed_ports
+
+    key = "sb_publishable_" + "A" * 24
+    publisher, record = live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": key})
+    assert publisher is not None and record is not None
+    with pytest.raises(ValueError):
+        live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "sb_secret_" + "A" * 24})
+    with pytest.raises(ValueError):
+        live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "not-a-key"})
+    with pytest.raises(ValueError):
+        live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": key,
+                           "CASEPROOF_REVIEW_RECORD_SIGNING_KEY_HEX": "not-hex"})
+    with pytest.raises(ValueError):
+        live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": key,
+                           "CASEPROOF_REVIEW_RECORD_SIGNING_KEY_HEX": "ab"})
+
+
+def test_workbench_documents_route_uses_wired_live_publisher():
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+
+    case_id = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+    calls = []
+
+    def stub_rpc(*, publishable_key, bearer, name, args):
+        calls.append((publishable_key, bearer, name, args))
+        return {"ok": True, "documents": [{"document_id": case_id, "label": "synthétique",
+                                           "versions": []}]}
+
+    key = "sb_publishable_" + "B" * 24
+    publisher = LiveSignedBriefPublisher(call_rpc=stub_rpc, publishable_key=key)
+    search, _ = search_rig()
+    reader = AuthorizedOriginalReader(search.checker, Originals())
+    client = TestClient(
+        create_litigation_development_app(checker=search.checker, originals=reader,
+                                          signed_brief_publisher=publisher),
+        client=("127.0.0.1", 50000),
+    )
+    response = client.get(f"/dev/signed/matters/{case_id}/documents",
+                          headers={"Authorization": "Bearer signed-user-token"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["schema"] == "caseproof-signed-documents-v1"
+    assert body["documents"][0]["document_id"] == case_id
+    assert calls == [(key, "signed-user-token", "caseproof_signed_list_documents",
+                      {"p_case": case_id})]
+
+
+def test_workbench_without_wired_publisher_stays_503():
+    search, _ = search_rig()
+    reader = AuthorizedOriginalReader(search.checker, Originals())
+    client = TestClient(create_litigation_development_app(checker=search.checker, originals=reader),
+                        client=("127.0.0.1", 50000))
+    response = client.get(f"/dev/signed/matters/{CASE}/documents",
+                          headers={"Authorization": "Bearer signed-user-token"})
+    assert response.status_code == 503
