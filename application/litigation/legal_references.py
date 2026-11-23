@@ -172,20 +172,26 @@ def check_legal_references(
         base: dict[str, Any] = dict(reference_id=ref_id, raw_text=c.raw_text, start=cite.span.start,
                     end=cite.span.end, act_code=c.code, article=c.article, language=c.language)
         act = act_aliases.get(c.code)
+        qk: dict[str, Any] = {}
+        if strict:
+            early = _bound_quote_matches(text, cite, article_cites)
+            bound_spans.extend(m.span() for m in early)
+            if early:
+                qk = {"quote": _qtext(early[0])[:_QUOTE_MAX]}
         if strict and (_LOCATOR.search(c.raw_text) or _LOCATOR.search(
                 text[max(0, cite.span.start - 40):cite.span.start] + " | " + text[cite.span.end:cite.span.end + 40].split("\n")[0])):
             out.append(LegalReferenceObservation(
-                **base, status=RuleStatus.UNDETERMINED, reason="sub_article_locator_not_checked_in_corpus"))
+                **base, **qk, status=RuleStatus.UNDETERMINED, reason="sub_article_locator_not_checked_in_corpus"))
             continue
         if act is None:
             out.append(LegalReferenceObservation(
-                **base, status=RuleStatus.UNDETERMINED,
+                **base, **qk, status=RuleStatus.UNDETERMINED,
                 reason="act_not_mapped_to_chosen_corpus"))
             continue
         matches = by_base.get(article_key(act, c.article, c.language), [])
         if not matches:
             out.append(LegalReferenceObservation(
-                **base, status=RuleStatus.UNVERIFIED,
+                **base, **qk, status=RuleStatus.UNVERIFIED,
                 reason="article_absent_from_chosen_corpus"))
             continue
         record = None
@@ -194,7 +200,7 @@ def check_legal_references(
             picked = [r for r in matches if r.version == wanted]
             if not picked:
                 out.append(LegalReferenceObservation(
-                    **base, status=RuleStatus.UNDETERMINED,
+                    **base, **qk, status=RuleStatus.UNDETERMINED,
                     reason="requested_version_absent_from_chosen_corpus"))
                 continue
             if len(picked) == 1:
@@ -203,7 +209,7 @@ def check_legal_references(
             record = matches[0]
         if record is None:
             out.append(LegalReferenceObservation(
-                **base, status=RuleStatus.UNDETERMINED,
+                **base, **qk, status=RuleStatus.UNDETERMINED,
                 reason="several_declared_versions_none_chosen"))
             continue
         ident: dict[str, Any] = dict(corpus_key=record.key, corpus_version=record.version,
@@ -211,7 +217,6 @@ def check_legal_references(
                      corpus_source_uri=record.source_uri)
         if strict:
             matches_q = _bound_quote_matches(text, cite, article_cites)
-            bound_spans.extend(m.span() for m in matches_q)
             verdicts: list[tuple[str, str, str]] = []
             article_norm = _norm_exact(record.derived_text)
             for m in matches_q:
