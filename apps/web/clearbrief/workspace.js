@@ -443,19 +443,19 @@
   }
   async function publishVersion(evt){
     evt.preventDefault();
-    const generation=state.generation;
+    // Capture the exact context the publication is made in; a late success is
+    // applied only to that same session and matter, never to a switched one.
+    const session=state.session,caseId=state.caseId;
     const documentId=$("upload-document").value.trim(),versionId=$("upload-version").value.trim();
     if(!UUID.test(documentId)||!UUID.test(versionId)){
       notice("Select the registered document/version whose uploaded original to publish.","danger");return;
     }
     $("publish").disabled=true;
     try{
-      const d=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/briefs/publish",{
+      const d=await api("/dev/signed/matters/"+encodeURIComponent(caseId)+"/briefs/publish",{
         method:"POST",json:{document_id:documentId,version_id:versionId,
           document_role:"own_draft",expected_revision:state.publishRevision}});
-      // A scope reload during flight must not silently drop a confirmed
-      // publication; only a ended session discards the result.
-      if(!state.session)return;
+      if(state.session!==session||state.caseId!==caseId)return;
       if(d.schema!=="caseproof-signed-brief-publish-v1"||!Number.isInteger(d.published_revision)||
          !UUID.test(d.brief_version_id))
         throw Error("invalid_schema");
@@ -464,13 +464,13 @@
       $("publish-status").textContent="Published brief version at revision "+d.published_revision+". Run the factual check.";
       notice("Brief version published from the verified uploaded original.","ok");
       await load();
-    }catch(error){if(generation===state.generation)
+    }catch(error){if(state.session===session&&state.caseId===caseId)
       notice(statusFor(error),"danger");}
     finally{$("publish").disabled=false;}
   }
   async function upload(evt){
     evt.preventDefault();
-    const generation=state.generation;
+    const session=state.session,caseId=state.caseId;
     const documentId=$("upload-document").value.trim(),versionId=$("upload-version").value.trim();
     const file=$("original-file").files?.[0];
     if(!UUID.test(documentId)||!UUID.test(versionId)||!file||file.size<=0||file.size>20*1024*1024){
@@ -481,12 +481,12 @@
     $("upload").disabled=true;
     try{
       const token=await bearer();
-      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(state.caseId)+
+      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(caseId)+
         "/documents/"+encodeURIComponent(documentId)+"/versions/"+encodeURIComponent(versionId)+"/original",{
           method:"PUT",credentials:"omit",redirect:"error",cache:"no-store",
           headers:{"Authorization":"Bearer "+token,"Content-Type":mime},body:file,
         });
-      if(generation!==state.generation||!state.session)return;
+      if(state.session!==session||state.caseId!==caseId)return;
       if(response.status!==201)throw Error("unavailable");
       $("publish").disabled=false;
       $("publish-status").textContent="";
@@ -495,7 +495,7 @@
       const digestHex=Array.from(digestBytes,(b)=>b.toString(16).padStart(2,"0")).join("");
       const uploadCurrent=$("upload-current");if(uploadCurrent)uploadCurrent.textContent="Current original: "+file.name+" · "+file.size+" bytes · SHA-256 "+digestHex.slice(0,16)+"\u2026 · version "+versionId;
       await load();
-    }catch(error){if(generation===state.generation)
+    }catch(error){if(state.session===session&&state.caseId===caseId)
       notice("Upload was denied or its outcome is unknown. Verify the exact version before retrying.","danger");}
     finally{$("upload").disabled=false;}
   }
