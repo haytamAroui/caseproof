@@ -1,0 +1,234 @@
+"""Verified-readback publish composition for the live signed path.
+
+The workbench route and the disposable backend share one six-argument
+``publish_uploaded`` contract. This adapter provides the same contract on
+the live path: every artifact is derived service-side from verified bytes
+and signed reads, then delegated to the RPC adapter. The publish RPC
+re-validates everything server-side; nothing here ever trusts the client.
+
+Derivation, fail-closed at every step:
+
+1. verified byte readback through :class:`SignedSourceLibrary` (digest and
+   revocation-drift re-check), restricted to ``text/plain`` originals in
+   strict UTF-8, matching the trusted-registry parser ``strict-utf8-txt-v1``;
+2. the confirmed exhibit register via ``caseproof_signed_exhibit_register``;
+3. citation references extracted from the representation
+   (« citation » (label)) whose label names a confirmed exhibit or one of
+   its aliases — the same citation grammar as the demo workbench;
+4. a graph preimage with the same canonical fields as the disposable graph
+   identity, minus the vault intent, which the publish RPC resolves
+   server-side and stores on the version row;
+5. a post-publish head read (``caseproof_signed_brief_head``) compared
+   with the RPC outcome: any mismatch is an unknown outcome, never a
+   silent success.
+
+Assertions stay empty: the journey checks citations, and a richer fact
+extractor is a product decision the owner has not made. The RPC already
+enforces the full assertion contract for any future extractor.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from dataclasses import dataclass, field
+from typing import Any
+from uuid import uuid4
+
+from apps.api.signed_supabase_brief_publisher import (
+    LiveSignedBriefPublisher,
+    SignedPublishOutcome,
+    _int,
+    _uuid,
+    _working_brief_id,
+)
+from apps.api.signed_supabase_originals import (
+    API_KEY,
+    PrivateStorageFailure,
+    PrivateStorageOutcomeUnknown,
+)
+from apps.api.signed_supabase_source_library import SignedSourceLibrary
+
+PARSER_ID = "strict-utf8-txt-v1"
+_MAX_REPRESENTATION_BYTES = 480_000
+_MAX_REFERENCES = 512
+_MAX_QUOTE = 4000
+_MAX_LABEL = 160
+_MAX_GRAPH_TEXT = 200_000
+
+# Citation grammar of the demo workbench: « citation exacte » (label).
+_QUOTE_RE = re.compile(r"«\s*(?P<quote>[^«»]{4,600}?)\s*»\s*\((?P<label>[^)]{4,120})\)")
+
+
+def _canonical(value: object) -> str:
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+@dataclass(frozen=True, slots=True)
+class ComposedSignedBriefPublisher:
+    """Six-argument live publish: derive service-side, then delegate."""
+
+    library: SignedSourceLibrary
+    publisher: LiveSignedBriefPublisher
+    publishable_key: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.publishable_key, str) or not API_KEY.fullmatch(
+            self.publishable_key
+        ):
+            raise ValueError("Use a Supabase publishable key, never a service key")
+
+    def _confirmed_labels(self, bearer: str, case_id: str, version_id: str) -> dict[str, str]:
+        """Confirmed register labels (display + aliases), lowercase → display."""
+        result = self.publisher._call(
+            bearer,
+            "caseproof_signed_exhibit_register",
+            {"p_case": _uuid(case_id, "case_id"), "p_version": _uuid(version_id, "version_id")},
+        )
+        revision = result.get("register_revision")
+        payload = result.get("payload")
+        if payload is None:
+            if revision != 0:
+                raise PrivateStorageFailure("RPC result outside the signed contract")
+            return {}
+        if not isinstance(payload, dict):
+            raise PrivateStorageFailure("RPC result outside the signed contract")
+        entries_raw = payload.get("entries")
+        if not isinstance(entries_raw, list) or len(entries_raw) > 512:
+            raise PrivateStorageFailure("RPC result outside the signed contract")
+        labels: dict[str, str] = {}
+        for entry in entries_raw:
+            if not isinstance(entry, dict) or entry.get("confirmed") is not True:
+                continue
+            display = entry.get("display_label")
+            if type(display) is not str or not 0 < len(display.strip()) <= _MAX_LABEL:
+                raise PrivateStorageFailure("RPC result outside the signed contract")
+            display = display.strip()
+            labels.setdefault(display.lower(), display)
+            aliases = entry.get("aliases")
+            if aliases is None:
+                continue
+            if not isinstance(aliases, list) or len(aliases) > 64:
+                raise PrivateStorageFailure("RPC result outside the signed contract")
+            for alias in aliases:
+                if type(alias) is not str or not 0 < len(alias.strip()) <= _MAX_LABEL:
+                    raise PrivateStorageFailure("RPC result outside the signed contract")
+                labels.setdefault(alias.strip().lower(), display)
+        return labels
+
+    def _extract_references(
+        self, text: str, labels: dict[str, str]
+    ) -> list[dict[str, Any]]:
+        references: list[dict[str, Any]] = []
+        for match in _QUOTE_RE.finditer(text):
+            display = labels.get(match.group("label").strip().lower())
+            if display is None:
+                continue
+            quote = match.group("quote").strip()
+            if not quote or len(quote) > _MAX_QUOTE:
+                continue
+            references.append(
+                {
+                    "reference_id": f"ref-{len(references) + 1:02d}",
+                    "exhibit_label": display,
+                    "exact_quote": quote,
+                    "pdf_page": None,
+                }
+            )
+            if len(references) > _MAX_REFERENCES:
+                raise PrivateStorageFailure("brief citations outside the signed contract")
+        return references
+
+    def publish_uploaded(
+        self,
+        *,
+        bearer: str,
+        case_id: str,
+        document_id: str,
+        version_id: str,
+        document_role: str,
+        expected_revision: int,
+    ) -> SignedPublishOutcome:
+        """Derive every artifact from verified reads, then publish via the RPC."""
+        if document_role not in {"own_draft", "opponent_brief"}:
+            raise ValueError("invalid document role")
+        case_key = _uuid(case_id, "case_id")
+        document_key = _uuid(document_id, "document_id")
+        version_key = _uuid(version_id, "version_id")
+        _int(expected_revision, "expected_revision", low=0, high=1_000_000)
+
+        ref, _length = self.library.source(
+            bearer=bearer, case_id=case_key, document_id=document_key,
+            version_id=version_key,
+        )
+        if ref.content_type != "text/plain":
+            raise PrivateStorageFailure("original outside the trusted UTF-8 parser")
+        data = self.library.read(
+            bearer=bearer, case_id=case_key, document_id=document_key,
+            version_id=version_key,
+        )
+        try:
+            text = data.decode("utf-8", "strict")
+        except UnicodeDecodeError:
+            raise PrivateStorageFailure("original outside the trusted UTF-8 parser") from None
+        if not 0 < len(text.encode("utf-8")) <= _MAX_REPRESENTATION_BYTES:
+            raise PrivateStorageFailure("representation outside the signed contract")
+
+        labels = self._confirmed_labels(bearer, case_key, version_key)
+        references = self._extract_references(text, labels)
+        representation_sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        brief_version_id = str(uuid4())
+        brief_id = _working_brief_id(case_key, document_role)
+        preimage = {
+            "brief_id": brief_id,
+            "case": case_key,
+            "version_id": brief_version_id,
+            "original_sha256": ref.sha256_hex,
+            "representation_sha256": representation_sha,
+            "parser_id": PARSER_ID,
+            "document_id": document_key,
+            "source_version": version_key,
+            "role": document_role,
+            "references": references,
+            "assertions": [],
+        }
+        graph_text = _canonical(preimage)
+        if len(graph_text) > _MAX_GRAPH_TEXT:
+            raise PrivateStorageFailure("graph outside the signed contract")
+        graph_sha = hashlib.sha256(graph_text.encode("utf-8")).hexdigest()
+
+        outcome = self.publisher.publish_uploaded(
+            bearer=bearer,
+            case_id=case_key,
+            document_id=document_key,
+            version_id=version_key,
+            document_role=document_role,
+            expected_revision=expected_revision,
+            brief_version_id=brief_version_id,
+            request_id=str(uuid4()),
+            representation=text,
+            representation_sha256=representation_sha,
+            parser_id=PARSER_ID,
+            references=references,
+            assertions=[],
+            graph_text=graph_text,
+            graph_sha256=graph_sha,
+        )
+
+        # Verified read-back: the stored head must be exactly what the RPC
+        # reported, otherwise the outcome is unknown, never a silent success.
+        head = self.publisher._call(
+            bearer,
+            "caseproof_signed_brief_head",
+            {"p_case": case_key, "p_role": document_role},
+        )
+        if (
+            head.get("brief_id") != outcome.brief_id
+            or head.get("version_id") != outcome.brief_version_id
+            or head.get("revision") != outcome.published_revision
+        ):
+            raise PrivateStorageOutcomeUnknown("publish outcome unverifiable")
+        return outcome
+
+
+__all__ = ["ComposedSignedBriefPublisher", "PARSER_ID"]

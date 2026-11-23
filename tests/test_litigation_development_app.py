@@ -653,7 +653,6 @@ def _live_publish_kwargs():
     graph = "graphe synthétique v1"
     return {
         "bearer": "jwt", "case_id": _UUID_A, "document_id": _UUID_B, "version_id": _UUID_C,
-        "intent_id": "3" * 8 + "-0000-4000-8000-" + "3" * 12,
         "document_role": "own_draft", "expected_revision": 1,
         "brief_version_id": "4" * 8 + "-0000-4000-8000-" + "4" * 12,
         "request_id": "5" * 8 + "-0000-4000-8000-" + "5" * 12,
@@ -686,7 +685,7 @@ def test_live_publisher_publish_contract():
     raw[8] = (raw[8] & 0x3F) | 0x80
     assert args["p_brief"] == str(uuid.UUID(bytes=bytes(raw)))
     assert outcome.brief_id == args["p_brief"]
-    assert args["p_expected"] == 1 and args["p_intent"] == kwargs["intent_id"]
+    assert args["p_expected"] == 1
     assert args["p_references"] == kwargs["references"]
     assert args["p_assertions"] == kwargs["assertions"]
     assert args["p_representation"] == kwargs["representation"]
@@ -1033,6 +1032,218 @@ def test_workbench_without_wired_publisher_stays_503():
     response = client.get(f"/dev/signed/matters/{CASE}/documents",
                           headers={"Authorization": "Bearer signed-user-token"})
     assert response.status_code == 503
+
+
+_PUBLISH_CASE = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+_PUBLISH_DOC = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
+_PUBLISH_VER = "cccccccc-3333-4333-8333-cccccccccccc"
+
+
+def _publish_route_client(publisher):
+    search, _ = search_rig()
+    reader = AuthorizedOriginalReader(search.checker, Originals())
+    return TestClient(
+        create_litigation_development_app(checker=search.checker, originals=reader,
+                                          signed_brief_publisher=publisher),
+        client=("127.0.0.1", 50000),
+    )
+
+
+def _publish_post(client, **overrides):
+    body = {"document_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+            "document_role": "own_draft", "expected_revision": 0}
+    body.update(overrides)
+    return client.post(
+        f"/dev/signed/matters/{_PUBLISH_CASE}/briefs/publish",
+        json=body, headers={"Authorization": "Bearer signed-user-token"})
+
+
+def test_workbench_publish_route_delegates_six_argument_contract():
+    from apps.api.signed_supabase_brief_publisher import SignedPublishOutcome
+    calls = []
+
+    class _Composer:
+        def publish_uploaded(self, **kwargs):
+            calls.append(kwargs)
+            return SignedPublishOutcome(
+                brief_id="dddddddd-4444-4444-8444-dddddddddddd",
+                brief_version_id="eeeeeeee-5555-4555-8555-eeeeeeeeeeee",
+                published_revision=1)
+
+    client = _publish_route_client(_Composer())
+    response = _publish_post(client)
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["schema"] == "caseproof-signed-brief-publish-v1"
+    assert body["published_revision"] == 1
+    assert calls == [{"bearer": "signed-user-token", "case_id": _PUBLISH_CASE,
+                      "document_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+                      "document_role": "own_draft", "expected_revision": 0}]
+    # The route never accepts service-computed artifacts from the client.
+    forged = _publish_post(client, representation="texte forgé jamais vérifié")
+    assert forged.status_code == 422
+    assert len(calls) == 1
+    # No wired publisher: the route stays unavailable, never a silent fallback.
+    search, _ = search_rig()
+    bare = TestClient(
+        create_litigation_development_app(
+            checker=search.checker,
+            originals=AuthorizedOriginalReader(search.checker, Originals())),
+        client=("127.0.0.1", 50000))
+    assert _publish_post(bare).status_code == 503
+
+
+def test_workbench_publish_route_error_mapping():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied, PrivateStorageFailure
+
+    class _Denied:
+        def publish_uploaded(self, **kwargs):
+            raise PrivateStorageDenied("masked")
+
+    class _Failure:
+        def publish_uploaded(self, **kwargs):
+            raise PrivateStorageFailure("boom")
+
+    class _Conflict:
+        def publish_uploaded(self, **kwargs):
+            raise ValueError("immutable publication conflict")
+
+    assert _publish_post(_publish_route_client(_Denied())).status_code == 404
+    assert _publish_post(_publish_route_client(_Failure())).status_code == 503
+    assert _publish_post(_publish_route_client(_Conflict())).status_code == 409
+
+
+def _composer_rig(data, register_payload, *, media="text/plain", head_mismatch=False):
+    import hashlib
+    from uuid import UUID
+
+    from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    from apps.api.signed_supabase_originals import OriginalRef
+
+    key = "sb_publishable_" + "D" * 24
+    captured = {}
+
+    def stub_rpc(*, publishable_key, bearer, name, args):
+        if name == "caseproof_signed_exhibit_register":
+            return {"ok": True, "register_revision": 1 if register_payload else 0,
+                    "media_type": media, "page_count": None, "payload": register_payload}
+        if name == "caseproof_signed_publish_uploaded":
+            captured.update(args)
+            return {"ok": True, "replay": False, "revision": 1}
+        if name == "caseproof_signed_brief_head":
+            return {"ok": True,
+                    "brief_id": captured.get("p_brief"),
+                    "version_id": None if head_mismatch else captured.get("p_version"),
+                    "revision": 1}
+        raise AssertionError(name)
+
+    org = UUID("99999999-1111-4111-8111-999999999999")
+
+    class _Library:
+        def source(self, *, bearer, case_id, document_id, version_id):
+            ref = OriginalRef(org, UUID(case_id), UUID(document_id), UUID(version_id),
+                              hashlib.sha256(data).hexdigest(), media)
+            return ref, len(data)
+
+        def read(self, *, bearer, case_id, document_id, version_id):
+            return data
+
+    composer = ComposedSignedBriefPublisher(
+        library=_Library(),
+        publisher=LiveSignedBriefPublisher(call_rpc=stub_rpc, publishable_key=key),
+        publishable_key=key,
+    )
+    return composer, captured
+
+
+_REGISTER = {
+    "schema": "caseproof-exhibit-register-v1",
+    "entries": [
+        {"exhibit_id": "piece-aaa111bbb222", "display_label": "Contrat",
+         "aliases": ["le contrat"], "confirmed": True, "manual_inclusion": False,
+         "pages": [{"source_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+                    "pdf_page": 1, "printed_page": None, "bundle_page": None}]},
+        {"exhibit_id": "piece-bbb222ccc333", "display_label": "Brouillon",
+         "aliases": [], "confirmed": False, "manual_inclusion": False,
+         "pages": [{"source_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+                    "pdf_page": 2, "printed_page": None, "bundle_page": None}]},
+    ],
+}
+_BRIEF_TEXT = ("Le juge constate que «paiement sous 30 jours» (Contrat) et que "
+               "«livraison incluse» (Le Contrat) mais ignore «citation orpheline» (Inconnu) "
+               "et «passage non confirmé» (Brouillon).")
+
+
+def test_composed_publisher_derives_every_artifact_from_verified_reads():
+    import hashlib
+    import json
+    composer, captured = _composer_rig(_BRIEF_TEXT.encode("utf-8"), _REGISTER)
+    outcome = composer.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert outcome.published_revision == 1
+    expected_refs = [
+        {"reference_id": "ref-01", "exhibit_label": "Contrat",
+         "exact_quote": "paiement sous 30 jours", "pdf_page": None},
+        {"reference_id": "ref-02", "exhibit_label": "Contrat",
+         "exact_quote": "livraison incluse", "pdf_page": None},
+    ]
+    assert captured["p_representation"] == _BRIEF_TEXT
+    assert captured["p_representation_sha"] == hashlib.sha256(
+        _BRIEF_TEXT.encode("utf-8")).hexdigest()
+    assert captured["p_parser_id"] == "strict-utf8-txt-v1"
+    assert captured["p_references"] == expected_refs
+    assert captured["p_assertions"] == []
+    assert "p_intent" not in captured
+    preimage = json.loads(captured["p_graph_text"])
+    assert set(preimage) == {"brief_id", "case", "version_id", "original_sha256",
+                             "representation_sha256", "parser_id", "document_id",
+                             "source_version", "role", "references", "assertions"}
+    assert preimage["references"] == expected_refs and preimage["assertions"] == []
+    assert preimage["role"] == "own_draft" and preimage["case"] == _PUBLISH_CASE
+    assert captured["p_graph_sha"] == hashlib.sha256(
+        captured["p_graph_text"].encode("utf-8")).hexdigest()
+
+
+def test_composed_publisher_fails_closed_outside_the_trusted_parser():
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+    composer, _ = _composer_rig(_BRIEF_TEXT.encode("utf-8"), _REGISTER, media="application/pdf")
+    with pytest.raises(PrivateStorageFailure):
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    composer, _ = _composer_rig(b"\xff\xfe binaire non utf-8", _REGISTER)
+    with pytest.raises(PrivateStorageFailure):
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+
+
+def test_composed_publisher_reports_unverifiable_outcome():
+    from apps.api.signed_supabase_originals import PrivateStorageOutcomeUnknown
+    composer, _ = _composer_rig(_BRIEF_TEXT.encode("utf-8"), _REGISTER, head_mismatch=True)
+    with pytest.raises(PrivateStorageOutcomeUnknown):
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+
+
+def test_composed_publisher_propagates_masked_denials():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied
+
+    def denying_rpc(*, publishable_key, bearer, name, args):
+        return {"ok": False, "error": "denied"}
+
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    key = "sb_publishable_" + "E" * 24
+    composer, _ = _composer_rig(_BRIEF_TEXT.encode("utf-8"), _REGISTER)
+    object.__setattr__(composer, "publisher",
+                       LiveSignedBriefPublisher(call_rpc=denying_rpc, publishable_key=key))
+    with pytest.raises(PrivateStorageDenied):
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
 
 
 def test_live_workbench_assembly_refuses_mixed_backends():
@@ -1776,16 +1987,16 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
             conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
 
         def publish(sub, *, request=None, expected=0, brief=None, version=brief_v1,
-                    document=doc_up, doc_version=ver_up, intent_id=intent, role="own_draft",
+                    document=doc_up, doc_version=ver_up, role="own_draft",
                     text=rep_text, text_sha=None, graph=graph_text, g_sha=None,
                     references=None, asserts=None, jwt_role="authenticated"):
             as_user(sub, jwt_role)
             return conn.execute(
                 "select public.caseproof_signed_publish_uploaded"
-                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)",
+                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)",
                 (str(case), brief or working_brief(role), str(version),
                  str(request or uuid4()), expected, str(document), str(doc_version),
-                 str(intent_id), role, text,
+                 role, text,
                  text_sha or hashlib.sha256(text.encode("utf-8")).hexdigest(),
                  "parser-synthétique-v1", references if references is not None else refs(),
                  asserts if asserts is not None else assertions(), graph,
@@ -1802,8 +2013,6 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
             "ok": False, "error": "invalid"}
         # Correct representation but a digest over other bytes.
         assert publish(user_a, text_sha="0" * 64) == {"ok": False, "error": "invalid"}
-        # Unknown intent / unverified binding.
-        assert publish(user_a, intent_id=uuid4()) == {"ok": False, "error": "invalid"}
         # Reference whose quote does not occur in the exhibit's source.
         assert publish(user_a, references=refs(quote_text="citation absente")) == {
             "ok": False, "error": "invalid"}
@@ -1993,6 +2202,58 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
                 with pytest.raises(errors.InsufficientPrivilege):
                     conn.execute("select public.caseproof_signed_matter_access(%s)",
                                  (str(target),))
+
+        # The verified vault intent is resolved server-side: the caller never
+        # supplies one, a merely pending intent never qualifies, and several
+        # verified intents on the same version resolve deterministically to
+        # the oldest one.
+        rep_text2 = "Mémoire synthétique seconde version."
+        audit5, audit6 = uuid4(), uuid4()
+        for audit in (audit5, audit6):
+            conn.execute(
+                "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+                " actor_user_id, action, event_schema_version, correlation_id,"
+                " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
+                (audit, org, case, user_a, uuid4(), "a" * 64))
+        conn.execute(
+            "insert into caseproof._dev_journey_sources(org_id, case_id, document_id,"
+            " version_id, original_sha, representation_sha, snapshot_sha, representation,"
+            " audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (org, case, doc_up, ver_up2, "1" * 64,
+             hashlib.sha256(rep_text2.encode("utf-8")).hexdigest(), "5" * 64,
+             rep_text2, audit5))
+        conn.execute(
+            "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
+            " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
+            " byte_length, media_type, state, created_audit_id, created_case_revision,"
+            " last_audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, 4, 'text/plain',"
+            " 'pending', %s, 1, %s)",
+            (org, case, uuid4(), user_a, doc_up, ver_up2,
+             str(org) + "/" + str(case) + "/" + str(doc_up) + "/" + str(ver_up2)
+             + "/" + "1" * 64 + "-en-attente",
+             "1" * 64, audit5, audit6))
+        assert publish(user_a, doc_version=ver_up2, version=uuid4(), expected=1,
+                       text=rep_text2) == {"ok": False, "error": "invalid"}
+        intent_newer, intent_older = uuid4(), uuid4()
+        for intent_row, created in ((intent_newer, "now() + interval '1 hour'"),
+                                    (intent_older, "now()")):
+            conn.execute(
+                "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
+                " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
+                " byte_length, media_type, state, created_audit_id, created_case_revision,"
+                " last_audit_id, created_at) values(%s, %s, %s, %s, %s, %s, %s, %s, 4,"
+                " 'text/plain', 'verified', %s, 1, %s, " + created + ")",
+                (org, case, intent_row, user_a, doc_up, ver_up2,
+                 str(org) + "/" + str(case) + "/" + str(doc_up) + "/" + str(ver_up2)
+                 + "/" + "1" * 64 + "-" + str(intent_row),
+                 "1" * 64, audit5, audit6))
+        second_version = uuid4()
+        assert publish(user_a, doc_version=ver_up2, version=second_version, expected=1,
+                       text=rep_text2) == {"ok": True, "replay": False, "revision": 2}
+        assert conn.execute(
+            "select vault_intent_id from caseproof._m2_brief_versions"
+            " where case_id=%s and version_id=%s",
+            (str(case), str(second_version))).fetchone()[0] == intent_older
 
 
 def _live_check_store(result, library_bytes=None):

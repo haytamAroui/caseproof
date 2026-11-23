@@ -707,11 +707,51 @@ def create_litigation_development_app(
         request: Request,
         authorization: str | None = Header(default=None),
     ) -> JSONResponse:
-        # Disabled until the verified-readback composition adapters (source
-        # library + original reader) land: the signed publish RPC requires the
-        # service-computed representation/references/assertions/graph, and this
-        # route must never accept them from the client.
-        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if signed_brief_publisher is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=422, detail="invalid_request") from None
+        if not isinstance(payload, dict) or set(payload) != {
+            "document_id",
+            "version_id",
+            "document_role",
+            "expected_revision",
+        }:
+            raise HTTPException(status_code=422, detail="invalid_request")
+        ids = [payload[k] for k in ("document_id", "version_id")]
+        if (
+            any(type(v) is not str or len(v) != 36 for v in ids)
+            or payload["document_role"] not in {"own_draft", "opponent_brief"}
+            or type(payload["expected_revision"]) is not int
+            or payload["expected_revision"] < 0
+        ):
+            raise HTTPException(status_code=422, detail="invalid_request")
+        try:
+            outcome = signed_brief_publisher.publish_uploaded(
+                bearer=_token(authorization),
+                case_id=case_id,
+                document_id=payload["document_id"],
+                version_id=payload["version_id"],
+                document_role=payload["document_role"],
+                expected_revision=payload["expected_revision"],
+            )
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        except ValueError:
+            raise HTTPException(status_code=409, detail="immutable publication conflict") from None
+        return JSONResponse(
+            {
+                "schema": "caseproof-signed-brief-publish-v1",
+                "brief_id": outcome.brief_id,
+                "brief_version_id": outcome.brief_version_id,
+                "published_revision": outcome.published_revision,
+            },
+            status_code=201,
+        )
 
     @app.get("/dev/signed/matters/{case_id}/review-record")
     def signed_review_record_read(

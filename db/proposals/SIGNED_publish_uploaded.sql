@@ -6,8 +6,10 @@
 --    (caseproof._dev_journey_sources is written solely by service_role
 --    ingestion or by the storage-fidelity-checked SQL TXT ingest), so a direct
 --    caller cannot publish a representation the verifier never derived;
---  * the vault intent must exist in state 'verified' with the version's
---    original digest (mirrors disposable_litigation_brief_graph.py:135-145);
+--  * the vault intent is resolved server-side: exactly the verified intent
+--    bound to this version and its original digest is used (deterministically
+--    the oldest when several verified intents name the same version); the
+--    caller never supplies it (mirrors disposable_litigation_brief_graph.py:135-145);
 --  * representation_sha256 and graph_sha256 are verified at write with the
 --    core sha256(bytea) primitive against the exact submitted text;
 --  * every reference resolves against the current CONFIRMED exhibit register
@@ -26,12 +28,13 @@
 -- from stored content; no stored digest is trusted at read time.
 create or replace function public.caseproof_signed_publish_uploaded(
  p_case uuid,p_brief uuid,p_version uuid,p_request uuid,p_expected bigint,
- p_document uuid,p_document_version uuid,p_intent uuid,p_role text,
+ p_document uuid,p_document_version uuid,p_role text,
  p_representation text,p_representation_sha text,p_parser_id text,
  p_references jsonb,p_assertions jsonb,p_graph_text text,p_graph_sha text
 ) returns jsonb language plpgsql security definer set search_path='' as $$
 declare
  v_actor uuid:=auth.uid(); v_org uuid; v_head caseproof._m2_brief_heads%rowtype;
+ v_intent uuid;
  v_source caseproof._dev_journey_sources%rowtype;
  v_register jsonb; v_case_rev bigint; v_exhibit_rev bigint; v_original_sha text;
  v_raw bytea; v_working uuid; v_h text; v_ref jsonb; v_ast jsonb;
@@ -44,7 +47,7 @@ begin
  if v_actor is null or coalesce(auth.jwt()->>'role','')<>'authenticated'
  or coalesce(auth.jwt()->>'is_anonymous','false')='true'
  or p_case is null or p_version is null or p_request is null or p_expected is null
- or p_document is null or p_document_version is null or p_intent is null
+ or p_document is null or p_document_version is null
  or p_role not in ('own_draft','opponent_brief')
  or p_representation is null or p_representation='' or octet_length(p_representation)>480000
  or p_parser_id is null or length(p_parser_id) not between 1 and 256
@@ -79,14 +82,15 @@ begin
 
  -- verified vault intent + original digest chain (bytes fidelity was verified
  -- against Storage at upload/ingest time)
- select dv.original_sha256_hex into v_original_sha
+ select dv.original_sha256_hex, i.intent_id into v_original_sha, v_intent
  from caseproof.documents d
  join caseproof.document_versions dv on dv.org_id=d.org_id and dv.document_id=d.id
  join caseproof._s2_009b_vault_intents i on i.org_id=dv.org_id
     and i.case_id=d.case_id and i.document_id=d.id and i.document_version_id=dv.id
     and i.sha256_hex=dv.original_sha256_hex and i.state='verified'
  where d.org_id=v_org and d.case_id=p_case and d.id=p_document and dv.id=p_document_version
-   and i.intent_id=p_intent;
+ order by i.created_at, i.intent_id
+ limit 1;
  if v_original_sha is null then return jsonb_build_object('ok',false,'error','invalid'); end if;
 
  -- representation byte-identical to the trusted-registry source for this
@@ -116,7 +120,7 @@ begin
      where v.org_id=v_org and v.case_id=p_case and v.brief_id=v_working
        and v.version_id=v_replay_version and v.version_id=p_version
        and v.document_id=p_document and v.document_version_id=p_document_version
-       and v.vault_intent_id=p_intent and v.document_role=p_role
+       and v.vault_intent_id=v_intent and v.document_role=p_role
        and v.representation_sha256=p_representation_sha and v.graph_sha256=p_graph_sha)
    then return jsonb_build_object('ok',true,'replay',true,'revision',v_head.revision); end if;
    return jsonb_build_object('ok',false,'error','conflict'); end if;
@@ -201,7 +205,7 @@ begin
    document_id,document_version_id,vault_intent_id,original_sha256,representation_sha256,parser_id,
    representation,document_role,graph_sha256,case_revision,exhibit_revision,actor_id,created_at)
  values(v_org,p_case,v_working,p_version,v_new_rev,v_head.version_id,p_document,p_document_version,
-        p_intent,v_original_sha,p_representation_sha,p_parser_id,p_representation,p_role,p_graph_sha,
+        v_intent,v_original_sha,p_representation_sha,p_parser_id,p_representation,p_role,p_graph_sha,
         v_case_rev,v_exhibit_rev,v_actor,v_now);
  insert into caseproof._m2_brief_references(org_id,case_id,brief_id,version_id,reference_order,
    reference_id,exhibit_label,exact_quote,pdf_page)
@@ -227,5 +231,5 @@ begin
  if not found then return jsonb_build_object('ok',false,'error','conflict'); end if;
  return jsonb_build_object('ok',true,'replay',false,'revision',v_new_rev);
 end $$;
-revoke all on function public.caseproof_signed_publish_uploaded(uuid,uuid,uuid,uuid,bigint,uuid,uuid,uuid,text,text,text,text,jsonb,jsonb,text,text) from public,anon;
-grant execute on function public.caseproof_signed_publish_uploaded(uuid,uuid,uuid,uuid,bigint,uuid,uuid,uuid,text,text,text,text,jsonb,jsonb,text,text) to authenticated;
+revoke all on function public.caseproof_signed_publish_uploaded(uuid,uuid,uuid,uuid,bigint,uuid,uuid,text,text,text,text,jsonb,jsonb,text,text) from public,anon;
+grant execute on function public.caseproof_signed_publish_uploaded(uuid,uuid,uuid,uuid,bigint,uuid,uuid,text,text,text,text,jsonb,jsonb,text,text) to authenticated;

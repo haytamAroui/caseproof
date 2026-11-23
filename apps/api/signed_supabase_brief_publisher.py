@@ -60,7 +60,7 @@ _MEDIA_MAX_BYTES = 3 * 1024 * 1024
 
 RpcCaller = Callable[..., Any]
 
-__all__ = ["LiveSignedBriefPublisher"]
+__all__ = ["LiveSignedBriefPublisher", "SignedPublishOutcome"]
 
 
 def _uuid(value: object, field_name: str) -> str:
@@ -418,7 +418,6 @@ class LiveSignedBriefPublisher:
         case_id: str,
         document_id: str,
         version_id: str,
-        intent_id: str,
         document_role: str,
         expected_revision: int,
         brief_version_id: str,
@@ -465,7 +464,6 @@ class LiveSignedBriefPublisher:
             "p_expected": _int(expected_revision, "expected_revision", low=0, high=1_000_000),
             "p_document": _uuid(document_id, "document_id"),
             "p_document_version": _uuid(version_id, "version_id"),
-            "p_intent": _uuid(intent_id, "intent_id"),
             "p_role": document_role,
             "p_representation": representation,
             "p_representation_sha": representation_sha256,
