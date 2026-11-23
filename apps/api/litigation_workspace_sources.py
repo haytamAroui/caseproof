@@ -87,6 +87,13 @@ class SignedBriefSources:
         preview = matches[0]
         if len(preview.text) > 120_000 or len(preview.spans) > 4096:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        # Parser spans carry zero-based block page indices; the wire speaks
+        # 1-based physical PDF pages, matching PageState/ExhibitPage and the
+        # preserved-page routes. None stays NOT MAPPED.
+        spans = tuple(
+            (s[0], s[1], s[2], None if s[3] is None else s[3] + 1)
+            for s in preview.spans
+        )
         # Distinct page-numbering spaces from the confirmed register; each None
         # stays None (NOT MAPPED), never collapsed into another space.
         page_mappings = [
@@ -102,7 +109,7 @@ class SignedBriefSources:
             "case_id": case_id, "brief_version_id": brief_version_id,
             "row": asdict(preview.row),
             "text": preview.text,
-            "spans": preview.spans,
+            "spans": spans,
             "page_mappings": page_mappings,
             "claim_support": "not_assessed",
         }

@@ -131,3 +131,5 @@ def test_preview_page_mappings_keep_numbering_spaces_distinct():
     assert preview.json()["page_mappings"] == [
         {"pdf_page": 1, "printed_page": None, "bundle_page": None}
     ]
+    # Wire spans are 1-based physical PDF pages (store blocks are zero-based).
+    assert preview.json()["spans"] == [[0, 27, "pdf", 1]]
