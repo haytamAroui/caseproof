@@ -23,6 +23,7 @@ from apps.api.litigation_review_workspace import ReviewLedger, SignedReviewWorks
 from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
 from apps.api.signed_supabase_check_store import LiveMatterCheckStore
 from apps.api.signed_supabase_facts import LiveMatterFacts
+from apps.api.signed_supabase_flags import LivePassageFlags
 from apps.api.signed_supabase_originals import SignedOriginalsStorage
 from apps.api.signed_supabase_review_ledger import LiveReviewLedger
 from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
@@ -142,6 +143,8 @@ def assemble_request_workbench(environ: Mapping[str, str], bearer: str) -> Reque
         issuer=f"https://{PROJECT_REF}.supabase.co/auth/v1",
         audience="authenticated", publisher=ledger,
         legal_corpus_for=legal_corpus_provider(environ),
+        passage_flags_for=lambda b: LivePassageFlags(
+            call_rpc=call_rpc, publishable_key=publishable, bearer=b),
         fact_ledger_for=lambda b: LiveMatterFacts(
             call_rpc=call_rpc, publishable_key=publishable, bearer=b),
     )

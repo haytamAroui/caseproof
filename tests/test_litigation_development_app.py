@@ -3631,7 +3631,7 @@ def test_signed_composed_workflow_on_disposable_postgres():
         "SIGNED_registry_ingest_parsed", "SIGNED_exhibit_register_read",
         "SIGNED_exhibit_confirm", "SIGNED_publish_uploaded",
         "SIGNED_brief_head_read", "SIGNED_check_bundle_read",
-        "SIGNED_matter_fact_confirm",
+        "SIGNED_matter_fact_confirm", "SIGNED_passage_flags",
     )
     with connect() as conn:
         install_shims(conn, root, names)
@@ -3834,6 +3834,42 @@ def test_signed_composed_workflow_on_disposable_postgres():
         dumped = json.dumps(body, default=str)
         assert out2.brief_version_id in dumped
         assert run1.snapshot_hash in dumped and run2.snapshot_hash in dumped
+
+        # Human missed-passage report: actor/custody and replay are enforced in SQL.
+        from apps.api.signed_supabase_facts import FactRefused
+        from apps.api.signed_supabase_flags import LivePassageFlags
+        flag_port = LivePassageFlags(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY, bearer="user-token-a")
+        checker.passage_flags_for = lambda b: flag_port
+        flag_request = str(uuid4())
+        # Reopen the actual authorized representation, no invented passage.
+        flag_bundle = store.load_bundle(case_id=str(case), brief_version_id=out2.brief_version_id,
+                                       access=checker._scope(checker._verified("user-token-a"), str(case)))
+        flag_preview = flag_bundle.previews[0]
+        f = {"brief_version_id": out2.brief_version_id,
+             "source_document_id": flag_preview.row.document_id,
+             "source_version_id": flag_preview.row.version_id,
+             "draft_passage": flag_bundle.representation.text[:30],
+             "source_passage": flag_preview.text[:30], "source_start": 0,
+             "rationale": "Synthetic human report of a missed passage."}
+        assert client.post(f"/dev/signed/matters/{case}/passage-flags", json={"request_id": flag_request, **f}).status_code == 401
+        url_flag = f"/dev/signed/matters/{case}/passage-flags"
+        assert client.post(url_flag, json={"request_id": flag_request, **f}, headers=auth).status_code == 200
+        assert client.post(url_flag, json={"request_id": flag_request, **f}, headers=auth).json()["recorded"] is False
+        assert client.post(url_flag, json={"request_id": str(uuid4()), **f, "source_passage": "not in this source"}, headers=auth).status_code in {403, 404}
+        with pytest.raises(FactRefused):
+            flag_port.record(case_id=str(case), request_id=flag_request, flag={**f,"rationale":"changed"})
+        flags = flag_port.list(case_id=str(case))
+        assert len(flags) == 1 and flags[0]["actor_id"] == str(user)
+        flagged_run = checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out2.brief_version_id)
+        assert flagged_run.snapshot_hash != run2.snapshot_hash
+        assert flagged_run.passage_flags[0]["binding_current"] is True
+        assert checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out1.brief_version_id).passage_flags == ()
+        assert client.get(base2 + "/review", headers=auth).json()["revision"] == 0
+        from application.litigation.unified_review import verification_record
+        assert b"human_passage_flags" in verification_record(flagged_run)
+        from psycopg.errors import RaiseException
+        with pytest.raises(RaiseException), conn.transaction():
+            conn.execute("delete from caseproof._m3_passage_flags")
 
         # Fact confirmation: actor and source hash come from the server, append-only.
         from apps.api.signed_supabase_facts import FactRefused, LiveMatterFacts

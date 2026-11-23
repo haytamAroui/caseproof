@@ -307,6 +307,12 @@
         source:a.source_id,version:a.source_version_id,sourceSha:a.source_sha256,
         representation:a.representation_id,span:"Version-bound candidate",raw:a,
       })),
+      ...(state.check.passage_flags||[]).map(a=>({
+        id:"flag:"+a.id,kind:"Human-reported passage",state:"needs_context",
+        source:a.binding_current?(state.inventory?.rows||[]).find(r=>r.document_id===a.source_document_id&&r.version_id===a.source_version_id)?.source_id:null,version:a.source_version_id,
+        sourceSha:a.source_sha256,representation:(state.inventory?.rows||[]).find(r=>r.document_id===a.source_document_id&&r.version_id===a.source_version_id)?.representation_id,
+        span:a.binding_current?"Human-selected text, not automatic detection":"Binding changed: inspect again",raw:{...a,text_start:a.source_start,text_end:a.source_start+[...a.source_passage].length},
+      })),
       ...(state.check.event_observations||[]).map(a=>({
         id:"event:"+a.observation_id,kind:"Event language review",state:a.state,
         source:a.source_id,version:a.source_version_id,sourceSha:a.source_sha256,
@@ -345,6 +351,7 @@
       scope.className="check-scope partial";
       scope.textContent="Check not available. Declared sources and exclusions have not been assessed.";
     }
+    renderPassageFlagForm();
     if(state.check)scope.append(el("small","Event-language coverage: "+(state.check.event_observations||[]).length+" paragraph candidate(s). Explicit signature and dispatch-for-signature phrases only (FR/NL/EN), outside quoted text. Source comparison requires one unique existing exact quotation in the same paragraph. Other wording, general paraphrases, event identity and truth are NOT assessed. Uncited candidates receive no automatic source."));
     $("citation-count").textContent=String(state.check?.citation_observations?.length??0);
     $("fact-count").textContent=String(state.check?.factual_observations?.length??0);
@@ -371,6 +378,34 @@
         state.selected=item;renderChecks();renderSelected();});
       node.append(button);
     }
+  }
+  function renderPassageFlagForm(){
+    const box=$("passage-flag-form");if(!box)return;box.replaceChildren();
+    if(!signedWorkbench||!state.check)return;
+    const rows=(state.inventory?.rows||[]).filter(r=>r.document_id&&r.version_id);
+    const draft=el("textarea");draft.placeholder="Paste the exact missed assertion from the current conclusions";draft.maxLength=1200;draft.id="flag-draft";
+    const src=el("select");src.id="flag-source";
+    for(const r of rows){const o=el("option",labelOf(r.source_id)||r.source_id);o.value=r.document_id+"|"+r.version_id;src.append(o);}
+    const view=el("p","","passage-view");view.id="flag-text";view.tabIndex=0;
+    const rationale=el("textarea");rationale.id="flag-rationale";rationale.placeholder="Why does this passage need review? Human judgment only.";rationale.maxLength=2000;
+    const status=el("p","No passage selected.","small");let chosen=null;const requestId=crypto.randomUUID();
+    const generation=state.generation;let seq=0;
+    const loadText=async()=>{const n=++seq;chosen=null;const r=rows.find(r=>r.document_id+"|"+r.version_id===src.value);if(!r)return;
+      try{const d=await api(reviewPath()+"/sources/"+encodeURIComponent(r.source_id));if(n===seq&&generation===state.generation)view.textContent=d.text||"";}
+      catch(error){view.textContent="Source unavailable: "+statusFor(error);}};
+    src.onchange=loadText;
+    const pick=el("button","Use selected missed passage","secondary");pick.type="button";
+    pick.onclick=()=>{const s=getSelection();if(!s||s.isCollapsed||s.anchorNode!==view.firstChild||s.focusNode!==view.firstChild){status.textContent="Select words inside the source text.";return;}
+      const a=Math.min(s.anchorOffset,s.focusOffset),b=Math.max(s.anchorOffset,s.focusOffset),text=view.firstChild.data.slice(a,b);
+      if(!text.trim()||text.length>1200){status.textContent="Select 1 to 1200 characters.";return;}
+      chosen={text,start:[...view.firstChild.data.slice(0,a)].length};status.textContent="Selected: "+text;};
+    const save=el("button","Record missed passage","secondary");save.type="button";
+    save.onclick=async()=>{if(!chosen||!draft.value.trim()||!rationale.value.trim()){status.textContent="Provide the exact assertion, selected source passage and reason.";return;}
+      save.disabled=true;const [doc,ver]=src.value.split("|");
+      try{await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/passage-flags",{method:"POST",json:{request_id:requestId,brief_version_id:state.briefId,source_document_id:doc,source_version_id:ver,draft_passage:draft.value,source_passage:chosen.text,source_start:chosen.start,rationale:rationale.value}});await load();}
+      catch(error){status.textContent="Not recorded: "+statusFor(error);save.disabled=false;}};
+    box.append(el("p","Human report, not automated detection. Exact text is checked against this brief and source version; semantic support remains your judgment.","small"),draft,src,view,pick,status,rationale,save);
+    void loadText();
   }
   function renderFactForm(box,a){
     const rows=(state.inventory?.rows||[]).filter(r=>r.document_id&&r.version_id);
@@ -474,6 +509,14 @@
     $("selected").append(el("p","Check state: "+label(selected.state)));
     $("selected").append(el("p","Source: "+(labelOf(selected.source)||"not resolved"),"small"));
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
+    if(selected.kind==="Human-reported passage"){
+      const a=selected.raw;
+      $("selected").append(el("strong","Appréciation requise · human reported"));
+      $("selected").append(el("p","Conclusions: "+a.draft_passage));
+      $("selected").append(el("p","Selected source: "+a.source_passage));
+      $("selected").append(el("p","Human reason: "+a.rationale));
+      $("selected").append(el("p","Recorded by signed actor "+a.actor_id+" at "+a.recorded_at+". Text existence checked, not support. Binding current: "+a.binding_current,"small"));
+    }
     if(selected.kind==="Event language review"){
       const a=selected.raw;
       $("selected").append(el("strong","Appréciation requise"));

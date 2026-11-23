@@ -82,6 +82,8 @@ begin
                where 'fact:'||(f.value->>'claim_id')=v_dec->>'observation_id')
      or exists(select 1 from jsonb_array_elements(coalesce(v_payload->'legal_references','[]'::jsonb)) l
                where 'legal:'||(l.value->>'reference_id')=v_dec->>'observation_id')
+     or exists(select 1 from jsonb_array_elements(coalesce(v_payload->'human_passage_flags','[]'::jsonb)) h
+               where 'flag:'||(h.value->>'id')=v_dec->>'observation_id')
      or exists(select 1 from jsonb_array_elements(coalesce(v_payload->'event_candidates','[]'::jsonb)) e
                where 'event:'||(e.value->>'observation_id')=v_dec->>'observation_id')
      or exists(select 1 from jsonb_array_elements(coalesce(v_payload->'suitability','[]'::jsonb)) s

@@ -57,6 +57,13 @@ begin
    or jsonb_typeof(v_payload->'sources'->'excluded')<>'array'
    or jsonb_typeof(v_payload->'citations')<>'array'
    or jsonb_typeof(v_payload->'factual_candidates')<>'array'
+   or (v_payload ? 'human_passage_flags' and (
+         jsonb_typeof(v_payload->'human_passage_flags')<>'array'
+         or jsonb_array_length(v_payload->'human_passage_flags')>512
+         or exists(select 1 from jsonb_array_elements(v_payload->'human_passage_flags') h
+                   where jsonb_typeof(h.value)<>'object'
+                    or coalesce(h.value->>'origin','')<>'human_reported_not_automatically_detected'
+                    or coalesce(h.value->>'semantic_support','')<>'not_assessed')))
    or (v_payload ? 'event_candidates' and (
          jsonb_typeof(v_payload->'event_candidates')<>'array'
          or jsonb_array_length(v_payload->'event_candidates')>128

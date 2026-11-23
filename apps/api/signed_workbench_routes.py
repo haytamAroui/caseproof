@@ -129,6 +129,18 @@ def _corpus_for(wb: Any, case_id: str) -> Any:
     return provider(case_id) if callable(provider) else None
 
 
+class PassageFlagBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    request_id: str
+    brief_version_id: str
+    source_document_id: str
+    source_version_id: str
+    draft_passage: str = Field(min_length=1, max_length=1200)
+    source_passage: str = Field(min_length=1, max_length=1200)
+    source_start: int = Field(ge=0)
+    rationale: str = Field(min_length=1, max_length=2000)
+
+
 class SearchBody(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     query: str = Field(min_length=2, max_length=120)
@@ -231,6 +243,35 @@ def create_signed_workbench_router(
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         return {"schema": "caseproof-signed-fact-recorded-v1", "recorded": recorded,
                 "note": _FACT_NOTE}
+
+    @router.post("/dev/signed/matters/{case_id}/passage-flags")
+    def signed_passage_flag(
+        case_id: str, body: PassageFlagBody,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        bearer, wb = bench(authorization)
+        provider = getattr(wb.checker, "passage_flags_for", None)
+        if not callable(provider):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        subject = wb.checker._verified(bearer)
+        access = wb.checker._scope(subject, case_id)
+        bundle = wb.checker.store.load_bundle(case_id=case_id, brief_version_id=body.brief_version_id, access=access)
+        from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
+        AuthorizedEvidenceSearch._require_evidence(access)
+        p = next((p for p in bundle.previews if p.row.document_id == body.source_document_id
+                  and p.row.version_id == body.source_version_id), None)
+        if (p is None or p.row.status != "ready" or p.row.warnings
+                or p.text[body.source_start:body.source_start + len(body.source_passage)] != body.source_passage
+                or body.draft_passage not in bundle.representation.text
+                or not wb.checker.store.still_current(access=access, bundle=bundle)):
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+        try:
+            recorded = provider(bearer).record(case_id=case_id, request_id=body.request_id,
+                                               flag=body.model_dump(exclude={"request_id"}))
+        except FactRefused:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return {"schema": "caseproof-human-passage-flag-v1", "recorded": recorded,
+                "note": "Human-reported passage; exact text existence checked, not semantic support. Recheck required."}
 
     @router.get(base + "/legal-references/{reference_id}/passage")
     def signed_legal_passage(

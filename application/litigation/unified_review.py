@@ -166,6 +166,7 @@ class VerificationRun:
     legal_observations: tuple[LegalObservation, ...] = ()
     suitability_observations: tuple[SuitabilityObservation, ...] = ()
     event_observations: tuple[EventObservation, ...] = ()
+    passage_flags: tuple[dict[str, Any], ...] = ()
     # Separate kinds: a literal/value mismatch is not a legal conclusion.
 
 
@@ -178,6 +179,8 @@ def _payload(run: VerificationRun, reviews: tuple[ObservationReview, ...] = ()) 
         legal = {**legal, "suitability": [asdict(x) for x in run.suitability_observations]}
     if run.event_observations:
         legal = {**legal, "event_candidates": [asdict(x) for x in run.event_observations]}
+    if run.passage_flags:
+        legal = {**legal, "human_passage_flags": list(run.passage_flags)}
     return {
         **legal,
         "schema": REPORT_SCHEMA,
@@ -218,6 +221,7 @@ def run_unified_check(
     authorized_register_revision: int,
     legal_observations: tuple[LegalObservation, ...] = (),
     suitability_observations: tuple[SuitabilityObservation, ...] = (),
+    passage_flags: tuple[dict[str, Any], ...] = (),
 ) -> VerificationRun:
     """No implicit trust from request parameters; authorized_* are server-owned."""
     if not isinstance(representation, BriefRepresentation) or not isinstance(source_scope, SourceScope):
@@ -298,6 +302,10 @@ def run_unified_check(
         "factual": [asdict(x) for x in facts],
         "rule_version": ENGINE,
     }
+    if passage_flags:
+        if len(passage_flags) > 512:
+            raise VerificationError("too many human passage flags")
+        identity["human_passage_flags"] = passage_flags
     if event_rows:
         identity["events"] = [asdict(x) for x in event_rows]
     if legal_observations:
@@ -312,7 +320,7 @@ def run_unified_check(
         register.revision, ENGINE, source_scope.declared_source_versions,
         source_scope.excluded_source_versions, processed, incomplete,
         citations.observations, tuple(facts), _hash(identity),
-        tuple(legal_observations), tuple(suitability_observations), event_rows,
+        tuple(legal_observations), tuple(suitability_observations), event_rows, passage_flags,
     )
 
 
@@ -326,6 +334,7 @@ def verification_record(
         raise VerificationError("bounded verification report required")
     valid_ids = {f"citation:{x.reference_id}" for x in run.citation_observations}
     valid_ids |= {f"fact:{x.claim_id}" for x in run.factual_observations}
+    valid_ids |= {f"flag:{x['id']}" for x in run.passage_flags}
     valid_ids |= {f"event:{x.observation_id}" for x in run.event_observations}
     valid_ids |= {f"legal:{x.reference_id}" for x in run.legal_observations}
     valid_ids |= {f"suitability:{x.rule_id}" for x in run.suitability_observations}
