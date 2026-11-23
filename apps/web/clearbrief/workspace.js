@@ -292,12 +292,16 @@
         throw Error("source_version_mismatch");
       const preview=$("source-preview");preview.replaceChildren();
       const text=d.text||"";
+      // Backend offsets are Unicode code points (Python semantics), never
+      // UTF-16 code units: slice over code points so astral characters
+      // before or inside the match cannot shift the highlight.
+      const chars=[...text];
       const obs=state.selected?.raw||{};
       const start=obs.text_start,end=obs.text_end;
-      if(Number.isInteger(start)&&Number.isInteger(end)&&start>=0&&end>start&&end<=text.length){
+      if(Number.isInteger(start)&&Number.isInteger(end)&&start>=0&&end>start&&end<=chars.length){
         preview.append(el("p","Matched passage · offsets "+start+"–"+end+" in this verified source representation:","small"));
         const passage=el("p","","matched-passage");
-        passage.append(el("span",text.slice(0,start)),el("mark",text.slice(start,end),"matched"),el("span",text.slice(end)));
+        passage.append(el("span",chars.slice(0,start).join("")),el("mark",chars.slice(start,end).join(""),"matched"),el("span",chars.slice(end).join("")));
         preview.append(passage);
       }else{
         if(String(state.selected?.id||"").startsWith("citation:"))

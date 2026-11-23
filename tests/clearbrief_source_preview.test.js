@@ -105,3 +105,44 @@ test("citation observation without aligned offsets shows unhighlighted text",asy
   assert(preview.children.some(x=>x.textContent==="sensitive version text"));
   assert(!preview.children.some(x=>x.className==="matched-passage"));
 });
+
+test("passage offsets are Unicode code points, not UTF-16 units",async()=>{
+  const text="a\u{1F600}b LE droit \u{1F601} fin";
+  const span="LE droit \u{1F601}";
+  const start=[..."a\u{1F600}b "].length;
+  const end=start+[...span].length;
+  const nodes=new Map();
+  const get=id=>{ if(!nodes.has(id)) nodes.set(id,new Element()); return nodes.get(id); };
+  const caseId="11111111-1111-4111-8111-111111111111";
+  const briefId="22222222-2222-4222-8222-222222222222";
+  const row={source_id:"source",version_id:"version-a",original_sha256:"a".repeat(64),
+    representation_id:"representation-a",warnings:[],pages:[]};
+  const response=data=>({ok:true,json:async()=>data});
+  const fetch=async url=>{
+    if(url.endsWith("/check")) return response({schema:"caseproof-m2-check-headless-v1",
+      case_id:caseId,brief_version_id:briefId,snapshot_hash:"b".repeat(64),
+      citation_observations:[{reference_id:"ref-01",state:"exact_match",source_id:"source",
+        source_version_id:"version-a",source_sha256:"a".repeat(64),
+        representation_id:"representation-a",text_start:start,text_end:end}],
+      factual_observations:[]});
+    if(url.endsWith("/sources")) return response({schema:"caseproof-clearbrief-brief-sources-v1",
+      case_id:caseId,brief_version_id:briefId,rows:[row]});
+    if(url.endsWith("/sources/source")) return response({schema:"caseproof-clearbrief-brief-source-preview-v1",
+      case_id:caseId,brief_version_id:briefId,row,text});
+    if(url.endsWith("/review")) return response({schema:"caseproof-clearbrief-review-v1",case_id:caseId,
+      snapshot_hash:"b".repeat(64),revision:0});
+    throw Error("unexpected request");
+  };
+  const document={getElementById:get,createElement:()=>new Element()};
+  const window={caseproofSession:{caseId,briefVersionId:briefId,getBearer:async()=>"test"}};
+  vm.runInNewContext(fs.readFileSync("apps/web/clearbrief/workspace.js","utf8"),
+    {document,window,fetch,console,setTimeout});
+  await get("connection-form").listeners.submit({preventDefault(){}});
+  get("observations").children[0].listeners.click();
+  await new Promise(r=>setTimeout(r,0));
+  await new Promise(r=>setTimeout(r,0));
+  const passage=get("source-preview").children.find(x=>x.className==="matched-passage");
+  const mark=passage.children.find(x=>x.className==="matched");
+  assert.equal(mark.textContent,span);
+  assert.equal(passage.children.map(x=>x.textContent).join(""),text);
+});
