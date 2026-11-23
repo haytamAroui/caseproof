@@ -100,7 +100,7 @@
         throw Error("provider_mismatch");
       state.caseId=caseId;state.briefId=briefId;
       state.catalog=null;state.publishTarget=null;state.publishRevision=0;
-      clearView(); void loadCatalog(); await load();
+      clearView(); await load(); void loadCatalog();
     } catch(err) {
       if(err.message==="provider_mismatch")notice("The connected Word session belongs to a different matter/brief.","danger");
       else if(err.message==="credentials_required")notice("Enter your development Auth email and password.","danger");
