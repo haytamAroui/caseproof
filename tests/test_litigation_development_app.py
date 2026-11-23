@@ -1742,15 +1742,50 @@ def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
         with conn.transaction(force_rollback=True):
             with pytest.raises(errors.UniqueViolation):
                 ingest()
-        # Text-native PDF media follows the same verified path and digests.
-        outcome_pdf = ingest(version=ver_pdf,
-                             representation="Page texte native complète.",
-                             parser="caseproof-parser-v1;engine=pypdf:6.21.2:page-text-v1")
+        # Text-native PDF media needs a complete, zero-warning page manifest that
+        # SQL re-verifies against the registered original and the submitted text.
+        from psycopg.types.json import Jsonb
+
+        pdf_rep = "Page texte native complète."
+        pdf_parser = "caseproof-parser-v1;engine=pypdf:6.21.2:page-text-v1"
+        good = {
+            "schema": "dev-document-parse-v1", "media_type": "application/pdf",
+            "original_sha256": sha4,
+            "representation_sha256": hashlib.sha256(pdf_rep.encode()).hexdigest(),
+            "parser_id": pdf_parser, "complete": True, "warnings": [],
+            "pages": [{"pdf_page": 1, "status": "text_extracted"}],
+            "blocks": [{"kind": "pdf_page", "page_index": 0, "start": 0, "end": len(pdf_rep)}],
+        }
+
+        def ingest_pdf(manifest, representation=pdf_rep, version=ver_pdf):
+            as_role("service_role")
+            return conn.execute(
+                "select public.caseproof_registry_ingest_parsed(%s, %s, %s, %s, %s, %s, %s)",
+                (str(case), str(doc), str(version), str(uuid4()), representation,
+                 pdf_parser, None if manifest is None else Jsonb(manifest))).fetchone()[0]
+
+        for bad in (
+            None,
+            {**good, "original_sha256": "e" * 64},
+            {**good, "representation_sha256": "e" * 64},
+            {**good, "warnings": ["page_without_text"]},
+            {**good, "complete": False},
+            {**good, "pages": [{"pdf_page": 2, "status": "text_extracted"}]},
+            {**good, "blocks": [{"kind": "pdf_page", "page_index": 0, "start": 0, "end": 3}]},
+        ):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InvalidParameterValue):
+                    ingest_pdf(bad)
+        outcome_pdf = ingest_pdf(good)
         assert outcome_pdf["original_sha"] == sha4
         assert conn.execute(
             "select parser_id from caseproof._dev_journey_sources"
             " where case_id=%s and version_id=%s",
             (str(case), str(ver_pdf))).fetchone()[0].endswith("page-text-v1")
+        assert conn.execute(
+            "select count(*) from caseproof._dev_journey_parse_manifests"
+            " where case_id=%s and version_id=%s", (str(case), str(ver_pdf))
+        ).fetchone()[0] == 1
 
 
 def test_live_workbench_assembly_refuses_mixed_backends():
@@ -2325,7 +2360,7 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
             with pytest.raises(errors.InsufficientPrivilege):
                 conn.execute(
                     "select public.caseproof_signed_confirm_exhibit(%s, %s, %s, %s, 2,"
-                    " %s::jsonb, %s)",
+                    " %s, %s)",
                     (str(uuid4()), str(doc_pdf), str(ver_pdf), str(uuid4()),
                      json.dumps(appended), "d" * 64))
 
@@ -3526,3 +3561,175 @@ def test_demo_journey_page_resolution_abstains_and_text_stays_unpaginated(tmp_pa
     # Same quote on two physical pages: abstention, never a guessed page.
     assert citations["clause répétée"]["state"] == "reference_ambiguous"
     assert citations["clause répétée"]["source_pdf_page"] is None
+
+
+def test_signed_composed_workflow_on_disposable_postgres():
+    """Composed SIGNED path against a disposable PostgreSQL.
+
+    Real: the db/proposals SQL RPCs (run under authenticated/service_role with
+    JWT claims), the Python adapters, the fail-closed DOCX reader, the PDF
+    inventory, the deterministic fact/citation checks, the review ledger and
+    the review record. FAKE (labeled): PostgREST transport, Supabase Storage
+    bytes and the auth verifier (see tests/signed_composed_rig.py). Local
+    disposable run, not a CI-proof of the live path and not a signed-user
+    isolation proof for the service_role ingest step.
+    """
+    import hashlib
+    import json
+    import os
+    from dataclasses import replace
+    from datetime import UTC, datetime, timedelta
+    from functools import partial
+    from pathlib import Path
+    from uuid import UUID, uuid4
+
+    from application.litigation.library import EvidenceIndexer
+    from application.litigation.review_cycle import CorrectionProposal, preview_correction
+    from application.litigation.unified_review import ReviewDisposition
+    from infrastructure.parsers.limited import LimitedDocumentParser
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from apps.api.access_control import VerifiedSubject
+    from apps.api.litigation_check_service import AuthorizedLitigationChecker
+    from apps.api.litigation_review_workspace import ReviewCommand, SignedReviewWorkspace
+    from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
+    from apps.api.signed_registry_ingest import ingest_parsed_original
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    from apps.api.signed_supabase_check_store import LiveMatterCheckStore
+    from apps.api.signed_supabase_review_ledger import LiveReviewLedger
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+    from apps.api.signed_supabase_rpc import call_rpc
+    from scripts.verify_vault_integration import connect
+    from tests.signed_composed_rig import (
+        PUBLISHABLE_KEY,
+        SERVICE_KEY,
+        FakePostgrest,
+        FakeStorageLibrary,
+        docx_without_custom_xml,
+        install_shims,
+    )
+
+    docx_media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    sentence_a = "Le juge retient « paiement sous 30 jours » (Contrat). "
+    sentence_b = "Le paiement de 12.500,00 EUR est invoqué par le demandeur. "
+    sentence_c = "Selon « Le prix est payable » (Contrat), le paiement est dû le 22 mai 2026."
+    brief_text = sentence_a + sentence_b + sentence_c
+    pdf = _pdf_fixture_bytes([
+        ["Contrat-cadre synthétique."],
+        ["Article 5 - Prix et paiement",
+         "Le prix est payable selon la clause : paiement sous 30 jours.",
+         "Le paiement de 15.000,00 EUR est exigible.",
+         "Le paiement est exigible le 04/05/2026 ou le 22 mai 2026."],
+    ])
+    org, case, user = uuid4(), uuid4(), uuid4()
+    root = Path(__file__).resolve().parents[1] / "db" / "proposals"
+    names = (
+        "SIGNED_review_run_publish", "SIGNED_review_state_read",
+        "SIGNED_review_decision_record", "SIGNED_review_record_read",
+        "SIGNED_matter_access_read", "SIGNED_document_inventory",
+        "SIGNED_registry_ingest_parsed", "SIGNED_exhibit_register_read",
+        "SIGNED_exhibit_confirm", "SIGNED_publish_uploaded",
+        "SIGNED_brief_head_read", "SIGNED_check_bundle_read",
+    )
+    with connect() as conn:
+        install_shims(conn, root, names)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s,'synth')", (org,))
+        conn.execute("insert into auth.users(id, instance_id) values(%s,%s) on conflict (id) do nothing", (user, org))
+        conn.execute("insert into caseproof.organization_members(org_id,user_id,actions) values(%s,%s,array['case:read','evidence:read','finding:write','review:request']::text[])", (org, user))
+        conn.execute("insert into caseproof.cases(id,org_id,created_by_user,effective_policy_version) values(%s,%s,%s,'v1')", (case, org, user))
+        conn.execute("insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions) values(%s,%s,%s,'reviewer',array['case:read','evidence:read','evidence:upload','draft:check','review:request','exhibit:confirm']::text[])", (org, case, user))
+        rig = FakePostgrest(conn, {"user-token-a": str(user)})
+        rpc = partial(call_rpc, _conn_factory=rig.factory)
+        pub = LiveSignedBriefPublisher(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY)
+        lib = FakeStorageLibrary(conn, org)
+
+        def upload(label, data, media):
+            reg = pub.register_source_version(
+                bearer="user-token-a", case_id=str(case), label=label,
+                media_type=media, byte_length=len(data),
+                sha256_hex=hashlib.sha256(data).hexdigest())
+            lib.put(case=case, doc=UUID(reg.document_id), ver=UUID(reg.version_id),
+                    actor=user, data=data, media=media)
+            ingest_parsed_original(
+                secret_key=SERVICE_KEY, case_id=str(case), document_id=reg.document_id,
+                version_id=reg.version_id, request_id=str(uuid4()), data=data,
+                media_type=media, _conn_factory=rig.factory)
+            return reg
+
+        contract = upload("contrat", pdf, "application/pdf")
+        brief_reg = upload("mémoire", docx_without_custom_xml([brief_text]), docx_media)
+        pub.confirm_exhibit(
+            bearer="user-token-a", case_id=str(case), document_id=contract.document_id,
+            version_id=contract.version_id, display_label="Contrat")
+        composer = ComposedSignedBriefPublisher(library=lib, publisher=pub, publishable_key=PUBLISHABLE_KEY)
+        out1 = composer.publish_uploaded(
+            bearer="user-token-a", case_id=str(case), document_id=brief_reg.document_id,
+            version_id=brief_reg.version_id, document_role="own_draft", expected_revision=0)
+        assert out1.published_revision == 1
+
+        class FakeVerifier:  # FAKE auth boundary: maps the bearer to a subject
+            def verify_bearer(self, token):
+                now = datetime.now(UTC)
+                return VerifiedSubject(rig.tokens[token], "iss", "aud", now - timedelta(seconds=5),
+                                       now + timedelta(hours=1), True)
+
+        store = LiveMatterCheckStore(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY,
+                                     bearer="user-token-a", library=lib,
+                                     indexer=EvidenceIndexer(LimitedDocumentParser()))
+        ledger = LiveReviewLedger(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY, bearer="user-token-a")
+        checker = AuthorizedLitigationChecker(verifier=FakeVerifier(), store=store, issuer="iss",
+                                              audience="aud", publisher=ledger)
+        workspace = SignedReviewWorkspace(checker, ledger)
+        run1 = checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out1.brief_version_id)
+        facts = {f.claim_id: f for f in run1.factual_observations}
+        diff = [f for f in facts.values() if f.state.value == "candidate_difference"]
+        abst = [f for f in facts.values() if f.state.value in {"needs_context", "not_assessed"}]
+        assert diff and abst, {k: v.state.value for k, v in facts.items()}
+        assert diff[0].source_pdf_page == 2  # verified PDF inventory, not invented
+        assert all(c.state.value == "exact_match" for c in run1.citation_observations)
+
+        # Review: decide on the contradiction, replay, then a stale revision.
+        obs = f"fact:{diff[0].claim_id}"
+        req = uuid4()
+        cmd = ReviewCommand(run1.snapshot_hash, obs, req, 0, ReviewDisposition.CONFIRMED,
+                            "Écart de montant à corriger.")
+        receipt = workspace.record(bearer="user-token-a", case_id=str(case),
+                                   brief_version_id=out1.brief_version_id, command=cmd)
+        assert receipt["revision"] == 1 and receipt["replayed"] is False
+        again = workspace.record(bearer="user-token-a", case_id=str(case),
+                                 brief_version_id=out1.brief_version_id, command=cmd)
+        assert again["replayed"] is True and again["revision"] == 1
+        with pytest.raises(AccessRejected):
+            workspace.record(bearer="user-token-a", case_id=str(case),
+                             brief_version_id=out1.brief_version_id,
+                             command=replace(cmd, request_id=uuid4()))  # stale expected revision 0
+        state = workspace.state(bearer="user-token-a", case_id=str(case),
+                                brief_version_id=out1.brief_version_id)
+        assert state["revision"] == 1 and state["release_authorized"] is False
+
+        # Correction: bounded exact-range edit, then a NEW uploaded version and recheck.
+        text = run1_text = brief_text
+        start = text.index("12.500,00")
+        proposal = CorrectionProposal(
+            obs, str(user), run1.snapshot_hash, out1.brief_version_id,
+            run1.representation_sha256, start, start + len("12.500,00"),
+            "12.500,00", "15.000,00", "Montant du contrat.")
+        preview = preview_correction(run=run1, text=run1_text, proposal=proposal)
+        corrected_reg = upload("mémoire corrigé", docx_without_custom_xml([preview.proposed_text]), docx_media)
+        out2 = composer.publish_uploaded(
+            bearer="user-token-a", case_id=str(case), document_id=corrected_reg.document_id,
+            version_id=corrected_reg.version_id, document_role="own_draft", expected_revision=1)
+        assert out2.published_revision == 2
+        run2 = checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out2.brief_version_id)
+        assert run2.snapshot_hash != run1.snapshot_hash
+        states2 = {f.state.value for f in run2.factual_observations}
+        assert "candidate_difference" not in states2 and "value_match" in states2
+        assert "needs_context" in states2 or "not_assessed" in states2  # abstention persists
+
+        # Export: signed review record, all revisions consistent and verified.
+        record = LiveSignedReviewRecord(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY)
+        body = record.record(bearer="user-token-a", case_id=str(case), document_role="own_draft")
+        dumped = json.dumps(body, default=str)
+        assert out2.brief_version_id in dumped
+        assert run1.snapshot_hash in dumped and run2.snapshot_hash in dumped

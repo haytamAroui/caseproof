@@ -50,7 +50,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 def derive_registry_ingest(
     *, document_id: str, version_id: str, data: bytes, media_type: str
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Verified original bytes -> registry payload, fail-closed.
 
     Returns exactly the fields the service_role RPC takes beyond the
@@ -80,7 +80,12 @@ def derive_registry_ingest(
         raise ExtractionError("parser_identity_invalid")
     if not 0 < len(text.encode("utf-8")) <= MAX_REPRESENTATION_BYTES:
         raise ExtractionError("parsed_representation_limit")
-    return {"representation": text, "parser_id": parser_id}
+    derived: dict[str, Any] = {"representation": text, "parser_id": parser_id}
+    if media_type == _PDF_MIME:
+        # The physical page inventory the signed exhibit flow resolves PDF
+        # pages from; SQL re-verifies it against the exact text and digests.
+        derived["manifest"] = manifest
+    return derived
 
 
 def secret_key_from_env(environ: dict[str, str]) -> str:
@@ -203,17 +208,20 @@ def ingest_parsed_original(
         document_id=document_key, version_id=version_key,
         data=data, media_type=media_type,
     )
+    rpc_args: dict[str, Any] = {
+        "p_case": case_key,
+        "p_document": document_key,
+        "p_version": version_key,
+        "p_request": request_key,
+        "p_representation": derived["representation"],
+        "p_parser_id": derived["parser_id"],
+    }
+    if "manifest" in derived:
+        rpc_args["p_manifest"] = derived["manifest"]
     result = call_service_rpc(
         secret_key=secret_key,
         name="caseproof_registry_ingest_parsed",
-        args={
-            "p_case": case_key,
-            "p_document": document_key,
-            "p_version": version_key,
-            "p_request": request_key,
-            "p_representation": derived["representation"],
-            "p_parser_id": derived["parser_id"],
-        },
+        args=rpc_args,
         timeout_seconds=timeout_seconds,
         _conn_factory=_conn_factory,
     )
