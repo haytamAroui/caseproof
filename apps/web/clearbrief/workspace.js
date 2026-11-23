@@ -19,6 +19,36 @@
   }
   const path = () => "/v2/matters/" + encodeURIComponent(state.caseId) +
     "/briefs/" + encodeURIComponent(state.briefId);
+  // Signed workbench (check/review on the signed adapters) when the host exposes it;
+  // otherwise the legacy v2 routes. Chosen from /dev/clearbrief/config, never guessed.
+  let signedWorkbench = false;
+  const reviewPath = () => signedWorkbench
+    ? "/dev/signed/matters/" + encodeURIComponent(state.caseId) + "/briefs/" + encodeURIComponent(state.briefId)
+    : path();
+  async function previewCorrection(evt) {
+    evt.preventDefault();
+    const generation = state.generation, out = $("correction-result");
+    const selected = state.selected?.id, snapshot = state.check?.snapshot_hash;
+    const before = $("correction-before").value, after = $("correction-after").value;
+    if (!signedWorkbench || !selected || !sha.test(snapshot || "") || !before || !after) return;
+    out.textContent = "Checking against the current verified representation…";
+    try {
+      const d = await api(reviewPath() + "/correction-preview", {method: "POST",
+        json: {snapshot_hash: snapshot, observation_id: selected, before, after,
+          rationale: $("rationale").value.trim() || "Correction proposed after review"}});
+      if (generation !== state.generation) return;
+      if (d.schema !== "caseproof-signed-correction-preview-v1" || d.persisted !== false ||
+          d.invalidates_check_hash !== snapshot || !sha.test(d.proposed_text_sha256))
+        throw Error("invalid_schema");
+      out.textContent = "Preview only, nothing saved. Proposed text digest " +
+        d.proposed_text_sha256.slice(0, 16) + "\u2026 It requires a new brief version and a new check.";
+    } catch (error) {
+      if (generation === state.generation)
+        out.textContent = error && error.code === 409
+          ? "The text is not found exactly once in the current checked version, or the check is out of date."
+          : statusFor(error);
+    }
+  }
   async function bearer() {
     if (!state.session) throw Error("no_session");
     const token = await state.session.getBearer();
@@ -450,9 +480,9 @@
     $("matter-meta").textContent="Matter "+state.caseId+" · brief "+state.briefId;
     notice("Checking private access and current evidence scope…");
     try{
-      const checked=await api(path()+"/check",{method:"POST"});
+      const checked=await api(reviewPath()+"/check",{method:"POST"});
       if(generation!==state.generation)return;
-      if(checked.schema!=="caseproof-m2-check-headless-v1" || checked.case_id!==state.caseId ||
+      if((checked.schema!=="caseproof-m2-check-headless-v1"&&checked.schema!=="caseproof-signed-check-v1") || checked.case_id!==state.caseId ||
         checked.brief_version_id!==state.briefId || !sha.test(checked.snapshot_hash))
         throw Error("invalid_schema");
       state.check=checked;
@@ -468,7 +498,7 @@
           inv.case_id===state.caseId && inv.brief_version_id===state.briefId)?inv:null;
     }catch{if(generation!==state.generation)return;state.inventory=null;}
     try {
-      const review=await api(path()+"/review");
+      const review=await api(reviewPath()+"/review");
       if(generation===state.generation && review.schema==="caseproof-clearbrief-review-v1" &&
         review.case_id===state.caseId && review.snapshot_hash===state.check?.snapshot_hash)
         state.review=review;
@@ -499,12 +529,12 @@
     };
     const submit=$("save-review");submit.disabled=true;state.busy=true;
     try{
-      const receipt=await api(path()+"/review",{method:"POST",json:state.pending});
+      const receipt=await api(reviewPath()+"/review",{method:"POST",json:state.pending});
       if(generation!==state.generation)return;
       if(receipt.schema!=="caseproof-clearbrief-review-receipt-v1" ||
         receipt.snapshot_hash!==state.check.snapshot_hash)throw Error("invalid_receipt");
       state.pending=null;$("rationale").value="";
-      const review=await api(path()+"/review");
+      const review=await api(reviewPath()+"/review");
       if(generation!==state.generation)return;
       if(review.schema!=="caseproof-clearbrief-review-v1"||review.revision!==receipt.revision)
         throw Error("reload_required");
@@ -1116,7 +1146,7 @@
       const config=await response.json();
       if(response.ok&&config.schema==="caseproof-clearbrief-dev-config-v1"&&
          typeof config.publishable_key==="string"&&config.publishable_key.startsWith("sb_publishable_")){
-        state.publishable=config.publishable_key;$("auth-mode").textContent="Supabase dev authentication";
+        state.publishable=config.publishable_key;signedWorkbench=config.signed_workbench===true;$("correction-form").hidden=!signedWorkbench;$("auth-mode").textContent="Supabase dev authentication";
       }else{
         $("auth-mode").textContent="Backend session required";$("credentials").hidden=true;
         $("connect").disabled=true;disableRemoteJourney();
@@ -1125,6 +1155,7 @@
     }catch{ $("auth-mode").textContent="Backend session required";$("credentials").hidden=true;
       $("connect").disabled=true;notice("The signed identity provider is unavailable.","danger");}
   }
+  $("correction-form").addEventListener("submit", previewCorrection);
   void init();
 })();
 

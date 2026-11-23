@@ -152,6 +152,15 @@
           <textarea id="rationale" maxlength="2000" rows="4" placeholder="State what this source does and does not establish." required></textarea>
           <button id="save-review" type="submit" disabled>Save version-bound review</button>
         </form>
+        <form id="correction-form" hidden>
+          <p class="small">Correction preview (signed workbench). Compares nothing and writes nothing: upload the corrected file, publish it as a new brief version, then re-run the check. A candidate difference is not a legal conclusion.</p>
+          <label for="correction-before">Exact text to replace (must occur once)</label>
+          <input id="correction-before" maxlength="4000" required>
+          <label for="correction-after">Replacement text</label>
+          <input id="correction-after" maxlength="4000" required>
+          <button id="correction-preview" type="submit" class="secondary">Preview correction</button>
+          <p id="correction-result" class="small mono" aria-live="polite"></p>
+        </form>
         <div id="review-history" class="history"></div>
       </section>
     </div>

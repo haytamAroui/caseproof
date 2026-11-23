@@ -6,10 +6,11 @@ accept credentials from requests, install schemas or authorize live deployment.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
@@ -35,6 +36,7 @@ from apps.api.review_record_qr import build_qr_payload, render_qr_png
 from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
+from apps.api.signed_workbench_routes import create_signed_workbench_router
 from apps.api.workspace_auth import SupabaseWorkspaceAuth, create_workspace_auth_router
 from apps.api.workspace_catalog import create_workspace_catalog_router
 from apps.api.workspace_intake import WorkspaceIntake, create_workspace_intake_router
@@ -159,6 +161,7 @@ def create_litigation_development_app(
     signed_review_record: SignedReviewRecord | None = None,
     evidence: EvidenceReader | None = None,
     reviews: SignedReviewWorkspace | None = None,
+    signed_workbench_factory: Callable[[str], Any] | None = None,
     publishable_key: str | None = None,
     trusted_ingest_key: str | None = None,
     ocr: LocalPDFOCR | None = None,
@@ -187,6 +190,8 @@ def create_litigation_development_app(
             else None,
         )
     )
+
+    app.include_router(create_signed_workbench_router(signed_workbench_factory))
 
     if publishable_key is not None and (
         not publishable_key.startswith("sb_publishable_")
@@ -230,8 +235,12 @@ def create_litigation_development_app(
     )
 
     @app.get("/dev/clearbrief/config", include_in_schema=False)
-    def lawyer_config() -> dict[str, str | None]:
-        return {"schema": "caseproof-clearbrief-dev-config-v1", "publishable_key": publishable_key}
+    def lawyer_config() -> dict[str, str | bool | None]:
+        return {
+            "schema": "caseproof-clearbrief-dev-config-v1",
+            "publishable_key": publishable_key,
+            "signed_workbench": signed_workbench_factory is not None,
+        }
 
     catalog = SignedMatterCatalog(publishable_key) if publishable_key else None
     app.include_router(create_workspace_catalog_router(catalog))

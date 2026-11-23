@@ -3590,7 +3590,7 @@ def test_signed_composed_workflow_on_disposable_postgres():
 
     if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
         pytest.skip("disposable PostgreSQL required")
-    from apps.api.access_control import VerifiedSubject
+    from apps.api.access_control import InvalidBearer, VerifiedSubject
     from apps.api.litigation_check_service import AuthorizedLitigationChecker
     from apps.api.litigation_review_workspace import ReviewCommand, SignedReviewWorkspace
     from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
@@ -3670,6 +3670,8 @@ def test_signed_composed_workflow_on_disposable_postgres():
 
         class FakeVerifier:  # FAKE auth boundary: maps the bearer to a subject
             def verify_bearer(self, token):
+                if token not in rig.tokens:
+                    raise InvalidBearer()
                 now = datetime.now(UTC)
                 return VerifiedSubject(rig.tokens[token], "iss", "aud", now - timedelta(seconds=5),
                                        now + timedelta(hours=1), True)
@@ -3727,8 +3729,70 @@ def test_signed_composed_workflow_on_disposable_postgres():
         assert "candidate_difference" not in states2 and "value_match" in states2
         assert "needs_context" in states2 or "not_assessed" in states2  # abstention persists
 
-        # Export: signed review record, all revisions consistent and verified.
+        # The product routes reach the SAME signed adapters (fake auth/transport only).
+        from types import SimpleNamespace
+
         record = LiveSignedReviewRecord(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY)
+        bench = SimpleNamespace(checker=checker, workspace=workspace, store=store)
+        client = TestClient(create_litigation_development_app(
+            signed_workbench_factory=lambda bearer: bench, signed_review_record=record),
+            client=("127.0.0.1", 50000))
+        auth = {"Authorization": "Bearer user-token-a"}
+        base2 = f"/dev/signed/matters/{case}/briefs/{out2.brief_version_id}"
+        base1 = f"/dev/signed/matters/{case}/briefs/{out1.brief_version_id}"
+        assert client.get("/dev/clearbrief/config").json()["signed_workbench"] is True
+        script = (Path(__file__).resolve().parents[1] / "apps/web/clearbrief/workspace.js").read_text()
+        assert "correction-preview" in script and 'id="correction-form"' in (Path(__file__).resolve().parents[1] / "apps/web/clearbrief/index.html").read_text()
+        assert 'api(reviewPath()+"/check"' in script and 'api(reviewPath()+"/review"' in script
+        assert client.get(base2 + "/check").status_code == 401
+        assert client.post(base2 + "/check", headers=auth).status_code == 200
+        assert client.get(base2 + "/check", headers={"Authorization": "Bearer nobody"}).status_code == 401
+        http_run2 = client.get(base2 + "/check", headers=auth).json()
+        assert http_run2["snapshot_hash"] == run2.snapshot_hash
+        assert "not legal conclusions" in http_run2["note"]
+        assert "candidate_difference" not in {
+            f["state"] for f in http_run2["factual_observations"]}
+        # Recheck of the ORIGINAL version still reports the candidate difference.
+        http_run1 = client.get(base1 + "/check", headers=auth).json()
+        assert http_run1["snapshot_hash"] == run1.snapshot_hash
+        assert any(f["state"] == "candidate_difference" for f in http_run1["factual_observations"])
+        # Correction preview: bounded, writes nothing, bound to the current snapshot.
+        body_cp = {"snapshot_hash": run1.snapshot_hash, "observation_id": obs,
+                   "start": start, "end": start + len("12.500,00"), "before": "12.500,00",
+                   "after": "15.000,00", "rationale": "Montant du contrat."}
+        cp = client.post(base1 + "/correction-preview", headers=auth, json=body_cp)
+        assert cp.status_code == 200 and cp.json()["persisted"] is False
+        assert cp.json()["proposed_text"] == preview.proposed_text
+        located = {k: v for k, v in body_cp.items() if k not in {"start", "end"}}
+        assert client.post(base1 + "/correction-preview", headers=auth,
+                           json=located).json()["proposed_text"] == preview.proposed_text
+        # Text that does not occur exactly once abstains instead of guessing.
+        assert client.post(base1 + "/correction-preview", headers=auth,
+                           json={**located, "before": "Le "}).status_code == 409
+        assert client.post(base1 + "/correction-preview", headers=auth,
+                           json={**body_cp, "snapshot_hash": "0" * 64}).status_code == 409
+        assert client.post(base1 + "/correction-preview", headers=auth,
+                           json={**body_cp, "before": "99.999,00"}).status_code == 409
+        assert client.post(base1 + "/correction-preview", json=body_cp).status_code == 401
+        # Review over HTTP on the current version; replay is idempotent.
+        assert client.get(base2 + "/review", headers=auth).json()["revision"] == 0
+        abst2 = next(f for f in run2.factual_observations
+                     if f.state.value in {"needs_context", "not_assessed"})
+        rv = {"snapshot_hash": run2.snapshot_hash, "observation_id": f"fact:{abst2.claim_id}",
+              "request_id": "11111111-1111-4111-8111-111111111111", "expected_revision": 0,
+              "disposition": "needs_information", "rationale": "Date à vérifier au contrat."}
+        first = client.post(base2 + "/review", headers=auth, json=rv).json()
+        assert first["revision"] == 1 and first["replayed"] is False
+        assert client.post(base2 + "/review", headers=auth, json=rv).json()["replayed"] is True
+        assert client.post(base2 + "/review", headers=auth, json={**rv, "snapshot_hash": "0" * 64,
+                           "request_id": "22222222-2222-4222-8222-222222222222",
+                           "expected_revision": 1}).status_code in {403, 404, 409}
+        assert client.get(base2 + "/review", headers=auth).json()["revision"] == 1
+        exported = client.get(f"/dev/signed/matters/{case}/review-record", headers=auth)
+        assert exported.status_code == 200
+        assert out2.brief_version_id in exported.text
+
+        # Export: signed review record, all revisions consistent and verified.
         body = record.record(bearer="user-token-a", case_id=str(case), document_role="own_draft")
         dumped = json.dumps(body, default=str)
         assert out2.brief_version_id in dumped
