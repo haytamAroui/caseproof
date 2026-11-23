@@ -355,3 +355,56 @@ def test_exported_pdf_pack_body_start_cannot_be_edited(tmp_path):
     body = verify_legal_pack(raw, expected_sha256=cp)
     assert body["articles"][0]["body_start_basis"] == "publisher_pdf_layout"
     assert base64.b64decode(body["articles"][0]["original_base64"]).startswith(b"%PDF-")
+
+
+def test_signed_http_pack_route_replays_with_same_findings_as_offline_check(tmp_path, monkeypatch):
+    """Real signed /offline-legal-pack route (FastAPI), fake checker/store: same text, same corpus -> same findings.
+
+    The checker run is produced by the same legal step the signed service runs
+    (strict, v3). Auth, storage and Postgres are faked, so this proves the
+    route-to-pack wiring and replay, not the live signed identity path.
+    """
+    import io
+    import zipfile
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from application.litigation.legal_references import check_legal_references, load_corpus_config
+    from apps.api.offline_docx_check import parse_docx
+    from apps.api.signed_workbench_routes import create_signed_workbench_router
+
+    paragraphs = [f"Article 8.5 du Code civil : « {ARTICLE} ». Article 8.5 du Code civil : ‘la preuve est toujours inutile’."]
+    path = tmp_path / "p.docx"
+    path.write_bytes(docx_without_custom_xml(paragraphs))
+    cdir = pdf_corpus(tmp_path)
+    raw, cp = check_offline_docx(docx=path, corpus=cdir)
+    offline = [(r["status"], r["reason"], r["quote"]) for r in verify_legal_pack(raw, expected_sha256=cp)["references"]]
+
+    config = load_corpus_config(cdir)
+    text = parse_docx(path.read_bytes())["text"]
+    legal = check_legal_references(text, config.records, config.act_aliases,
+                                   chosen_versions=config.chosen_versions, strict=True, v3=True)
+    run = SimpleNamespace(snapshot_hash="a" * 64, representation_sha256=hashlib.sha256(text.encode()).hexdigest(),
+                          corpus_pack_sha256=config.pack_sha256, legal_observations=tuple(legal))
+    access = SimpleNamespace(case_id="c")
+    checker = SimpleNamespace(
+        check=lambda **_: run, legal_corpus_for=lambda _c: config,
+        _verified=lambda _b: None, _scope=lambda _s, _c: access)
+    wb = SimpleNamespace(
+        checker=checker,
+        store=SimpleNamespace(load_bundle=lambda **_: SimpleNamespace(representation=SimpleNamespace(text=text)),
+                              still_current=lambda **_: True),
+        workspace=SimpleNamespace(state=lambda **_: {"snapshot_hash": "a" * 64, "decisions": []}))
+    from apps.api import litigation_evidence_search as les
+    monkeypatch.setattr(les.AuthorizedEvidenceSearch, "_require_evidence", staticmethod(lambda _a: None))
+    app = FastAPI()
+    app.include_router(create_signed_workbench_router(lambda _b: wb))
+    r = TestClient(app).get("/dev/signed/matters/c/briefs/v/offline-legal-pack",
+                            headers={"Authorization": "Bearer synthetic"})
+    assert r.status_code == 200, r.text
+    routed = [(x["status"], x["reason"], x["quote"]) for x in
+              verify_legal_pack(r.content, expected_sha256=r.headers["X-CaseProof-Legal-Review-SHA256"])["references"]]
+    assert routed == offline
+    assert zipfile.ZipFile(io.BytesIO(r.content)).namelist()
