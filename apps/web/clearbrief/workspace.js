@@ -3,7 +3,8 @@
 (() => {
   const $ = id => document.getElementById(id);
   const state = {session:null, external:false, caseId:"", briefId:"", inventory:null, check:null,
-    review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null};
+    review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null,
+    catalog:null, publishTarget:null, publishRevision:0};
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const sha = /^[0-9a-f]{64}$/;
   const el = (tag, content, className) => {
@@ -98,7 +99,8 @@
       if(state.external && (session.caseId!==caseId || session.briefVersionId!==briefId))
         throw Error("provider_mismatch");
       state.caseId=caseId;state.briefId=briefId;
-      clearView(); await load();
+      state.catalog=null;state.publishTarget=null;state.publishRevision=0;
+      clearView(); void loadCatalog(); await load();
     } catch(err) {
       if(err.message==="provider_mismatch")notice("The connected Word session belongs to a different matter/brief.","danger");
       else if(err.message==="credentials_required")notice("Enter your development Auth email and password.","danger");
@@ -404,42 +406,60 @@
       if(!d.hits.length)node.append(el("p","No match in the searched scope; review exclusions and incomplete sources.","small"));
     }catch(error){if(generation===state.generation)node.append(el("p",statusFor(error),"error"));}
   }
+  function populateVersions() {
+    const select=$("upload-version");select.replaceChildren();
+    const document=(state.catalog||[]).find(d=>d.document_id===$("upload-document").value);
+    for(const version of document?document.versions:[]){
+      const option=el("option","v"+version.version_number+" · "+version.media_type+" · "+version.byte_length+" bytes");
+      option.value=version.version_id;select.append(option);
+    }
+  }
+  async function loadCatalog() {
+    const generation=state.generation;
+    try{
+      const data=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/documents");
+      if(generation!==state.generation||!state.session)return;
+      state.catalog=(data.schema==="caseproof-signed-documents-v1"&&Array.isArray(data.documents))?data.documents:[];
+    }catch{if(generation!==state.generation)return;state.catalog=[];}
+    const select=$("upload-document");select.replaceChildren();
+    for(const document of state.catalog){
+      const option=el("option",document.label+" · "+document.document_id.slice(0,8)+"\u2026");
+      option.value=document.document_id;select.append(option);
+    }
+    populateVersions();
+  }
   async function publishVersion(evt){
     evt.preventDefault();
     const generation=state.generation;
-    const documentId=$("document-id").value.trim(),versionId=$("version-id").value.trim();
-    const briefId=$("publish-brief-id").value.trim(),briefVersionId=$("publish-brief-version-id").value.trim();
-    const expectedRevision=Number($("publish-expected-revision").value);
-    if(!UUID.test(documentId)||!UUID.test(versionId)||!UUID.test(briefId)||!UUID.test(briefVersionId)||
-       !Number.isInteger(expectedRevision)||expectedRevision<0){
-      notice("Exact document, version, brief and brief-version UUIDs plus a non-negative expected revision are required.","danger");return;
+    const target=state.publishTarget;
+    if(!target||!UUID.test(target.documentId)||!UUID.test(target.versionId)){
+      notice("Upload a registered original first; publication binds that verified upload.","danger");return;
     }
     $("publish").disabled=true;
     try{
-      const token=await bearer();
-      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/briefs/publish",{
-        method:"POST",credentials:"omit",redirect:"error",cache:"no-store",
-        headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},
-        body:JSON.stringify({document_id:documentId,version_id:versionId,brief_id:briefId,
-          brief_version_id:briefVersionId,document_role:"own_draft",expected_revision:expectedRevision}),
-      });
+      const d=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/briefs/publish",{
+        method:"POST",json:{document_id:target.documentId,version_id:target.versionId,
+          document_role:"own_draft",expected_revision:state.publishRevision}});
       if(generation!==state.generation||!state.session)return;
-      if(response.status!==201)throw Error("unavailable");
-      const d=await response.json();
+      if(d.schema!=="caseproof-signed-brief-publish-v1"||!Number.isInteger(d.published_revision)||
+         !UUID.test(d.brief_version_id))
+        throw Error("invalid_schema");
+      state.publishRevision=d.published_revision;
+      state.briefId=d.brief_version_id;$("brief-id").value=d.brief_version_id;
       $("publish-status").textContent="Published brief version at revision "+d.published_revision+". Run the factual check.";
       notice("Brief version published from the verified uploaded original.","ok");
       await load();
     }catch(error){if(generation===state.generation)
-      notice("Publication was denied or its outcome is unknown. Verify the exact identifiers before retrying.","danger");}
-    finally{$("publish").disabled=false;}
+      notice(statusFor(error),"danger");}
+    finally{$("publish").disabled=!state.publishTarget;}
   }
   async function upload(evt){
     evt.preventDefault();
     const generation=state.generation;
-    const documentId=$("document-id").value.trim(),versionId=$("version-id").value.trim();
+    const documentId=$("upload-document").value.trim(),versionId=$("upload-version").value.trim();
     const file=$("original-file").files?.[0];
     if(!UUID.test(documentId)||!UUID.test(versionId)||!file||file.size<=0||file.size>20*1024*1024){
-      notice("Select an existing exact document/version UUID and an original under 20 MiB.","danger");return;
+      notice("Select a registered document/version and an original under 20 MiB.","danger");return;
     }
     const mime={txt:"text/plain",pdf:"application/pdf",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg"}[file.name.split(".").pop()?.toLowerCase()];
     if(!mime){notice("This original format is unsupported.","danger");return;}
@@ -453,6 +473,9 @@
         });
       if(generation!==state.generation||!state.session)return;
       if(response.status!==201)throw Error("unavailable");
+      state.publishTarget={documentId:documentId,versionId:versionId};
+      $("publish").disabled=false;
+      $("publish-status").textContent="";
       notice("Original uploaded to its pre-registered version. Reopen the verified source after indexing.","ok");
       const digestBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
       const digestHex=Array.from(digestBytes,(b)=>b.toString(16).padStart(2,"0")).join("");
@@ -730,6 +753,7 @@
     state.generation+=1;state.previewSeq+=1;
     if(!state.external)state.session?.clear?.();
     state.session=null;state.external=false;state.caseId="";state.briefId="";
+    state.catalog=null;state.publishTarget=null;state.publishRevision=0;
     Object.assign(journey,{caseId:"",source:null,brief:null,snapshot:null,observation:null,revision:0,pending:null,createRequest:null,briefRequest:null,uploadIdentity:null,registerRequest:null,ingestRequest:null,correctionRequest:null,correctionPreview:null,busy:false});
     $("journey-state").textContent="";
     $("matter-options").replaceChildren();
@@ -763,6 +787,7 @@
     $("review-form").addEventListener("submit",submitReview);
     $("search").addEventListener("click",search);
     $("upload-form").addEventListener("submit",upload);
+    $("upload-document").addEventListener("change",populateVersions);
     const publishForm=$("publish-form");if(publishForm)publishForm.addEventListener("submit",publishVersion);
     $("signout").addEventListener("click",signout);
     $("refresh").addEventListener("click",()=>{void load();});

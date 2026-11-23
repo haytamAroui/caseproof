@@ -6,6 +6,7 @@ accept credentials from requests, install schemas or authorize live deployment.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
 from typing import Protocol
@@ -40,27 +41,53 @@ from apps.api.workspace_reports import WorkspaceReports, create_workspace_report
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 
 
+@dataclass(frozen=True, slots=True)
+class SignedDocumentVersionSummary:
+    version_id: str
+    version_number: int
+    media_type: str
+    byte_length: int
+    sha256_hex: str
+
+
+@dataclass(frozen=True, slots=True)
+class SignedDocumentSummary:
+    document_id: str
+    label: str
+    versions: tuple[SignedDocumentVersionSummary, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SignedPublishOutcome:
+    brief_id: str
+    brief_version_id: str
+    published_revision: int
+
+
 class SignedBriefPublisher(Protocol):
     """Loopback-only port: publish one brief version bound to its verified
     uploaded original. Implementations must verify the bearer, read back the
     stored bytes, derive the checked representation with the real parser and
-    refuse stale expected revisions. Raises PrivateStorageDenied for masked or
-    unauthorized access, PrivateStorageFailure for uncertain storage outcomes
-    and ValueError for an immutable graph conflict (stale revision, duplicate
+    refuse stale expected revisions. The port resolves the matter's working
+    brief itself: the browser selects a registered document/version and never
+    manages brief identifiers; optimistic concurrency stays internal through
+    expected_revision. Raises PrivateStorageDenied for masked or unauthorized
+    access, PrivateStorageFailure for uncertain storage outcomes and
+    ValueError for an immutable graph conflict (stale revision, duplicate
     version)."""
 
-    def publish(
+    def list_documents(self, *, bearer: str, case_id: str) -> tuple[SignedDocumentSummary, ...]: ...
+
+    def publish_uploaded(
         self,
         *,
         bearer: str,
         case_id: str,
         document_id: str,
         version_id: str,
-        brief_id: str,
-        brief_version_id: str,
         document_role: str,
         expected_revision: int,
-    ) -> int: ...
+    ) -> SignedPublishOutcome: ...
 
 
 def create_litigation_development_app(
@@ -413,6 +440,39 @@ def create_litigation_development_app(
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return Response(status_code=201)
 
+    @app.get("/dev/signed/matters/{case_id}/documents")
+    def signed_documents(case_id: str, authorization: str | None = Header(default=None)) -> JSONResponse:
+        if signed_brief_publisher is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            documents = signed_brief_publisher.list_documents(bearer=_token(authorization), case_id=case_id)
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return JSONResponse(
+            {
+                "schema": "caseproof-signed-documents-v1",
+                "documents": [
+                    {
+                        "document_id": document.document_id,
+                        "label": document.label,
+                        "versions": [
+                            {
+                                "version_id": version.version_id,
+                                "version_number": version.version_number,
+                                "media_type": version.media_type,
+                                "byte_length": version.byte_length,
+                                "sha256_hex": version.sha256_hex,
+                            }
+                            for version in document.versions
+                        ],
+                    }
+                    for document in documents
+                ],
+            }
+        )
+
     @app.post("/dev/signed/matters/{case_id}/briefs/publish", status_code=201)
     async def signed_brief_publish(
         case_id: str,
@@ -428,13 +488,11 @@ def create_litigation_development_app(
         if not isinstance(payload, dict) or set(payload) != {
             "document_id",
             "version_id",
-            "brief_id",
-            "brief_version_id",
             "document_role",
             "expected_revision",
         }:
             raise HTTPException(status_code=422, detail="invalid_request")
-        ids = [payload[k] for k in ("document_id", "version_id", "brief_id", "brief_version_id")]
+        ids = [payload[k] for k in ("document_id", "version_id")]
         if (
             any(type(v) is not str or len(v) != 36 for v in ids)
             or payload["document_role"] not in {"own_draft", "opponent_brief"}
@@ -443,13 +501,11 @@ def create_litigation_development_app(
         ):
             raise HTTPException(status_code=422, detail="invalid_request")
         try:
-            published_revision = signed_brief_publisher.publish(
+            outcome = signed_brief_publisher.publish_uploaded(
                 bearer=_token(authorization),
                 case_id=case_id,
                 document_id=payload["document_id"],
                 version_id=payload["version_id"],
-                brief_id=payload["brief_id"],
-                brief_version_id=payload["brief_version_id"],
                 document_role=payload["document_role"],
                 expected_revision=payload["expected_revision"],
             )
@@ -460,7 +516,12 @@ def create_litigation_development_app(
         except ValueError:
             raise HTTPException(status_code=409, detail="immutable publication conflict") from None
         return JSONResponse(
-            {"schema": "caseproof-signed-brief-publish-v1", "published_revision": published_revision},
+            {
+                "schema": "caseproof-signed-brief-publish-v1",
+                "brief_id": outcome.brief_id,
+                "brief_version_id": outcome.brief_version_id,
+                "published_revision": outcome.published_revision,
+            },
             status_code=201,
         )
 

@@ -107,16 +107,14 @@
         <div class="searchbox"><label for="query">Search within this brief's evidence</label><div class="inline"><input id="query" minlength="2" maxlength="120" placeholder="e.g. betaling, montant, date"><button id="search" type="button" class="secondary">Find</button></div></div>
         <div id="search-results" class="results" aria-live="polite"></div>
         <details class="upload"><summary>Upload a pre-registered original (development)</summary>
-          <p class="small">Only if the server has already created this document/version and granted upload permission. This is not case creation.</p>
-          <form id="upload-form"><label>Document UUID<input id="document-id" required spellcheck="false"></label>
-          <label>Version UUID<input id="version-id" required spellcheck="false"></label>
+          <p class="small">Only sources the server has already registered for this matter and granted upload permission. This is not case creation.</p>
+          <form id="upload-form"><label>Registered document<select id="upload-document" required></select></label>
+          <label>Registered version<select id="upload-version" required></select></label>
           <label>Original file<input id="original-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
           <button id="upload" type="submit" class="secondary">Upload immutable original</button></form>
           <p id="upload-current" class="small mono" aria-live="polite"></p>
-          <form id="publish-form"><label>Brief UUID<input id="publish-brief-id" required spellcheck="false"></label>
-          <label>Brief version UUID<input id="publish-brief-version-id" required spellcheck="false"></label>
-          <label>Expected revision<input id="publish-expected-revision" type="number" min="0" value="0" required></label>
-          <button id="publish" type="submit" class="secondary">Publish uploaded original as brief version</button></form>
+          <form id="publish-form"><p class="small">Publish the uploaded original as the next version of this matter's working brief. The server resolves the brief; optimistic concurrency is tracked automatically.</p>
+          <button id="publish" type="submit" class="secondary" disabled>Publish uploaded original as brief version</button></form>
           <p id="publish-status" class="small mono" aria-live="polite"></p>
         </details>
       </section>
