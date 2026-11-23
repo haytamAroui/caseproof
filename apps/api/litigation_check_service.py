@@ -19,6 +19,7 @@ from application.litigation.matter_policy import (
     MatterPermission,
     authorize_matter,
 )
+from application.litigation.suitability_review import evaluate_suitability
 from application.litigation.unified_review import (
     BriefRepresentation,
     SourceScope,
@@ -154,17 +155,22 @@ class AuthorizedLitigationChecker:
             if not isinstance(bundle, CheckBundle) or bundle.representation.brief.version_id != brief_version_id:
                 raise MatterCheckUnavailable()
             legal: tuple[Any, ...] = ()
+            suitability: tuple[Any, ...] = ()
             config = self.legal_corpus_for(scope.case_id) if self.legal_corpus_for else None
             if config is not None:
                 legal = check_legal_references(
                     bundle.representation.text, config.records, config.act_aliases,
                     chosen_versions=config.chosen_versions)
+                if config.suitability is not None:
+                    suitability = evaluate_suitability(
+                        legal, config.suitability,
+                        frozenset(r.key for r in config.records))
             report = run_unified_check(
                 representation=bundle.representation, register=bundle.register,
                 previews=bundle.previews, source_scope=bundle.source_scope,
                 authorized_case_id=scope.case_id,
                 authorized_register_revision=bundle.register.revision,
-                legal_observations=legal,
+                legal_observations=legal, suitability_observations=suitability,
             )
             # Prevent accidental use of a revoked/grant-changed or source-stale result.
             current = self._scope(self._verified(bearer), case_id)

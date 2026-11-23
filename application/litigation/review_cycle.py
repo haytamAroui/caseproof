@@ -43,6 +43,7 @@ def revise_review(
     valid = {f"citation:{x.reference_id}" for x in run.citation_observations}
     valid |= {f"fact:{x.claim_id}" for x in run.factual_observations}
     valid |= {f"legal:{x.reference_id}" for x in run.legal_observations}
+    valid |= {f"suitability:{x.rule_id}" for x in run.suitability_observations}
     if decision.observation_id not in valid:
         raise VerificationError("decision refers to an unknown observation")
     updated = tuple(d for d in packet.decisions if d.observation_id != decision.observation_id)
@@ -96,6 +97,7 @@ def preview_correction(
     valid = {f"citation:{x.reference_id}" for x in run.citation_observations}
     valid |= {f"fact:{x.claim_id}" for x in run.factual_observations}
     valid |= {f"legal:{x.reference_id}" for x in run.legal_observations}
+    valid |= {f"suitability:{x.rule_id}" for x in run.suitability_observations}
     if (proposal.observation_id not in valid or proposal.end > len(text)
             or text[proposal.start:proposal.end] != proposal.before):
         raise VerificationError("changed range or unknown observation")

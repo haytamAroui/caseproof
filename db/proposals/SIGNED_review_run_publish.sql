@@ -57,6 +57,13 @@ begin
    or jsonb_typeof(v_payload->'sources'->'excluded')<>'array'
    or jsonb_typeof(v_payload->'citations')<>'array'
    or jsonb_typeof(v_payload->'factual_candidates')<>'array'
+   or (v_payload ? 'suitability' and (
+         jsonb_typeof(v_payload->'suitability')<>'array'
+         or jsonb_array_length(v_payload->'suitability')>128
+         or exists(select 1 from jsonb_array_elements(v_payload->'suitability') s
+                   where jsonb_typeof(s.value)<>'object'
+                      or jsonb_typeof(s.value->'rule_id')<>'string'
+                      or (s.value->>'status') not in ('PASS','FAIL','UNDETERMINED','UNVERIFIED'))))
    or (v_payload ? 'legal_references' and (
          jsonb_typeof(v_payload->'legal_references')<>'array'
          or jsonb_array_length(v_payload->'legal_references')>512

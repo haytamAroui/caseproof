@@ -124,6 +124,30 @@ class LegalObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class SuitabilityObservation:
+    """One lawyer-written rule evaluated on lawyer-CONFIRMED facts.
+
+    The rule is the lawyer's, applied only to an article the brief cites that
+    is present in the chosen corpus. status is PASS/FAIL/UNDETERMINED/UNVERIFIED
+    (shared contract). It reports the lawyer's own condition; it is never a
+    machine legal conclusion. ``missing`` names every input that blocked a verdict.
+    """
+
+    rule_id: str
+    rule_version: str
+    reference: str
+    scope: str
+    status: str
+    reason: str
+    article_key: str
+    cited_by: tuple[str, ...]
+    missing: tuple[str, ...]
+    facts: tuple[tuple[str, str, bool, str], ...]  # name, value, confirmed, provenance
+    input_hashes: tuple[tuple[str, str], ...]
+    subresults: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class VerificationRun:
     case_id: str
     brief_version_id: str
@@ -139,6 +163,7 @@ class VerificationRun:
     factual_observations: tuple[FactObservation, ...]
     snapshot_hash: str
     legal_observations: tuple[LegalObservation, ...] = ()
+    suitability_observations: tuple[SuitabilityObservation, ...] = ()
     # Separate kinds: a literal/value mismatch is not a legal conclusion.
 
 
@@ -147,6 +172,8 @@ def _payload(run: VerificationRun, reviews: tuple[ObservationReview, ...] = ()) 
         {"legal_references": [asdict(x) for x in run.legal_observations]}
         if run.legal_observations else {}
     )
+    if run.suitability_observations:
+        legal = {**legal, "suitability": [asdict(x) for x in run.suitability_observations]}
     return {
         **legal,
         "schema": REPORT_SCHEMA,
@@ -186,6 +213,7 @@ def run_unified_check(
     authorized_case_id: str,
     authorized_register_revision: int,
     legal_observations: tuple[LegalObservation, ...] = (),
+    suitability_observations: tuple[SuitabilityObservation, ...] = (),
 ) -> VerificationRun:
     """No implicit trust from request parameters; authorized_* are server-owned."""
     if not isinstance(representation, BriefRepresentation) or not isinstance(source_scope, SourceScope):
@@ -270,12 +298,14 @@ def run_unified_check(
         # historical snapshot hash. The corpus identity (key, version, text
         # hash) is inside each observation, so a changed corpus changes the hash.
         identity["legal"] = [asdict(x) for x in legal_observations]
+    if suitability_observations:
+        identity["suitability"] = [asdict(x) for x in suitability_observations]
     return VerificationRun(
         brief.case_id, brief.version_id, brief.sha256_hex, representation.text_sha256,
         register.revision, ENGINE, source_scope.declared_source_versions,
         source_scope.excluded_source_versions, processed, incomplete,
         citations.observations, tuple(facts), _hash(identity),
-        tuple(legal_observations),
+        tuple(legal_observations), tuple(suitability_observations),
     )
 
 
@@ -290,6 +320,7 @@ def verification_record(
     valid_ids = {f"citation:{x.reference_id}" for x in run.citation_observations}
     valid_ids |= {f"fact:{x.claim_id}" for x in run.factual_observations}
     valid_ids |= {f"legal:{x.reference_id}" for x in run.legal_observations}
+    valid_ids |= {f"suitability:{x.rule_id}" for x in run.suitability_observations}
     if (len({x.observation_id for x in reviews}) != len(reviews)
             or any(not isinstance(x, ObservationReview) or x.observation_id not in valid_ids
                    for x in reviews)):

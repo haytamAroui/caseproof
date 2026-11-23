@@ -81,7 +81,9 @@ begin
      or exists(select 1 from jsonb_array_elements(v_payload->'factual_candidates') f
                where 'fact:'||(f.value->>'claim_id')=v_dec->>'observation_id')
      or exists(select 1 from jsonb_array_elements(coalesce(v_payload->'legal_references','[]'::jsonb)) l
-               where 'legal:'||(l.value->>'reference_id')=v_dec->>'observation_id'))
+               where 'legal:'||(l.value->>'reference_id')=v_dec->>'observation_id')
+     or exists(select 1 from jsonb_array_elements(coalesce(v_payload->'suitability','[]'::jsonb)) s
+               where 'suitability:'||(s.value->>'rule_id')=v_dec->>'observation_id'))
    then return jsonb_build_object('ok',false,'error','invalid'); end if;
  exception when others then
    return jsonb_build_object('ok',false,'error','invalid');

@@ -3971,3 +3971,50 @@ def test_legal_corpus_is_chosen_per_matter_never_by_default(tmp_path):
         chosen("case-a")
     with pytest.raises(ValueError):
         legal_corpus_provider({"CASEPROOF_LEGAL_CORPUS_BY_CASE": "[1]"})
+
+
+def test_lawyer_rules_run_on_cited_articles_and_name_missing_inputs():
+    from application.litigation.legal_references import check_legal_references
+    from application.litigation.suitability_review import (
+        SuitabilityConfig,
+        evaluate_suitability,
+    )
+    from application.litigation.suitability_rules import ConfirmedFact, load_rule
+    recs = _legal_corpus()
+    keys = frozenset(r.key for r in recs)
+    rule = load_rule("""
+[rule]
+format = "caseproof-suitability-rule-format-v1"
+id = "synthetic.rule"
+version = "0.1.0"
+scope = "Synthetic rule."
+reference = "Synthetic art. 12"
+[article]
+act = "synthetic-civ"
+article = "12"
+language = "fr"
+version = "v1"
+[condition]
+all = [ { fact = "a", op = "eq", value = true }, { fact = "b", op = "eq", value = true } ]
+""")
+    legal = check_legal_references("Article 12 du Code civil.", recs, {"C.civ.": "synthetic-civ"})
+    facts = ((ConfirmedFact("a", True, True), "Pièce 1, confirmé"),
+             (ConfirmedFact("b", True, False), "à confirmer"))
+    out = evaluate_suitability(legal, SuitabilityConfig((rule,), facts), keys)
+    assert [(o.status, o.reason) for o in out] == [("UNDETERMINED", "facts_unavailable_unconfirmed_or_incomparable")]
+    assert out[0].missing == ("b",) and out[0].cited_by == (legal[0].reference_id,)
+    assert dict((n, p) for n, _, _, p in out[0].facts)["a"] == "Pièce 1, confirmé"
+    confirmed = SuitabilityConfig((rule,), ((ConfirmedFact("a", True, True), "p1"),
+                                            (ConfirmedFact("b", True, True), "p2")))
+    assert evaluate_suitability(legal, confirmed, keys)[0].status == "PASS"
+    # A rule whose article the brief does not cite is not run.
+    assert evaluate_suitability((), confirmed, keys) == ()
+    # A fact without provenance is refused at load time.
+    import tempfile
+    from pathlib import Path
+
+    from application.litigation.suitability_review import load_suitability_config
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "confirmed-facts.toml").write_text('[[fact]]\nname = "a"\nvalue = true\nconfirmed = true\n')
+        cfg = load_suitability_config(Path(d))
+        assert cfg.facts == () and cfg.failures

@@ -121,6 +121,10 @@ def create_signed_workbench_router(
                 {**asdict(x), "observation_id": f"legal:{x.reference_id}",
                  "claim_support": "not_assessed"} for x in run.legal_observations
             ],
+            "suitability": [
+                {**asdict(x), "observation_id": f"suitability:{x.rule_id}"}
+                for x in run.suitability_observations
+            ],
         }
 
     @router.get(base + "/legal-references/{reference_id}/passage")

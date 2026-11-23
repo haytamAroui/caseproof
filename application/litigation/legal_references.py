@@ -186,6 +186,7 @@ class LegalCorpusConfig:
     act_aliases: Mapping[str, str]
     chosen_versions: Mapping[str, str]
     failures: tuple[str, ...] = ()
+    suitability: Any = None  # SuitabilityConfig (lawyer rules + confirmed facts), optional
 
 
 def load_corpus_config(directory: Path) -> LegalCorpusConfig:
@@ -207,7 +208,10 @@ def load_corpus_config(directory: Path) -> LegalCorpusConfig:
         for key, target in (data.get("chosen_versions") or {}).items():
             if isinstance(key, str) and isinstance(target, str):
                 versions[key] = target
-    return LegalCorpusConfig(report.records, aliases, versions, report.failures)
+    from application.litigation.suitability_review import load_suitability_config
+    suitability = load_suitability_config(directory)
+    return LegalCorpusConfig(
+        report.records, aliases, versions, report.failures, suitability)
 
 
 def to_wire(obs: LegalReferenceObservation) -> dict[str, object]:
