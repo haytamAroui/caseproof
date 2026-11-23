@@ -447,7 +447,7 @@ class LiveSignedBriefPublisher:
             or not _SHA256.fullmatch(representation_sha256)
             or hashlib.sha256(representation.encode("utf-8")).hexdigest()
             != representation_sha256
-            or type(parser_id) is not str or not 1 <= len(parser_id) <= 64
+            or type(parser_id) is not str or not 1 <= len(parser_id) <= 256
             or type(graph_text) is not str or len(graph_text) > 200_000
             or type(graph_sha256) is not str or not _SHA256.fullmatch(graph_sha256)
             or hashlib.sha256(graph_text.encode("utf-8")).hexdigest() != graph_sha256

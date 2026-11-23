@@ -1246,6 +1246,95 @@ def test_composed_publisher_propagates_masked_denials():
             version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
 
 
+def test_fact_extraction_deterministic_with_explicit_abstention():
+    from application.litigation.fact_extraction import extract_fact_assertions
+    from application.litigation.factual_values import FactKind, FactRole
+
+    text = (
+        "Le juge relève «paiement convenu» (Contrat). "
+        "Le paiement de € 1 250,50 est intervenu. "
+        "«clause deux» (Contrat). L'échéance était le 12 mai 2026. "
+        "Le montant de € 300 est peut-être dû. "
+        "La livraison de € 400 n'a pas eu lieu. "
+        "Facture € 100 et € 200 réglées. "
+        "€ 999 sans citation préalable."
+    )
+    citations = (("ref-01", text.index("(Contrat).") + len("(Contrat).")),
+                 ("ref-02", text.index("(Contrat). L'") + len("(Contrat).")))
+    first = extract_fact_assertions(text, citations)
+    assert first == extract_fact_assertions(text, citations)  # replay stable
+    by_kind = {(a.kind, a.role): a for a in first}
+    assert len(first) == 2
+    money = by_kind[(FactKind.MONEY, FactRole.PAYMENT)]
+    assert money.text == "Le paiement de € 1 250,50 est intervenu"
+    assert text[money.text_start:money.text_end] == money.text
+    assert money.reference_id == "ref-01" and money.language == "fr"
+    date = by_kind[(FactKind.DATE, FactRole.DUE)]
+    assert date.text == "L'échéance était le 12 mai 2026"
+    assert date.reference_id == "ref-02" and date.language == "fr"
+    # Abstentions explicites : incertitude, négation, double montant dans la
+    # même phrase, fait sans citation qui précède.
+    assert all("300" not in a.text and "400" not in a.text
+               and "100" not in a.text and "999" not in a.text for a in first)
+    # Rôle mixte : aucune assertion.
+    mixed = "Le paiement de € 10 concerne la livraison."
+    assert extract_fact_assertions(mixed, (("ref-01", 0),)) == ()
+    # Aucune citation du tout : aucune assertion.
+    assert extract_fact_assertions("Le paiement de € 10 est intervenu.", ()) == ()
+
+
+def test_fact_extraction_attachments_and_span_integrity():
+    from application.litigation.fact_extraction import extract_fact_assertions
+
+    text = ("«première clause» (A). Le paiement de € 10 est intervenu. "
+            "«seconde clause» (B). Le paiement de € 20 est intervenu.")
+    cut_a = text.index("(A).") + 4
+    cut_b = text.index("(B).") + 4
+    assertions = extract_fact_assertions(text, (("ref-b", cut_b), ("ref-a", cut_a)))
+    assert len(assertions) == 2
+    assert assertions[0].reference_id == "ref-a" and "€ 10" in assertions[0].text
+    assert assertions[1].reference_id == "ref-b" and "€ 20" in assertions[1].text
+    for assertion in assertions:
+        assert text[assertion.text_start:assertion.text_end] == assertion.text
+    # Citation hors limites : refus, jamais de rattachement inventé.
+    with pytest.raises(ValueError):
+        extract_fact_assertions(text, (("ref-x", len(text) + 1),))
+
+
+def test_composed_publisher_docx_path_derives_from_trusted_parser():
+    from docx import Document
+
+    document = Document()
+    for line in _BRIEF_TEXT.split(". "):
+        document.add_paragraph(line)
+    target = "/tmp/caseproof-composer-test.docx"
+    document.save(target)
+    # The default python-docx template embeds a customXml part unrelated to
+    # the body text; a clean authored document has none. Strip it so the
+    # fixture exercises the publishable path (customXml stays a refusal).
+    import os
+    import zipfile
+    with zipfile.ZipFile(target) as archive:
+        kept = {name: archive.read(name) for name in archive.namelist()
+                if not name.startswith("customXml/")}
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, blob in kept.items():
+            archive.writestr(name, blob)
+    with open(target, "rb") as handle:
+        data = handle.read()
+    os.unlink(target)
+    composer, captured = _composer_rig(
+        data, _REGISTER,
+        media="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    outcome = composer.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert outcome.published_revision == 1
+    assert captured["p_parser_id"].startswith("caseproof-parser-v1;")
+    assert "«paiement sous 30 jours» (Contrat)" in captured["p_representation"]
+    assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02"]
+
+
 def test_live_workbench_assembly_refuses_mixed_backends():
     from apps.api.signed_live_composition import assemble_live_workbench
 

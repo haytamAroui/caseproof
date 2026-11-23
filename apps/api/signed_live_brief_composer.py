@@ -35,6 +35,9 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from application.extraction.contracts import ExtractionError
+from application.litigation.fact_extraction import extract_fact_assertions
+from apps.api.signed_document_parse import parse_verified_original
 from apps.api.signed_supabase_brief_publisher import (
     LiveSignedBriefPublisher,
     SignedPublishOutcome,
@@ -50,6 +53,11 @@ from apps.api.signed_supabase_originals import (
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 
 PARSER_ID = "strict-utf8-txt-v1"
+_DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+# The only DOCX warning compatible with publishing: layout page numbers stay
+# unverified and references carry pdf_page=None (never inferred). Any other
+# warning marks a real coverage gap (images, fields, headers) and refuses.
+_DOCX_PUBLISHABLE_WARNINGS = frozenset({"docx_layout_page_numbers_unverified"})
 _MAX_REPRESENTATION_BYTES = 480_000
 _MAX_REFERENCES = 512
 _MAX_QUOTE = 4000
@@ -118,8 +126,9 @@ class ComposedSignedBriefPublisher:
 
     def _extract_references(
         self, text: str, labels: dict[str, str]
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], list[tuple[str, int]]]:
         references: list[dict[str, Any]] = []
+        citations: list[tuple[str, int]] = []
         for match in _QUOTE_RE.finditer(text):
             display = labels.get(match.group("label").strip().lower())
             if display is None:
@@ -127,17 +136,64 @@ class ComposedSignedBriefPublisher:
             quote = match.group("quote").strip()
             if not quote or len(quote) > _MAX_QUOTE:
                 continue
+            reference_id = f"ref-{len(references) + 1:02d}"
             references.append(
                 {
-                    "reference_id": f"ref-{len(references) + 1:02d}",
+                    "reference_id": reference_id,
                     "exhibit_label": display,
                     "exact_quote": quote,
                     "pdf_page": None,
                 }
             )
+            citations.append((reference_id, match.end()))
             if len(references) > _MAX_REFERENCES:
                 raise PrivateStorageFailure("brief citations outside the signed contract")
-        return references
+        return references, citations
+
+    @staticmethod
+    def _parse_verified_text(
+        *, document_id: str, version_id: str, data: bytes, media_type: str
+    ) -> tuple[str, str]:
+        """Verified bytes -> (representation, parser_id), fail-closed.
+
+        text/plain decodes as strict UTF-8 under the trusted-registry
+        parser identity; DOCX goes through the bounded fail-closed parser
+        and publishes only when every block maps the text contiguously and
+        no warning beyond unverified layout page numbers remains (page
+        numbers are never inferred: references keep pdf_page=None). PDF
+        stays refused: its OCR-assisted coverage is not reproducible
+        across environments, so it abstains explicitly rather than
+        publishing a partial representation.
+        """
+        if media_type == "text/plain":
+            try:
+                return data.decode("utf-8", "strict"), PARSER_ID
+            except UnicodeDecodeError:
+                raise PrivateStorageFailure(
+                    "original outside the trusted UTF-8 parser"
+                ) from None
+        if media_type == _DOCX_MIME:
+            try:
+                text, manifest = parse_verified_original(
+                    document_id=document_id, version_id=version_id,
+                    data=data, media_type=media_type,
+                )
+            except ExtractionError:
+                raise PrivateStorageFailure(
+                    "original outside the trusted DOCX parser"
+                ) from None
+            warnings = manifest.get("warnings")
+            if (
+                not isinstance(warnings, list)
+                or set(warnings) - _DOCX_PUBLISHABLE_WARNINGS
+                or not manifest.get("blocks")
+            ):
+                raise PrivateStorageFailure("DOCX coverage gap never publishes")
+            parser_id = manifest.get("parser_id")
+            if type(parser_id) is not str or not 0 < len(parser_id) <= 256:
+                raise PrivateStorageFailure("trusted DOCX parser identity missing")
+            return text, parser_id
+        raise PrivateStorageFailure("original media outside the trusted parsers")
 
     def publish_uploaded(
         self,
@@ -161,21 +217,33 @@ class ComposedSignedBriefPublisher:
             bearer=bearer, case_id=case_key, document_id=document_key,
             version_id=version_key,
         )
-        if ref.content_type != "text/plain":
-            raise PrivateStorageFailure("original outside the trusted UTF-8 parser")
         data = self.library.read(
             bearer=bearer, case_id=case_key, document_id=document_key,
             version_id=version_key,
         )
-        try:
-            text = data.decode("utf-8", "strict")
-        except UnicodeDecodeError:
-            raise PrivateStorageFailure("original outside the trusted UTF-8 parser") from None
+        text, parser_id = self._parse_verified_text(
+            document_id=document_key, version_id=version_key,
+            data=data, media_type=ref.content_type,
+        )
         if not 0 < len(text.encode("utf-8")) <= _MAX_REPRESENTATION_BYTES:
             raise PrivateStorageFailure("representation outside the signed contract")
 
         labels = self._confirmed_labels(bearer, case_key, version_key)
-        references = self._extract_references(text, labels)
+        references, citations = self._extract_references(text, labels)
+        assertions = [
+            {
+                "claim_id": assertion.claim_id,
+                "reference_id": assertion.reference_id,
+                "text_start": assertion.text_start,
+                "text_end": assertion.text_end,
+                "assertion_text": assertion.text,
+                "kind": assertion.kind.value,
+                "fact_role": assertion.role.value,
+                "language": assertion.language,
+                "source_language": assertion.source_language,
+            }
+            for assertion in extract_fact_assertions(text, tuple(citations))
+        ]
         representation_sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
         brief_version_id = str(uuid4())
         brief_id = _working_brief_id(case_key, document_role)
@@ -185,12 +253,12 @@ class ComposedSignedBriefPublisher:
             "version_id": brief_version_id,
             "original_sha256": ref.sha256_hex,
             "representation_sha256": representation_sha,
-            "parser_id": PARSER_ID,
+            "parser_id": parser_id,
             "document_id": document_key,
             "source_version": version_key,
             "role": document_role,
             "references": references,
-            "assertions": [],
+            "assertions": assertions,
         }
         graph_text = _canonical(preimage)
         if len(graph_text) > _MAX_GRAPH_TEXT:
@@ -208,9 +276,9 @@ class ComposedSignedBriefPublisher:
             request_id=str(uuid4()),
             representation=text,
             representation_sha256=representation_sha,
-            parser_id=PARSER_ID,
+            parser_id=parser_id,
             references=references,
-            assertions=[],
+            assertions=assertions,
             graph_text=graph_text,
             graph_sha256=graph_sha,
         )
