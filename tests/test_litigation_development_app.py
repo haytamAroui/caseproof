@@ -4348,3 +4348,54 @@ def test_composed_piece_stuk_references_keep_unresolved_and_page_spaces():
     assert [r["exact_quote"] for r in refs[:4]]==[None]*4
     assert refs[3]["exhibit_label"]=="pièce 99"
     assert refs[4]["exact_quote"]=="terme introuvable"
+
+
+def _docx_with_note_story(note_xml, *, kind="footnotes", body_xml=None, extra=None):
+    import io
+    import zipfile
+    ns="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    raw=_docx_fixture_bytes(["Voir Pièce 1."])
+    target=io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(target,"w",zipfile.ZIP_DEFLATED) as out:
+        for item in source.infolist():
+            blob=source.read(item.filename)
+            if item.filename=="word/document.xml" and body_xml is not None:
+                blob=f'<w:document xmlns:w="{ns}"><w:body>{body_xml}</w:body></w:document>'.encode()
+            out.writestr(item.filename,blob)
+        out.writestr(f"word/{kind}.xml",f'<w:{kind} xmlns:w="{ns}">{note_xml}</w:{kind}>')
+        for name,blob in (extra or {}).items():
+            out.writestr(name,blob)
+    return target.getvalue()
+
+
+@pytest.mark.parametrize("kind",["footnotes","endnotes"])
+def test_signed_docx_plain_notes_preserve_text_without_inventing_pages(kind):
+    from apps.api.signed_document_parse import parse_verified_original
+    from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
+    media="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    note=f'<w:{"footnote" if kind=="footnotes" else "endnote"} w:id="2"><w:p><w:r><w:t>Voir Stuk 2, art. 1382.</w:t></w:r></w:p></w:{"footnote" if kind=="footnotes" else "endnote"}>'
+    raw=_docx_with_note_story(note,kind=kind)
+    text,manifest=parse_verified_original(document_id=_PUBLISH_DOC,version_id=_PUBLISH_VER,data=raw,media_type=media)
+    assert "Voir Stuk 2, art. 1382." in text
+    assert any(b["kind"]=="docx_note" for b in manifest["blocks"])
+    assert all(b["page_index"] is None for b in manifest["blocks"])
+    assert set(manifest["warnings"])=={"docx_layout_page_numbers_unverified"}
+    assert ComposedSignedBriefPublisher._parse_verified_text(document_id=_PUBLISH_DOC,version_id=_PUBLISH_VER,data=raw,media_type=media)[0]==text
+
+
+@pytest.mark.parametrize("story",["body","footnotes","endnotes"])
+@pytest.mark.parametrize("element",[
+    '<w:ins><w:r><w:t>Stuk 99</w:t></w:r></w:ins>',
+    '<w:fldSimple w:instr="PAGE"><w:r><w:t>99</w:t></w:r></w:fldSimple>',
+    '<w:r><w:rPr><w:vanish/></w:rPr><w:t>Stuk 99</w:t></w:r>',
+    '<w:r><w:drawing/></w:r>',
+    '<w:r><w:instrText>REF secret</w:instrText></w:r>',
+])
+def test_signed_docx_unsupported_story_content_never_publishes(story,element):
+    from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+    media="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    raw=_docx_with_note_story(f'<w:p>{element}</w:p>',kind="footnotes" if story=="body" else story,
+                             body_xml=f'<w:p>{element}</w:p>' if story=="body" else None)
+    with pytest.raises(PrivateStorageFailure):
+        ComposedSignedBriefPublisher._parse_verified_text(document_id=_PUBLISH_DOC,version_id=_PUBLISH_VER,data=raw,media_type=media)
