@@ -19,6 +19,10 @@ from application.litigation.exhibit_coverage import R_LOCATED, R_PAGE
 from application.litigation.factual_values import typed_values
 
 MAX_PAGES = 200
+# Fixed FR/NL cue lists. Partial detection of ONE contradiction shape, not a reading of meaning.
+_SIGNED = ("signé", "signée", "signés", "signées", "ondertekend", "getekend")
+_PENDING = ("pour signature", "à signer", "en attente de signature", "non signé", "non signée", "pas signé", "pas encore signé",
+            "ter ondertekening", "voor ondertekening", "nog niet ondertekend", "niet ondertekend", "nog niet getekend")
 MAX_EXCERPT = 400
 MAX_FOUND_PER_VALUE = 3
 SCOPE = ("Passages proposés par correspondance de dates et de montants identiques. Aucune lecture du sens : une même date peut figurer "
@@ -49,6 +53,25 @@ def read_piece_texts(directory: Path, exhibits: Mapping[str, Any],
     return out
 
 
+def _cue(text: str, cues: tuple[str, ...]) -> str | None:
+    low = text.casefold()
+    return next((c for c in cues if c in low), None)
+
+
+def status_mismatch(claim: str, excerpt: str) -> dict[str, str] | None:
+    """Claim says signed while the passage with the same value only has a not-yet-signed wording (partial cue check)."""
+    claim_cue = _cue(claim, _SIGNED)
+    pending = _cue(excerpt, _PENDING)
+    if claim_cue is None or pending is None or _cue(claim, _PENDING) is not None:
+        return None
+    rest = excerpt.casefold()
+    for cue in _PENDING:
+        rest = rest.replace(cue, " ")
+    if _cue(rest, _SIGNED) is not None:  # the passage also says signed somewhere: no mismatch claimed
+        return None
+    return {"claim_cue": claim_cue, "passage_cue": pending}
+
+
 def _claim(text: str, start: int, end: int) -> tuple[str, list[dict[str, Any]]]:
     lo, hi = next(((a, b) for a, b in _sentences(text) if a <= start < b), (0, len(text)))
     sentence = " ".join(text[lo:hi].split())
@@ -75,8 +98,12 @@ def build_passages(text: str, observations: Sequence[Any], texts: Mapping[str, S
                     chunk = page[lo:hi]
                     if key in {k for *_x, k in typed_values(chunk)} and hits < MAX_FOUND_PER_VALUE:
                         excerpt = " ".join(chunk.split())[:MAX_EXCERPT]
-                        found.append({"key": key, "page": page_no, "excerpt": excerpt,
-                                      "excerpt_sha256": hashlib.sha256(excerpt.encode()).hexdigest()})
+                        row = {"key": key, "page": page_no, "excerpt": excerpt,
+                               "excerpt_sha256": hashlib.sha256(excerpt.encode()).hexdigest()}
+                        mismatch = status_mismatch(sentence, excerpt)
+                        if mismatch is not None:
+                            row["status_cue_mismatch"] = mismatch
+                        found.append(row)
                         hits += 1
             if hits == 0:
                 missing.append(key)
@@ -98,7 +125,10 @@ def _sentences(page: str) -> list[tuple[int, int]]:
     return spans
 
 
-def validate_passages(text: str, observations: Sequence[Mapping[str, Any]], passages: Any) -> None:
+RULES = "status-cue-v1"  # marks exports whose passages carry the status-cue check; older exports replay without it
+
+
+def validate_passages(text: str, observations: Sequence[Mapping[str, Any]], passages: Any, rules: str | None = None) -> None:
     """Replay check. The claim side is recomputed from the brief. Excerpts are checked only for internal integrity."""
     if not isinstance(passages, list):
         raise CorpusError("passages malformed")
@@ -119,3 +149,10 @@ def validate_passages(text: str, observations: Sequence[Mapping[str, Any]], pass
             raise CorpusError("a value cannot be both found and missing")
         if any(hashlib.sha256(f["excerpt"].encode()).hexdigest() != f["excerpt_sha256"] for f in entry["found"]):
             raise CorpusError("passage excerpt altered")
+        if rules is None:
+            if any("status_cue_mismatch" in f for f in entry["found"]):
+                raise CorpusError("status cue without its rules marker")
+        elif rules != RULES:
+            raise CorpusError("unknown passage rules")
+        elif any(f.get("status_cue_mismatch") != status_mismatch(sentence, f["excerpt"]) for f in entry["found"]):
+            raise CorpusError("passage status cue does not replay")

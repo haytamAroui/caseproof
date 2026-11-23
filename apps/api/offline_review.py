@@ -54,7 +54,7 @@ def record_decisions(*, pack: bytes, checkpoint: str,
     run = _Run(body["snapshot_hash"], body["brief_representation_sha256"], body["corpus_pack_sha256"],
                tuple(LegalObservation(**r) for r in body["references"]))
     return build_legal_pack(config=config, run=run, brief_text=body["brief_text"], review=review,
-                            exhibits=body.get("exhibits"), passages=body.get("passages"))
+                            exhibits=body.get("exhibits"), passages=body.get("passages"), passages_rules=body.get("passages_rules"))
 
 
 def recheck(*, docx: Path, corpus: Path | LegalCorpusConfig, prior_pack: bytes, prior_checkpoint: str,

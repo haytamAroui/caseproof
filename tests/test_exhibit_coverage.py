@@ -121,12 +121,9 @@ def test_cold_replay_rejects_edited_review_and_report_scope_is_stated(tmp_path):
     assert "ne vérifie PAS que le contenu" in report and "Pièces jamais citées : 2, 3, 4, 9" in report
     body = json.loads(z.read("review.json"))
     body["exhibits"]["pieces"][0]["sha256"] = "a" * 64
-    out = BytesIO()
-    with zipfile.ZipFile(out, "w") as w:
-        w.writestr("review.json", json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode())
-        w.writestr("report.html", z.read("report.html"))
-    with pytest.raises(CorpusError):
-        verify_legal_pack(out.getvalue(), expected_sha256=cp)
+    data, sha = reseal(body, z.read("report.html"))  # recomputed checkpoint: only the replay can refuse it
+    with pytest.raises(CorpusError, match="rejected"):
+        verify_legal_pack(data, expected_sha256=sha)
 
 
 def test_decision_carries_when_piece_bytes_unchanged_and_lapses_when_the_file_changes(tmp_path):
@@ -182,6 +179,16 @@ def test_changed_surrounding_assertion_withdraws_the_piece_decision_although_byt
     assert not review["decisions"] and review["superseded"]
 
 
+def reseal(doc: dict, report: bytes) -> tuple[bytes, str]:
+    """Rebuild an export from an edited review.json WITH a recomputed checkpoint (what an attacker or a legacy writer would do)."""
+    payload = json.dumps(doc, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    out = BytesIO()
+    with zipfile.ZipFile(out, "w") as w:
+        w.writestr("review.json", payload)
+        w.writestr("report.html", report)
+    return out.getvalue(), hashlib.sha256(payload).hexdigest()
+
+
 def passage_run(tmp_path: Path, paragraphs: list[str]):
     d = tmp_path / "pieces"
     d.mkdir(parents=True)
@@ -203,24 +210,26 @@ def test_passages_show_same_values_and_flag_absent_ones_without_a_verdict(tmp_pa
     assert all(r["status"] != "PASS" for r in body["references"] if r["reason"].startswith("exhibit_"))
 
 
-def test_altered_passage_excerpt_or_claim_is_refused(tmp_path):
+def test_altered_passage_excerpt_or_claim_is_refused_even_with_a_recomputed_checkpoint(tmp_path):
     raw, cp, _ = passage_run(tmp_path, ["Signé le 15/03/2024 (pièce 1)."])
     z = zipfile.ZipFile(BytesIO(raw))
-    for edit in ("excerpt", "claim", "missing"):
+    control, control_sha = reseal(json.loads(z.read("review.json")), z.read("report.html"))
+    verify_legal_pack(control, expected_sha256=control_sha)  # an untouched resealed export is accepted: the refusals below come from the edits
+    for edit in ("claim", "missing", "excerpt_without_hash", "added_cue_without_marker"):
         body = json.loads(z.read("review.json"))
         entry = body["passages"][0]
-        if edit == "excerpt":
-            entry["found"][0]["excerpt"] = "signe definitivement"
-        elif edit == "claim":
+        if edit == "claim":
             entry["claim"] = "Signé le 16/03/2024 (pièce 1)."
+        elif edit == "missing":
+            entry["missing_values"] = [entry["found"][0]["key"]]
+        elif edit == "excerpt_without_hash":
+            entry["found"][0]["excerpt"] = "signe definitivement"
         else:
-            entry["missing_values"], entry["found"] = entry["missing_values"] + [entry["found"][0]["key"]], entry["found"]
-        out = BytesIO()
-        with zipfile.ZipFile(out, "w") as w:
-            w.writestr("review.json", json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode())
-            w.writestr("report.html", z.read("report.html"))
-        with pytest.raises(CorpusError):
-            verify_legal_pack(out.getvalue(), expected_sha256=None)
+            body.pop("passages_rules")
+        data, sha = reseal(body, z.read("report.html"))
+        with pytest.raises(CorpusError, match="rejected") as caught:
+            verify_legal_pack(data, expected_sha256=sha)
+        assert any(k in str(caught.value.__cause__) for k in ("passage", "replay", "found and missing", "status cue")), (edit, caught.value.__cause__)
 
 
 def test_thousands_dot_does_not_cut_a_fact_sentence():
@@ -249,3 +258,47 @@ def test_workbench_page_scripts_are_valid_javascript(tmp_path):
         f.write_text(js)
         done = subprocess.run([node, "--check", str(f)], capture_output=True, text=True, timeout=30)
         assert done.returncode == 0, done.stderr
+
+
+@pytest.mark.parametrize(("claim", "excerpt", "expected"), [
+    ("Le contrat a été signé le 15/03/2024 (pièce 1).", "Le contrat a ete envoye pour signature le 15/03/2024.", True),
+    ("Het contract werd ondertekend op 15/03/2024.", "Contract ter ondertekening verstuurd op 15/03/2024.", True),
+    ("Le contrat a été signé le 15/03/2024.", "Contrat non signé au 15/03/2024.", True),
+    ("Le contrat a été signé le 15/03/2024.", "Le contrat signé le 15/03/2024 (envoyé pour signature le 1er mars).", False),
+    ("Le contrat est envoyé pour signature le 15/03/2024.", "Le contrat a ete envoye pour signature le 15/03/2024.", False),
+    ("Le contrat n'est pas signé.", "Contrat non signé.", False),
+])
+def test_status_cue_mismatch_is_a_partial_flag(claim, excerpt, expected):
+    from application.litigation.exhibit_passages import status_mismatch
+    assert (status_mismatch(claim, excerpt) is not None) is expected
+
+
+def test_passage_flags_signed_vs_sent_for_signature_and_replay_refuses_edits(tmp_path):
+    raw, _, body = passage_run(tmp_path, ["Le contrat a été signé le 15/03/2024 (pièce 1)."])
+    row = body["passages"][0]["found"][0]
+    assert row["status_cue_mismatch"] == {"claim_cue": "signé", "passage_cue": "pour signature"}
+    assert all(r["status"] != "PASS" for r in body["references"])
+    z = zipfile.ZipFile(BytesIO(raw))
+    doc = json.loads(z.read("review.json"))
+    del doc["passages"][0]["found"][0]["status_cue_mismatch"]
+    data, sha = reseal(doc, z.read("report.html"))
+    with pytest.raises(CorpusError, match="rejected"):
+        verify_legal_pack(data, expected_sha256=sha)
+
+
+def test_export_without_status_cue_rules_still_replays_and_decisions_keep_it(tmp_path):
+    """A delivered v5 export has passages but no status-cue field or rules marker: it must replay unchanged."""
+    raw, cp, body = passage_run(tmp_path, ["Le contrat a été signé le 15/03/2024 (pièce 1)."])
+    from application.litigation.offline_legal_pack import _report
+    z = zipfile.ZipFile(BytesIO(raw))
+    doc = json.loads(z.read("review.json"))
+    del doc["passages_rules"]
+    for f in doc["passages"][0]["found"]:
+        f.pop("status_cue_mismatch", None)
+    legacy, legacy_sha = reseal(doc, _report(doc))
+    assert "passages_rules" not in verify_legal_pack(legacy, expected_sha256=legacy_sha)
+    # a status cue smuggled in without the marker is refused
+    doc["passages"][0]["found"][0]["status_cue_mismatch"] = {"claim_cue": "signé", "passage_cue": "pour signature"}
+    bad, bad_sha = reseal(doc, _report(doc))
+    with pytest.raises(CorpusError, match="rejected"):
+        verify_legal_pack(bad, expected_sha256=bad_sha)

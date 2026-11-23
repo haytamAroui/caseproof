@@ -26,6 +26,7 @@ from application.litigation.corpus import (
 from application.litigation.exhibit_coverage import coverage as exhibit_coverage
 from application.litigation.exhibit_coverage import exhibit_observations
 from application.litigation.exhibit_passages import SCOPE as PASSAGE_SCOPE
+from application.litigation.exhibit_passages import RULES as PASSAGE_RULES
 from application.litigation.exhibit_passages import validate_passages
 from application.litigation.legal_references import (
     _QUOTE_STRICT,
@@ -161,6 +162,13 @@ def _report(body: dict[str, Any]) -> bytes:
                 parts += ["<p><strong>Affirmation :</strong> ", esc(entry["claim"]), "</p><p class='note'>", esc(PASSAGE_SCOPE), "</p>"]
                 parts += ["<p>Passages de la pièce avec la même valeur : ", ("" if entry["found"] else "aucun"), "</p>"]
                 parts += [f"<pre>p. {f['page']} · {esc(f['key'])}\n{esc(f['excerpt'])}</pre>" for f in entry["found"]]
+                flagged: set[str] = set()
+                for f in entry["found"]:
+                    if "status_cue_mismatch" in f and f["excerpt_sha256"] not in flagged:
+                        flagged.add(f["excerpt_sha256"])
+                        m = f["status_cue_mismatch"]
+                        parts += [f"<p><strong>Mot d'état divergent (détection partielle) :</strong> l'affirmation dit « {esc(m['claim_cue'])} », "
+                                  f"le passage p. {f['page']} dit « {esc(m['passage_cue'])} ». Liste fixe de mots FR/NL, un seul cas de contradiction ; à lire par l'avocat.</p>"]
                 if entry["missing_values"]:
                     parts += ["<p><strong>Différence candidate :</strong> valeur absente de toutes les pages lues de la pièce : ",
                               esc(", ".join(entry["missing_values"])), ". À examiner par l'avocat.</p>"]
@@ -231,7 +239,7 @@ def observe(text: str, config: LegalCorpusConfig, marker: object, exhibits: dict
 
 def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
                      brief_text: str, review: dict[str, Any], exhibits: dict[str, Any] | None = None,
-                     passages: list[dict[str, Any]] | None = None) -> tuple[bytes, str]:
+                     passages: list[dict[str, Any]] | None = None, passages_rules: str | None = PASSAGE_RULES) -> tuple[bytes, str]:
     if config.failures or not config.records or run.corpus_pack_sha256 != config.pack_sha256:
         raise CorpusError("complete exact chosen corpus required for export")
     if _hash(brief_text.encode()) != run.representation_sha256 or review.get("snapshot_hash") != run.snapshot_hash:
@@ -256,6 +264,8 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
         if exhibits is None:
             raise CorpusError("passages need an exhibit manifest")
         body["passages"] = passages
+        if passages_rules is not None:
+            body["passages_rules"] = passages_rules
     payload = _encode(body)
     checkpoint = _hash(payload)
     report = _report(body)
@@ -302,7 +312,7 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
             raise CorpusError("passages without exhibit coverage")
         observed = observe(body["brief_text"], config, marker, body.get("exhibits"))
         if "passages" in body:
-            validate_passages(body["brief_text"], [asdict(x) for x in observed], body["passages"])
+            validate_passages(body["brief_text"], [asdict(x) for x in observed], body["passages"], body.get("passages_rules"))
         if _encode([asdict(x) for x in observed]) != _encode(body["references"]):
             raise CorpusError("legal checks do not replay")
         if body["article_index"] != [{"key": r.key, "index": i} for i, r in enumerate(config.records)]:
