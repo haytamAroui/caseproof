@@ -31,8 +31,20 @@ function setup(){
   get("upload-version").value=VERSION;
   let resolvePublish;
   const pendingPublish=new Promise(resolve=>{resolvePublish=resolve;});
+  const HASH="a".repeat(64);
   const fetch=async(url)=>{
-    if(String(url).endsWith("/briefs/publish"))return pendingPublish;
+    const u=String(url);
+    if(u.endsWith("/briefs/publish"))return pendingPublish;
+    if(u.endsWith("/check"))return {ok:true,status:200,json:async()=>({
+      schema:"caseproof-m2-check-headless-v1",case_id:CASE_A,brief_version_id:BRIEF_2,
+      snapshot_hash:HASH,declared:[],processed:[],excluded:[],incomplete:[],
+      citation_observations:[],factual_observations:[]})};
+    if(u.endsWith("/sources"))return {ok:true,status:200,json:async()=>({
+      schema:"caseproof-clearbrief-brief-sources-v1",case_id:CASE_A,brief_version_id:BRIEF_2,
+      rows:[],complete:true})};
+    if(u.endsWith("/review"))return {ok:true,status:200,json:async()=>({
+      schema:"caseproof-clearbrief-review-v1",case_id:CASE_A,snapshot_hash:HASH,revision:0,
+      decisions:[]})};
     return {ok:true,status:200,json:async()=>({schema:"unrelated"})};
   };
   const window={caseproofSession:{caseId:CASE_A,briefVersionId:BRIEF_1,getBearer:async()=>"signed-token"}};
@@ -58,8 +70,24 @@ test("confirmed publish survives a legitimate same-context refresh",async()=>{
   await flush();
   resolvePublish(publishResponse());
   await running;await flush();
-  assert.match(get("publish-status").textContent,/revision 2/);
+  assert.match(get("publish-status").textContent,/Scope current after publication at revision 2/);
   assert.equal(get("brief-id").value,BRIEF_2);
+});
+
+test("late confirmed publish does not replace a switched document/version selection",async()=>{
+  const {get,resolvePublish}=setup();
+  const evt={preventDefault(){}};
+  await get("connection-form").listeners.submit(evt);
+  const running=get("publish-form").listeners.submit(evt);
+  await flush();
+  get("upload-document").value="77777777-7777-4777-8777-777777777777";
+  get("upload-version").value="88888888-8888-4888-8888-888888888888";
+  resolvePublish(publishResponse());
+  await running;await flush();
+  assert.equal(get("publish-status").textContent,"");
+  assert.equal(get("brief-id").value,BRIEF_1);
+  assert.equal(get("upload-document").value,"77777777-7777-4777-8777-777777777777");
+  assert.equal(get("upload-version").value,"88888888-8888-4888-8888-888888888888");
 });
 
 test("late confirmed publish is discarded after a matter switch",async()=>{

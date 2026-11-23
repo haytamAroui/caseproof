@@ -3,7 +3,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const state = {session:null, external:false, caseId:"", briefId:"", inventory:null, check:null,
-    review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null,
+    review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null, justPublished:false,
     catalog:null, publishRevision:0};
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const sha = /^[0-9a-f]{64}$/;
@@ -318,6 +318,7 @@
     const generation=++state.generation;
     state.previewSeq+=1;state.loading=true;state.check=null;state.review=null;state.previewReady=false;
     state.inventory=null;state.selected=null;
+    if(state.justPublished)$("publish-status").textContent="Reloading current scope after publication\u2026";
     $("save-review").disabled=true;
     $("review-form").setAttribute("aria-busy","true");
     $("selected").textContent="Checking current brief and permissions…";
@@ -357,6 +358,10 @@
     state.loading=false;$("review-form").removeAttribute("aria-busy");
     state.selected=null;
     renderSources();renderChecks();renderReview();renderSelected();
+    if(state.justPublished){
+      state.justPublished=false;
+      $("publish-status").textContent="Scope current after publication at revision "+state.publishRevision+". Run the factual check.";
+    }
   }
   async function submitReview(evt){
     evt.preventDefault();
@@ -499,10 +504,19 @@
       if(d.schema!=="caseproof-signed-brief-publish-v1"||!Number.isInteger(d.published_revision)||
          !UUID.test(d.brief_version_id))
         throw Error("invalid_schema");
+      // Server truth always advances; the success UI is applied only when the
+      // user still works on the same document/version selection, so a late
+      // success never silently replaces newly selected work.
       state.publishRevision=d.published_revision;
-      state.briefId=d.brief_version_id;$("brief-id").value=d.brief_version_id;
-      $("publish-status").textContent="Published brief version at revision "+d.published_revision+". Run the factual check.";
-      notice("Brief version published from the verified uploaded original.","ok");
+      state.briefId=d.brief_version_id;
+      if($("upload-document").value.trim()===documentId&&$("upload-version").value.trim()===versionId){
+        $("brief-id").value=d.brief_version_id;
+        state.justPublished=true;
+        notice("Brief version published from the verified uploaded original.","ok");
+      }else{
+        notice("Publication of the previously selected version completed at revision "+
+          d.published_revision+"; current selection unchanged.","ok");
+      }
       await load();
     }catch(error){if(state.session===session&&state.caseId===caseId)
       notice(statusFor(error),"danger");}
