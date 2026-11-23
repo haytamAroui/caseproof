@@ -27,6 +27,7 @@ from apps.api.litigation_check_service import AuthorizedLitigationChecker
 from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_review_app import ReviewBody
 from apps.api.litigation_review_workspace import ReviewCommand, SignedReviewWorkspace
+from apps.api.litigation_workspace_sources import SignedBriefSources
 
 __all__ = ["create_signed_workbench_router"]
 
@@ -79,6 +80,25 @@ def create_signed_workbench_router(
         bearer, wb = bench(authorization)
         run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
         return {"schema": "caseproof-signed-check-v1", "note": _NOTE, **asdict(run)}
+
+    @router.get(base + "/sources")
+    def signed_sources(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        bearer, wb = bench(authorization)
+        return SignedBriefSources(wb.checker).inventory(
+            bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+
+    @router.get(base + "/sources/{source_id}")
+    def signed_source_preview(
+        case_id: str, brief_version_id: str, source_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        bearer, wb = bench(authorization)
+        return SignedBriefSources(wb.checker).preview(
+            bearer=bearer, case_id=case_id, brief_version_id=brief_version_id,
+            source_id=source_id)
 
     @router.get(base + "/review")
     def signed_review_state(

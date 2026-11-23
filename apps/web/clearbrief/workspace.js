@@ -231,7 +231,7 @@
     $("source-preview").textContent="Loading source preview…";
     state.selected=null;state.previewReady=false;$("save-review").disabled=true;
     try {
-      const data=await api(path()+"/sources/"+encodeURIComponent(row.source_id));
+      const data=await api(reviewPath()+"/sources/"+encodeURIComponent(row.source_id));
       if(generation!==state.generation||seq!==state.previewSeq||state.selected!==null)return;
       if(data.schema!=="caseproof-clearbrief-brief-source-preview-v1" || data.row?.source_id!==row.source_id ||
         data.case_id!==state.caseId || data.brief_version_id!==state.briefId)
@@ -366,7 +366,7 @@
     const current=()=>generation===state.generation && seq===state.previewSeq &&
       state.selected?.id===selectedId && !state.loading && state.session;
     try{
-      const d=await api(path()+"/sources/"+encodeURIComponent(row.source_id));
+      const d=await api(reviewPath()+"/sources/"+encodeURIComponent(row.source_id));
       if(!current())return;
       if(d.schema!=="caseproof-clearbrief-brief-source-preview-v1"||d.row?.source_id!==row.source_id||
         d.case_id!==state.caseId||d.brief_version_id!==state.briefId||
@@ -492,7 +492,7 @@
       notice(error&&error.code===409 ? "This published snapshot is out of date after a source or exhibit change. Publish a new brief version, then re-run the check." : statusFor(error),"danger");}
     if(generation!==state.generation)return;
     try {
-      const inv=await api(path()+"/sources");
+      const inv=await api(reviewPath()+"/sources");
       if(generation===state.generation)
         state.inventory=(inv.schema==="caseproof-clearbrief-brief-sources-v1" &&
           inv.case_id===state.caseId && inv.brief_version_id===state.briefId)?inv:null;

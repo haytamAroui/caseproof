@@ -117,7 +117,7 @@ def test_workbench_serves_real_assets_only_from_loopback():
     client, _ = make_client()
     page = client.get("/dev/clearbrief")
     assert page.status_code == 200
-    assert "ClearBrief" in page.text
+    assert "CaseProof" in page.text and "ClearBrief" not in page.text
     assert "stale" not in page.headers.get("content-security-policy", "")
     assert "script-src 'self'" in page.headers["content-security-policy"]
     assert page.headers["cache-control"] == "no-store"

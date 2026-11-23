@@ -92,6 +92,18 @@ class ComposedSignedBriefPublisher:
         ):
             raise ValueError("Use a Supabase publishable key, never a service key")
 
+    # The dev app's signed port is ONE object: document listing, source
+    # registration and exhibit confirmation are plain signed-RPC passthroughs;
+    # only publish_uploaded adds the verified-readback derivation below.
+    def list_documents(self, *, bearer: str, case_id: str) -> Any:
+        return self.publisher.list_documents(bearer=bearer, case_id=case_id)
+
+    def register_source_version(self, **kwargs: Any) -> Any:
+        return self.publisher.register_source_version(**kwargs)
+
+    def confirm_exhibit(self, **kwargs: Any) -> Any:
+        return self.publisher.confirm_exhibit(**kwargs)
+
     def _confirmed_labels(
         self, bearer: str, case_id: str, version_id: str
     ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:

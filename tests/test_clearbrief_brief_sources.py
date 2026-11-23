@@ -103,8 +103,8 @@ def test_browser_reuses_brief_source_route_not_org_wide_inventory():
 
     src = (Path(__file__).resolve().parents[1] /
            "apps/web/clearbrief/workspace.js").read_text()
-    assert 'api(path()+"/sources")' in src
-    assert 'api(path()+"/sources/"+encodeURIComponent(row.source_id))' in src
+    assert 'api(reviewPath()+"/sources")' in src
+    assert 'api(reviewPath()+"/sources/"+encodeURIComponent(row.source_id))' in src
     assert "caseproof-clearbrief-brief-sources-v1" in src
     assert "caseproof-clearbrief-brief-source-preview-v1" in src
     assert "caseproof-evidence-preview-v1" not in src

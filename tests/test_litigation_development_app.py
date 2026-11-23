@@ -3735,7 +3735,8 @@ def test_signed_composed_workflow_on_disposable_postgres():
         record = LiveSignedReviewRecord(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY)
         bench = SimpleNamespace(checker=checker, workspace=workspace, store=store)
         client = TestClient(create_litigation_development_app(
-            signed_workbench_factory=lambda bearer: bench, signed_review_record=record),
+            signed_workbench_factory=lambda bearer: bench, signed_review_record=record,
+            signed_brief_publisher=composer),
             client=("127.0.0.1", 50000))
         auth = {"Authorization": "Bearer user-token-a"}
         base2 = f"/dev/signed/matters/{case}/briefs/{out2.brief_version_id}"
@@ -3744,6 +3745,8 @@ def test_signed_composed_workflow_on_disposable_postgres():
         script = (Path(__file__).resolve().parents[1] / "apps/web/clearbrief/workspace.js").read_text()
         assert "correction-preview" in script and 'id="correction-form"' in (Path(__file__).resolve().parents[1] / "apps/web/clearbrief/index.html").read_text()
         assert 'api(reviewPath()+"/check"' in script and 'api(reviewPath()+"/review"' in script
+        docs = client.get(f"/dev/signed/matters/{case}/documents", headers=auth)
+        assert docs.status_code == 200
         assert client.get(base2 + "/check").status_code == 401
         assert client.post(base2 + "/check", headers=auth).status_code == 200
         assert client.get(base2 + "/check", headers={"Authorization": "Bearer nobody"}).status_code == 401
@@ -3774,6 +3777,11 @@ def test_signed_composed_workflow_on_disposable_postgres():
         assert client.post(base1 + "/correction-preview", headers=auth,
                            json={**body_cp, "before": "99.999,00"}).status_code == 409
         assert client.post(base1 + "/correction-preview", json=body_cp).status_code == 401
+        inv = client.get(base2 + "/sources", headers=auth).json()
+        assert inv["brief_version_id"] == out2.brief_version_id and inv["rows"]
+        src_id = inv["rows"][0]["source_id"]
+        assert client.get(f"{base2}/sources/{src_id}", headers=auth).status_code == 200
+        assert client.get(base2 + "/sources").status_code == 401
         # Review over HTTP on the current version; replay is idempotent.
         assert client.get(base2 + "/review", headers=auth).json()["revision"] == 0
         abst2 = next(f for f in run2.factual_observations
