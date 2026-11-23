@@ -410,7 +410,7 @@
       if(!d.hits.length)node.append(el("p","No match in the searched scope; review exclusions and incomplete sources.","small"));
     }catch(error){if(generation===state.generation)node.append(el("p",statusFor(error),"error"));}
   }
-  function populateVersions() {
+  function populateVersions(preferredVersion) {
     const select=$("upload-version");select.replaceChildren();
     const document=(state.catalog||[]).find(d=>d.document_id===$("upload-document").value);
     const versions=document?document.versions:[];
@@ -418,10 +418,15 @@
       const option=el("option","v"+version.version_number+" · "+version.media_type+" · "+version.byte_length+" bytes");
       option.value=version.version_id;select.append(option);
     }
+    if(preferredVersion&&versions.some(v=>v.version_id===preferredVersion))
+      select.value=preferredVersion;
     $("publish").disabled=versions.length===0;
   }
   async function loadCatalog() {
     const generation=state.generation;
+    // Recharging the catalog must never silently move the publish target:
+    // keep the user's current document/version selection when still present.
+    const keepDocument=$("upload-document").value,keepVersion=$("upload-version").value;
     try{
       const data=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/documents");
       if(generation!==state.generation||!state.session)return;
@@ -432,7 +437,9 @@
       const option=el("option",document.label+" · "+document.document_id.slice(0,8)+"\u2026");
       option.value=document.document_id;select.append(option);
     }
-    populateVersions();
+    if(keepDocument&&state.catalog.some(d=>d.document_id===keepDocument))
+      select.value=keepDocument;
+    populateVersions(keepVersion);
   }
   async function publishVersion(evt){
     evt.preventDefault();
@@ -446,7 +453,9 @@
       const d=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/briefs/publish",{
         method:"POST",json:{document_id:documentId,version_id:versionId,
           document_role:"own_draft",expected_revision:state.publishRevision}});
-      if(generation!==state.generation||!state.session)return;
+      // A scope reload during flight must not silently drop a confirmed
+      // publication; only a ended session discards the result.
+      if(!state.session)return;
       if(d.schema!=="caseproof-signed-brief-publish-v1"||!Number.isInteger(d.published_revision)||
          !UUID.test(d.brief_version_id))
         throw Error("invalid_schema");
