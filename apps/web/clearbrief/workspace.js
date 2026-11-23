@@ -427,7 +427,7 @@
       notice("Original uploaded to its pre-registered version. Reopen the verified source after indexing.","ok");
       const digestBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
       const digestHex=Array.from(digestBytes,(b)=>b.toString(16).padStart(2,"0")).join("");
-      $("upload-current").textContent="Current original: "+file.name+" · "+file.size+" bytes · SHA-256 "+digestHex.slice(0,16)+"\u2026 · version "+versionId;
+      const uploadCurrent=$("upload-current");if(uploadCurrent)uploadCurrent.textContent="Current original: "+file.name+" · "+file.size+" bytes · SHA-256 "+digestHex.slice(0,16)+"\u2026 · version "+versionId;
       await load();
     }catch(error){if(generation===state.generation)
       notice("Upload was denied or its outcome is unknown. Verify the exact version before retrying.","danger");}
@@ -711,7 +711,7 @@
     // In a loopback composition without a publishable key those controls are
     // dead steps; disable them honestly instead of offering actions that
     // can only fail. The signed workbench below stays fully usable.
-    const card=document.querySelector(".journey-card");
+    const card=document.querySelector?.(".journey-card");
     if(!card)return;
     for(const el2 of card.querySelectorAll("input,select,button,textarea"))el2.disabled=true;
     const note=el("p","Remote Supabase journey is not configured in this loopback composition. "+
