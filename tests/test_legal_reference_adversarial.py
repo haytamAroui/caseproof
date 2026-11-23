@@ -60,8 +60,16 @@ def test_derived_text_must_occur_in_preserved_original(tmp_path):
         check_offline_docx(docx=path, corpus=corpus(tmp_path, tampered))
 
 
-def test_exact_full_quote_passes(tmp_path):
-    assert verdict(run(tmp_path, f"Article 8.5 du Code civil : « {ARTICLE} »"))[0] == "PASS"
+UNATTESTED = "quotation_starts_at_declared_body_start_not_attested"
+
+
+def test_exact_full_quote_from_declared_body_start_is_left_to_a_human(tmp_path):
+    """The declared body_start is preparer metadata: it never yields a PASS by itself (v3)."""
+    assert verdict(run(tmp_path, f"Article 8.5 du Code civil : « {ARTICLE} »")) == ("UNDETERMINED", UNATTESTED)
+
+
+def test_quote_from_the_article_start_passes(tmp_path):
+    assert verdict(run(tmp_path, f"Article 8.5 du Code civil : « {DERIVED} »"))[0] == "PASS"
 
 
 def test_dropped_reservation_is_not_a_pass(tmp_path):
@@ -82,7 +90,7 @@ def test_case_punctuation_and_additions_fail(tmp_path, quote):
 
 
 def test_whitespace_and_nbsp_are_layout_not_wording(tmp_path):
-    spaced = ARTICLE.replace("la preuve", "la\u00a0 preuve")
+    spaced = DERIVED.replace("la preuve", "la\u00a0 preuve")
     assert verdict(run(tmp_path, f"Article 8.5 du Code civil : « {spaced} »"))[0] == "PASS"
 
 
@@ -171,25 +179,68 @@ def test_report_accounts_for_every_quotation_and_labels_scope(tmp_path):
     from zipfile import ZipFile
     path = tmp_path / "b.docx"
     path.write_bytes(docx_without_custom_xml([
-        f"Article 8.5 du Code civil : « {ARTICLE} » et « La preuve est toujours inutile. »", "« Citation orpheline. »"]))
+        f"Article 8.5 du Code civil : « {DERIVED} » et « La preuve est toujours inutile. »", "« Citation orpheline. »"]))
     raw, cp = check_offline_docx(docx=path, corpus=corpus(tmp_path))
     refs = verify_legal_pack(raw, expected_sha256=cp)["references"]
     assert sorted(r["quote"] for r in refs if r["quote"]) == sorted(
-        [ARTICLE, "La preuve est toujours inutile.", "Citation orpheline."])
+        [DERIVED, "La preuve est toujours inutile.", "Citation orpheline."])
     html = ZipFile(io.BytesIO(raw)).read("report.html").decode()
     assert "Citations entre guillemets dans le Word : 3. Citations avec un constat visible ci-dessous : 3" in html
     assert "Contexte, réserves, portée et applicabilité non évalués" in html and "Moteur de contrôle strict (v3)" in html
 
 
-def test_moving_body_start_into_the_sentence_is_refused(tmp_path):
-    """Audit: moving body_start alone must not turn an omitted reserve into a PASS."""
-    with pytest.raises(CorpusError):
-        check_offline_docx(docx=_docx(tmp_path, "Article 8.5 du Code civil : « la preuve doit être rapportée "
-                                      "avec un degré raisonnable de certitude. »"),
-                           corpus=corpus(tmp_path, body="la preuve doit être rapportée"))
+def test_moving_body_start_alone_never_turns_an_omitted_reserve_into_pass(tmp_path):
+    """Audit: a manifest copy with only body_start moved must not give PASS for a quote that drops the reserve."""
+    omitted = "Article 8.5 du Code civil : « la preuve doit être rapportée avec un degré raisonnable de certitude. »"
+    for body in ("Hormis les cas", "la preuve doit être rapportée", "avec un degré"):
+        status, reason = verdict(run(tmp_path, omitted, body=body))
+        assert status == "UNDETERMINED", (body, status, reason)
 
 
 def _docx(tmp_path: Path, text: str) -> Path:
     p = tmp_path / "x.docx"
     p.write_bytes(docx_without_custom_xml([text]))
     return p
+
+
+def test_signed_service_and_offline_check_give_identical_findings_for_the_same_word(tmp_path, monkeypatch):
+    """Audit: same Word text, same corpus -> same findings on the signed service and the offline path."""
+    from types import SimpleNamespace
+
+    from application.litigation.legal_references import load_corpus_config
+    from apps.api import litigation_check_service as svc
+
+    paragraphs = [f"Article 8.5 du Code civil : « {ARTICLE} ». Article 8.5 du Code civil : ‘la preuve est toujours inutile’.",
+                  "Article 8.5 du Code civil : « la preuve doit être rapportée avec un degré raisonnable de certitude. »"]
+    path = tmp_path / "p.docx"
+    path.write_bytes(docx_without_custom_xml(paragraphs))
+    cdir = corpus(tmp_path)
+    raw, cp = check_offline_docx(docx=path, corpus=cdir)
+    offline = [(r["status"], r["reason"], r["quote"]) for r in verify_legal_pack(raw, expected_sha256=cp)["references"]]
+
+    config = load_corpus_config(cdir)
+    from apps.api.offline_docx_check import parse_docx
+    text = parse_docx(path.read_bytes())["text"]
+    seen: dict[str, object] = {}
+    real = svc.check_legal_references
+
+    def spy(*a, **k):
+        seen.update(k)
+        out = real(*a, **k)
+        seen["obs"] = [(o.status.value, o.reason, o.quote) for o in out]
+        raise RuntimeError("stop after the legal step")
+
+    monkeypatch.setattr(svc, "check_legal_references", spy)
+    checker = svc.AuthorizedLitigationChecker.__new__(svc.AuthorizedLitigationChecker)
+    checker.legal_corpus_for = lambda _case: config
+    checker.store = SimpleNamespace(load_bundle=lambda **_: svc.CheckBundle.__new__(svc.CheckBundle))
+    monkeypatch.setattr(svc.AuthorizedLitigationChecker, "_verified", lambda self, b: None)
+    monkeypatch.setattr(svc.AuthorizedLitigationChecker, "_scope", lambda self, s, c: SimpleNamespace(case_id=c))
+    bundle = SimpleNamespace(representation=SimpleNamespace(text=text, brief=SimpleNamespace(version_id="v")),
+                             previews=())
+    monkeypatch.setattr(svc, "CheckBundle", SimpleNamespace)
+    checker.store = SimpleNamespace(load_bundle=lambda **_: bundle)
+    with pytest.raises(Exception):  # noqa: B017, PT011 - the spy aborts after the legal step on purpose
+        checker.check(bearer="t", case_id="c", brief_version_id="v")
+    assert seen["strict"] is True and seen["v3"] is True
+    assert seen["obs"] == offline

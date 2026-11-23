@@ -86,7 +86,7 @@ def _norm_exact(text: str) -> str:
     return _WS.sub(" ", text.replace("\u00a0", " ").replace("\u2019", "'")).strip()
 
 
-def _excerpt_issue(quote: str, article: str, body_start: str = "") -> str | None:
+def _excerpt_issue(quote: str, article: str, body_start: str = "", v3: bool = False) -> str | None:
     """None when some literal occurrence starts and ends where a reader expects.
 
     A fragment that begins mid-sentence or mid-word, or stops before the sentence
@@ -95,6 +95,7 @@ def _excerpt_issue(quote: str, article: str, body_start: str = "") -> str | None
     """
     start = article.find(quote)
     word_issue = False
+    unattested_body = False
     while start != -1:
         end = start + len(quote)
         before = article[:start].rstrip()
@@ -102,13 +103,19 @@ def _excerpt_issue(quote: str, article: str, body_start: str = "") -> str | None
         # is therefore declared in the corpus manifest. Without it, only a quote that
         # starts at the article's first character or after a sentence end can be complete.
         at_body = bool(body_start) and article.startswith(body_start, start) and article[:start].endswith(" ")
-        starts_ok = start == 0 or at_body or (article[start - 1] == " " and before[-1:] in ".;:!?")
+        sentence_ok = start == 0 or (article[start - 1] == " " and before[-1:] in ".;:!?")
+        # v3: a declared body_start is preparer metadata, not publisher evidence. It can never
+        # turn a quote that begins mid-sentence into a PASS; it only leaves it for a human.
+        starts_ok = sentence_ok or (at_body and not v3)
         word_ok = (start == 0 or not article[start - 1].isalnum()) and (end == len(article) or not article[end].isalnum())
         ends_ok = end == len(article) or quote[-1] in ".;:!?" or article[end] in ".;:!?"
         if starts_ok and word_ok and ends_ok:
             return None
         word_issue = word_issue or not word_ok
+        unattested_body = unattested_body or (v3 and at_body and not sentence_ok and word_ok and ends_ok)
         start = article.find(quote, start + 1)
+    if unattested_body and not word_issue:
+        return "quotation_starts_at_declared_body_start_not_attested"
     return "quotation_starts_or_ends_mid_word" if word_issue else "quotation_partial_excerpt_review_required"
 
 
@@ -243,7 +250,7 @@ def check_legal_references(
                 if q not in article_norm:
                     verdicts.append(("FAIL", "quotation_absent_from_corpus_article_text", raw_q))
                     continue
-                issue = _excerpt_issue(q, article_norm, _norm_exact(record.body_start))
+                issue = _excerpt_issue(q, article_norm, _norm_exact(record.body_start), v3)
                 verdicts.append(("UNDETERMINED", issue, raw_q) if issue else
                                 ("PASS", "quotation_found_verbatim_in_corpus_article", raw_q))
             if not verdicts:

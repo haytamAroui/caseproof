@@ -69,6 +69,7 @@ def _config(data: dict[str, Any]) -> LegalCorpusConfig:
 _SCOPE = {
     "quotation_found_verbatim_in_corpus_article": "Extrait littéral retrouvé dans le texte conservé de l'article. Contexte, réserves, portée et applicabilité non évalués.",
     "quotation_absent_from_corpus_article_text": "Extrait absent du texte conservé de l'article.",
+    "quotation_starts_at_declared_body_start_not_attested": "Extrait littéral retrouvé, qui commence au début de corps déclaré par le préparateur du corpus (non attesté par l'éditeur) : la réserve ou le contexte qui précède n'est pas écarté par le moteur. Décision humaine requise.",
     "quotation_partial_excerpt_review_required": "Extrait littéral retrouvé, mais il ne commence pas ou ne finit pas à une limite de phrase du texte conservé. Appréciation de l'avocat requise.",
     "quotation_starts_or_ends_mid_word": "Fragment qui commence ou finit au milieu d'un mot. Appréciation de l'avocat requise.",
     "article_exists_in_corpus_no_quotation_checked_claim_not_verified": "Article présent dans le corpus. Aucune citation n'a été contrôlée : l'affirmation n'est pas vérifiée.",
