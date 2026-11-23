@@ -3734,7 +3734,17 @@ def test_signed_composed_workflow_on_disposable_postgres():
         from types import SimpleNamespace
 
         record = LiveSignedReviewRecord(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY)
-        bench = SimpleNamespace(checker=checker, workspace=workspace, store=store)
+        from apps.api.litigation_original_reader import AuthorizedOriginalReader, Original
+
+        class FakeOriginalPort:  # FAKE storage boundary: bytes from the test's own blob map
+            def read(self, *, access, source_id, version_id):
+                for (_doc, ver), (data, media) in lib.blobs.items():
+                    if ver == str(version_id):
+                        return Original(data, hashlib.sha256(data).hexdigest(), media)
+                raise KeyError(version_id)
+
+        bench = SimpleNamespace(checker=checker, workspace=workspace, store=store,
+                                originals=AuthorizedOriginalReader(checker, FakeOriginalPort()))
         client = TestClient(create_litigation_development_app(
             signed_workbench_factory=lambda bearer: bench, signed_review_record=record,
             signed_brief_publisher=composer),
@@ -3784,6 +3794,17 @@ def test_signed_composed_workflow_on_disposable_postgres():
         assert inv["labels"][src_id] == "Contrat"  # confirmed register label, not a UUID
         assert client.get(f"{base2}/sources/{src_id}", headers=auth).status_code == 200
         assert client.get(base2 + "/sources").status_code == 401
+        # Source inspection over the signed routes: verified bytes and a page rendering.
+        ver_id = inv["rows"][0]["version_id"]
+        orig = client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/original", headers=auth)
+        assert orig.status_code == 200 and orig.content == pdf
+        assert orig.headers["x-caseproof-original-sha256"] == hashlib.sha256(pdf).hexdigest()
+        assert orig.headers["content-disposition"].startswith("attachment")
+        page_png = client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/pages/2", headers=auth)
+        assert page_png.status_code == 200 and page_png.content[:4] == b"\x89PNG"
+        assert client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/pages/99", headers=auth).status_code == 404
+        assert client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/original").status_code == 401
+        assert client.get(f"{base2}/sources/{src_id}/versions/{uuid4()}/original", headers=auth).status_code in {403, 404}
         # Review over HTTP on the current version; replay is idempotent.
         assert client.get(base2 + "/review", headers=auth).json()["revision"] == 0
         abst2 = next(f for f in run2.factual_observations

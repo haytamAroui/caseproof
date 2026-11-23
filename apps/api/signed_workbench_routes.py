@@ -18,7 +18,7 @@ from dataclasses import asdict
 from typing import Annotated, Any, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.litigation.review_cycle import CorrectionProposal, preview_correction
@@ -30,6 +30,8 @@ from apps.api.litigation_review_app import ReviewBody
 from apps.api.litigation_review_workspace import ReviewCommand, SignedReviewWorkspace
 from apps.api.litigation_workspace_sources import SignedBriefSources
 from apps.api.signed_supabase_facts import FactRefused
+from infrastructure.parsers.pdf_ocr import OCRUnavailable
+from infrastructure.parsers.pdf_source_crop import render_pdf_page
 
 __all__ = ["create_signed_workbench_router"]
 
@@ -290,6 +292,53 @@ def create_signed_workbench_router(
         return SignedBriefSources(wb.checker).preview(
             bearer=bearer, case_id=case_id, brief_version_id=brief_version_id,
             source_id=source_id)
+
+    def _original(wb: Any, bearer: str, case_id: str, brief_version_id: str,
+                  source_id: str, version_id: str) -> Any:
+        reader = getattr(wb, "originals", None)
+        if reader is None or getattr(reader, "checker", None) is not wb.checker:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return reader.read(
+            bearer=bearer, case_id=case_id, brief_version_id=brief_version_id,
+            source_id=source_id, version_id=version_id)
+
+    @router.get(base + "/sources/{source_id}/versions/{version_id}/original")
+    def signed_original(
+        case_id: str, brief_version_id: str, source_id: str, version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Verified original bytes: authorized, digest-bound, never inline."""
+        bearer, wb = bench(authorization)
+        item = _original(wb, bearer, case_id, brief_version_id, source_id, version_id)
+        return Response(
+            item.data, media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": "attachment; filename=caseproof-original",
+                "X-Content-Type-Options": "nosniff",
+                "X-CaseProof-Original-SHA256": item.sha256_hex,
+                "X-CaseProof-Original-Media-Type": item.media_type,
+            })
+
+    @router.get(base + "/sources/{source_id}/versions/{version_id}/pages/{pdf_page}")
+    def signed_original_page(
+        case_id: str, brief_version_id: str, source_id: str, version_id: str,
+        pdf_page: int, authorization: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Physical-page PNG of the verified original: a rendering, not a verdict."""
+        bearer, wb = bench(authorization)
+        item = _original(wb, bearer, case_id, brief_version_id, source_id, version_id)
+        if item.media_type != "application/pdf":
+            raise HTTPException(status_code=404, detail="physical_page_unavailable")
+        try:
+            png = render_pdf_page(item.data, page_number=pdf_page)
+        except OCRUnavailable as exc:
+            if str(exc) in {"crop_rasterizer_unavailable", "crop_pillow_unavailable"}:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+            raise HTTPException(status_code=404, detail="physical_page_unavailable") from None
+        return Response(png, media_type="image/png", headers={
+            "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+            "X-CaseProof-Original-SHA256": item.sha256_hex,
+            "X-CaseProof-Physical-Page": str(pdf_page)})
 
     @router.get(base + "/review")
     def signed_review_state(

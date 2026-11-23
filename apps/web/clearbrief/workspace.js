@@ -47,6 +47,9 @@
       }
     }catch(error){if(generation===state.generation){box.replaceChildren();box.append(el("p","Legal references unavailable: "+statusFor(error),"error"));}}
   }
+  const evidencePath = (row) => signedWorkbench
+    ? reviewPath() + "/sources/" + encodeURIComponent(row.source_id) + "/versions/" + encodeURIComponent(row.version_id)
+    : path() + "/evidence/" + encodeURIComponent(row.source_id) + "/versions/" + encodeURIComponent(row.version_id);
   const labelOf = (id) => (id && state.inventory?.labels?.[id]) || id;
   async function previewCorrection(evt) {
     evt.preventDefault();
@@ -283,10 +286,8 @@
     search:"Evidence search is not available in the signed workbench yet: no signed search route exists. Nothing was searched."};
   async function downloadOriginal(row) {
     const generation=state.generation;
-    if(signedWorkbench){notice(SIGNED_UNSUPPORTED.original,"danger");return;}
     try {
-      const response=await api(path()+"/evidence/"+encodeURIComponent(row.source_id)+
-        "/versions/"+encodeURIComponent(row.version_id)+"/original",{raw:true});
+      const response=await api(evidencePath(row)+"/original",{raw:true});
       const blob=await response.blob();
       if(generation!==state.generation||!state.session)return;
       if(blob.size>20*1024*1024||blob.size===0)throw Error("invalid_original");
@@ -536,18 +537,14 @@
         // resolved physical page, never on printed/bundle labels. The image
         // is a rendering, never a visual-verification verdict. Late responses
         // are dropped and revoked so they cannot land on another finding.
-        if(physical!==null&&row.media_type==="application/pdf"&&signedWorkbench){
-          const nb=el("div","","page-image");nb.append(el("p",SIGNED_UNSUPPORTED.page,"small"));
-          preview.parentNode.insertBefore(nb,preview.nextSibling);state.pageImageNode=nb;
-        } else if(physical!==null&&row.media_type==="application/pdf"){
+        if(physical!==null&&row.media_type==="application/pdf"){
           const imgBox=el("div","","page-image");
           imgBox.append(el("p","Physical page rendering of the verified original bytes · a rendering, not a verification.","small"));
           imgBox.append(el("p","Loading physical page "+physical+"…","small"));
           preview.parentNode.insertBefore(imgBox,preview.nextSibling);
           state.pageImageNode=imgBox;
           try{
-            const resp=await api(path()+"/evidence/"+encodeURIComponent(row.source_id)+
-              "/versions/"+encodeURIComponent(row.version_id)+"/pages/"+physical,{raw:true});
+            const resp=await api(evidencePath(row)+"/pages/"+physical,{raw:true});
             if(resp.headers.get("x-caseproof-original-sha256")!==row.original_sha256)
               throw Error("source_version_mismatch");
             const blob=await resp.blob();
