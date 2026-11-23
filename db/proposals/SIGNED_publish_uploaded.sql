@@ -103,10 +103,23 @@ begin
  select h.* into v_head from caseproof._m2_brief_heads h
  where h.org_id=v_org and h.case_id=p_case and h.brief_id=v_working for update;
  select c.case_revision into v_case_rev from caseproof.cases c where c.id=p_case;
- select e.entries,e.revision into v_register,v_exhibit_rev
+ select e.payload->'entries',e.revision into v_register,v_exhibit_rev
  from caseproof._m1_exhibit_heads e where e.org_id=v_org and e.case_id=p_case;
  if v_case_rev is null or v_case_rev<1 or v_exhibit_rev is null or v_exhibit_rev<1
  then return jsonb_build_object('ok',false,'error','invalid'); end if;
+ -- request replay first: an identical recorded request replays regardless of
+ -- the head revision the caller computed against; any difference conflicts
+ select e.version_id into v_replay_version from caseproof._m2_brief_events e
+ where e.org_id=v_org and e.case_id=p_case and e.brief_id=v_working and e.request_id=p_request;
+ if found then
+   if exists(select 1 from caseproof._m2_brief_versions v
+     where v.org_id=v_org and v.case_id=p_case and v.brief_id=v_working
+       and v.version_id=v_replay_version and v.version_id=p_version
+       and v.document_id=p_document and v.document_version_id=p_document_version
+       and v.vault_intent_id=p_intent and v.document_role=p_role
+       and v.representation_sha256=p_representation_sha and v.graph_sha256=p_graph_sha)
+   then return jsonb_build_object('ok',true,'replay',true,'revision',v_head.revision); end if;
+   return jsonb_build_object('ok',false,'error','conflict'); end if;
  if v_head.revision<>p_expected then return jsonb_build_object('ok',false,'error','conflict','revision',v_head.revision); end if;
  if v_head.revision>0 then
    perform 1 from caseproof._m2_brief_versions v
@@ -130,7 +143,7 @@ begin
    for v_entry in select value from jsonb_array_elements(coalesce(v_register,'[]'::jsonb)) loop
      if jsonb_typeof(v_entry)<>'object' or jsonb_typeof(v_entry->'confirmed')<>'boolean'
      or (v_entry->>'confirmed')::boolean is not true then continue; end if;
-     if lower(coalesce(v_entry->>'exhibit_label',''))<>v_label
+     if lower(coalesce(v_entry->>'display_label',''))<>v_label
      and not (jsonb_typeof(v_entry->'aliases')='array'
               and exists(select 1 from jsonb_array_elements_text(v_entry->'aliases') a where lower(a)=v_label))
      then continue; end if;
@@ -152,7 +165,7 @@ begin
    end loop;
    if not v_ok then return jsonb_build_object('ok',false,'error','invalid'); end if;
    if v_ref->>'reference_id'=any(v_ref_ids) then return jsonb_build_object('ok',false,'error','invalid'); end if;
-   v_ref_ids:=v_ref_ids||v_ref->>'reference_id';
+   v_ref_ids:=array_append(v_ref_ids,v_ref->>'reference_id');
  end loop;
 
  for v_ast in select value from jsonb_array_elements(p_assertions) loop
@@ -177,20 +190,6 @@ begin
    then return jsonb_build_object('ok',false,'error','invalid'); end if;
  end loop;
 
- -- request replay: event recorded for this request; identical recorded
- -- version replays, any difference conflicts
- select e.version_id into v_replay_version from caseproof._m2_brief_events e
- where e.org_id=v_org and e.case_id=p_case and e.brief_id=v_working and e.request_id=p_request;
- if found then
-   if exists(select 1 from caseproof._m2_brief_versions v
-     where v.org_id=v_org and v.case_id=p_case and v.brief_id=v_working
-       and v.version_id=v_replay_version and v.version_id=p_version
-       and v.document_id=p_document and v.document_version_id=p_document_version
-       and v.vault_intent_id=p_intent and v.document_role=p_role
-       and v.representation_sha256=p_representation_sha and v.graph_sha256=p_graph_sha)
-   then return jsonb_build_object('ok',true,'replay',true,'revision',v_head.revision); end if;
-   return jsonb_build_object('ok',false,'error','conflict'); end if;
-
  v_new_rev:=v_head.revision+1;
  insert into caseproof._m2_brief_versions(org_id,case_id,brief_id,version_id,revision,parent_version_id,
    document_id,document_version_id,vault_intent_id,original_sha256,representation_sha256,parser_id,
@@ -200,16 +199,16 @@ begin
         v_case_rev,v_exhibit_rev,v_actor,v_now);
  insert into caseproof._m2_brief_references(org_id,case_id,brief_id,version_id,reference_order,
    reference_id,exhibit_label,exact_quote,pdf_page)
- select v_org,p_case,v_working,p_version,ord.rnk-1,r.value->>'reference_id',r.value->>'exhibit_label',
-        r.value->>'exact_quote',
-        case when jsonb_typeof(r.value->'pdf_page')='number' then (r.value->>'pdf_page')::integer end
- from jsonb_array_elements(p_references) with ordinality as ord(rnk,value);
+ select v_org,p_case,v_working,p_version,ord.rnk-1,ord.value->>'reference_id',ord.value->>'exhibit_label',
+        ord.value->>'exact_quote',
+        case when jsonb_typeof(ord.value->'pdf_page')='number' then (ord.value->>'pdf_page')::integer end
+ from jsonb_array_elements(p_references) with ordinality as ord(value,rnk);
  insert into caseproof._m2_brief_assertions(org_id,case_id,brief_id,version_id,claim_order,claim_id,
    reference_id,text_start,text_end,assertion_text,kind,fact_role,language,source_language)
- select v_org,p_case,v_working,p_version,ord.rnk-1,a.value->>'claim_id',a.value->>'reference_id',
-        (a.value->>'text_start')::integer,(a.value->>'text_end')::integer,a.value->>'assertion_text',
-        a.value->>'kind',a.value->>'fact_role',a.value->>'language',a.value->>'source_language'
- from jsonb_array_elements(p_assertions) with ordinality as ord(rnk,value);
+ select v_org,p_case,v_working,p_version,ord.rnk-1,ord.value->>'claim_id',ord.value->>'reference_id',
+        (ord.value->>'text_start')::integer,(ord.value->>'text_end')::integer,ord.value->>'assertion_text',
+        ord.value->>'kind',ord.value->>'fact_role',ord.value->>'language',ord.value->>'source_language'
+ from jsonb_array_elements(p_assertions) with ordinality as ord(value,rnk);
  insert into caseproof.audit_events(id,org_id,case_id,actor_type,actor_user_id,action,
    event_schema_version,correlation_id,input_sha256_hex)
  values(v_audit,v_org,p_case,'human',v_actor,'m2_brief_graph_publish','v1',p_request,p_graph_sha);

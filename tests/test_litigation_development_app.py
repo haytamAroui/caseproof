@@ -1565,3 +1565,215 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
         with conn.transaction(force_rollback=True):
             with pytest.raises(errors.InsufficientPrivilege):
                 read_register(user_a, version=uuid4())
+
+
+def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
+    import hashlib
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals" / "SIGNED_publish_uploaded.sql"
+    ).read_text(encoding="utf-8")
+    org, case = uuid4(), uuid4()
+    user_a, user_b, user_e = uuid4(), uuid4(), uuid4()
+    doc_up, ver_up, ver_up2 = uuid4(), uuid4(), uuid4()
+    doc_ex, ver_ex = uuid4(), uuid4()
+    intent = uuid4()
+    brief_v1, brief_v2 = uuid4(), uuid4()
+
+    rep_text = "Mémoire synthétique: le contrat exige le paiement."
+    rep_sha = hashlib.sha256(rep_text.encode("utf-8")).hexdigest()
+    graph_text = "graphe synthétique v1"
+    graph_sha = hashlib.sha256(graph_text.encode("utf-8")).hexdigest()
+    exhibit_rep = "Contrat synthétique: paiement sous 30 jours. Livraison incluse."
+    quote = "paiement sous 30 jours"
+
+    def working_brief(role):
+        raw = bytearray(hashlib.sha256(
+            ("caseproof-working-brief:" + role + ":" + str(case)).encode()).digest()[:16])
+        raw[6] = (raw[6] & 0x0F) | 0x40
+        raw[8] = (raw[8] & 0x3F) | 0x80
+        import uuid as _uuid
+        return str(_uuid.UUID(bytes=bytes(raw)))
+
+    def refs(quote_text=quote, label="contrat", pdf_page=2):
+        return json.dumps([{"reference_id": "ref-1", "exhibit_label": label,
+                            "exact_quote": quote_text, "pdf_page": pdf_page}])
+
+    def assertions(start=0, end=5, text=None, ref="ref-1"):
+        return json.dumps([{"claim_id": "c1", "reference_id": ref,
+                            "text_start": start, "text_end": end,
+                            "assertion_text": text if text is not None else rep_text[start:end],
+                            "kind": "money", "fact_role": "payment",
+                            "language": "fr", "source_language": "nl"}])
+
+    exhibit_entry = {"exhibit_id": "piece-aaa111bbb222", "display_label": "Contrat",
+                     "aliases": [], "confirmed": True, "manual_inclusion": False,
+                     "pages": [{"source_id": str(doc_ex), "version_id": str(ver_ex),
+                                "pdf_page": n, "printed_page": None, "bundle_page": None}
+                               for n in (1, 2, 3)]}
+
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute(proposal)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s),(%s, %s),(%s, %s)"
+                     " on conflict (id) do nothing", (user_a, org, user_b, org, user_e, org))
+        full_actions = ("array['case:read','evidence:read','finding:write','review:request']"
+                        "::text[]")
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, " + full_actions + "),(%s, %s, "
+            " array['case:read','review:request']::text[]),(%s, %s, " + full_actions + ")",
+            (org, user_a, org, user_b, org, user_e))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user_a))
+        reviewer_perms = ("array['case:read','evidence:read','evidence:upload','draft:check',"
+                          "'review:request']::text[]")
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', " + reviewer_perms + "),"
+            " (%s, %s, %s, 'viewer', array['case:read']::text[]),"
+            " (%s, %s, %s, 'reviewer', " + reviewer_perms + ")",
+            (org, case, user_a, org, case, user_b, org, case, user_e))
+        conn.execute(
+            "insert into caseproof.documents(id, org_id, case_id, source_label)"
+            " values(%s, %s, %s, 'mémoire synthétique'),(%s, %s, %s, 'contrat synthétique')",
+            (doc_up, org, case, doc_ex, org, case))
+        conn.execute(
+            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
+            " original_sha256_hex, byte_length, media_type)"
+            " values(%s, %s, %s, 1, %s, 4, 'text/plain'),(%s, %s, %s, 2, %s, 4, 'text/plain'),"
+            " (%s, %s, %s, 1, %s, 4, 'application/pdf')",
+            (ver_up, org, doc_up, "d" * 64, ver_up2, org, doc_up, "1" * 64,
+             ver_ex, org, doc_ex, "b" * 64))
+        audits = [uuid4() for _ in range(4)]
+        for audit in audits:
+            conn.execute(
+                "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+                " actor_user_id, action, event_schema_version, correlation_id,"
+                " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
+                (audit, org, case, user_a, uuid4(), "a" * 64))
+        conn.execute(
+            "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
+            " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
+            " byte_length, media_type, state, created_audit_id, created_case_revision,"
+            " last_audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, 4, 'text/plain',"
+            " 'verified', %s, 1, %s)",
+            (org, case, intent, user_a, doc_up, ver_up,
+             str(org) + "/" + str(case) + "/" + str(doc_up) + "/" + str(ver_up) + "/" + "d" * 64,
+             "d" * 64, audits[0], audits[1]))
+        conn.execute(
+            "insert into caseproof._dev_journey_sources(org_id, case_id, document_id,"
+            " version_id, original_sha, representation_sha, snapshot_sha, representation,"
+            " audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (org, case, doc_up, ver_up, "d" * 64, rep_sha, "2" * 64, rep_text, audits[2]))
+        conn.execute(
+            "insert into caseproof._dev_journey_sources(org_id, case_id, document_id,"
+            " version_id, original_sha, representation_sha, snapshot_sha, representation,"
+            " audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (org, case, doc_ex, ver_ex, "b" * 64, "3" * 64, "4" * 64, exhibit_rep, audits[3]))
+        conn.execute(
+            "insert into caseproof._m1_exhibit_heads(org_id, case_id, revision, payload)"
+            " values(%s, %s, 1, %s::jsonb)",
+            (org, case, json.dumps({"schema": "caseproof-exhibit-register-v1",
+                                    "entries": [exhibit_entry]})))
+
+        def as_user(sub, role="authenticated"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+
+        def publish(sub, *, request=None, expected=0, brief=None, version=brief_v1,
+                    document=doc_up, doc_version=ver_up, intent_id=intent, role="own_draft",
+                    text=rep_text, text_sha=None, graph=graph_text, g_sha=None,
+                    references=None, asserts=None, jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute(
+                "select public.caseproof_signed_publish_uploaded"
+                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)",
+                (str(case), brief or working_brief(role), str(version),
+                 str(request or uuid4()), expected, str(document), str(doc_version),
+                 str(intent_id), role, text,
+                 text_sha or hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                 "parser-synthétique-v1", references if references is not None else refs(),
+                 asserts if asserts is not None else assertions(), graph,
+                 g_sha or hashlib.sha256(graph.encode("utf-8")).hexdigest())).fetchone()[0]
+
+        # Unauthenticated and anonymous contexts are refused before any work.
+        assert publish(user_a, jwt_role="anon") == {"ok": False, "error": "invalid"}
+        # Wrong working brief identity (caller cannot steer another brief's head).
+        assert publish(user_a, brief=str(uuid4())) == {"ok": False, "error": "invalid"}
+        # Member without the reviewer grant.
+        assert publish(user_b) == {"ok": False, "error": "forbidden"}
+        # Falsified representation (never derived by the trusted path).
+        assert publish(user_a, text="Texte falsifié jamais vérifié") == {
+            "ok": False, "error": "invalid"}
+        # Correct representation but a digest over other bytes.
+        assert publish(user_a, text_sha="0" * 64) == {"ok": False, "error": "invalid"}
+        # Unknown intent / unverified binding.
+        assert publish(user_a, intent_id=uuid4()) == {"ok": False, "error": "invalid"}
+        # Reference whose quote does not occur in the exhibit's source.
+        assert publish(user_a, references=refs(quote_text="citation absente")) == {
+            "ok": False, "error": "invalid"}
+        # Reference to an exhibit label absent from the confirmed register.
+        assert publish(user_a, references=refs(label="Inconnu")) == {
+            "ok": False, "error": "invalid"}
+        # pdf_page outside the confirmed pages of the entry.
+        assert publish(user_a, references=refs(pdf_page=9)) == {"ok": False, "error": "invalid"}
+        # Assertion whose text does not match the claimed slice.
+        assert publish(user_a, asserts=assertions(text="autre")) == {
+            "ok": False, "error": "invalid"}
+        # Assertion citing a reference that was not passed.
+        assert publish(user_a, asserts=assertions(ref="fantôme")) == {
+            "ok": False, "error": "invalid"}
+
+        # Happy path: revision 1, all rows committed.
+        request = uuid4()
+        outcome = publish(user_a, request=request)
+        assert outcome == {"ok": True, "replay": False, "revision": 1}
+        head = conn.execute(
+            "select revision, version_id from caseproof._m2_brief_heads"
+            " where case_id=%s and brief_id=%s",
+            (str(case), working_brief("own_draft"))).fetchone()
+        assert head == (1, brief_v1)
+        assert conn.execute(
+            "select representation_sha256, graph_sha256, document_role"
+            " from caseproof._m2_brief_versions where case_id=%s and version_id=%s",
+            (str(case), str(brief_v1))).fetchone() == (rep_sha, graph_sha, "own_draft")
+        assert conn.execute(
+            "select count(*) from caseproof._m2_brief_references where case_id=%s"
+            " and version_id=%s", (str(case), str(brief_v1))).fetchone()[0] == 1
+        assert conn.execute(
+            "select count(*) from caseproof._m2_brief_assertions where case_id=%s"
+            " and version_id=%s", (str(case), str(brief_v1))).fetchone()[0] == 1
+        assert conn.execute(
+            "select count(*) from caseproof.audit_events where case_id=%s"
+            " and action='m2_brief_graph_publish'", (str(case),)).fetchone()[0] == 1
+
+        # Identical request replays; same request id with different content conflicts.
+        assert publish(user_a, request=request) == {"ok": True, "replay": True, "revision": 1}
+        assert publish(user_a, request=request, graph="graphe altéré") == {
+            "ok": False, "error": "conflict"}
+        # Stale expected revision conflicts.
+        assert publish(user_a, expected=0) == {"ok": False, "error": "conflict", "revision": 1}
+        # Reusing the head version id is invalid.
+        assert publish(user_a, expected=1, version=brief_v1) == {"ok": False, "error": "invalid"}
+        # Reusing the preserved source version is invalid.
+        assert publish(user_a, expected=1, version=brief_v2) == {"ok": False, "error": "invalid"}
+
+        # Second authorized user operates the independent opponent brief head.
+        assert publish(user_e, role="opponent_brief") == {"ok": True, "replay": False,
+                                                          "revision": 1}
