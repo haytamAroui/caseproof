@@ -479,7 +479,12 @@
       $("selected").append(el("strong","Appréciation requise"));
       $("selected").append(el("p","Conclusions: "+a.draft_text));
       $("selected").append(el("p","Automated lexical detection: "+a.draft_events.join(", ")+". Source wording: "+(a.source_events.join(", ")||"unresolved")+". Reason: "+a.reason));
-      $("selected").append(el("p","Signature and dispatch for signature are different event phrases even if the date matches. This lexical warning does not establish a contradiction, identity, truth or source support. The signed reviewer inspects the original and records their own judgment. Uncited claims are detected only for these phrases; no source is inferred.","small"));
+      const explanation=a.reason==="same_event_wording_support_not_assessed"
+        ? "The detected event wording agrees. This is not proof that this source supports the assertion: identity, truth and context still need human review."
+        : a.reason==="different_event_wording_requires_human_review"
+          ? "The detected event wording differs: signature and dispatch for signature are different events, even if the date matches. This is a lexical review warning, not an established contradiction."
+          : "The event wording or its source could not be compared reliably. Inspect the named reason; no source support is inferred.";
+      $("selected").append(el("p",explanation+" The signed reviewer inspects the original and records their own judgment. Uncited claims are detected only for these phrases; no source is inferred.","small"));
     }
     // A claim may be reviewed only against the exact checked source version,
     // digest and representation, never a newer catalog entry sharing its source_id.

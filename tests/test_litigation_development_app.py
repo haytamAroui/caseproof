@@ -4206,3 +4206,18 @@ def test_event_review_supported_languages_abstentions(claim, source):
     assert review_events(text, b.brief.references, c.observations, (p,))[0].source_id is None
     assert review_events(text + '\n' + text, b.brief.references, c.observations, previews)[0].source_id is None
     assert review_events("Possibly " + text, b.brief.references, c.observations, previews)[0].reason == "draft_event_context_ambiguous"
+
+
+def test_cli_stack_failure_diagnostics_remain_redacted_and_failing():
+    import inspect
+
+    from scripts import fresh_supabase_cli_profile, probe_historical_74_upgrade
+    from scripts.probe_supabase_cli_local import output_tail
+    # The failure report must include redacted startup output, not only a category.
+    for module in (fresh_supabase_cli_profile, probe_historical_74_upgrade):
+        code = inspect.getsource(module)
+        startup = code[code.index('"status": "' + ('LOCAL_STACK_FAILED' if module is fresh_supabase_cli_profile else 'HISTORICAL_LOCAL_STACK_FAILED')):]
+        assert '"cli_output_tail": output_tail(' in startup.split('folder =')[0]
+    diagnostic = output_tail("Error: container failed password=sentinel-secret\npostgres://u:sentinel-password@host/db")
+    assert "container failed" in diagnostic
+    assert "sentinel-secret" not in diagnostic and "sentinel-password" not in diagnostic
