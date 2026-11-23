@@ -44,7 +44,7 @@ const H={'X-CaseProof-Local':token,'Accept':'application/json'};
 let current=null;
 const el=(t,txt,cls)=>{const e=document.createElement(t);if(txt!==undefined)e.textContent=txt;if(cls)e.className=cls;return e;};
 const b64=async(file)=>{const buf=new Uint8Array(await file.arrayBuffer());let s='';for(let i=0;i<buf.length;i+=32768)s+=String.fromCharCode.apply(null,buf.subarray(i,i+32768));return btoa(s);};
-const LABELS={confirm:'Confirmer',qualify:'Confirmer avec réserve',reject:'Rejeter',waive:'Écarter'};
+const LABELS={confirm:'Confirmer',qualify:'Confirmer avec réserve',reject:'Rejeter',waive:'Écarter',omission:'Signaler un passage omis'};
 async function post(path,body,type){const r=await fetch(path,{method:'POST',headers:{...H,'Content-Type':type},body});if(!r.ok)throw Error(await r.text());return r.json();}
 function render(payload){current=payload;const result=document.getElementById('result');result.replaceChildren();
 result.append(el('p','Corpus de cette revue : '+payload.corpus_pack_sha256));if(payload.exhibit_note)result.append(el('p',payload.exhibit_note,'note'));

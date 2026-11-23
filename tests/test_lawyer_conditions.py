@@ -102,3 +102,20 @@ def test_decision_on_a_condition_row_is_local_and_binds_to_the_evidence(tmp_path
     after = verify_legal_pack(raw2, expected_sha256=cp2)
     assert after["conditions"] == body["conditions"] and after["condition_evidence"] == body["condition_evidence"]
     assert len(after["review"]["decisions"]) == 1 and after["review"]["release_authorized"] is False
+
+
+def test_omitted_passage_flag_needs_a_reason_is_local_and_binds_to_the_finding(tmp_path):
+    raw, cp, body = run(tmp_path, ["Le courrier a été envoyé (pièce 1)."])
+    idx = next(i for i, r in enumerate(body["references"]) if r["reason"] == R_FOUND)
+    with pytest.raises(CorpusError):
+        record_decisions(pack=raw, checkpoint=cp, decisions=[
+            {"reference_index": idx, "action": "omission", "reason": "", "reviewer_label": "local"}])
+    raw2, cp2 = record_decisions(pack=raw, checkpoint=cp, decisions=[
+        {"reference_index": idx, "action": "omission", "reason": "pièce 1, p. 2: accusé de réception non montré", "reviewer_label": "local"}])
+    after = verify_legal_pack(raw2, expected_sha256=cp2)
+    d = after["review"]["decisions"][0]
+    assert d["action"] == "omission" and after["review"]["release_authorized"] is False
+    assert "accusé de réception non montré" in zipfile.ZipFile(BytesIO(raw2)).read("report.html").decode()
+    forged, sha = reseal({**after, "review": {**after["review"], "decisions": [{**d, "reason": ""}]}}, zipfile.ZipFile(BytesIO(raw2)).read("report.html"))
+    with pytest.raises(CorpusError, match="rejected"):
+        verify_legal_pack(forged, expected_sha256=sha)

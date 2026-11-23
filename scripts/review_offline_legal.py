@@ -22,7 +22,7 @@ def main() -> None:
     decide.add_argument("review", type=Path)
     decide.add_argument("--checkpoint", required=True, help="SHA-256 kept separately from the export")
     decide.add_argument("--finding", type=int, required=True, help="Finding number from 0")
-    decide.add_argument("--action", choices=("confirm", "qualify", "reject", "waive"), required=True)
+    decide.add_argument("--action", choices=("confirm", "qualify", "reject", "waive", "omission"), required=True)
     decide.add_argument("--reason", default="")
     decide.add_argument("--label", required=True, help="Local reviewer label, not an authenticated identity")
     decide.add_argument("--output", type=Path, required=True)

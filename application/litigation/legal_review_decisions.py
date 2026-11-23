@@ -15,9 +15,9 @@ from typing import Any
 
 from application.litigation.corpus import CorpusError
 
-ACTIONS = ("confirm", "qualify", "reject", "waive")
+ACTIONS = ("confirm", "qualify", "reject", "waive", "omission")  # omission: the reviewer says a relevant passage was not shown; a local note, never an effect
 ATTRIBUTION = "local_unauthenticated_label"
-_REASON_REQUIRED = ("qualify", "reject", "waive")
+_REASON_REQUIRED = ("qualify", "reject", "waive", "omission")
 
 
 FINGERPRINT_SCHEME = 2
