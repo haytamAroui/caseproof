@@ -1,4 +1,4 @@
-"""Lawyer-written suitability rules applied to the articles a brief cites.
+"""Typed suitability rules applied to the articles a brief cites.
 
 Offline and deterministic. The rules and the lawyer-confirmed facts are plain
 files chosen for the matter (``suitability-rules/*.toml`` and

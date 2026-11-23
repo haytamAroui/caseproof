@@ -313,7 +313,7 @@
         span:"Offsets "+a.start+"\u2013"+a.end+" \u00b7 "+a.raw_text,raw:a,
       })),
       ...(state.check.suitability_observations||[]).map(a=>({
-        id:"suitability:"+a.rule_id,kind:"Lawyer rule",state:a.status,source:null,
+        id:"suitability:"+a.rule_id,kind:"Suitability rule",state:a.status,source:null,
         span:a.reference+" \u00b7 "+(a.missing.length?a.missing.length+" input(s) missing":"inputs confirmed"),raw:a,
       })),
     ];
@@ -360,7 +360,7 @@
       const button=el("button","","observation");button.type="button";
       button.setAttribute("aria-pressed",String(state.selected?.id===item.id));
       button.append(el("span",item.kind+" / "+label(item.state),"tag"));
-      button.append(el("strong",item.id.replace("citation:","Reference ").replace("fact:","Fact ").replace("legal:","Legal reference ").replace("suitability:","Lawyer rule ")));
+      button.append(el("strong",item.id.replace("citation:","Reference ").replace("fact:","Fact ").replace("legal:","Legal reference ").replace("suitability:","Suitability rule ")));
       button.append(el("small",(labelOf(item.source)||"No confirmed source")+" · "+item.span));
       button.addEventListener("click",()=>{if(state.loading||state.busy||state.pending)return;
         state.selected=item;renderChecks();renderSelected();});
@@ -369,14 +369,14 @@
   }
   function renderSuitability(selected){
     const a=selected.raw,box=$("source-preview");box.replaceChildren();
-    box.append(el("strong","Lawyer-written rule "+a.rule_id+" v"+a.rule_version));
+    box.append(el("strong","Suitability rule "+a.rule_id+" v"+a.rule_version));
     box.append(el("p",a.scope,"small"));
     box.append(el("p","Assessed reference: "+a.reference+" \u00b7 cited at "+a.cited_by.join(", ")+" \u00b7 article "+a.article_key,"small mono"));
     box.append(el("p","Result: "+a.status+" \u00b7 "+a.reason,"small"));
     for(const [k,v] of a.subresults)box.append(el("p",k+" \u2192 "+v,"small mono"));
     if(a.missing.length)box.append(el("p","Inputs blocking a verdict: "+a.missing.join(", ")+". A fact must be present and lawyer-confirmed.","small"));
     for(const [name,value,confirmed,prov] of a.facts)box.append(el("p","Fact "+name+" = "+value+" \u00b7 "+(confirmed?"confirmed":"NOT confirmed")+" \u00b7 "+prov,"small mono"));
-    box.append(el("p","This is the lawyer's own condition applied to the facts shown. It is not a machine legal conclusion and does not assess the brief's argument.","small"));
+    box.append(el("p","The rule text and each fact's provenance are declared in the matter's files. No authenticated lawyer confirmation (actor, source, version) is bound yet, so \"confirmed\" means declared, not verified. This is the declared condition applied to those facts. It is not a machine legal conclusion and does not assess the brief's argument.","small"));
     state.previewReady=true;$("save-review").disabled=!state.review||state.loading||state.busy;
   }
   async function renderLegalPassage(selected){
@@ -419,7 +419,7 @@
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
     // A claim may be reviewed only against the exact checked source version,
     // digest and representation, never a newer catalog entry sharing its source_id.
-    if(selected.kind==="Lawyer rule"){renderSuitability(selected);return;}
+    if(selected.kind==="Suitability rule"){renderSuitability(selected);return;}
     if(selected.kind==="Legal reference"){void renderLegalPassage(selected);return;}
     if(!selected.source){
       $("source-preview").textContent="No source resolved for this observation. Evidence support is unknown.";

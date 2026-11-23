@@ -125,7 +125,7 @@ class LegalObservation:
 
 @dataclass(frozen=True, slots=True)
 class SuitabilityObservation:
-    """One lawyer-written rule evaluated on lawyer-CONFIRMED facts.
+    """One typed rule evaluated on facts declared as confirmed.
 
     The rule is the lawyer's, applied only to an article the brief cites that
     is present in the chosen corpus. status is PASS/FAIL/UNDETERMINED/UNVERIFIED
