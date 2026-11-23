@@ -307,6 +307,11 @@
         source:a.source_id,version:a.source_version_id,sourceSha:a.source_sha256,
         representation:a.representation_id,span:"Version-bound candidate",raw:a,
       })),
+      ...(state.check.event_observations||[]).map(a=>({
+        id:"event:"+a.observation_id,kind:"Event language review",state:a.state,
+        source:a.source_id,version:a.source_version_id,sourceSha:a.source_sha256,
+        representation:a.representation_id,span:a.reason,raw:a,
+      })),
       ...(state.check.legal_observations||[]).map(a=>({
         id:"legal:"+a.reference_id,kind:"Legal reference",state:a.status,source:null,
         span:"Offsets "+a.start+"\u2013"+a.end+" \u00b7 "+a.raw_text,raw:a,
@@ -340,6 +345,7 @@
       scope.className="check-scope partial";
       scope.textContent="Check not available. Declared sources and exclusions have not been assessed.";
     }
+    if(state.check)scope.append(el("small","Event-language coverage: "+(state.check.event_observations||[]).length+" paragraph candidate(s). Explicit signature and dispatch-for-signature phrases only (FR/NL/EN), outside quoted text. Source comparison requires one unique existing exact quotation in the same paragraph. Other wording, general paraphrases, event identity and truth are NOT assessed. Uncited candidates receive no automatic source."));
     $("citation-count").textContent=String(state.check?.citation_observations?.length??0);
     $("fact-count").textContent=String(state.check?.factual_observations?.length??0);
     if(!state.check){$("observations-filter").hidden=true;node.append(el("p","Check is unavailable. No success or correctness is implied.","empty"));return;}
@@ -468,6 +474,13 @@
     $("selected").append(el("p","Check state: "+label(selected.state)));
     $("selected").append(el("p","Source: "+(labelOf(selected.source)||"not resolved"),"small"));
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
+    if(selected.kind==="Event language review"){
+      const a=selected.raw;
+      $("selected").append(el("strong","Appréciation requise"));
+      $("selected").append(el("p","Conclusions: "+a.draft_text));
+      $("selected").append(el("p","Automated lexical detection: "+a.draft_events.join(", ")+". Source wording: "+(a.source_events.join(", ")||"unresolved")+". Reason: "+a.reason));
+      $("selected").append(el("p","Signature and dispatch for signature are different event phrases even if the date matches. This lexical warning does not establish a contradiction, identity, truth or source support. The signed reviewer inspects the original and records their own judgment. Uncited claims are detected only for these phrases; no source is inferred.","small"));
+    }
     // A claim may be reviewed only against the exact checked source version,
     // digest and representation, never a newer catalog entry sharing its source_id.
     if(selected.kind==="Suitability rule"){renderSuitability(selected);return;}

@@ -42,6 +42,7 @@ def revise_review(
         raise VerificationError("stale review, untrusted decision or source revision")
     valid = {f"citation:{x.reference_id}" for x in run.citation_observations}
     valid |= {f"fact:{x.claim_id}" for x in run.factual_observations}
+    valid |= {f"event:{x.observation_id}" for x in run.event_observations}
     valid |= {f"legal:{x.reference_id}" for x in run.legal_observations}
     valid |= {f"suitability:{x.rule_id}" for x in run.suitability_observations}
     if decision.observation_id not in valid:
@@ -96,6 +97,7 @@ def preview_correction(
         raise VerificationError("stale correction or unverified current document")
     valid = {f"citation:{x.reference_id}" for x in run.citation_observations}
     valid |= {f"fact:{x.claim_id}" for x in run.factual_observations}
+    valid |= {f"event:{x.observation_id}" for x in run.event_observations}
     valid |= {f"legal:{x.reference_id}" for x in run.legal_observations}
     valid |= {f"suitability:{x.rule_id}" for x in run.suitability_observations}
     if (proposal.observation_id not in valid or proposal.end > len(text)

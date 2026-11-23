@@ -19,6 +19,7 @@ from application.litigation.brief_checks import (
     VersionedBrief,
     check_brief_references,
 )
+from application.litigation.event_review import EventObservation, review_events
 from application.litigation.factual_values import (
     FactAssertion,
     FactObservation,
@@ -164,6 +165,7 @@ class VerificationRun:
     snapshot_hash: str
     legal_observations: tuple[LegalObservation, ...] = ()
     suitability_observations: tuple[SuitabilityObservation, ...] = ()
+    event_observations: tuple[EventObservation, ...] = ()
     # Separate kinds: a literal/value mismatch is not a legal conclusion.
 
 
@@ -174,6 +176,8 @@ def _payload(run: VerificationRun, reviews: tuple[ObservationReview, ...] = ()) 
     )
     if run.suitability_observations:
         legal = {**legal, "suitability": [asdict(x) for x in run.suitability_observations]}
+    if run.event_observations:
+        legal = {**legal, "event_candidates": [asdict(x) for x in run.event_observations]}
     return {
         **legal,
         "schema": REPORT_SCHEMA,
@@ -259,6 +263,7 @@ def run_unified_check(
             assertion, verified_brief_text=representation.text,
             preview=verified_preview, pdf_page=physical_page,
         ))
+    event_rows = review_events(representation.text, brief.references, citations.observations, previews)
     processed = tuple(sorted(
         (x.row.source_id, x.row.version_id) for x in previews
         if x.row.status == "ready" and not x.row.warnings and x.row.representation_id
@@ -293,6 +298,8 @@ def run_unified_check(
         "factual": [asdict(x) for x in facts],
         "rule_version": ENGINE,
     }
+    if event_rows:
+        identity["events"] = [asdict(x) for x in event_rows]
     if legal_observations:
         # Present only when a corpus was chosen: a run without one keeps its
         # historical snapshot hash. The corpus identity (key, version, text
@@ -305,7 +312,7 @@ def run_unified_check(
         register.revision, ENGINE, source_scope.declared_source_versions,
         source_scope.excluded_source_versions, processed, incomplete,
         citations.observations, tuple(facts), _hash(identity),
-        tuple(legal_observations), tuple(suitability_observations),
+        tuple(legal_observations), tuple(suitability_observations), event_rows,
     )
 
 
@@ -319,6 +326,7 @@ def verification_record(
         raise VerificationError("bounded verification report required")
     valid_ids = {f"citation:{x.reference_id}" for x in run.citation_observations}
     valid_ids |= {f"fact:{x.claim_id}" for x in run.factual_observations}
+    valid_ids |= {f"event:{x.observation_id}" for x in run.event_observations}
     valid_ids |= {f"legal:{x.reference_id}" for x in run.legal_observations}
     valid_ids |= {f"suitability:{x.rule_id}" for x in run.suitability_observations}
     if (len({x.observation_id for x in reviews}) != len(reviews)

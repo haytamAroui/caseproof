@@ -57,6 +57,14 @@ begin
    or jsonb_typeof(v_payload->'sources'->'excluded')<>'array'
    or jsonb_typeof(v_payload->'citations')<>'array'
    or jsonb_typeof(v_payload->'factual_candidates')<>'array'
+   or (v_payload ? 'event_candidates' and (
+         jsonb_typeof(v_payload->'event_candidates')<>'array'
+         or jsonb_array_length(v_payload->'event_candidates')>128
+         or exists(select 1 from jsonb_array_elements(v_payload->'event_candidates') e
+                   where jsonb_typeof(e.value)<>'object'
+                      or jsonb_typeof(e.value->'observation_id')<>'string'
+                      or coalesce(e.value->>'semantic_support','')<>'not_assessed'
+                      or coalesce(e.value->>'state','')<>'needs_context')))
    or (v_payload ? 'suitability' and (
          jsonb_typeof(v_payload->'suitability')<>'array'
          or jsonb_array_length(v_payload->'suitability')>128
@@ -133,6 +141,10 @@ begin
              where f.value->>'source_id'=v_pair.s::text
                and f.value->>'source_version_id'=v_pair.v::text
                and coalesce(f.value->>'source_sha256','')<>v_sha)
+   or exists(select 1 from jsonb_array_elements(coalesce(v_payload->'event_candidates','[]'::jsonb)) e
+             where e.value->>'source_id'=v_pair.s::text
+               and e.value->>'source_version_id'=v_pair.v::text
+               and coalesce(e.value->>'source_sha256','')<>v_sha)
    then return jsonb_build_object('ok',false,'error','invalid'); end if;
  end loop;
 

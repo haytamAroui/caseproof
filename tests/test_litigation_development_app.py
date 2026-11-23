@@ -4135,3 +4135,74 @@ def test_fact_or_rule_change_makes_a_new_snapshot_so_old_decisions_do_not_carry_
         replace(obs, input_hashes=(("rule_source", "2" * 64),)),
     ):
         assert run_unified_check(**kw, suitability_observations=(changed,)).snapshot_hash != base
+
+
+def test_event_language_review_is_separate_from_equal_dates_and_human_support():
+    import json
+    from dataclasses import replace
+
+    from application.litigation.unified_review import (
+        ObservationReview,
+        ReviewDisposition,
+        run_unified_check,
+        verification_record,
+    )
+    from tests.test_litigation_m2_unified_review import rig
+
+    source = "Le contrat a été envoyé pour signature le 12 mars."
+    text = 'Le contrat a été signé le 12 mars. Voir « ' + source + ' » (Pièce 1).'
+    b, register, previews, scope = rig(text, source, quote=source)
+    b = replace(b, claims=())
+
+    def check(rep=b, ps=previews):
+        return run_unified_check(representation=rep, register=register, previews=ps,
+                                 source_scope=scope, authorized_case_id="case-1",
+                                 authorized_register_revision=4)
+
+    run = check()
+    e, = run.event_observations
+    assert e.draft_events == ("signed",) and e.source_events == ("sent_for_signature",)
+    assert e.reason == "different_event_wording_requires_human_review"
+    assert e.state == "needs_context" and e.semantic_support == "not_assessed"
+    assert e.source_text == source and e.source_id == "src-1"
+    decision = ObservationReview("event:" + e.observation_id, "actor-1",
+                                 ReviewDisposition.NEEDS_INFORMATION,
+                                 "Transmission shown; signature still needs evidence (synthetic).")
+    payload = json.loads(verification_record(run, reviews=(decision,)))
+    assert payload["event_candidates"][0]["source_sha256"] == previews[0].row.original_sha256
+    assert payload["reviewer_dispositions"][0]["observation_id"].startswith("event:")
+    changed = replace(previews[0], row=replace(previews[0].row, original_sha256="f" * 64))
+    assert check(ps=(changed,)).snapshot_hash != run.snapshot_hash
+    # Uncited, negated, uncertain or same-event wording never becomes support.
+    from application.litigation.event_review import review_events
+    assert review_events("Le contrat a été signé le 12 mars.", (), (), ())[0].source_id is None
+    neg = text.replace("a été signé", "n'a pas été signé")
+    assert review_events(neg, (), (), ()) == ()  # phrase not in supported detector
+    same = text.replace("a été signé", "a été envoyé pour signature")
+    rows = review_events(same, b.brief.references, run.citation_observations, previews)
+    assert rows[0].reason == "same_event_wording_support_not_assessed"
+    assert rows[0].semantic_support == "not_assessed"
+    assert review_events('« Le contrat a été signé » (Pièce 1).', (), (), ()) == ()
+
+
+@pytest.mark.parametrize(("claim", "source"), [
+    ("Le contrat a été signé.", "Le contrat a été envoyé pour signature."),
+    ("The contract was signed.", "The contract was sent for signature."),
+    ("Het contract werd ondertekend.", "Het contract is ter ondertekening verzonden."),
+])
+def test_event_review_supported_languages_abstentions(claim, source):
+    from dataclasses import replace
+
+    from application.litigation.brief_checks import check_brief_references
+    from application.litigation.event_review import review_events
+    from tests.test_litigation_m2_unified_review import rig
+    text = claim + ' « ' + source + ' » (Pièce 1).'
+    b, register, previews, _ = rig(text, source, quote=source)
+    c = check_brief_references(brief=b.brief, register=register, previews=previews,
+                              authorized_case_id="case-1", authorized_register_revision=4)
+    e, = review_events(text, b.brief.references, c.observations, previews)
+    assert e.reason == "different_event_wording_requires_human_review"
+    p = replace(previews[0], row=replace(previews[0].row, warnings=("partial",)))
+    assert review_events(text, b.brief.references, c.observations, (p,))[0].source_id is None
+    assert review_events(text + '\n' + text, b.brief.references, c.observations, previews)[0].source_id is None
+    assert review_events("Possibly " + text, b.brief.references, c.observations, previews)[0].reason == "draft_event_context_ambiguous"
