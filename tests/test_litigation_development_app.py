@@ -2143,3 +2143,258 @@ def test_live_check_store_stale_and_tampered():
     assert drift_access is not None
     with pytest.raises(PrivateCheckStoreError):
         drift_store.load_bundle(case_id=_UUID_C, brief_version_id=_UUID_B, access=drift_access)
+
+
+def test_signed_review_ledger_proposal_rpcs():
+    """Proposed review-ledger RPCs (db/proposals): real access, contract and
+    chain behavior against the disposable PostgreSQL cluster; never applied
+    to live. Digests must match the Python canonical form exactly."""
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, _canonical, _digest
+    from scripts.verify_vault_integration import connect
+
+    root = Path(__file__).resolve().parents[1] / "db" / "proposals"
+    org, case = uuid4(), uuid4()
+    doc, ver = uuid4(), uuid4()
+    user_a, viewer, stranger = uuid4(), uuid4(), uuid4()
+    sha = "b" * 64
+    snapshot = "a" * 64
+    brief_version = str(uuid4())
+    payload = json.dumps({
+        "schema": "caseproof-litigation-verification-run-v1",
+        "engine": "caseproof-disputes-unified-factual-v1",
+        "case_id": str(case), "brief_version_id": brief_version,
+        "snapshot_hash": snapshot, "exhibit_revision": 1,
+        "sources": {"declared": [[str(doc), str(ver)]],
+                    "processed": [[str(doc), str(ver)]],
+                    "incomplete": [], "excluded": []},
+        "citations": [{"reference_id": "ref-1", "source_id": str(doc),
+                       "source_version_id": str(ver), "source_sha256": sha}],
+        "factual_candidates": [], "reviewer_dispositions": [],
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    payload_sha = _digest(payload)
+    decision = {"actor_id": str(user_a), "disposition": "confirmed_candidate",
+                "observation_id": "citation:ref-1",
+                "rationale": "contrôle «synthétique» \\ ok"}
+    dec_text = json.dumps(decision, ensure_ascii=False, sort_keys=True,
+                          separators=(",", ":"))
+
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        for name in ("SIGNED_review_run_publish", "SIGNED_review_state_read",
+                     "SIGNED_review_decision_record"):
+            conn.execute((root / f"{name}.sql").read_text(encoding="utf-8"))
+        conn.execute("insert into caseproof.organizations(id, display_name)"
+                     " values(%s, 'synthétique')", (org,))
+        conn.execute("insert into auth.users(id, instance_id)"
+                     " values(%s, %s),(%s, %s),(%s, %s) on conflict (id) do nothing",
+                     (user_a, org, viewer, org, stranger, org))
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','finding:write','review:request']::text[]),"
+            " (%s, %s, array['case:read','evidence:read','finding:write']::text[])",
+            (org, user_a, org, viewer))
+        conn.execute("insert into caseproof.cases(id, org_id, created_by_user,"
+                     " effective_policy_version) values(%s, %s, %s, 'v1')",
+                     (case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role,"
+            " permissions) values(%s, %s, %s, 'reviewer',"
+            " array['case:read','draft:check','review:request']::text[]),"
+            " (%s, %s, %s, 'viewer',"
+            " array['case:read','evidence:read','draft:check']::text[])",
+            (org, case, user_a, org, case, viewer))
+        conn.execute(
+            "insert into caseproof._m1_exhibit_heads(org_id, case_id, revision, payload,"
+            " payload_sha256) values(%s, %s, 1, '{\"entries\":[]}', %s)",
+            (org, case, "0" * 64))
+        conn.execute("insert into caseproof.documents(id, org_id, case_id, source_label)"
+                     " values(%s, %s, %s, 'synthétique')", (doc, org, case))
+        conn.execute("insert into caseproof.document_versions(id, org_id, document_id,"
+                     " version_number, original_sha256_hex, byte_length, media_type)"
+                     " values(%s, %s, %s, 1, %s, 4, 'text/plain')", (ver, org, doc, sha))
+        intent, audit1, audit2 = uuid4(), uuid4(), uuid4()
+        conn.execute(
+            "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+            " actor_user_id, action, event_schema_version, correlation_id,"
+            " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s),"
+            " (%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
+            (audit1, org, case, user_a, uuid4(), "e" * 64,
+             audit2, org, case, user_a, uuid4(), "f" * 64))
+        conn.execute(
+            "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
+            " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
+            " byte_length, media_type, state, created_audit_id, created_case_revision,"
+            " last_audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, 4, 'text/plain',"
+            " 'verified', %s, 1, %s)",
+            (org, case, intent, user_a, doc, ver,
+             str(org) + "/" + str(case) + "/" + str(doc) + "/" + str(ver) + "/" + sha,
+             sha, audit1, audit2))
+
+        def as_user(sub, role="authenticated"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+
+        def publish(sub, *, snap=snapshot, text=payload, text_sha=payload_sha,
+                    exhibit_rev=1, jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute(
+                "select public.caseproof_signed_review_run_publish(%s, %s, %s, %s, %s, %s)",
+                (str(case), snap, brief_version, exhibit_rev, text, text_sha),
+            ).fetchone()[0]
+
+        def record(sub, *, request=None, expected=0, text=dec_text, jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute(
+                "select public.caseproof_signed_review_decision(%s, %s, %s, %s, %s)",
+                (str(case), snapshot, str(request or uuid4()), expected, text),
+            ).fetchone()[0]
+
+        def state(sub, *, snap=snapshot, jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute("select public.caseproof_signed_review_state(%s, %s)",
+                                (str(case), snap)).fetchone()[0]
+
+        # Publish: happy path, idempotent replay, falsified digest, wrong
+        # exhibit pin and custody violation are refused server-side.
+        assert publish(user_a) == {"ok": True, "replay": False}
+        assert publish(user_a) == {"ok": True, "replay": True}
+        assert publish(user_a, text_sha="0" * 64) == {"ok": False, "error": "invalid"}
+        stale_payload = json.dumps({**json.loads(payload), "exhibit_revision": 9},
+                                   ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert publish(user_a, text=stale_payload, text_sha=_digest(stale_payload),
+                       exhibit_rev=9) == {"ok": False, "error": "conflict"}
+        tampered = json.dumps({**json.loads(payload), "case_id": str(uuid4())},
+                              ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert publish(user_a, text=tampered, text_sha=_digest(tampered)) == {
+            "ok": False, "error": "invalid"}
+        with conn.transaction(force_rollback=True):
+            conn.execute("update caseproof._s2_009b_vault_intents"
+                         " set state='unavailable', intent_revision=intent_revision+1,"
+                         " last_audit_id=%s where org_id=%s",
+                         (conn.execute(
+                             "insert into caseproof.audit_events(id, org_id, case_id,"
+                             " actor_type, actor_user_id, action, event_schema_version,"
+                             " correlation_id, input_sha256_hex) values(%s, %s, %s,"
+                             " 'human', %s, 's2_009b_vault_unavailable', 'v1', %s, %s)"
+                             " returning id",
+                             (uuid4(), org, case, user_a, uuid4(), "7" * 64)).fetchone()[0],
+                          org))
+            assert publish(user_a, snap="c" * 64) == {"ok": False, "error": "invalid"}
+        with conn.transaction(force_rollback=True):
+            wrong = json.loads(payload)
+            wrong["citations"][0]["source_sha256"] = "d" * 64
+            text = json.dumps(wrong, ensure_ascii=False, sort_keys=True,
+                              separators=(",", ":"))
+            assert publish(user_a, snap="e" * 64, text=text, text_sha=_digest(text)) == {
+                "ok": False, "error": "invalid"}
+
+        # Record: full chain with digests equal to the Python canonical form.
+        request_id = uuid4()
+        first = record(user_a, request=request_id)
+        event_sha_1 = _digest(_canonical({
+            "run": snapshot, "revision": 1, "request": str(request_id),
+            "actor": str(user_a), "previous_sha": ZERO_HASH, "decision": decision}))
+        assert first == {"ok": True, "replay": False, "revision": 1,
+                         "event_sha": event_sha_1}
+        fingerprint = _digest(_canonical({
+            "run": snapshot, "actor": str(user_a), "request": str(request_id),
+            "expected": 0, "decision": dec_text}))
+        assert conn.execute("select input_sha from caseproof._m2_review_receipts"
+                            " where snapshot_sha=%s", (snapshot,)).fetchone()[0] == fingerprint
+        assert record(user_a, request=request_id) == {
+            "ok": True, "replay": True, "revision": 1, "event_sha": event_sha_1}
+        other = json.dumps(dict(decision, rationale="autre"), ensure_ascii=False,
+                           sort_keys=True, separators=(",", ":"))
+        assert record(user_a, request=request_id, text=other) == {
+            "ok": False, "error": "conflict"}
+        assert record(user_a, expected=0) == {
+            "ok": False, "error": "conflict", "revision": 1}
+        # Adversarial contract violations, all refused server-side.
+        fake = json.dumps(dict(decision, actor_id=str(stranger)), ensure_ascii=False,
+                          sort_keys=True, separators=(",", ":"))
+        assert record(user_a, expected=1, text=fake) == {"ok": False, "error": "invalid"}
+        unknown = json.dumps(dict(decision, observation_id="citation:inconnu"),
+                             ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert record(user_a, expected=1, text=unknown) == {"ok": False, "error": "invalid"}
+        bad_dispo = json.dumps(dict(decision, disposition="approuvé_juridiquement"),
+                               ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert record(user_a, expected=1, text=bad_dispo) == {"ok": False, "error": "invalid"}
+        blank = json.dumps(dict(decision, rationale="   "), ensure_ascii=False,
+                           sort_keys=True, separators=(",", ":"))
+        assert record(user_a, expected=1, text=blank) == {"ok": False, "error": "invalid"}
+        # Second event chains on the first.
+        request_2 = uuid4()
+        second_dec = dict(decision, disposition="dismissed", rationale="écarté")
+        second_text = json.dumps(second_dec, ensure_ascii=False, sort_keys=True,
+                                 separators=(",", ":"))
+        second = record(user_a, request=request_2, expected=1, text=second_text)
+        event_sha_2 = _digest(_canonical({
+            "run": snapshot, "revision": 2, "request": str(request_2),
+            "actor": str(user_a), "previous_sha": event_sha_1, "decision": second_dec}))
+        assert second == {"ok": True, "replay": False, "revision": 2,
+                          "event_sha": event_sha_2}
+
+        # State: full history, verified head; staleness and custody drift are
+        # typed failures, never silent reads.
+        st = state(user_a)
+        assert st["ok"] is True
+        assert st["head"] == {"revision": 2, "event_sha": event_sha_2}
+        assert [e["decision"] for e in st["events"]] == [dec_text, second_text]
+        assert st["run"]["payload"] == payload
+        with conn.transaction(force_rollback=True):
+            conn.execute("update caseproof._m1_exhibit_heads set revision=2"
+                         " where org_id=%s and case_id=%s", (org, case))
+            assert state(user_a) == {"ok": False, "error": "stale"}
+            assert record(user_a, expected=2) == {"ok": False, "error": "stale"}
+        with conn.transaction(force_rollback=True):
+            conn.execute("update caseproof._s2_009b_vault_intents"
+                         " set state='unavailable', intent_revision=intent_revision+1,"
+                         " last_audit_id=%s where org_id=%s",
+                         (conn.execute(
+                             "insert into caseproof.audit_events(id, org_id, case_id,"
+                             " actor_type, actor_user_id, action, event_schema_version,"
+                             " correlation_id, input_sha256_hex) values(%s, %s, %s,"
+                             " 'human', %s, 's2_009b_vault_unavailable', 'v1', %s, %s)"
+                             " returning id",
+                             (uuid4(), org, case, user_a, uuid4(), "7" * 64)).fetchone()[0],
+                          org))
+            assert state(user_a) == {"ok": False, "error": "conflict"}
+
+        # Masked denials: viewer without reviewer grant, stranger and anon get
+        # the same 42501 on every RPC; existence is never revealed.
+        for sub, role in ((viewer, "authenticated"), (stranger, "authenticated"),
+                          (user_a, "anon")):
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute("select public.caseproof_signed_review_state(%s, %s)",
+                                 (str(case), snapshot))
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute(
+                        "select public.caseproof_signed_review_decision(%s, %s, %s, %s, %s)",
+                        (str(case), snapshot, str(uuid4()), 2, dec_text))
+        # The viewer holds draft:check: publish authorizes per action, so the
+        # viewer reaches the contract stage (digest falsified -> invalid).
+        assert publish(viewer, text_sha="0" * 64) == {"ok": False, "error": "invalid"}
+        with conn.transaction(force_rollback=True):
+            as_user(stranger)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute(
+                    "select public.caseproof_signed_review_run_publish"
+                    "(%s, %s, %s, %s, %s, %s)",
+                    (str(case), snapshot, brief_version, 1, payload, payload_sha))
+        conn.rollback()
