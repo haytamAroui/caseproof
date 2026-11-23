@@ -2398,3 +2398,189 @@ def test_signed_review_ledger_proposal_rpcs():
                     "(%s, %s, %s, %s, %s, %s)",
                     (str(case), snapshot, brief_version, 1, payload, payload_sha))
         conn.rollback()
+
+
+def _review_ledger_run():
+    from application.litigation.brief_checks import CitationCheckState, CitationObservation
+    from application.litigation.unified_review import VerificationRun
+    citation = CitationObservation(
+        reference_id="ref-1", state=CitationCheckState.EXACT_MATCH,
+        exhibit_id=None, source_id=_UUID_D, source_version_id=_UUID_E,
+        source_sha256="b" * 64, representation_id=None, text_start=None,
+        text_end=None, scope_note="synthétique")
+    return VerificationRun(
+        case_id=_UUID_C, brief_version_id=_UUID_B, brief_sha256="c" * 64,
+        representation_sha256="d" * 64, exhibit_revision=1, rule_version="v1",
+        declared=((_UUID_D, _UUID_E),), excluded=(),
+        processed=((_UUID_D, _UUID_E),), incomplete=(),
+        citation_observations=(citation,), factual_observations=(),
+        snapshot_hash="a" * 64)
+
+
+def _review_ledger(responses):
+    from apps.api.signed_supabase_review_ledger import LiveReviewLedger
+    calls = []
+
+    def fake_rpc(*, publishable_key, bearer, name, args):
+        calls.append((name, args))
+        return responses(calls)
+
+    ledger = LiveReviewLedger(call_rpc=fake_rpc,
+                              publishable_key="sb_publishable_k", bearer="jwt")
+    return ledger, calls
+
+
+def _review_event(run, decision, *, revision, request_id, previous):
+    import json
+
+    from apps.api.disposable_litigation_review_ledger import _canonical, _digest
+    item = {"actor_id": decision.actor_id, "disposition": decision.disposition.value,
+            "observation_id": decision.observation_id,
+            "rationale": decision.rationale}
+    text = json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    event_sha = _digest(_canonical({
+        "run": run.snapshot_hash, "revision": revision,
+        "request": str(request_id), "actor": decision.actor_id,
+        "previous_sha": previous, "decision": item}))
+    return {"revision": revision, "request_id": str(request_id),
+            "actor_id": decision.actor_id, "previous_sha": previous,
+            "event_sha": event_sha, "decision": text}
+
+
+def test_live_review_ledger_publish_contract():
+    from apps.api.disposable_litigation_review_ledger import M2LedgerConflict
+    run = _review_ledger_run()
+    ledger, calls = _review_ledger(lambda c: {"ok": True, "replay": False})
+    assert ledger.publish(org_id=_UUID_A, actor_id=_UUID_B, run=run) is True
+    name, args = calls[0]
+    assert name == "caseproof_signed_review_run_publish"
+    assert args["p_case"] == _UUID_C and args["p_snapshot_sha"] == "a" * 64
+    ledger, _ = _review_ledger(lambda c: {"ok": True, "replay": True})
+    assert ledger.publish(org_id=_UUID_A, actor_id=_UUID_B, run=run) is False
+    for bad in ({"ok": False, "error": "invalid"}, {"ok": False, "error": "conflict"},
+                {"ok": True, "replay": "oui"}, {"nok": True}):
+        ledger, _ = _review_ledger(lambda c, bad=bad: bad)
+        with pytest.raises(M2LedgerConflict):
+            ledger.publish(org_id=_UUID_A, actor_id=_UUID_B, run=run)
+
+
+def test_live_review_ledger_state_and_tamper():
+    import hashlib
+    from uuid import UUID, uuid4
+
+    from application.litigation.unified_review import (
+        ObservationReview,
+        ReviewDisposition,
+        verification_record,
+    )
+    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, M2LedgerConflict
+    run = _review_ledger_run()
+    decision = ObservationReview("citation:ref-1", _UUID_B,
+                                 ReviewDisposition.CONFIRMED, "contrôle ok")
+    request_id = uuid4()
+    event = _review_event(run, decision, revision=1, request_id=request_id,
+                          previous=ZERO_HASH)
+    payload = verification_record(run).decode("utf-8")
+
+    def responses(calls, *, event_rows=(), head=None, stored_payload=None):
+        return {"ok": True,
+                "run": {"payload": stored_payload if stored_payload is not None else payload,
+                        "payload_sha": hashlib.sha256(
+                            (stored_payload if stored_payload is not None
+                             else payload).encode("utf-8")).hexdigest(),
+                        "brief_version_id": run.brief_version_id,
+                        "case_revision": 1, "exhibit_revision": 1},
+                "head": head or {"revision": len(event_rows),
+                                 "event_sha": event_rows[-1]["event_sha"] if event_rows
+                                 else ZERO_HASH},
+                "events": list(event_rows)}
+
+    ledger, _ = _review_ledger(lambda c: responses(c, event_rows=(event,)))
+    state = ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    assert state.revision == 1 and state.event_sha == event["event_sha"]
+    assert len(state.packet.decisions) == 1
+    assert state.packet.decisions[0].observation_id == "citation:ref-1"
+
+    # Empty history: zero head verifies.
+    ledger, _ = _review_ledger(lambda c: responses(c))
+    empty = ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    assert empty.revision == 0 and empty.event_sha == ZERO_HASH
+
+    # Tampered event digest, broken chain, wrong head and payload drift all
+    # fail closed from the returned content.
+    tampered_event = dict(event, event_sha="0" * 64)
+    ledger, _ = _review_ledger(lambda c: responses(c, event_rows=(tampered_event,)))
+    with pytest.raises(M2LedgerConflict):
+        ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    broken = dict(event, previous_sha="1" * 64)
+    broken["event_sha"] = event["event_sha"]
+    ledger, _ = _review_ledger(lambda c: responses(c, event_rows=(broken,)))
+    with pytest.raises(M2LedgerConflict):
+        ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    ledger, _ = _review_ledger(
+        lambda c: responses(c, event_rows=(event,),
+                            head={"revision": 1, "event_sha": "f" * 64}))
+    with pytest.raises(M2LedgerConflict):
+        ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    drift = payload.replace("ref-1", "ref-9", 1)
+    ledger, _ = _review_ledger(lambda c: responses(c, stored_payload=drift))
+    with pytest.raises(M2LedgerConflict):
+        ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+
+
+def test_live_review_ledger_record_flow():
+    import hashlib
+    from uuid import UUID, uuid4
+
+    from application.litigation.unified_review import (
+        ObservationReview,
+        ReviewDisposition,
+        verification_record,
+    )
+    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, M2LedgerConflict
+    run = _review_ledger_run()
+    decision = ObservationReview("citation:ref-1", _UUID_B,
+                                 ReviewDisposition.CONFIRMED, "contrôle ok")
+    request_id = uuid4()
+    event = _review_event(run, decision, revision=1, request_id=request_id,
+                          previous=ZERO_HASH)
+    payload = verification_record(run).decode("utf-8")
+
+    def responses(calls, *, replay):
+        if calls[-1][0] == "caseproof_signed_review_decision":
+            return {"ok": True, "replay": replay, "revision": 1,
+                    "event_sha": event["event_sha"]}
+        return {"ok": True,
+                "run": {"payload": payload,
+                        "payload_sha": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+                        "brief_version_id": run.brief_version_id,
+                        "case_revision": 1, "exhibit_revision": 1},
+                "head": {"revision": 1, "event_sha": event["event_sha"]},
+                "events": [event]}
+
+    ledger, calls = _review_ledger(lambda c: responses(c, replay=False))
+    state, replayed = ledger.record(
+        org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run,
+        request_id=UUID(str(request_id)), expected_revision=0, decision=decision)
+    assert replayed is False and state.revision == 1
+    name, args = calls[0]
+    assert name == "caseproof_signed_review_decision"
+    assert args["p_request"] == str(request_id) and args["p_expected"] == 0
+    # The state after the write is re-read and re-derived, not trusted.
+    assert calls[1][0] == "caseproof_signed_review_state"
+
+    ledger, _ = _review_ledger(lambda c: responses(c, replay=True))
+    state, replayed = ledger.record(
+        org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run,
+        request_id=UUID(str(request_id)), expected_revision=0, decision=decision)
+    assert replayed is True and state.revision == 1
+
+    # A decision naming another actor never reaches the transport.
+    impostor = ObservationReview("citation:ref-1", str(uuid4()),
+                                 ReviewDisposition.DISMISSED, "détourné")
+    ledger, calls = _review_ledger(lambda c: responses(c, replay=False))
+    with pytest.raises(M2LedgerConflict):
+        ledger.record(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run,
+                      request_id=UUID(str(request_id)), expected_revision=0,
+                      decision=impostor)
+    assert calls == []
