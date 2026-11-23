@@ -23,7 +23,8 @@ MAX_EXCERPT = 400
 MAX_FOUND_PER_VALUE = 3
 SCOPE = ("Passages proposés par correspondance de dates et de montants identiques. Aucune lecture du sens : une même date peut figurer "
          "dans « envoyé pour signature » comme dans « signé ». Une valeur absente de la pièce est une différence candidate, pas une conclusion. "
-         "Extraits enregistrés au moment du contrôle, non re-dérivables depuis l'export.")
+         "Extraits enregistrés au moment du contrôle. Sans les octets des pièces, la relecture ne vérifie que la cohérence interne et l'empreinte : "
+         "elle ne prouve pas la fidélité des extraits, et une modification suivie d'un nouveau calcul d'empreinte passerait.")
 
 
 def read_piece_texts(directory: Path, exhibits: Mapping[str, Any],

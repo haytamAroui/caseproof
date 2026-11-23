@@ -97,7 +97,7 @@ _SCOPE = {
     "article_exists_in_corpus_no_quotation_checked_claim_not_verified": "Article présent dans le corpus. Aucune citation n'a été contrôlée : l'affirmation n'est pas vérifiée.",
     "sub_article_locator_not_checked_in_corpus": "Alinéa, paragraphe ou autre subdivision cité : non contrôlé, le corpus ne contient pas ce niveau.",
     "quotation_delimiter_not_recognised_text_not_checked": "Guillemet ouvrant non reconnu : le texte qui suit n'est pas contrôlé.",
-    "exhibit_located_by_number_bytes_read_content_not_compared": "Renvoi à une pièce retrouvé dans le bordereau par son numéro ; le fichier a été lu (empreinte SHA-256 calculée sur ses octets). Le CONTENU de la pièce n'a PAS été comparé à l'affirmation : appréciation de l'avocat requise.",
+    "exhibit_located_by_number_bytes_read_content_not_compared": "Renvoi à une pièce retrouvé dans le bordereau par son numéro ; le fichier a été lu (empreinte SHA-256 calculée sur ses octets). Le SENS de la pièce n'a PAS été vérifié par rapport à l'affirmation (au mieux, des dates ou montants identiques sont proposés en passages) : appréciation de l'avocat requise.",
     "exhibit_number_absent_from_bordereau": "Numéro de pièce absent du bordereau : renvoi non résolu.",
     "exhibit_listed_but_file_missing_check_impossible": "Pièce inscrite au bordereau, fichier absent : contrôle impossible.",
     "exhibit_file_has_no_readable_text_check_impossible": "Fichier présent mais sans texte lisible (scan, protégé ou illisible) : contrôle impossible, aucune lecture OCR.",

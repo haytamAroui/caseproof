@@ -53,12 +53,17 @@ _EN_MONTHS = {
 }
 
 
+def _is_boundary(text: str, i: int) -> bool:
+    ch = text[i]
+    if ch not in _BOUNDARIES:
+        return False
+    # A dot between digits is a thousands or decimal separator ("1.250,00"), not a sentence end.
+    return not (ch == "." and 0 < i < len(text) - 1 and text[i - 1].isdigit() and text[i + 1].isdigit())
+
+
 def _sentence(text: str, start: int, end: int) -> tuple[int, int]:
-    left = max(text.rfind(boundary, 0, start) for boundary in _BOUNDARIES) + 1
-    right = min(
-        (found for b in _BOUNDARIES if (found := text.find(b, end)) != -1),
-        default=len(text),
-    )
+    left = next((i for i in range(start - 1, -1, -1) if _is_boundary(text, i)), -1) + 1
+    right = next((i for i in range(end, len(text)) if _is_boundary(text, i)), len(text))
     while left < right and text[left] in " \t":
         left += 1
     while right > left and text[right - 1] in " \t\r":

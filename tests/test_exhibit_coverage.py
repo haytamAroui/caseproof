@@ -221,3 +221,11 @@ def test_altered_passage_excerpt_or_claim_is_refused(tmp_path):
             w.writestr("report.html", z.read("report.html"))
         with pytest.raises(CorpusError):
             verify_legal_pack(out.getvalue(), expected_sha256=None)
+
+
+def test_thousands_dot_does_not_cut_a_fact_sentence():
+    from application.litigation.fact_extraction import extract_fact_assertions
+    text = "Le paiement du 20/01/2024 de 1.250,00 EUR a été fait le 15/03/2024 (réf)."
+    found = extract_fact_assertions(text, (("r1", 0),))
+    assert all(len(a.text) > 40 for a in found)  # no assertion truncated at "1."
+    assert not [a for a in found if a.kind.value == "date"]  # two dates in one sentence: abstain
