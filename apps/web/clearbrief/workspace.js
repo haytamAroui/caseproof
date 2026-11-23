@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const state = {session:null, external:false, caseId:"", briefId:"", inventory:null, check:null,
     review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null,
-    catalog:null, publishTarget:null, publishRevision:0};
+    catalog:null, publishRevision:0};
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const sha = /^[0-9a-f]{64}$/;
   const el = (tag, content, className) => {
@@ -99,7 +99,7 @@
       if(state.external && (session.caseId!==caseId || session.briefVersionId!==briefId))
         throw Error("provider_mismatch");
       state.caseId=caseId;state.briefId=briefId;
-      state.catalog=null;state.publishTarget=null;state.publishRevision=0;
+      state.catalog=null;state.publishRevision=0;
       clearView(); await load(); void loadCatalog();
     } catch(err) {
       if(err.message==="provider_mismatch")notice("The connected Word session belongs to a different matter/brief.","danger");
@@ -409,10 +409,12 @@
   function populateVersions() {
     const select=$("upload-version");select.replaceChildren();
     const document=(state.catalog||[]).find(d=>d.document_id===$("upload-document").value);
-    for(const version of document?document.versions:[]){
+    const versions=document?document.versions:[];
+    for(const version of versions){
       const option=el("option","v"+version.version_number+" · "+version.media_type+" · "+version.byte_length+" bytes");
       option.value=version.version_id;select.append(option);
     }
+    $("publish").disabled=versions.length===0;
   }
   async function loadCatalog() {
     const generation=state.generation;
@@ -431,14 +433,14 @@
   async function publishVersion(evt){
     evt.preventDefault();
     const generation=state.generation;
-    const target=state.publishTarget;
-    if(!target||!UUID.test(target.documentId)||!UUID.test(target.versionId)){
-      notice("Upload a registered original first; publication binds that verified upload.","danger");return;
+    const documentId=$("upload-document").value.trim(),versionId=$("upload-version").value.trim();
+    if(!UUID.test(documentId)||!UUID.test(versionId)){
+      notice("Select the registered document/version whose uploaded original to publish.","danger");return;
     }
     $("publish").disabled=true;
     try{
       const d=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/briefs/publish",{
-        method:"POST",json:{document_id:target.documentId,version_id:target.versionId,
+        method:"POST",json:{document_id:documentId,version_id:versionId,
           document_role:"own_draft",expected_revision:state.publishRevision}});
       if(generation!==state.generation||!state.session)return;
       if(d.schema!=="caseproof-signed-brief-publish-v1"||!Number.isInteger(d.published_revision)||
@@ -451,7 +453,7 @@
       await load();
     }catch(error){if(generation===state.generation)
       notice(statusFor(error),"danger");}
-    finally{$("publish").disabled=!state.publishTarget;}
+    finally{$("publish").disabled=false;}
   }
   async function upload(evt){
     evt.preventDefault();
@@ -473,7 +475,6 @@
         });
       if(generation!==state.generation||!state.session)return;
       if(response.status!==201)throw Error("unavailable");
-      state.publishTarget={documentId:documentId,versionId:versionId};
       $("publish").disabled=false;
       $("publish-status").textContent="";
       notice("Original uploaded to its pre-registered version. Reopen the verified source after indexing.","ok");
@@ -753,7 +754,7 @@
     state.generation+=1;state.previewSeq+=1;
     if(!state.external)state.session?.clear?.();
     state.session=null;state.external=false;state.caseId="";state.briefId="";
-    state.catalog=null;state.publishTarget=null;state.publishRevision=0;
+    state.catalog=null;state.publishRevision=0;
     Object.assign(journey,{caseId:"",source:null,brief:null,snapshot:null,observation:null,revision:0,pending:null,createRequest:null,briefRequest:null,uploadIdentity:null,registerRequest:null,ingestRequest:null,correctionRequest:null,correctionPreview:null,busy:false});
     $("journey-state").textContent="";
     $("matter-options").replaceChildren();
