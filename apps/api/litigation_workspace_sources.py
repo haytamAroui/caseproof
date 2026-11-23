@@ -17,6 +17,21 @@ from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
 
 
+def _labels(bundle: CheckBundle) -> dict[str, str]:
+    """Human exhibit labels from the CONFIRMED register, keyed by source id.
+
+    A label is the user's own confirmed display label, never inferred from
+    bytes. A source that is in no confirmed exhibit keeps no label.
+    """
+    out: dict[str, str] = {}
+    for entry in bundle.register.entries:
+        if not entry.confirmed:
+            continue
+        for page in entry.pages:
+            out.setdefault(page.source_id, entry.display_label)
+    return out
+
+
 class SignedBriefSources:
     def __init__(self, checker: AuthorizedLitigationChecker) -> None:
         self.checker = checker
@@ -68,6 +83,7 @@ class SignedBriefSources:
             "case_id": case_id,
             "brief_version_id": brief_version_id,
             "rows": [asdict(x) for x in rows],
+            "labels": _labels(bundle),
             "complete": not missing and not excluded and len(rows)==len(expected),
             "failed_count": sum(x.status=="failed" for x in rows),
             "partial_count": incomplete+len(expected-{(x.source_id,x.version_id) for x in rows}),
@@ -108,6 +124,7 @@ class SignedBriefSources:
             "schema": "caseproof-clearbrief-brief-source-preview-v1",
             "case_id": case_id, "brief_version_id": brief_version_id,
             "row": asdict(preview.row),
+            "label": _labels(bundle).get(preview.row.source_id),
             "text": preview.text,
             "spans": spans,
             "page_mappings": page_mappings,

@@ -3780,6 +3780,7 @@ def test_signed_composed_workflow_on_disposable_postgres():
         inv = client.get(base2 + "/sources", headers=auth).json()
         assert inv["brief_version_id"] == out2.brief_version_id and inv["rows"]
         src_id = inv["rows"][0]["source_id"]
+        assert inv["labels"][src_id] == "Contrat"  # confirmed register label, not a UUID
         assert client.get(f"{base2}/sources/{src_id}", headers=auth).status_code == 200
         assert client.get(base2 + "/sources").status_code == 401
         # Review over HTTP on the current version; replay is idempotent.

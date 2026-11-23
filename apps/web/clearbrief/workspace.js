@@ -25,6 +25,7 @@
   const reviewPath = () => signedWorkbench
     ? "/dev/signed/matters/" + encodeURIComponent(state.caseId) + "/briefs/" + encodeURIComponent(state.briefId)
     : path();
+  const labelOf = (id) => (id && state.inventory?.labels?.[id]) || id;
   async function previewCorrection(evt) {
     evt.preventDefault();
     const generation = state.generation, out = $("correction-result");
@@ -216,7 +217,7 @@
     if(!rows.length)node.append(el("p","No authorized sources are indexed in this matter.","empty"));
     for(const row of rows) {
       const button=el("button","","source-item");button.type="button";
-      button.append(el("div",row.source_id||"Unnamed source"));
+      button.append(el("div",labelOf(row.source_id)||"Unnamed source"));
       button.firstChild.append(el("span",(row.media_type||"unknown format")+" · "+(row.pages?.length??0)+" page states"));
       button.append(el("span",row.status||"unknown","state"));
       button.addEventListener("click",()=>selectSource(row));
@@ -241,7 +242,7 @@
         data.row.representation_id!==row.representation_id)
         throw Error("source_version_mismatch");
       const preview=$("source-preview");preview.replaceChildren();
-      preview.append(el("strong",row.source_id));
+      preview.append(el("strong",labelOf(row.source_id)));
       preview.append(el("p","SHA-256: "+row.original_sha256,"small mono"));
       preview.append(el("p",(row.warnings||[]).join(" · ")||"No recorded parser warnings","small"));
       preview.append(el("p",data.text||"No available represented text."));
@@ -254,8 +255,13 @@
         "Source version, digest or representation changed. Refresh the inventory before viewing or downloading." :
         statusFor(error);}
   }
+  const SIGNED_UNSUPPORTED={
+    original:"Original download is not available in the signed workbench yet: no signed route returns original bytes. Nothing was requested.",
+    page:"Page rendering is not available in the signed workbench yet: no signed route renders pages. The locator above is the only page evidence shown.",
+    search:"Evidence search is not available in the signed workbench yet: no signed search route exists. Nothing was searched."};
   async function downloadOriginal(row) {
     const generation=state.generation;
+    if(signedWorkbench){notice(SIGNED_UNSUPPORTED.original,"danger");return;}
     try {
       const response=await api(path()+"/evidence/"+encodeURIComponent(row.source_id)+
         "/versions/"+encodeURIComponent(row.version_id)+"/original",{raw:true});
@@ -327,7 +333,7 @@
       button.setAttribute("aria-pressed",String(state.selected?.id===item.id));
       button.append(el("span",item.kind+" / "+label(item.state),"tag"));
       button.append(el("strong",item.id.replace("citation:","Reference ").replace("fact:","Fact ")));
-      button.append(el("small",(item.source||"No confirmed source")+" · "+item.span));
+      button.append(el("small",(labelOf(item.source)||"No confirmed source")+" · "+item.span));
       button.addEventListener("click",()=>{if(state.loading||state.busy||state.pending)return;
         state.selected=item;renderChecks();renderSelected();});
       node.append(button);
@@ -342,7 +348,7 @@
     if(!selected){$("selected").textContent="Select a finding to inspect and review.";return;}
     $("selected").append(el("strong",selected.kind+" · "+selected.id));
     $("selected").append(el("p","Check state: "+label(selected.state)));
-    $("selected").append(el("p","Source: "+(selected.source||"not resolved"),"small"));
+    $("selected").append(el("p","Source: "+(labelOf(selected.source)||"not resolved"),"small"));
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
     // A claim may be reviewed only against the exact checked source version,
     // digest and representation, never a newer catalog entry sharing its source_id.
@@ -407,7 +413,10 @@
         // resolved physical page, never on printed/bundle labels. The image
         // is a rendering, never a visual-verification verdict. Late responses
         // are dropped and revoked so they cannot land on another finding.
-        if(physical!==null&&row.media_type==="application/pdf"){
+        if(physical!==null&&row.media_type==="application/pdf"&&signedWorkbench){
+          const nb=el("div","","page-image");nb.append(el("p",SIGNED_UNSUPPORTED.page,"small"));
+          preview.parentNode.insertBefore(nb,preview.nextSibling);state.pageImageNode=nb;
+        } else if(physical!==null&&row.media_type==="application/pdf"){
           const imgBox=el("div","","page-image");
           imgBox.append(el("p","Physical page rendering of the verified original bytes · a rendering, not a verification.","small"));
           imgBox.append(el("p","Loading physical page "+physical+"…","small"));
@@ -550,6 +559,7 @@
     const generation=state.generation;
     const query=$("query").value.trim(),node=$("search-results");node.replaceChildren();
     if(query.length<2){node.append(el("p","Enter at least two characters.","small"));return;}
+    if(signedWorkbench){node.append(el("p",SIGNED_UNSUPPORTED.search,"small"));return;}
     try{
       const d=await api(path()+"/evidence/search",{method:"POST",json:{query}});
       if(generation!==state.generation||!state.session)return;
