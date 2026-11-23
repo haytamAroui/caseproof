@@ -152,6 +152,8 @@ def _report(body: dict[str, Any]) -> bytes:
         row = by_key.get(obs["corpus_key"])
         if row is not None:
             parts += [f"<a href='#article-{row['index']}'>Rouvrir le passage exact du pack figé</a>"]
+        elif obs["reason"].startswith("exhibit_"):
+            parts += ["<p>Renvoi à une pièce : aucun article de corpus concerné.</p>"]
         else:
             parts += ["<p>Pas de passage sélectionné. Aucune substitution par une autre version.</p>"]
         d = decided.get(fp)
