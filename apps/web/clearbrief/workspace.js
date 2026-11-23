@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const state = {session:null, external:false, caseId:"", briefId:"", inventory:null, check:null,
     review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null, justPublished:false,
-    catalog:null, publishRevision:0, pageImageUrl:null, pageImageNode:null};
+    catalog:null, publishRevision:0, pageImageUrl:null, pageImageNode:null, pageZoomNode:null};
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const sha = /^[0-9a-f]{64}$/;
   const el = (tag, content, className) => {
@@ -45,7 +45,35 @@
   const fidelityPanel=window.CaseProofFidelity?.mount({root:$("fidelity-panel"),
     api:async(url,options)=>{await authenticate();return api(url,options);},
     context:()=>({caseId:$("case-id").value.trim(),briefId:$("brief-id").value.trim()})});
+  function closePageZoom() {
+    const dialog = state.pageZoomNode;
+    state.pageZoomNode = null;
+    if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
+  }
+  function openPageZoom(url, physical) {
+    closePageZoom();
+    const dialog = el("div", "", "page-zoom");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-label", "Physical page " + physical + " rendering at full size");
+    const bar = el("div", "", "page-zoom-bar");
+    bar.append(el("p", "Physical page rendering of the verified original bytes · a rendering, not a verification. · page " + physical, "small"));
+    const close = el("button", "Close", "secondary");
+    close.type = "button";
+    close.addEventListener("click", closePageZoom);
+    bar.append(close);
+    const scroller = el("div", "", "page-zoom-scroll");
+    const img = new Image();
+    img.alt = "Physical PDF page " + physical + " rendering of the verified original, full size";
+    img.src = url;
+    scroller.append(img);
+    dialog.append(bar, scroller);
+    dialog.addEventListener("click", event => { if (event.target === dialog) closePageZoom(); });
+    document.body.append(dialog);
+    state.pageZoomNode = dialog;
+    close.focus();
+  }
   function revokePageImage() {
+    closePageZoom();
     if (state.pageImageUrl) { URL.revokeObjectURL(state.pageImageUrl); state.pageImageUrl = null; }
     const node = state.pageImageNode;
     state.pageImageNode = null;
@@ -347,9 +375,12 @@
             const img=new Image();
             img.alt="Physical PDF page "+physical+" rendering of the verified original";
             img.src=url;
+            const zoomHint=el("button","Open readable full-size page view","ghost page-zoom-open");
+            zoomHint.type="button";
+            zoomHint.addEventListener("click",()=>openPageZoom(url,physical));
             imgBox.replaceChildren(
               el("p","Physical page rendering of the verified original bytes · a rendering, not a verification.","small"),
-              img);
+              img,zoomHint);
           }catch(error){if(current())
             imgBox.replaceChildren(el("p","Physical page image unavailable for this source; the text representation above stands on its own.","small"));}
         }
