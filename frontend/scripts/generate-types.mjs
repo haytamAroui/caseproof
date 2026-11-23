@@ -15,6 +15,13 @@ for (const [name, type, stem] of [
   ['review-ledger', 'ReviewLedgerView', 'review-ledger-generated'],
   ['draft-excerpt', 'DraftExcerptView', 'draft-excerpt-generated'],
   ['legal-references', 'LegalReferencesView', 'legal-references-generated'],
+  ['clearbrief-review', 'ClearbriefReviewState', 'clearbrief-review-generated'],
+  [
+    'clearbrief-receipt',
+    'ClearbriefReviewReceipt',
+    'clearbrief-receipt-generated',
+  ],
+  ['clearbrief-command', 'ReviewBody', 'clearbrief-command-generated'],
   ['legal-passage', 'LegalPassageView', 'legal-passage-generated'],
   ['review-command', 'VisualDecisionBody', 'review-command-generated'],
   ['docx-locator-v1', 'DocxLocatorIdentity', 'docx-locator-v1-generated'],

@@ -8,6 +8,8 @@ from application.capacity_envelope import CAPACITY_POLICY
 from application.litigation.frontend_contract import DossierView
 from application.litigation.viewer_contract import ViewerContext
 from application.litigation.workspace_contract import (
+    ClearbriefReviewReceipt,
+    ClearbriefReviewState,
     DraftExcerptView,
     LegalPassageView,
     LegalReferencesView,
@@ -22,6 +24,7 @@ from apps.api.dossier_journey import (
     InventoryConfirmation,
     VisualDecisionBody,
 )
+from apps.api.litigation_review_app import ReviewBody
 from apps.api.workspace_auth import SessionView
 from apps.api.workspace_intake import CreatedMatter, IntakeView, OrganizationView
 
@@ -52,6 +55,9 @@ def main() -> None:
         (ReviewLedgerView, TARGET.with_name("review-ledger.schema.json")),
         (DraftExcerptView, TARGET.with_name("draft-excerpt.schema.json")),
         (LegalReferencesView, TARGET.with_name("legal-references.schema.json")),
+        (ClearbriefReviewState, TARGET.with_name("clearbrief-review.schema.json")),
+        (ClearbriefReviewReceipt, TARGET.with_name("clearbrief-receipt.schema.json")),
+        (ReviewBody, TARGET.with_name("clearbrief-command.schema.json")),
         (LegalPassageView, TARGET.with_name("legal-passage.schema.json")),
         (VisualDecisionBody, TARGET.with_name("review-command.schema.json")),
         (DocxLocatorIdentity, TARGET.with_name("docx-locator-v1.schema.json")),

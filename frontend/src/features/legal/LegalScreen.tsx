@@ -9,6 +9,7 @@ import {
 } from '../../shared/api/legal';
 import { useSession } from '../../shared/session';
 import { Button, Notice } from '../../shared/ui';
+import { ReviewBox } from './ReviewBox';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const LABEL: Record<string, string> = {
@@ -154,6 +155,13 @@ export function LegalScreen({ api }: { api: ApiClient }) {
                           </div>
                         </div>
                       )}
+                      <ReviewBox
+                        api={api}
+                        caseId={caseId}
+                        briefId={briefId}
+                        snapshot={snapshot}
+                        observationId={`legal:${r.reference_id}`}
+                      />
                     </div>
                   )}
                 </li>

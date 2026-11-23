@@ -256,3 +256,52 @@ class LegalPassageView(BaseModel):
         if self.quote_span and self.brief_excerpt[self.quote_span[0]:self.quote_span[1]] != self.quote:
             raise ValueError("quote span does not match the checked quotation")
         return self
+
+
+class ClearbriefDecisionView(BaseModel):
+    """A signed reviewer statement about one observation. Never semantic truth."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    observation_id: str = Field(min_length=1, max_length=220)
+    actor_id: str = Field(min_length=1, max_length=200)
+    disposition: Literal["confirmed_candidate", "dismissed", "needs_information"]
+    rationale: str = Field(min_length=1, max_length=2000)
+
+
+class BlockerItemView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    observation_id: str = Field(min_length=1, max_length=400)
+    reason: str = Field(max_length=800)
+    review_disposition: str = Field(max_length=100)
+
+
+class BlockerInventoryView(BaseModel):
+    """Open items only. Not readiness and not permission to file."""
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-blocker-inventory-v1"] = Field(alias="schema")
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    items: list[BlockerItemView] = Field(max_length=20000)
+    verdict: Literal["not_computed"]
+    release_authorized: Literal[False]
+    waiver_policy: Literal["not_decided"]
+    note: str = Field(max_length=1000)
+
+
+class ClearbriefReviewState(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-clearbrief-review-v1"] = Field(alias="schema")
+    case_id: str = Field(min_length=1, max_length=200)
+    brief_version_id: str = Field(min_length=1, max_length=200)
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    revision: int = Field(ge=0, le=100000)
+    decisions: list[ClearbriefDecisionView] = Field(max_length=10000)
+    blocker_inventory: BlockerInventoryView
+    release_authorized: Literal[False]
+
+
+class ClearbriefReviewReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-clearbrief-review-receipt-v1"] = Field(alias="schema")
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    revision: int = Field(ge=0, le=100000)
+    replayed: bool
+    release_authorized: Literal[False]

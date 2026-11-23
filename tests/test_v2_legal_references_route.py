@@ -111,3 +111,22 @@ def test_contract_rejects_inconsistent_counts(status):
                           analysed="x", not_analysed=[])
     with pytest.raises(ValueError):
         LegalCoverageView(detected=1, by_status={"PASS": 1, "FAIL": 0, "UNVERIFIED": 0}, analysed=status, not_analysed=[])
+
+
+def test_review_state_from_the_real_blocker_builder_fits_the_product_contract(tmp_path):
+    """The /v2 review state the React screen reads is validated by the same pydantic contract."""
+    from application.litigation.review_blockers import review_blockers
+    from application.litigation.workspace_contract import ClearbriefReviewReceipt, ClearbriefReviewState
+    _, legal = _client(tmp_path, [f"Article 8.5 du Code civil : « {ARTICLE} »."])
+    run = SimpleNamespace(snapshot_hash=SNAP, citation_observations=(), factual_observations=(),
+                          legal_observations=tuple(legal), suitability_observations=(),
+                          event_observations=(), passage_flags=(), incomplete=(), excluded=())
+    state = {"schema": "caseproof-clearbrief-review-v1", "case_id": "c", "brief_version_id": "v",
+             "snapshot_hash": SNAP, "revision": 0, "decisions": [],
+             "blocker_inventory": review_blockers(run, ()), "release_authorized": False}
+    ClearbriefReviewState.model_validate(state)
+    ClearbriefReviewReceipt.model_validate({"schema": "caseproof-clearbrief-review-receipt-v1",
+                                            "snapshot_hash": SNAP, "revision": 1, "replayed": False,
+                                            "release_authorized": False})
+    with pytest.raises(ValueError):
+        ClearbriefReviewState.model_validate({**state, "release_authorized": True})
