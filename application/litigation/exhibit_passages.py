@@ -137,7 +137,7 @@ def _sentences(page: str) -> list[tuple[int, int]]:
     return spans
 
 
-RULES = "status-cue-v1"  # marks exports whose passages carry the status-cue check; older exports replay without it
+RULES = "status-cue-v2"  # IMMUTABLE behaviour: cue lists + negation rule below. Any change needs status-cue-v3 and keeps v2 replaying. v1 (no negation rule) was never in an artifact.
 
 
 def validate_passages(text: str, observations: Sequence[Mapping[str, Any]], passages: Any, rules: str | None = None) -> None:

@@ -331,3 +331,11 @@ def test_delivered_v5_exports_replay_unchanged():
     for case, checkpoint in checkpoints.items():
         body = verify_legal_pack((fixtures / f"{case}.zip").read_bytes(), expected_sha256=checkpoint)
         assert "passages_rules" not in body and "exhibits" in body
+
+
+def test_status_cue_rules_marker_names_immutable_behaviour():
+    """The marker identifies this exact cue list and negation rule. Change either and you must add a new marker."""
+    from application.litigation import exhibit_passages as e
+    assert e.RULES == "status-cue-v2"
+    pinned = hashlib.sha256(repr((e._SIGNED, e._PENDING, e._NEGATION.pattern, e._NEGATION.flags)).encode()).hexdigest()
+    assert pinned == "0837b4fb2312319b33a9f0bd6349d85181ff60360b3469741af449c117f3549c"
