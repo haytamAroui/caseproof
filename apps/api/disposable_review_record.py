@@ -20,6 +20,9 @@ from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
 from application.litigation.matter_policy import MatterPermission, authorize_matter
 from apps.api.access_control import VerifiedSubject
 from apps.api.disposable_litigation_brief_graph import _canonical, _hash
@@ -29,7 +32,33 @@ from apps.api.disposable_signed_brief_publisher import working_brief_id
 from apps.api.litigation_check_service import PrivateMatterAccess
 from apps.api.signed_supabase_originals import PrivateStorageDenied
 
-__all__ = ["DisposableSignedReviewRecord", "RecordConflict"]
+__all__ = ["DisposableSignedReviewRecord", "RecordConflict", "SIGNATURE_DOMAIN", "sign_record_body"]
+
+SIGNATURE_DOMAIN = "caseproof-review-record-signature-v1"
+
+
+def sign_record_body(body: dict[str, Any], signing_key: bytes) -> dict[str, str]:
+    """Ed25519 receipt over the domain-separated canonical completed record.
+
+    Binds the record (record_sha256 included) to the holder of signing_key.
+    This is an installation signature: it proves production by a key holder
+    and integrity since signing, never a personal, legal or eIDAS signature.
+    The private key is configuration-held; only the public key is exported.
+    """
+    if type(signing_key) is not bytes or len(signing_key) != 32:
+        raise RecordConflict("Ed25519 signing key must be 32 raw bytes")
+    if body.get("schema") != "caseproof-review-record-v1" or "record_sha256" not in body:
+        raise RecordConflict("only a completed review record can be signed")
+    private = Ed25519PrivateKey.from_private_bytes(signing_key)
+    public = private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    signed_doc = {"domain": SIGNATURE_DOMAIN, "record": body}
+    signature = private.sign(_canonical(signed_doc).encode("utf-8"))
+    return {
+        "scheme": "ed25519",
+        "domain": SIGNATURE_DOMAIN,
+        "public_key": public.hex(),
+        "signature": signature.hex(),
+    }
 
 _MAX_BEARER = 8192
 _MAX_RUNS = 20
@@ -61,10 +90,14 @@ class DisposableSignedReviewRecord:
         connect: Callable[[], Connection],
         verify_bearer: Callable[[str], VerifiedSubject],
         access_lookup: Callable[[str, str], PrivateMatterAccess | None],
+        signing_key: bytes | None = None,
     ) -> None:
         self._connect = connect
         self._verify = verify_bearer
         self._access = access_lookup
+        if signing_key is not None and (type(signing_key) is not bytes or len(signing_key) != 32):
+            raise RecordConflict("Ed25519 signing key must be 32 raw bytes")
+        self._signing_key = signing_key
 
     def _authorize(self, bearer: str, case_id: str) -> tuple[UUID, UUID]:
         if (
@@ -264,4 +297,6 @@ class DisposableSignedReviewRecord:
             ),
         }
         body["record_sha256"] = _hash(body)
+        if self._signing_key is not None:
+            body["receipt"] = sign_record_body(body, self._signing_key)
         return body

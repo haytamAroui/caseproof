@@ -208,10 +208,20 @@ def main() -> None:
         extract_references=extract_references,
         build_representation=build_representation,
     )
+    signing_key_hex = os.environ.get("CASEPROOF_REVIEW_RECORD_SIGNING_KEY", "")
+    signing_key = None
+    if signing_key_hex:
+        try:
+            signing_key = bytes.fromhex(signing_key_hex)
+        except ValueError:
+            raise SystemExit("CASEPROOF_REVIEW_RECORD_SIGNING_KEY must be hex") from None
+        if len(signing_key) != 32:
+            raise SystemExit("CASEPROOF_REVIEW_RECORD_SIGNING_KEY must be 32 raw bytes (64 hex)")
     record_port = DisposableSignedReviewRecord(
         connect=connect,
         verify_bearer=verifier.verify_bearer,
         access_lookup=store.current_access,
+        signing_key=signing_key,
     )
 
     fixtures = root / "fixtures"

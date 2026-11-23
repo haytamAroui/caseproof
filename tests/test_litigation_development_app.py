@@ -374,3 +374,102 @@ def test_offline_record_broken_chain_head_fails_closed():
     body["record_sha256"] = _recompute_body_digest(body)
     with pytest.raises(RecordVerificationError, match="review head mismatch"):
         verify_record_document(body)
+
+
+# Ed25519 receipt on the exported record: installation signature, never a
+# personal/legal/eIDAS signature. Three outcomes, no silent downgrade.
+def _signed_offline_record():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        PublicFormat,
+    )
+
+    from apps.api.disposable_review_record import sign_record_body
+    private = Ed25519PrivateKey.generate()
+    seed = private.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+    body = valid_offline_record()
+    body["receipt"] = sign_record_body(body, seed)
+    public = private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    return body, seed, public
+
+
+def test_sign_record_body_strict_key():
+    from apps.api.disposable_review_record import RecordConflict, sign_record_body
+    with pytest.raises(RecordConflict):
+        sign_record_body(valid_offline_record(), b"short")
+    with pytest.raises(RecordConflict):
+        sign_record_body({"schema": "caseproof-review-record-v1"}, b"k" * 32)
+
+
+def test_signed_record_verifies_against_trusted_key():
+    from scripts.verify_review_record_file import verify_record_document
+    body, _seed, public = _signed_offline_record()
+    steps = verify_record_document(body, trusted_public_key=public)
+    assert any("VERIFIED against the trusted installation key" in s for s in steps)
+
+
+def test_signed_record_without_trusted_key_is_self_asserted():
+    from scripts.verify_review_record_file import verify_record_document
+    body, _seed, _public = _signed_offline_record()
+    steps = verify_record_document(body)
+    assert any("SELF-ASSERTED" in s for s in steps)
+
+
+def test_tampered_signed_record_fails_signature():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body, _seed, public = _signed_offline_record()
+    body["brief"]["head_revision"] = 7
+    body["record_sha256"] = _recompute_body_digest(
+        {k: v for k, v in body.items() if k != "receipt"})
+    with pytest.raises(RecordVerificationError, match="invalid receipt signature"):
+        verify_record_document(body, trusted_public_key=public)
+
+
+def test_key_substitution_fails_against_trusted_key():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        PublicFormat,
+    )
+
+    from apps.api.disposable_review_record import sign_record_body
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body, _seed, trusted = _signed_offline_record()
+    body["brief"]["head_revision"] = 7
+    body["record_sha256"] = _recompute_body_digest(
+        {k: v for k, v in body.items() if k != "receipt"})
+    forger = Ed25519PrivateKey.generate()
+    forged_seed = forger.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+    signed_record = {k: v for k, v in body.items() if k != "receipt"}
+    body["receipt"] = sign_record_body(signed_record, forged_seed)
+    assert body["receipt"]["public_key"] == forger.public_key().public_bytes(
+        Encoding.Raw, PublicFormat.Raw).hex()
+    # Internally valid signature, substituted key: embedded-only check reports
+    # self-asserted; trusted-key verification must fail closed.
+    steps = verify_record_document(body)
+    assert any("SELF-ASSERTED" in s for s in steps)
+    with pytest.raises(RecordVerificationError, match="untrusted issuer"):
+        verify_record_document(body, trusted_public_key=trusted)
+
+
+def test_unsigned_record_with_trusted_key_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    _body, _seed, public = _signed_offline_record()
+    with pytest.raises(RecordVerificationError, match="no receipt"):
+        verify_record_document(valid_offline_record(), trusted_public_key=public)
+    steps = verify_record_document(valid_offline_record())
+    assert any("integrity-only record" in s for s in steps)
