@@ -1653,6 +1653,7 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
 
     if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
         pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
 
     from scripts.verify_vault_integration import connect
 
@@ -1854,3 +1855,45 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
         # Second authorized user operates the independent opponent brief head.
         assert publish(user_e, role="opponent_brief") == {"ok": True, "replay": False,
                                                           "revision": 1}
+
+        # Brief-head read proposal: masked authorization, recomputed identity,
+        # revision 0 before first publication, head after publication.
+        head_proposal = (
+            Path(__file__).resolve().parents[1] / "db" / "proposals"
+            / "SIGNED_brief_head_read.sql"
+        ).read_text(encoding="utf-8")
+        conn.execute(head_proposal)
+
+        def head(sub, role="own_draft", jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute(
+                "select public.caseproof_signed_brief_head(%s, %s)",
+                (str(case), role)).fetchone()[0]
+
+        other_case_head = head(user_e, role="opponent_brief")
+        assert other_case_head["ok"] is True and other_case_head["revision"] == 1
+        assert other_case_head["brief_id"] == working_brief("opponent_brief")
+        own_head = head(user_a)
+        assert own_head == {"ok": True, "brief_id": working_brief("own_draft"),
+                            "revision": 1, "version_id": str(brief_v1)}
+        empty_case = uuid4()
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (empty_case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', "
+            "array['case:read','evidence:read','draft:check']::text[])",
+            (org, empty_case, user_a))
+        as_user(user_a)
+        empty_head = conn.execute(
+            "select public.caseproof_signed_brief_head(%s, 'own_draft')",
+            (str(empty_case),)).fetchone()[0]
+        assert empty_head == {"ok": True, "brief_id": empty_head["brief_id"],
+                              "revision": 0, "version_id": None}
+        for sub, role in ((user_b, "authenticated"), (user_a, "anon")):
+            as_user(sub, role)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute("select public.caseproof_signed_brief_head(%s, 'own_draft')",
+                             (str(case),))
+            conn.rollback()
