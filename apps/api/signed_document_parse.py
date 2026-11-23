@@ -151,6 +151,39 @@ def parse_verified_original(
                     "text_blocks": page_blocks.get(page, 0),
                 }
             )
+    hidden_text_scan: dict[str, Any] | None = None
+    if media_type == "application/pdf":
+        # Deterministic content-stream scan (Tr 3 / white fill). Coverage is
+        # declared, never exhaustive: raster images, annotations, layers,
+        # metadata, embedded files and JavaScript are out of scope.
+        from infrastructure.parsers.pdf_hidden_text_scan import scan_pdf_hidden_text
+
+        try:
+            found = scan_pdf_hidden_text(data, max_pages=MAX_PDF_PAGES)
+        except Exception:  # noqa: BLE001 - a failed scan is never a clean result
+            warnings.append("pdf_hidden_text_scan_unavailable")
+            found = ()
+            hidden_text_scan = {"status": "unavailable"}
+        if hidden_text_scan is None:
+            for finding in found:
+                warnings.append(f"pdf_hidden_text_detected:page:{finding.page_index}")
+            hidden_text_scan = {
+                "status": "clean" if not found else "findings",
+                "scope": "content-stream text rendering modes and white fill colours only",
+                "not_covered": [
+                    "raster_images",
+                    "annotations",
+                    "optional_content_layers",
+                    "metadata",
+                    "embedded_files",
+                    "javascript",
+                ],
+                "findings": [
+                    {"pdf_page": finding.page_index + 1, "hidden_runs": finding.runs}
+                    for finding in found
+                ],
+                "not_a_certification": True,
+            }
     complete = bool(artifact["complete"]) and not warnings and bool(text)
     manifest: dict[str, Any] = {
         "schema": "dev-document-parse-v1",
@@ -165,6 +198,8 @@ def parse_verified_original(
         "blocks": public_blocks,
         "warnings": sorted(set(warnings)),
     }
+    if hidden_text_scan is not None:
+        manifest["hidden_text_scan"] = hidden_text_scan
     # OCR is a review-only candidate and never changes extraction completeness.
     # The caller must explicitly opt in to a locally isolated OCR worker.
     if ocr is not None and media_type == "application/pdf":
