@@ -15,9 +15,13 @@ import tempfile
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from application.litigation.corpus import CorpusError
+from application.litigation.lawyer_conditions import R_FOUND as COND_FOUND
+from application.litigation.lawyer_conditions import R_NONE as COND_NONE
+from application.litigation.lawyer_conditions import SCOPE as CONDITION_SCOPE
 from application.litigation.legal_references import load_corpus_config
 from application.litigation.legal_review_decisions import body_fingerprints
 from application.litigation.local_corpus_library import LocalCorpusLibrary, encode_corpus_pack
@@ -45,8 +49,8 @@ async function post(path,body,type){const r=await fetch(path,{method:'POST',head
 function render(payload){current=payload;const result=document.getElementById('result');result.replaceChildren();
 result.append(el('p','Corpus de cette revue : '+payload.corpus_pack_sha256));if(payload.exhibit_note)result.append(el('p',payload.exhibit_note,'note'));
 result.append(el('p','Révision locale n° '+payload.revision+'. Les décisions ci-dessous portent une étiquette locale non authentifiée, ce ne sont pas des décisions d\u2019avocat et elles n\u2019autorisent aucun dépôt.'));
-payload.references.forEach((finding,index)=>{const section=el('section'),brief=el('pre',finding.quote||'Aucune citation liée'),article=el('pre',finding.article_text||(finding.reason.startsWith('exhibit_')?'Renvoi à une pièce : aucun article de corpus concerné.':'Version ou article non sélectionné : aucun passage de substitution.'));
-section.append(el('h2',finding.status+' · '+finding.raw_text),el('p',finding.scope),brief,article);const ps=finding.passage;if(ps){section.append(el('p','Affirmation : '+ps.claim));const seen=new Set();ps.found.forEach(f=>{section.append(el('pre','Pièce, p. '+f.page+' · '+f.key+'\\n'+f.excerpt));if(f.status_cue_mismatch&&!seen.has(f.excerpt_sha256)){seen.add(f.excerpt_sha256);section.append(el('p','Mot d\\u2019état divergent (détection partielle) : l\\u2019affirmation dit « '+f.status_cue_mismatch.claim_cue+' », le passage p. '+f.page+' dit « '+f.status_cue_mismatch.passage_cue+' ». Liste fixe de mots FR/NL, un seul cas de contradiction ; à lire par l\\u2019avocat.','note'));}});if(ps.missing_values.length)section.append(el('p','Différence candidate, valeur absente de la pièce : '+ps.missing_values.join(', ')+'. À examiner par l\u2019avocat.','note'));if(!ps.found.length&&!ps.missing_values.length)section.append(el('p','Aucune valeur comparable (date ou montant sans ambiguïté) dans l\u2019affirmation : aucun passage proposé.','note'));}
+payload.references.forEach((finding,index)=>{const section=el('section'),brief=el('pre',finding.quote||'Aucune citation liée'),article=el('pre',finding.article_text||(finding.reason.startsWith('exhibit_')?'Renvoi à une pièce : aucun article de corpus concerné.':finding.reason.startsWith('condition_')?'Condition de l\u2019avocat : aucun article de corpus concerné.':'Version ou article non sélectionné : aucun passage de substitution.'));
+section.append(el('h2',finding.status+' · '+finding.raw_text),el('p',finding.scope),brief,article);const cd=finding.condition;if(cd){section.append(el('p','Condition : '+cd.label+(cd.question?' · '+cd.question:'')));section.append(el('p','Phrase du mémoire : '+cd.sentence));cd.found.forEach(f=>section.append(el('pre','Pièce '+f.piece+', p. '+f.page+' · « '+f.term+' »\\n'+f.excerpt)));section.append(el('p',cd.found.length?'Passages contenant un des mots demandés : à apprécier par l\u2019avocat.':'Aucun passage trouvé dans les pièces lues ('+cd.pieces_read.join(', ')+') : cela ne prouve pas l\u2019absence.','note'));}const ps=finding.passage;if(ps){section.append(el('p','Affirmation : '+ps.claim));const seen=new Set();ps.found.forEach(f=>{section.append(el('pre','Pièce, p. '+f.page+' · '+f.key+'\\n'+f.excerpt));if(f.status_cue_mismatch&&!seen.has(f.excerpt_sha256)){seen.add(f.excerpt_sha256);section.append(el('p','Mot d\\u2019état divergent (détection partielle) : l\\u2019affirmation dit « '+f.status_cue_mismatch.claim_cue+' », le passage p. '+f.page+' dit « '+f.status_cue_mismatch.passage_cue+' ». Liste fixe de mots FR/NL, un seul cas de contradiction ; à lire par l\\u2019avocat.','note'));}});if(ps.missing_values.length)section.append(el('p','Différence candidate, valeur absente de la pièce : '+ps.missing_values.join(', ')+'. À examiner par l\u2019avocat.','note'));if(!ps.found.length&&!ps.missing_values.length)section.append(el('p','Aucune valeur comparable (date ou montant sans ambiguïté) dans l\u2019affirmation : aucun passage proposé.','note'));}
 const d=payload.decisions[index];
 if(d){section.append(el('p','Décision locale : '+LABELS[d.action]+(d.reason?' · '+d.reason:'')+' · étiquette « '+d.reviewer_label+' » (non authentifiée) · '+(d.origin==='carried'?'reprise d\u2019une revue antérieure, finding identique':'enregistrée dans cette révision'),'note'));}
 else{const f=el('form');f.dataset.index=index;const sel=el('select');sel.setAttribute('aria-label','Décision');for(const k of Object.keys(LABELS)){const o=el('option',LABELS[k]);o.value=k;sel.append(o);}
@@ -77,6 +81,16 @@ def _payload(data: bytes, checkpoint: str) -> dict[str, object]:
     review = body["review"]
     by_print = {d["fingerprint"]: d for d in review.get("decisions", [])}
     prints = body_fingerprints(body)
+    cond_rows = iter(body.get("condition_evidence", []))
+    cond_by_id = {c["id"]: c for c in body.get("conditions", {}).get("conditions", [])}
+    cond_for: dict[str, dict[str, Any]] = {}
+    for row in body["references"]:
+        if row["reason"] in (COND_FOUND, COND_NONE):
+            ev = next(cond_rows, None)
+            if ev is not None and ev["condition"] in cond_by_id:
+                cond_for[row["reference_id"]] = {**ev, "label": cond_by_id[ev["condition"]]["label"],
+                                                 "question": cond_by_id[ev["condition"]]["question"],
+                                                 "evidence_terms": cond_by_id[ev["condition"]]["evidence"]}
     return {"checkpoint": checkpoint, "summary": summary, "revision": review.get("revision", 1),
             "corpus_pack_sha256": body["corpus_pack_sha256"],
             "exhibit_note": (exhibit_note(body) if "exhibits" in body else None),
@@ -84,12 +98,13 @@ def _payload(data: bytes, checkpoint: str) -> dict[str, object]:
             "decisions": [by_print.get(fp) for fp in prints],
             "superseded": list(review.get("superseded", [])),
             "references": [{**row, "article_text": by_key.get(row["corpus_key"]),
-                            "scope": _SCOPE.get(row["reason"], row["reason"]),
+                            "scope": CONDITION_SCOPE if row["reason"] in (COND_FOUND, COND_NONE) else _SCOPE.get(row["reason"], row["reason"]),
+                            "condition": cond_for.get(row["reference_id"]),
                             "passage": next((e for e in body.get("passages", []) if e["reference_id"] == row["reference_id"]), None)}
                            for row in body["references"]]}
 
 
-def exhibit_note(body: dict) -> str:
+def exhibit_note(body: dict[str, Any]) -> str:
     from application.litigation.exhibit_coverage import coverage
     cov = coverage(body["brief_text"], body["exhibits"])
     return ("Pièces : renvois résolus dans le bordereau local et fichiers lus (empreintes SHA-256). Le contenu des pièces n'est PAS lu pour son sens : seules les dates et montants identiques sont rapprochés, à titre de passages proposés, avec un drapeau partiel de mot d'état (liste fixe FR/NL, personne qui signe non identifiée). "

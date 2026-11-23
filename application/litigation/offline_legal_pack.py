@@ -174,7 +174,7 @@ def _report(body: dict[str, Any]) -> bytes:
                 parts += ["<p><strong>Phrase du mémoire :</strong> ", esc(ev["sentence"]), "</p><p>Pièces lues : ",
                           esc(", ".join(ev["pieces_read"]) or "aucune"), ". Mots à retrouver : ", esc(", ".join(cond["evidence"])), ". ",
                           ("Passages trouvés :" if ev["found"] else "Aucun passage trouvé dans les pièces lues (cela ne prouve pas l'absence : texte non lisible, formulation différente).") , "</p>"]
-                parts += [f"<pre>{esc(f['piece'])} p. {f['page']} · « {esc(f['term'])} »\n{esc(f['excerpt'])}</pre>" for f in ev["found"]]
+                parts += [f"<pre>Pièce {esc(f['piece'])}, p. {f['page']} · « {esc(f['term'])} »\n{esc(f['excerpt'])}</pre>" for f in ev["found"]]
         elif obs["reason"].startswith("exhibit_"):
             parts += ["<p>Renvoi à une pièce : aucun article de corpus concerné.</p>"]
             entry = next((e for e in body.get("passages", []) if e["reference_id"] == obs["reference_id"]), None)
