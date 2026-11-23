@@ -181,7 +181,7 @@ def _report(body: dict[str, Any]) -> bytes:
             if entry is not None:
                 parts += ["<p><strong>Affirmation :</strong> ", esc(entry["claim"]), "</p><p class='note'>", esc(PASSAGE_SCOPE if body.get("passages_rules") else PASSAGE_SCOPE_LEGACY), "</p>"]
                 parts += ["<p>Passages de la pièce avec la même valeur : ", ("" if entry["found"] else "aucun"), "</p>"]
-                parts += [f"<pre>p. {f['page']} · {esc(f['key'])}\n{esc(f['excerpt'])}</pre>" for f in entry["found"]]
+                parts += [f"<pre>p. {f['page']}{_page_ref_text(f)} · {esc(f['key'])}\n{esc(f['excerpt'])}</pre>" for f in entry["found"]]
                 flagged: set[str] = set()
                 for f in entry["found"]:
                     if "status_cue_mismatch" in f and f["excerpt_sha256"] not in flagged:
@@ -242,6 +242,16 @@ class LegalRun(Protocol):
     def corpus_pack_sha256(self) -> str | None: ...
     @property
     def legal_observations(self) -> tuple[LegalObservation, ...]: ...
+
+
+def _page_ref_text(f: dict[str, Any]) -> str:
+    ref = f.get("page_ref")
+    if not ref:
+        return ""
+    bits = [f"position dans le fichier {ref['index']}"]
+    bits.append(f"étiquette du PDF « {ref['label']} »" if ref["label"] else "pas d'étiquette de page dans le PDF")
+    bits.append(f"numéro imprimé lu « {ref['printed']} »" if ref["printed"] else "pas de numéro imprimé reconnu")
+    return " (" + " · ".join(bits) + ")"
 
 
 def observe(text: str, config: LegalCorpusConfig, marker: object, exhibits: dict[str, Any] | None,

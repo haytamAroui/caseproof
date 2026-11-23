@@ -12,7 +12,7 @@ from pathlib import Path
 
 from application.litigation.corpus import CorpusError
 from application.litigation.exhibit_coverage import load_exhibit_set
-from application.litigation.exhibit_passages import build_passages, read_piece_texts
+from application.litigation.exhibit_passages import build_passages, page_meta, read_piece_texts
 from application.litigation.lawyer_conditions import build_evidence, load_conditions
 from application.litigation.legal_references import (
     ENGINE_STRICT4,
@@ -70,7 +70,7 @@ def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
     observations = observe(text, config, engine, exhibit_set, (spec, evidence) if spec is not None and evidence is not None else None)
     passages = None
     if piece_texts is not None:
-        passages = build_passages(text, observations, piece_texts)
+        passages = build_passages(text, observations, piece_texts, page_meta(exhibits, exhibit_set) if exhibits is not None and exhibit_set is not None else None)
     if not observations:
         raise CorpusError("no supported explicit legal reference detected; no success claim")
     representation_sha = hashlib.sha256(text.encode()).hexdigest()

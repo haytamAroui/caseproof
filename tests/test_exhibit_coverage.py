@@ -226,6 +226,8 @@ def test_altered_passage_excerpt_or_claim_is_refused_even_with_a_recomputed_chec
             entry["found"][0]["excerpt"] = "signe definitivement"
         else:
             body.pop("passages_rules")
+            for _f in body["passages"][0]["found"]:
+                _f.pop("page_ref", None)
         data, sha = reseal(body, z.read("report.html"))
         with pytest.raises(CorpusError, match="rejected") as caught:
             verify_legal_pack(data, expected_sha256=sha)
@@ -295,6 +297,7 @@ def test_export_without_status_cue_rules_still_replays_and_decisions_keep_it(tmp
     del doc["passages_rules"]
     for f in doc["passages"][0]["found"]:
         f.pop("status_cue_mismatch", None)
+        f.pop("page_ref", None)
     legacy, legacy_sha = reseal(doc, _report(doc))
     assert "passages_rules" not in verify_legal_pack(legacy, expected_sha256=legacy_sha)
     # a status cue smuggled in without the marker is refused
@@ -336,6 +339,89 @@ def test_delivered_v5_exports_replay_unchanged():
 def test_status_cue_rules_marker_names_immutable_behaviour():
     """The marker identifies this exact cue list and negation rule. Change either and you must add a new marker."""
     from application.litigation import exhibit_passages as e
-    assert e.RULES == "status-cue-v2"
+    assert e.RULES == "status-cue-v3" and e.RULES_V2 == "status-cue-v2"
     pinned = hashlib.sha256(repr((e._SIGNED, e._PENDING, e._NEGATION.pattern, e._NEGATION.flags)).encode()).hexdigest()
     assert pinned == "0837b4fb2312319b33a9f0bd6349d85181ff60360b3469741af449c117f3549c"
+
+
+def _pdf_stream(body: str) -> bytes:
+    stream = body.encode("latin-1")
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+            b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream),
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    out, offsets = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (i, o)
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    out += b"".join(b"%010d 00000 n \n" % x for x in offsets)
+    return out + b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)
+
+
+def test_printed_number_is_a_literal_footer_match_only():
+    from application.litigation.exhibit_passages import printed_number
+    assert printed_number("Texte\nPage 7 / 12") == "7" and printed_number("Texte\n7") == "7"
+    assert printed_number("Texte sans pied de page") is None
+    assert printed_number("Le loyer est de 1250\nsuite du texte") is None  # a number inside a sentence is not a page number
+
+
+def page_ref_run(tmp_path: Path):
+    d = tmp_path / "pieces"
+    d.mkdir(parents=True)
+    (d / "p1.pdf").write_bytes(_pdf_stream("BT /F1 12 Tf 72 720 Td 14 TL (Signe le 15/03/2024.) Tj T* (Page 7) Tj ET"))
+    (d / "bordereau.toml").write_text('format = "caseproof-bordereau-v1"\n[[piece]]\nnumber = "1"\nlabel = "Bail"\nfile = "p1.pdf"\n')
+    p = tmp_path / "w.docx"
+    p.write_bytes(docx_without_custom_xml(["Le bail a été signé le 15/03/2024 (pièce 1)."]))
+    raw, cp = check_offline_docx(docx=p, corpus=pdf_corpus(tmp_path), exhibits=d)
+    return raw, cp, verify_legal_pack(raw, expected_sha256=cp)
+
+
+def test_page_ref_shows_file_position_pdf_label_and_printed_number_separately(tmp_path):
+    raw, _, body = page_ref_run(tmp_path)
+    ref = body["passages"][0]["found"][0]["page_ref"]
+    assert ref == {"index": 1, "label": None, "printed": "7"} and body["passages_rules"] == "status-cue-v3"
+    html = zipfile.ZipFile(BytesIO(raw)).read("report.html").decode()
+    assert "position dans le fichier 1" in html and "numéro imprimé lu" in html and "pas d&#x27;étiquette" in html or "pas d'étiquette" in html
+
+
+def test_page_ref_tampering_is_refused_after_reseal_with_control(tmp_path):
+    raw, _, _ = page_ref_run(tmp_path)
+    z = zipfile.ZipFile(BytesIO(raw))
+    control, control_sha = reseal(json.loads(z.read("review.json")), z.read("report.html"))
+    verify_legal_pack(control, expected_sha256=control_sha)
+    for edit in ("old_marker", "bad_index", "bad_printed", "extra_key"):
+        body = json.loads(z.read("review.json"))
+        ref = body["passages"][0]["found"][0]["page_ref"]
+        if edit == "old_marker":
+            body["passages_rules"] = "status-cue-v2"
+        elif edit == "bad_index":
+            ref["index"] = 4
+        elif edit == "bad_printed":
+            ref["printed"] = "<b>7</b>"
+        else:
+            ref["extra"] = "x"
+        data, sha = reseal(body, z.read("report.html"))
+        with pytest.raises(CorpusError, match="rejected"):
+            verify_legal_pack(data, expected_sha256=sha)
+
+
+def test_export_with_the_v2_marker_and_no_page_refs_still_replays(tmp_path):
+    from application.litigation.offline_legal_pack import _report
+    raw, _, _ = passage_run(tmp_path, ["Le contrat a été signé le 15/03/2024 (pièce 1)."])
+    doc = json.loads(zipfile.ZipFile(BytesIO(raw)).read("review.json"))
+    doc["passages_rules"] = "status-cue-v2"
+    for f in doc["passages"][0]["found"]:
+        f.pop("page_ref", None)
+    data, sha = reseal(doc, _report(doc))
+    assert verify_legal_pack(data, expected_sha256=sha)["passages_rules"] == "status-cue-v2"
+
+
+def test_pdf_defined_page_label_is_recorded_as_the_pdf_label_not_as_a_printed_number(tmp_path):
+    from application.litigation.exhibit_passages import page_meta
+    raw = _pdf_stream("BT /F1 12 Tf 72 720 Td (Texte sans pied de page) Tj ET")
+    raw = raw.replace(b"/Type /Catalog /Pages 2 0 R", b"/Type /Catalog /Pages 2 0 R /PageLabels << /Nums [0 << /S /r >>] >>", 1)
+    (tmp_path / "p1.pdf").write_bytes(raw)
+    meta = page_meta(tmp_path, {"pieces": [{"number": "1", "file": "p1.pdf", "present": True, "readable": True}]})
+    assert meta["1"] == [{"index": 1, "label": "i", "printed": None}]

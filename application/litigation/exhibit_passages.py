@@ -40,6 +40,37 @@ SCOPE_LEGACY = ("Passages proposés par correspondance de dates et de montants i
          "elle ne prouve pas la fidélité des extraits, et une modification suivie d'un nouveau calcul d'empreinte passerait.")
 
 
+_PRINTED = re.compile(r"^(?:page|p\.|blz\.?|pagina)?\s*(\d{1,4})(?:\s*(?:/|sur|van|of)\s*\d{1,4})?$", re.IGNORECASE)
+
+
+def printed_number(page_text: str) -> str | None:
+    """Literal footer or header number: the last, else first, non-empty line that is only a number (optionally 'page 3 / 9')."""
+    lines = [ln.strip() for ln in page_text.splitlines() if ln.strip()]
+    for line in (lines[-1:] + lines[:1]):
+        m = _PRINTED.match(line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def page_meta(directory: Path, exhibits: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Per PDF page: its position in the file, the label the PDF itself defines (if any) and the printed number read from page text."""
+    from pypdf import PdfReader
+    root = directory.resolve()
+    out: dict[str, list[dict[str, Any]]] = {}
+    for piece in exhibits["pieces"]:
+        if not piece["present"] or piece["readable"] is not True or Path(piece["file"]).suffix.lower() != ".pdf":
+            continue
+        reader = PdfReader(io.BytesIO((root / piece["file"]).read_bytes()))
+        has_labels = "/PageLabels" in dict(reader.trailer["/Root"])  # type: ignore[call-overload]
+        rows = []
+        for i, page in enumerate(reader.pages[:MAX_PAGES]):
+            label = str(reader.page_labels[i])[:40] if has_labels else None
+            rows.append({"index": i + 1, "label": label, "printed": printed_number(page.extract_text() or "")})
+        out[str(piece["number"]).lower()] = rows
+    return out
+
+
 def read_piece_texts(directory: Path, exhibits: Mapping[str, Any],
                      docx_text: Callable[[bytes], str] | None = None) -> dict[str, list[str]]:
     """Per-page text of readable pieces, re-reading the bytes and requiring the recorded SHA-256."""
@@ -91,7 +122,8 @@ def _claim(text: str, start: int, end: int) -> tuple[str, list[dict[str, Any]]]:
     return sentence, values
 
 
-def build_passages(text: str, observations: Sequence[Any], texts: Mapping[str, Sequence[str]]) -> list[dict[str, Any]]:
+def build_passages(text: str, observations: Sequence[Any], texts: Mapping[str, Sequence[str]],
+                   meta: Mapping[str, Sequence[Mapping[str, Any]]] | None = None) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for obs in observations:
         if obs.reason not in (R_LOCATED, R_PAGE):
@@ -112,6 +144,9 @@ def build_passages(text: str, observations: Sequence[Any], texts: Mapping[str, S
                         excerpt = " ".join(chunk.split())[:MAX_EXCERPT]
                         row = {"key": key, "page": page_no, "excerpt": excerpt,
                                "excerpt_sha256": hashlib.sha256(excerpt.encode()).hexdigest()}
+                        refs = (meta or {}).get(number)
+                        if refs is not None and page_no <= len(refs):
+                            row["page_ref"] = dict(refs[page_no - 1])
                         mismatch = status_mismatch(sentence, excerpt)
                         if mismatch is not None:
                             row["status_cue_mismatch"] = mismatch
@@ -137,7 +172,9 @@ def _sentences(page: str) -> list[tuple[int, int]]:
     return spans
 
 
-RULES = "status-cue-v2"  # IMMUTABLE behaviour: cue lists + negation rule below. Any change needs status-cue-v3 and keeps v2 replaying. v1 (no negation rule) was never in an artifact.
+RULES_V2 = "status-cue-v2"  # IMMUTABLE: exports made before page references
+RULES = "status-cue-v3"  # v2 + optional page_ref per excerpt (see page_meta). IMMUTABLE once released.
+_OLD_RULES = "status-cue-v2"  # IMMUTABLE behaviour: cue lists + negation rule below. Any change needs status-cue-v3 and keeps v2 replaying. v1 (no negation rule) was never in an artifact.
 
 
 def validate_passages(text: str, observations: Sequence[Mapping[str, Any]], passages: Any, rules: str | None = None) -> None:
@@ -161,10 +198,19 @@ def validate_passages(text: str, observations: Sequence[Mapping[str, Any]], pass
             raise CorpusError("a value cannot be both found and missing")
         if any(hashlib.sha256(f["excerpt"].encode()).hexdigest() != f["excerpt_sha256"] for f in entry["found"]):
             raise CorpusError("passage excerpt altered")
+        for f in entry["found"]:
+            ref = f.get("page_ref")
+            if ref is not None:
+                ok = (rules == RULES and isinstance(ref, dict) and set(ref) == {"index", "label", "printed"}
+                      and type(ref["index"]) is int and ref["index"] == f["page"]
+                      and (ref["label"] is None or isinstance(ref["label"], str) and len(ref["label"]) <= 40)
+                      and (ref["printed"] is None or isinstance(ref["printed"], str) and re.fullmatch(r"\d{1,4}", ref["printed"])))
+                if not ok:
+                    raise CorpusError("passage page reference invalid or without its rules marker")
         if rules is None:
             if any("status_cue_mismatch" in f for f in entry["found"]):
                 raise CorpusError("status cue without its rules marker")
-        elif rules != RULES:
+        elif rules not in (RULES, _OLD_RULES):
             raise CorpusError("unknown passage rules")
         elif any(f.get("status_cue_mismatch") != status_mismatch(sentence, f["excerpt"]) for f in entry["found"]):
             raise CorpusError("passage status cue does not replay")
