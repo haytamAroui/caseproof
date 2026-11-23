@@ -478,29 +478,32 @@ def test_unsigned_record_with_trusted_key_fails_closed():
 # User-declared exhibit page mappings: independent numbering spaces, no
 # inference, duplicate physical pages fail closed, hardcoded printed page
 # removed.
-def test_confirmed_pages_absent_mappings_claim_physical_page_one_only_on_pdf():
+def test_confirmed_pages_absent_mappings_pdf_inventory_is_complete():
     from apps.api.disposable_signed_brief_publisher import _confirmed_pages
-    pages = _confirmed_pages("doc", "ver", None, is_pdf=True)
-    assert len(pages) == 1
-    assert pages[0].pdf_page == 1
-    assert pages[0].printed_page is None and pages[0].bundle_page is None
+    pages = _confirmed_pages("doc", "ver", None, page_count=3)
+    assert [p.pdf_page for p in pages] == [1, 2, 3]
+    assert all(p.printed_page is None and p.bundle_page is None for p in pages)
 
 
-def test_confirmed_pages_absent_mappings_non_pdf_keeps_legacy_placeholder():
+def test_confirmed_pages_absent_mappings_non_pdf_is_explicit_unpaginated():
     from apps.api.disposable_signed_brief_publisher import _confirmed_pages
-    pages = _confirmed_pages("doc", "ver", None, is_pdf=False)
+    pages = _confirmed_pages("doc", "ver", None, page_count=None)
     assert len(pages) == 1
-    assert pages[0].pdf_page is None and pages[0].printed_page == 1
+    assert pages[0].unpaginated
+    assert pages[0].pdf_page is None and pages[0].printed_page is None
+    assert pages[0].bundle_page is None
 
 
-def test_confirmed_pages_user_declared_distinct_spaces():
+def test_confirmed_pages_user_declared_labels_merge_onto_real_pages():
     from apps.api.disposable_signed_brief_publisher import _confirmed_pages
     pages = _confirmed_pages("doc", "ver", [
         {"pdf_page": 1, "printed_page": 3, "bundle_page": 7},
         {"pdf_page": 2},
-    ], is_pdf=True)
-    assert (pages[0].pdf_page, pages[0].printed_page, pages[0].bundle_page) == (1, 3, 7)
-    assert (pages[1].pdf_page, pages[1].printed_page, pages[1].bundle_page) == (2, None, None)
+    ], page_count=4)
+    assert [p.pdf_page for p in pages] == [1, 2, 3, 4]
+    assert (pages[0].printed_page, pages[0].bundle_page) == (3, 7)
+    assert (pages[1].printed_page, pages[1].bundle_page) == (None, None)
+    assert (pages[3].printed_page, pages[3].bundle_page) == (None, None)
 
 
 def test_confirmed_pages_reject_invalid_input():
@@ -519,4 +522,28 @@ def test_confirmed_pages_reject_invalid_input():
     ]
     for payload in bad:
         with pytest.raises(ValueError):
-            _confirmed_pages("doc", "ver", payload, is_pdf=True)
+            _confirmed_pages("doc", "ver", payload, page_count=3)
+
+
+def test_confirmed_pages_reject_out_of_inventory_physical_page():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    with pytest.raises(ValueError):
+        _confirmed_pages("doc", "ver", [{"pdf_page": 5}], page_count=3)
+
+
+def test_confirmed_pages_reject_mappings_on_unpaginated_source():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    with pytest.raises(ValueError):
+        _confirmed_pages("doc", "ver", [{"pdf_page": 1}], page_count=None)
+
+
+def test_unpaginated_marker_must_be_sole_row():
+    from domains.disputes.exhibits import ExhibitEntry, ExhibitError, ExhibitPage
+    single = ExhibitEntry("e1", "Stuk 1", (ExhibitPage("s1", "v1"),), confirmed=True)
+    assert single.pages[0].unpaginated
+    with pytest.raises(ExhibitError):
+        ExhibitEntry(
+            "e2", "Stuk 2",
+            (ExhibitPage("s1", "v1"), ExhibitPage("s1", "v1", pdf_page=1)),
+            confirmed=True,
+        )

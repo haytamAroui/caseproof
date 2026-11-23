@@ -19,7 +19,9 @@ never the demo's extraction policy.
 from __future__ import annotations
 
 import hashlib
+import io
 from collections.abc import Callable
+from typing import cast
 from uuid import UUID, uuid4
 
 from application.litigation.exhibit_confirmation import serialized_entries
@@ -46,51 +48,77 @@ from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage
 
 _MAPPING_KEYS = {"pdf_page", "printed_page", "bundle_page"}
+_MAX_PDF_PAGES = 64
 
 
 def _page_value(value: object) -> bool:
     return type(value) is int and 1 <= value <= 100_000
 
 
-def _confirmed_pages(
-    document_id: str, version_id: str, page_mappings: object, *, is_pdf: bool
-) -> tuple[ExhibitPage, ...]:
-    """User-declared page mappings, each numbering space independent.
+def _pdf_page_count(original: bytes) -> int:
+    """Physical page count of a VERIFIED original, parsed strictly.
 
-    Nothing is inferred: absent mappings on a PDF record only that physical
-    page 1 exists (full parser page inventory is not wired into
-    confirmation); printed/bundle stay NOT MAPPED. Absent mappings on a
-    non-paginated source keep the legacy printed_page=1 placeholder the
-    domain's non-empty inventory rule requires (widening the domain to an
-    explicit unpaginated marker is a separate domain decision). Duplicate
-    physical pages and unknown keys fail closed, never silently overwrite.
-    Printed labels are the existing numeric domain type; Roman or prefixed
-    labels stay unmapped.
+    Fail-closed: encryption, malformed structure or an out-of-bounds count
+    reject confirmation rather than guessing an inventory.
+    """
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(original), strict=True)
+    if reader.is_encrypted:
+        raise ValueError("invalid exhibit declaration")
+    count = len(reader.pages)
+    if not 1 <= count <= _MAX_PDF_PAGES:
+        raise ValueError("invalid exhibit declaration")
+    return count
+
+
+def _confirmed_pages(
+    document_id: str, version_id: str, page_mappings: object, *, page_count: int | None
+) -> tuple[ExhibitPage, ...]:
+    """Physical inventory plus user-declared label mappings.
+
+    page_count is the parser-derived physical page count of the verified
+    original (None for a source with no physical pages). Nothing is
+    invented: on a PDF the inventory is exactly pages 1..N and user
+    mappings only annotate printed/bundle labels on real pages; on a
+    non-paginated source the sole row is the explicit UNPAGINATED marker
+    (every numbering space NOT MAPPED), never a fabricated page 1.
+    Mappings on a non-paginated source, unknown keys, duplicates and
+    out-of-inventory physical pages all fail closed.
     """
     if page_mappings is None:
-        if is_pdf:
-            return (ExhibitPage(document_id, version_id, pdf_page=1),)
-        return (ExhibitPage(document_id, version_id, printed_page=1),)
+        if page_count is None:
+            return (ExhibitPage(document_id, version_id),)
+        return tuple(
+            ExhibitPage(document_id, version_id, pdf_page=page)
+            for page in range(1, page_count + 1)
+        )
     if not isinstance(page_mappings, (list, tuple)) or not 1 <= len(page_mappings) <= 512:
         raise ValueError("invalid exhibit declaration")
-    seen: set[int] = set()
-    pages = []
+    if page_count is None:
+        raise ValueError("invalid exhibit declaration")
+    merged: dict[int, tuple[int | None, int | None]] = {}
     for mapping in page_mappings:
         if not isinstance(mapping, dict) or set(mapping) - _MAPPING_KEYS or "pdf_page" not in mapping:
             raise ValueError("invalid exhibit declaration")
         pdf = mapping["pdf_page"]
         printed = mapping.get("printed_page")
         bundle = mapping.get("bundle_page")
-        if not _page_value(pdf) or pdf in seen:
+        if not _page_value(pdf) or pdf in merged or pdf > page_count:
             raise ValueError("invalid exhibit declaration")
         if any(v is not None and not _page_value(v) for v in (printed, bundle)):
             raise ValueError("invalid exhibit declaration")
-        seen.add(pdf)
-        pages.append(
-            ExhibitPage(document_id, version_id, pdf_page=pdf,
-                        printed_page=printed, bundle_page=bundle)
+        merged[pdf] = (cast("int | None", printed), cast("int | None", bundle))
+    return tuple(
+        ExhibitPage(
+            document_id,
+            version_id,
+            pdf_page=page,
+            printed_page=merged[page][0] if page in merged else None,
+            bundle_page=merged[page][1] if page in merged else None,
         )
-    return tuple(pages)
+        for page in range(1, page_count + 1)
+    )
 
 __all__ = ["DisposableSignedBriefPublisher", "working_brief_id"]
 
@@ -260,8 +288,17 @@ class DisposableSignedBriefPublisher:
             if len(media_rows) != 1 or not isinstance(media_rows[0][0], str):
                 raise PrivateStorageDenied("Private source unavailable")
             media_type = media_rows[0][0]
-            pages = _confirmed_pages(str(document), str(version), page_mappings,
-                                     is_pdf=(media_type == "application/pdf"))
+            if media_type == "application/pdf":
+                original = self._library.read(
+                    bearer=bearer, case_id=case_id,
+                    document_id=document_id, version_id=version_id,
+                )
+                page_count = _pdf_page_count(original)
+            else:
+                page_count = None
+            pages = _confirmed_pages(
+                str(document), str(version), page_mappings, page_count=page_count
+            )
             cur.execute(
                 "select revision,payload,payload_sha256 from caseproof._m1_exhibit_heads "
                 "where org_id=%s and case_id=%s",
