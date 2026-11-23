@@ -1301,28 +1301,34 @@ def test_fact_extraction_attachments_and_span_integrity():
         extract_fact_assertions(text, (("ref-x", len(text) + 1),))
 
 
-def test_composed_publisher_docx_path_derives_from_trusted_parser():
+def _docx_fixture_bytes(lines, *, keep_custom_xml=False):
+    import os
+    import zipfile
+
     from docx import Document
 
     document = Document()
-    for line in _BRIEF_TEXT.split(". "):
+    for line in lines:
         document.add_paragraph(line)
-    target = "/tmp/caseproof-composer-test.docx"
+    target = "/tmp/caseproof-docx-fixture.docx"
     document.save(target)
     # The default python-docx template embeds a customXml part unrelated to
-    # the body text; a clean authored document has none. Strip it so the
-    # fixture exercises the publishable path (customXml stays a refusal).
-    import os
-    import zipfile
+    # the body text; a clean authored document has none. Strip it unless the
+    # fixture exercises the coverage-gap refusal.
     with zipfile.ZipFile(target) as archive:
         kept = {name: archive.read(name) for name in archive.namelist()
-                if not name.startswith("customXml/")}
+                if keep_custom_xml or not name.startswith("customXml/")}
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, blob in kept.items():
             archive.writestr(name, blob)
     with open(target, "rb") as handle:
         data = handle.read()
     os.unlink(target)
+    return data
+
+
+def test_composed_publisher_docx_path_derives_from_trusted_parser():
+    data = _docx_fixture_bytes(_BRIEF_TEXT.split(". "))
     composer, captured = _composer_rig(
         data, _REGISTER,
         media="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
@@ -1333,6 +1339,255 @@ def test_composed_publisher_docx_path_derives_from_trusted_parser():
     assert captured["p_parser_id"].startswith("caseproof-parser-v1;")
     assert "«paiement sous 30 jours» (Contrat)" in captured["p_representation"]
     assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02"]
+
+
+def test_registry_ingest_service_transport_contract():
+    import json as jsonlib
+
+    from apps.api.signed_registry_ingest import call_service_rpc, secret_key_from_env
+    from apps.api.signed_supabase_originals import (
+        PrivateStorageDenied,
+        PrivateStorageFailure,
+        PrivateStorageOutcomeUnknown,
+    )
+
+    key = "sb_secret_" + "F" * 24
+    conn = _StubConn(200, jsonlib.dumps({"ok": True}).encode())
+    result = call_service_rpc(
+        secret_key=key, name="caseproof_registry_ingest_parsed",
+        args={"p_case": "x"}, _conn_factory=lambda: conn)
+    assert result == {"ok": True}
+    method, path, _body, headers = conn.requests[0]
+    assert (method, path) == ("POST", "/rest/v1/rpc/caseproof_registry_ingest_parsed")
+    assert headers["apikey"] == key and headers["Authorization"] == "Bearer " + key
+    assert conn.closed
+    with pytest.raises(ValueError):
+        call_service_rpc(secret_key="sb_publishable_" + "F" * 24,
+                         name="caseproof_registry_ingest_parsed", args={})
+    with pytest.raises(ValueError):
+        call_service_rpc(secret_key=key, name="other_function", args={})
+    for status, body, expected in (
+        (403, b"", PrivateStorageDenied),
+        (400, jsonlib.dumps({"code": "42501"}).encode(), PrivateStorageDenied),
+        (400, jsonlib.dumps({"code": "PGRST202"}).encode(), PrivateStorageDenied),
+        (400, jsonlib.dumps({"code": "22023"}).encode(), ValueError),
+        (409, jsonlib.dumps({"code": "23505"}).encode(), ValueError),
+        (500, b"", PrivateStorageFailure),
+        (200, b"<html>", PrivateStorageFailure),
+    ):
+        with pytest.raises(expected):
+            call_service_rpc(secret_key=key, name="caseproof_registry_ingest_parsed",
+                             args={},
+                             _conn_factory=lambda s=status, b=body: _StubConn(s, b))
+    with pytest.raises(PrivateStorageOutcomeUnknown):
+        call_service_rpc(secret_key=key, name="caseproof_registry_ingest_parsed",
+                         args={}, _conn_factory=lambda: _StubConn(error=OSError("down")))
+    assert secret_key_from_env({"CASEPROOF_SUPABASE_SECRET_KEY": key}) == key
+    with pytest.raises(ValueError):
+        secret_key_from_env({})
+    with pytest.raises(ValueError):
+        secret_key_from_env({"CASEPROOF_SUPABASE_SECRET_KEY": "sb_publishable_" + "F" * 24})
+
+
+def test_registry_ingest_derive_gate_fail_closed():
+    from application.extraction.contracts import ExtractionError
+    from apps.api.signed_registry_ingest import derive_registry_ingest
+
+    docx_media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    data = _docx_fixture_bytes(["Texte propre et complet."])
+    derived = derive_registry_ingest(document_id="d", version_id="v",
+                                     data=data, media_type=docx_media)
+    assert derived["parser_id"].startswith("caseproof-parser-v1;")
+    assert "Texte propre et complet." in derived["representation"]
+    with pytest.raises(ExtractionError):
+        derive_registry_ingest(document_id="d", version_id="v", data=data,
+                               media_type="application/pdf")
+    with pytest.raises(ExtractionError):
+        derive_registry_ingest(
+            document_id="d", version_id="v",
+            data=_docx_fixture_bytes(["Texte avec partie non traitée."],
+                                   keep_custom_xml=True),
+            media_type=docx_media)
+    with pytest.raises(ExtractionError):
+        derive_registry_ingest(document_id="d", version_id="v", data=b"",
+                               media_type=docx_media)
+
+
+def test_registry_ingest_binds_response_to_verified_bytes():
+    import hashlib
+    import json as jsonlib
+
+    from apps.api.signed_registry_ingest import derive_registry_ingest, ingest_parsed_original
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+
+    docx_media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    data = _docx_fixture_bytes(["Contrat synthétique lié."])
+    case_id = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+    document_id = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
+    version_id = "cccccccc-3333-4333-8333-cccccccccccc"
+    request_id = "dddddddd-4444-4444-8444-dddddddddddd"
+    key = "sb_secret_" + "G" * 24
+    derived = derive_registry_ingest(document_id=document_id, version_id=version_id,
+                                     data=data, media_type=docx_media)
+    good = {
+        "case_id": case_id, "document_id": document_id, "version_id": version_id,
+        "original_sha": hashlib.sha256(data).hexdigest(),
+        "representation_sha": hashlib.sha256(
+            derived["representation"].encode("utf-8")).hexdigest(),
+        "snapshot_sha": "e" * 64,
+    }
+    outcome = ingest_parsed_original(
+        secret_key=key, case_id=case_id, document_id=document_id,
+        version_id=version_id, request_id=request_id, data=data, media_type=docx_media,
+        _conn_factory=lambda: _StubConn(200, jsonlib.dumps(good).encode()))
+    assert outcome["original_sha"] == good["original_sha"]
+    # A custody mismatch between the verified bytes and the registry row is
+    # a failure, never a success.
+    tampered = dict(good, original_sha="f" * 64)
+    with pytest.raises(PrivateStorageFailure):
+        ingest_parsed_original(
+            secret_key=key, case_id=case_id, document_id=document_id,
+            version_id=version_id, request_id=request_id, data=data,
+            media_type=docx_media,
+            _conn_factory=lambda: _StubConn(200, jsonlib.dumps(tampered).encode()))
+
+
+def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
+    import hashlib
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals"
+        / "SIGNED_registry_ingest_parsed.sql"
+    ).read_text(encoding="utf-8")
+    docx_media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    org, case, user = uuid4(), uuid4(), uuid4()
+    doc, ver, ver_no_storage, ver_pending = uuid4(), uuid4(), uuid4(), uuid4()
+    sha, sha2, sha3 = "a" * 64, "b" * 64, "c" * 64
+
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute(proposal)
+        conn.execute("create schema if not exists storage")
+        conn.execute(
+            "create table if not exists storage.objects(bucket_id text, name text)")
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s)"
+                     " on conflict (id) do nothing", (user, org))
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','evidence:read','finding:write',"
+            "'review:request']::text[])", (org, user))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', array['case:read','evidence:read',"
+            "'evidence:upload','draft:check','review:request']::text[])", (org, case, user))
+        conn.execute(
+            "insert into caseproof.documents(id, org_id, case_id, source_label)"
+            " values(%s, %s, %s, 'mémoire word synthétique')", (doc, org, case))
+        conn.execute(
+            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
+            " original_sha256_hex, byte_length, media_type)"
+            " values(%s, %s, %s, 1, %s, 4, %s),(%s, %s, %s, 2, %s, 4, %s),"
+            " (%s, %s, %s, 3, %s, 4, %s)",
+            (ver, org, doc, sha, docx_media, ver_no_storage, org, doc, sha2, docx_media,
+             ver_pending, org, doc, sha3, docx_media))
+        audits = [uuid4() for _ in range(6)]
+        for audit in audits:
+            conn.execute(
+                "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+                " actor_user_id, action, event_schema_version, correlation_id,"
+                " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
+                (audit, org, case, user, uuid4(), "a" * 64))
+        for version, version_sha, state in (
+            (ver, sha, "verified"), (ver_no_storage, sha2, "verified"),
+            (ver_pending, sha3, "pending"),
+        ):
+            conn.execute(
+                "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
+                " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
+                " byte_length, media_type, state, created_audit_id, created_case_revision,"
+                " last_audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, 4, 'text/plain',"
+                " %s, %s, 1, %s)",
+                (org, case, uuid4(), user, doc, version,
+                 f"{org}/{case}/{doc}/{version}/{version_sha}", version_sha,
+                 state, audits[0], audits[1]))
+        conn.execute(
+            "insert into storage.objects(bucket_id, name) values"
+            " ('caseproof-originals-dev', %s),('caseproof-originals-dev', %s)",
+            (f"{org}/{case}/{doc}/{ver}/{sha}", f"{org}/{case}/{doc}/{ver_pending}/{sha3}"))
+
+        def as_role(role):
+            conn.execute(
+                "select set_config('request.jwt.claims', %s, true)",
+                (json.dumps({"role": role}),))
+
+        def ingest(role="service_role", representation="Texte parsé vérifié.",
+                   parser="caseproof-parser-v1;engine=test", request=None, version=ver):
+            as_role(role)
+            return conn.execute(
+                "select public.caseproof_registry_ingest_parsed(%s, %s, %s, %s, %s, %s)",
+                (str(case), str(doc), str(version), str(request or uuid4()),
+                 representation, parser)).fetchone()[0]
+
+        # Only service_role may call: every other role is the same denial.
+        for role in ("authenticated", "anon", ""):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    ingest(role=role)
+        # The SQL TXT parser identity stays reserved to the SQL ingest.
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(errors.InvalidParameterValue):
+                ingest(parser="strict-utf8-txt-v1")
+        # Missing Storage fidelity row: masked denial.
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(errors.InsufficientPrivilege):
+                ingest(version=ver_no_storage)
+        # Intent merely pending: masked denial.
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(errors.InsufficientPrivilege):
+                ingest(version=ver_pending)
+
+        # Happy path: exact digests, immutable registry row, service audit.
+        outcome = ingest()
+        rep_sha = hashlib.sha256("Texte parsé vérifié.".encode()).hexdigest()
+        assert outcome["original_sha"] == sha
+        assert outcome["representation_sha"] == rep_sha
+        assert outcome["case_id"] == str(case) and outcome["version_id"] == str(ver)
+        expected_snapshot = hashlib.sha256(
+            f"{org}:{case}:{ver}:{sha}:{rep_sha}:caseproof-parser-v1;engine=test".encode()
+        ).hexdigest()
+        assert outcome["snapshot_sha"] == expected_snapshot
+        row = conn.execute(
+            "select representation, parser_id, original_sha, representation_sha"
+            " from caseproof._dev_journey_sources"
+            " where case_id=%s and version_id=%s",
+            (str(case), str(ver))).fetchone()
+        assert row == ("Texte parsé vérifié.", "caseproof-parser-v1;engine=test",
+                       sha, rep_sha)
+        assert conn.execute(
+            "select actor_type, actor_user_id, action from caseproof.audit_events"
+            " where case_id=%s and action='dev_parsed_ingested'",
+            (str(case),)).fetchone() == ("service", None, "dev_parsed_ingested")
+        # The same version can never be ingested twice, even with a new request.
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(errors.UniqueViolation):
+                ingest()
 
 
 def test_live_workbench_assembly_refuses_mixed_backends():
