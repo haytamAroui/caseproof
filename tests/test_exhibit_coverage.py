@@ -148,3 +148,35 @@ def test_legal_findings_unchanged_by_exhibit_coverage(tmp_path):
     _, _, body = run(tmp_path, [f"Article 8.5 du Code civil : « {ARTICLE} » (pièce 1)."])
     legal = [r for r in body["references"] if not r["reason"].startswith("exhibit_")]
     assert any(r["status"] == "PASS" for r in legal)
+
+
+def _decided(tmp_path, paragraphs, index_of):
+    raw, cp, body = run(tmp_path, paragraphs)
+    idx = index_of(body)
+    raw2, cp2 = record_decisions(pack=raw, checkpoint=cp, decisions=[
+        {"reference_index": idx, "action": "confirm", "reason": "", "reviewer_label": "local"}])
+    return raw2, cp2
+
+
+def _recheck_decisions(tmp_path, paragraphs, prior):
+    docx = tmp_path / "w.docx"
+    docx.write_bytes(docx_without_custom_xml(paragraphs))
+    raw, cp = recheck(docx=docx, corpus=pdf_corpus(tmp_path), prior_pack=prior[0], prior_checkpoint=prior[1],
+                      exhibits=tmp_path / "pieces")
+    return verify_legal_pack(raw, expected_sha256=cp)["review"]
+
+
+def test_same_piece_cited_in_two_assertions_gets_its_own_decision(tmp_path):
+    paragraphs = ["Le bail est signé (pièce 1).", "Le loyer est de 800 euros (pièce 1)."]
+    first = lambda body: next(i for i, r in enumerate(body["references"]) if r["reason"] == R_LOCATED)  # noqa: E731
+    prior = _decided(tmp_path, paragraphs, first)
+    review = _recheck_decisions(tmp_path, paragraphs, prior)
+    assert len(review["decisions"]) == 1, "only the first occurrence is covered, not the identical reference elsewhere"
+
+
+def test_changed_surrounding_assertion_withdraws_the_piece_decision_although_bytes_are_identical(tmp_path):
+    paragraphs = ["Le bail est signé (pièce 1)."]
+    first = lambda body: next(i for i, r in enumerate(body["references"]) if r["reason"] == R_LOCATED)  # noqa: E731
+    prior = _decided(tmp_path, paragraphs, first)
+    review = _recheck_decisions(tmp_path, ["Le bail est résilié (pièce 1)."], prior)
+    assert not review["decisions"] and review["superseded"]
