@@ -16,7 +16,12 @@ from typing import Any, Protocol
 from zipfile import ZIP_STORED, BadZipFile, ZipFile
 
 from application.litigation.corpus import ArticleRecord, CorpusError, check_derived_binding
-from application.litigation.legal_references import ENGINE_STRICT, LegalCorpusConfig, check_legal_references
+from application.litigation.legal_references import (
+    _QUOTE_STRICT,
+    ENGINE_STRICT,
+    LegalCorpusConfig,
+    check_legal_references,
+)
 from application.litigation.legal_review_decisions import fingerprints, validate_review
 from application.litigation.unified_review import LegalObservation
 
@@ -49,7 +54,7 @@ def _config(data: dict[str, Any]) -> LegalCorpusConfig:
         if not isinstance(text, str) or _hash(text.encode()) != values["derived_sha256"]:
             raise CorpusError("article text changed")
         record = ArticleRecord(**values, original_bytes=raw)
-        check_derived_binding(record.source_artifact_kind, raw, text)
+        check_derived_binding(record.source_artifact_kind, raw, text, record.article)
         records.append(record)
     if len({r.key for r in records}) != len(records):
         raise CorpusError("duplicate article identity")
@@ -58,6 +63,17 @@ def _config(data: dict[str, Any]) -> LegalCorpusConfig:
                for m in (data["act_aliases"], data["chosen_versions"])):
         raise CorpusError("declared selection required")
     return LegalCorpusConfig(tuple(records), data["act_aliases"], data["chosen_versions"])
+
+
+_SCOPE = {
+    "quotation_found_verbatim_in_corpus_article": "Extrait littéral retrouvé dans le texte conservé de l'article. Contexte, réserves, portée et applicabilité non évalués.",
+    "quotation_absent_from_corpus_article_text": "Extrait absent du texte conservé de l'article.",
+    "quotation_partial_excerpt_review_required": "Extrait littéral retrouvé, mais il ne commence pas ou ne finit pas à une limite de phrase du texte conservé. Appréciation de l'avocat requise.",
+    "quotation_starts_or_ends_mid_word": "Fragment qui commence ou finit au milieu d'un mot. Appréciation de l'avocat requise.",
+    "article_exists_in_corpus_no_quotation_checked_claim_not_verified": "Article présent dans le corpus. Aucune citation n'a été contrôlée : l'affirmation n'est pas vérifiée.",
+    "sub_article_locator_not_checked_in_corpus": "Alinéa, paragraphe ou autre subdivision cité : non contrôlé, le corpus ne contient pas ce niveau.",
+    "quotation_not_bound_to_a_checked_reference": "Citation entre guillemets non rattachée à un article contrôlé : non vérifiée.",
+}
 
 
 def _report(body: dict[str, Any]) -> bytes:
@@ -74,6 +90,16 @@ def _report(body: dict[str, Any]) -> bytes:
              "</style><h1>Revue juridique hors ligne</h1><p class='note'>", esc(NOTE), "</p>",
              "<p>Pack figé <code>", esc(body["corpus_pack_sha256"]), "</code></p>",
              "<p>Revue <code>", esc(body["snapshot_hash"]), "</code></p><h2>Références vérifiées</h2>"]
+    strict = body["review"].get("check_engine") == ENGINE_STRICT
+    if strict:
+        quotes = [m for m in _QUOTE_STRICT.finditer(body["brief_text"])]
+        accounted = sum(any(o.get("quote") and " ".join(o["quote"].split()) == " ".join(next(g for g in m.groups() if g is not None).split())
+                            for o in body["references"]) for m in quotes)
+        parts += ["<p class='note'>Moteur de contrôle strict (v2). Les exports plus anciens, sans cette mention, utilisent un moteur plus large. ",
+                  "Un PASS signifie seulement : extrait littéralement présent dans le texte conservé. Le contexte, les réserves, la portée et ",
+                  "l'applicabilité restent à l'avocat.</p><h2>Couverture</h2><p>Citations entre guillemets dans le Word : ", str(len(quotes)),
+                  ". Citations avec un constat visible ci-dessous : ", str(accounted), ". Références d'article : ",
+                  str(sum(1 for o in body["references"] if o["act_code"] is not None)), ".</p>"]
     by_key = {r["key"]: r for r in body["article_index"]}
     prints = fingerprints(body["references"], body["articles"], body["article_index"], body["corpus_pack_sha256"])
     layered = body["review"].get("decision_layer") == 1
@@ -81,6 +107,8 @@ def _report(body: dict[str, Any]) -> bytes:
     for obs, fp in zip(body["references"], prints, strict=True):
         parts += ["<article><h3>", esc(obs["raw_text"]), "</h3><strong>", esc(obs["status"]),
                   "</strong> · ", esc(obs["reason"]), "<pre>", esc(obs["quote"] or "Aucune citation liée"), "</pre>"]
+        if strict and obs["reason"] in _SCOPE:
+            parts += ["<p>", esc(_SCOPE[obs["reason"]]), "</p>"]
         row = by_key.get(obs["corpus_key"])
         if row is not None:
             parts += [f"<a href='#article-{row['index']}'>Rouvrir le passage exact du pack figé</a>"]

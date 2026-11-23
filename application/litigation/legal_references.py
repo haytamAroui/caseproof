@@ -73,7 +73,7 @@ def _norm_exact(text: str) -> str:
     return _WS.sub(" ", text.replace("\u00a0", " ").replace("\u2019", "'")).strip()
 
 
-def _excerpt_issue(quote: str, article: str) -> str | None:
+def _excerpt_issue(quote: str, article: str, body_start: str = "") -> str | None:
     """None when some literal occurrence starts and ends where a reader expects.
 
     A fragment that begins mid-sentence or mid-word, or stops before the sentence
@@ -85,8 +85,11 @@ def _excerpt_issue(quote: str, article: str) -> str | None:
     while start != -1:
         end = start + len(quote)
         before = article[:start].rstrip()
-        starts_ok = start == 0 or (not article[start - 1].isalnum() and (
-            quote[0].isupper() or (before[-1:] in ".;:!?" and article[start - 1] == " ")))
+        # Heading and body are flattened into one run in a text capture. The body start
+        # is therefore declared in the corpus manifest. Without it, only a quote that
+        # starts at the article's first character or after a sentence end can be complete.
+        at_body = bool(body_start) and article.startswith(body_start, start) and article[:start].endswith(" ")
+        starts_ok = start == 0 or at_body or (article[start - 1] == " " and before[-1:] in ".;:!?")
         word_ok = (start == 0 or not article[start - 1].isalnum()) and (end == len(article) or not article[end].isalnum())
         ends_ok = end == len(article) or quote[-1] in ".;:!?" or article[end] in ".;:!?"
         if starts_ok and word_ok and ends_ok:
@@ -219,7 +222,7 @@ def check_legal_references(
                 if q not in article_norm:
                     verdicts.append(("FAIL", "quotation_absent_from_corpus_article_text", raw_q))
                     continue
-                issue = _excerpt_issue(q, article_norm)
+                issue = _excerpt_issue(q, article_norm, _norm_exact(record.body_start))
                 verdicts.append(("UNDETERMINED", issue, raw_q) if issue else
                                 ("PASS", "quotation_found_verbatim_in_corpus_article", raw_q))
             if not verdicts:
@@ -227,9 +230,10 @@ def check_legal_references(
                     **base, **ident, status=RuleStatus.UNDETERMINED,
                     reason="article_exists_in_corpus_no_quotation_checked_claim_not_verified"))
                 continue
-            worst = max(verdicts, key=lambda v: _STATUS_RANK[v[0]])
-            out.append(LegalReferenceObservation(
-                **base, **ident, quote=worst[2], status=RuleStatus(worst[0]), reason=worst[1]))
+            for k, (verdict_status, verdict_reason, verdict_quote) in enumerate(verdicts):
+                row = dict(base, reference_id=base["reference_id"] if k == 0 else f"{base['reference_id']}-q{k + 1}")
+                out.append(LegalReferenceObservation(
+                    **row, **ident, quote=verdict_quote, status=RuleStatus(verdict_status), reason=verdict_reason))
             continue
         quotes = [q for q in _bound_quotes(text, cite, article_cites) if q]
         if len(quotes) > 1 and len({_norm(q) for q in quotes}) > 1:
@@ -303,7 +307,7 @@ class LegalCorpusConfig:
                 {"key": r.key, "source_uri": r.source_uri, "acquired_at": r.acquired_at,
                  "consolidated": r.consolidated, "original_sha256": r.original_sha256,
                  "derived_sha256": r.derived_sha256, "source_artifact_kind": r.source_artifact_kind,
-                 "source_notes": r.source_notes}
+                 "source_notes": r.source_notes, **({"body_start": r.body_start} if r.body_start else {})}
                 for r in self.records), key=lambda row: str(row["key"])),
             "act_aliases": dict(self.act_aliases),
             "chosen_versions": dict(self.chosen_versions), "failures": list(self.failures),

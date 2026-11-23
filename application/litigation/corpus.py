@@ -42,12 +42,18 @@ def _ws(text: str) -> str:
     return re.sub(r"\s+", " ", text.replace("\u00a0", " ")).strip()
 
 
-def check_derived_binding(artifact_kind: str, original_bytes: bytes, derived_text: str) -> None:
-    """A text capture's derived article must literally occur in its preserved original.
+_HEADING = r"(?:Art\.|Section|Chapitre|Afdeling|Hoofdstuk|Boek|Livre|Titre|Titel)"
 
-    Hashing both files proves nothing about their relation: a derived text edited
-    beside an intact original would otherwise be checked against as "the source".
-    Other artifact kinds (for example a PDF) need an extraction proof not built yet.
+
+def check_derived_binding(artifact_kind: str, original_bytes: bytes, derived_text: str, article: str = "") -> None:
+    """A text capture's derived article must be the declared article's own span in its original.
+
+    Hashing both files proves nothing about their relation. Occurring somewhere in a large
+    capture is not enough either: text lifted from another article, or injected, would pass.
+    So the derived text must start with the declared article heading, appear unmodified in
+    the preserved capture, contain no other article heading, and end where the next heading
+    (or the end of the capture) begins. Other artifact kinds (for example a PDF) need an
+    extraction proof not built yet. This binds derivation, not publisher authenticity.
     """
     if artifact_kind != "official_text_capture":
         return
@@ -55,9 +61,20 @@ def check_derived_binding(artifact_kind: str, original_bytes: bytes, derived_tex
         original = original_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise CorpusError("text capture original is not UTF-8") from exc
-    needle = _ws(derived_text)
-    if not needle or needle not in _ws(original):
-        raise CorpusError("derived article text does not occur in its preserved original capture")
+    needle, hay = _ws(derived_text), _ws(original)
+    if not needle:
+        raise CorpusError("derived article text is empty")
+    if article and not re.match(rf"Art\.\s*{re.escape(article)}(?:\.|\s)", needle):
+        raise CorpusError("derived text does not start with the declared article heading")
+    if re.search(r"\bArt\.\s*\d", needle[4:]):
+        raise CorpusError("derived text contains another article heading")
+    at = hay.find(needle)
+    while at != -1:
+        tail = hay[at + len(needle):]
+        if not tail.strip() or re.match(rf"\s*{_HEADING}(?=[\s\d])", tail):
+            return
+        at = hay.find(needle, at + 1)
+    raise CorpusError("derived article text does not occur as that article's own span in its preserved original capture")
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +94,7 @@ class ArticleRecord:
     original_bytes: bytes | None = field(default=None, repr=False)
     source_artifact_kind: str = "publisher_file"
     source_notes: str = ""
+    body_start: str = ""
 
     @property
     def key(self) -> str:
@@ -117,7 +135,7 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
         raise CorpusError(f"manifest entry {index} is not a table")
     allowed = {"act", "article", "language", "version", "source_uri", "acquired_at",
                "consolidated", "original_file", "original_sha256", "derived_file",
-               "source_artifact_kind", "source_notes"}
+               "source_artifact_kind", "source_notes", "body_start"}
     if not set(entry) <= allowed:
         raise CorpusError(f"manifest entry {index} holds unknown keys: {sorted(set(entry) - allowed)}")
     act = _require_str(entry.get("act"), "act", 256)
@@ -168,7 +186,12 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
         raise CorpusError("unknown source artifact kind")
     if not isinstance(notes, str) or len(notes) > 4000:
         raise CorpusError("bounded source provenance required")
-    check_derived_binding(artifact_kind, original_bytes, derived_text)
+    check_derived_binding(artifact_kind, original_bytes, derived_text, article)
+    body_start = entry.get("body_start", "")
+    if not isinstance(body_start, str) or len(body_start) > 200:
+        raise CorpusError("bounded body_start required")
+    if body_start and (_ws(derived_text).count(body_start) != 1 or _ws(derived_text).startswith(body_start)):
+        raise CorpusError("body_start must occur exactly once, after the heading, in the derived text")
     return ArticleRecord(
         act=act,
         article=article,
@@ -181,7 +204,7 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
         derived_text=derived_text,
         derived_sha256=hashlib.sha256(derived_bytes).hexdigest(),
         original_bytes=original_bytes,
-        source_artifact_kind=artifact_kind, source_notes=notes,
+        source_artifact_kind=artifact_kind, source_notes=notes, body_start=body_start,
     )
 
 

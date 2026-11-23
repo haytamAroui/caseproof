@@ -21,15 +21,15 @@ PAGE = "Art. 8.4. Autre. Texte voisin.\nArt. 8.5. Règle générale - preuve cer
 DERIVED = "Art. 8.5. Règle générale - preuve certaine " + ARTICLE
 
 
-def corpus(tmp_path: Path, derived: str = DERIVED) -> Path:
+def corpus(tmp_path: Path, derived: str = DERIVED, page: str = PAGE, body: str = "Hormis les cas") -> Path:
     d = tmp_path / "c"
     d.mkdir(exist_ok=True)
-    (d / "capture.txt").write_text(PAGE)
+    (d / "capture.txt").write_text(page)
     (d / "art.txt").write_text(derived)
     entry = {"act": "be-civ", "article": "8.5", "language": "fr", "version": "v1",
              "source_uri": "urn:synthetic:capture", "acquired_at": "2026-11-23", "consolidated": True,
              "original_file": "capture.txt", "derived_file": "art.txt",
-             "original_sha256": hashlib.sha256(PAGE.encode()).hexdigest(),
+             "original_sha256": hashlib.sha256(page.encode()).hexdigest(), "body_start": body,
              "source_artifact_kind": "official_text_capture"}
     lines = ["format = " + json.dumps(CORPUS_FORMAT_VERSION), "[[publication]]"]
     lines += [k + " = " + (str(v).lower() if isinstance(v, bool) else json.dumps(v)) for k, v in entry.items()]
@@ -38,10 +38,10 @@ def corpus(tmp_path: Path, derived: str = DERIVED) -> Path:
     return d
 
 
-def run(tmp_path: Path, *paragraphs: str):
+def run(tmp_path: Path, *paragraphs: str, **corpus_args: str):
     path = tmp_path / "b.docx"
     path.write_bytes(docx_without_custom_xml(list(paragraphs)))
-    raw, cp = check_offline_docx(docx=path, corpus=corpus(tmp_path))
+    raw, cp = check_offline_docx(docx=path, corpus=corpus(tmp_path, **corpus_args))
     return verify_legal_pack(raw, expected_sha256=cp)["references"]
 
 
@@ -132,3 +132,50 @@ def test_survivors_absent_article_unmapped_act_and_negation(tmp_path):
     assert verdict(run(tmp_path, "Article 8.6 du Code civil."))[0] == "UNVERIFIED"
     assert verdict(run(tmp_path, "Article 8.5 du Code judiciaire."))[0] == "UNDETERMINED"
     assert verdict(run(tmp_path, f"Article 8.5 du Code civil : « {ARTICLE.replace('doit', 'ne doit pas')} »"))[0] == "FAIL"
+
+
+def _fails(tmp_path, **kw):
+    report = load_corpus(corpus(tmp_path, **kw))
+    return not report.records and bool(report.failures)
+
+
+def test_derived_must_be_the_declared_article_span_not_any_text_in_the_capture(tmp_path):
+    other = "Art. 8.4. Autre. Texte voisin."
+    assert _fails(tmp_path, derived=other)  # another article's text declared as 8.5
+    assert _fails(tmp_path, derived="Art. 8.5. Règle générale - preuve certaine Hormis les cas où la loi en dispose autrement,")  # truncated span
+    # An injected sentence in the capture (hash updated alongside) is not part of a heading-bounded span.
+    injected = PAGE.replace("Art. 8.6. Suite.", "Art. 8.5bis texte injecté. Art. 8.6. Suite.")
+    assert _fails(tmp_path, derived=DERIVED + " Art. 8.5bis texte injecté.", page=injected)
+
+
+def test_omitted_prefix_with_capitalised_remainder_is_not_a_pass(tmp_path):
+    """The earlier engine treated a capital letter as a sentence start."""
+    article = ("Hormis les cas où la loi en dispose autrement, la preuve est libre. "
+               "Sauf Convention contraire, Le juge apprécie souverainement.")
+    page = "Art. 8.4. Autre.\nArt. 8.5. Règle générale - preuve certaine " + article + "\nArt. 8.6. Suite."
+    derived = "Art. 8.5. Règle générale - preuve certaine " + article
+    refs = run(tmp_path, "Article 8.5 du Code civil : « Le juge apprécie souverainement. »", derived=derived, page=page)
+    assert verdict(refs) == ("UNDETERMINED", "quotation_partial_excerpt_review_required")
+    refs = run(tmp_path, "Article 8.5 du Code civil : « Sauf Convention contraire, Le juge apprécie souverainement. »",
+               derived=derived, page=page)
+    assert verdict(refs)[0] == "PASS"
+
+
+def test_without_declared_body_start_first_sentence_is_not_assumed_complete(tmp_path):
+    refs = run(tmp_path, f"Article 8.5 du Code civil : « {ARTICLE} »", body="")
+    assert verdict(refs) == ("UNDETERMINED", "quotation_partial_excerpt_review_required")
+
+
+def test_report_accounts_for_every_quotation_and_labels_scope(tmp_path):
+    import io
+    from zipfile import ZipFile
+    path = tmp_path / "b.docx"
+    path.write_bytes(docx_without_custom_xml([
+        f"Article 8.5 du Code civil : « {ARTICLE} » et « La preuve est toujours inutile. »", "« Citation orpheline. »"]))
+    raw, cp = check_offline_docx(docx=path, corpus=corpus(tmp_path))
+    refs = verify_legal_pack(raw, expected_sha256=cp)["references"]
+    assert sorted(r["quote"] for r in refs if r["quote"]) == sorted(
+        [ARTICLE, "La preuve est toujours inutile.", "Citation orpheline."])
+    html = ZipFile(io.BytesIO(raw)).read("report.html").decode()
+    assert "Citations entre guillemets dans le Word : 3. Citations avec un constat visible ci-dessous : 3" in html
+    assert "Contexte, réserves, portée et applicabilité non évalués" in html and "Moteur de contrôle strict (v2)" in html
