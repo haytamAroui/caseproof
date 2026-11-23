@@ -193,6 +193,60 @@ class DisposableSignedBriefPublisherTests(unittest.TestCase):
                 sha256_hex="zz" * 32,
             )
 
+    def test_confirm_exhibit_appends_at_current_revision(self) -> None:
+        src = b"SOURCE CONFIRMEE PAR LE SIGNATAIRE. quote beta\n"
+        d, v = self._register(src, "source a confirmer")
+        self._upload(d, v, src)
+        first = self.publisher.confirm_exhibit(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=d,
+            version_id=v,
+            display_label="Source A",
+        )
+        self.assertEqual(first.exhibit_revision, 2)
+        d2, v2 = self._register(b"AUTRE SOURCE. quote beta\n", "autre source")
+        self._upload(d2, v2, b"AUTRE SOURCE. quote beta\n")
+        second = self.publisher.confirm_exhibit(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=d2,
+            version_id=v2,
+            display_label="Source A bis",
+        )
+        self.assertEqual(second.exhibit_revision, 3)
+        self.assertNotEqual(first.exhibit_id, second.exhibit_id)
+
+    def test_confirm_exhibit_unknown_document_masked(self) -> None:
+        with self.assertRaises(PrivateStorageDenied):
+            self.publisher.confirm_exhibit(
+                bearer="synthetic-fixture-only",
+                case_id=self.case_id,
+                document_id=str(uuid4()),
+                version_id=str(uuid4()),
+                display_label="inconnue",
+            )
+
+    def test_confirm_exhibit_denied_without_grant(self) -> None:
+        src = b"SOURCE SANS DROIT. quote beta\n"
+        d, v = self._register(src, "source sans droit")
+        self._upload(d, v, src)
+        with connect() as conn:
+            conn.execute(
+                "update caseproof._m1_matter_grants "
+                "set permissions=array_remove(permissions,'exhibit:confirm') "
+                "where case_id=%s and user_id=%s",
+                (self.f.scope.case_id, self.f.actor),
+            )
+        with self.assertRaises(PrivateStorageDenied):
+            self.publisher.confirm_exhibit(
+                bearer="synthetic-fixture-only",
+                case_id=self.case_id,
+                document_id=d,
+                version_id=v,
+                display_label="Source A",
+            )
+
     def test_register_source_version_denied_without_grant(self) -> None:
         with connect() as conn:
             conn.execute(

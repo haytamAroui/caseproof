@@ -62,6 +62,8 @@ def extract(text: str) -> list[tuple[str, str, str]]:
     refs = [("ref-01", "Source A", "quote alpha")] if "quote alpha" in text else []
     if BELGIAN_QUOTE in text:
         refs.append(("ref-be", BELGIAN_LABEL, BELGIAN_QUOTE))
+    if "quote gamma" in text:
+        refs.append(("ref-03", "Source C", "quote gamma"))
     return refs
 
 
@@ -282,6 +284,69 @@ class DisposableReviewReceiptTests(unittest.TestCase):
         )
         states = {obs.reference_id: obs.state.value for obs in run.citation_observations}
         self.assertEqual(states, {"ref-be": "exact_match"})
+
+    def test_confirmed_exhibit_enters_check_denominator(self) -> None:
+        src = b"SOURCE C CONFIRMEE. quote gamma\n"
+        document, version = uuid4(), uuid4()
+        with connect() as conn:
+            conn.execute(
+                "insert into caseproof.documents(id,org_id,case_id,source_label) values(%s,%s,%s,%s)",
+                (document, self.f.scope.org_id, self.f.scope.case_id, "source c"),
+            )
+            conn.execute(
+                "insert into caseproof.document_versions(id,org_id,document_id,version_number,"
+                "original_sha256_hex,byte_length,media_type) values(%s,%s,%s,1,%s,%s,%s)",
+                (version, self.f.scope.org_id, document, sha256(src).hexdigest(), len(src), "text/plain"),
+            )
+        self.library.put_once(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=str(document),
+            version_id=str(version),
+            data=src,
+        )
+        confirmation = self.publisher.confirm_exhibit(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=str(document),
+            version_id=str(version),
+            display_label="Source C",
+        )
+        self.assertGreaterEqual(confirmation.exhibit_revision, 2)
+        original = "BRIEF DEMO. «quote gamma» (Source C)\n".encode()
+        d2, v2 = uuid4(), uuid4()
+        with connect() as conn:
+            conn.execute(
+                "insert into caseproof.documents(id,org_id,case_id,source_label) values(%s,%s,%s,%s)",
+                (d2, self.f.scope.org_id, self.f.scope.case_id, "brief citant c"),
+            )
+            conn.execute(
+                "insert into caseproof.document_versions(id,org_id,document_id,version_number,"
+                "original_sha256_hex,byte_length,media_type) values(%s,%s,%s,1,%s,%s,%s)",
+                (v2, self.f.scope.org_id, d2, sha256(original).hexdigest(), len(original), "text/plain"),
+            )
+        self.library.put_once(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=str(d2),
+            version_id=str(v2),
+            data=original,
+        )
+        outcome = self.publisher.publish_uploaded(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            document_id=str(d2),
+            version_id=str(v2),
+            document_role="own_draft",
+            expected_revision=0,
+        )
+        run = self.service.check(
+            bearer="synthetic-fixture-only",
+            case_id=self.case_id,
+            brief_version_id=outcome.brief_version_id,
+        )
+        states = {obs.reference_id: obs.state.value for obs in run.citation_observations}
+        self.assertEqual(states, {"ref-03": "exact_match"})
 
     def test_record_before_publication_is_denied(self) -> None:
         with self.assertRaises(PrivateStorageDenied):

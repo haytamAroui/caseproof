@@ -112,6 +112,11 @@
           <label>Original file<input id="register-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
           <button id="register" type="submit" class="secondary">Declare and upload new source</button></form>
           <p id="register-status" class="small mono" aria-live="polite"></p>
+          <p class="small">Declare an exhibit for this matter's corpus: digest registered first, bytes must match, then it is confirmed into the check scope at the current revision. Adding an exhibit stales published snapshots; publish a new brief version and re-run the check afterwards.</p>
+          <form id="exhibit-form"><label>Exhibit label<input id="exhibit-label" maxlength="200" required placeholder="e.g. Code civil, art. 1735"></label>
+          <label>Exhibit file<input id="exhibit-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
+          <button id="exhibit" type="submit" class="secondary">Declare, upload and confirm exhibit</button></form>
+          <p id="exhibit-status" class="small mono" aria-live="polite"></p>
           <p class="small">Or upload bytes to a source the server already registered for this matter.</p>
           <form id="upload-form"><label>Registered document<select id="upload-document" required></select></label>
           <label>Registered version<select id="upload-version" required></select></label>

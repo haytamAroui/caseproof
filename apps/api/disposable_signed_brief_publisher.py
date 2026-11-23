@@ -22,6 +22,7 @@ import hashlib
 from collections.abc import Callable
 from uuid import UUID, uuid4
 
+from application.litigation.exhibit_confirmation import serialized_entries
 from application.litigation.matter_policy import MatterPermission, authorize_matter
 from application.litigation.unified_review import BriefRepresentation
 from apps.api.access_control import VerifiedSubject
@@ -37,10 +38,12 @@ from apps.api.litigation_development_app import (
     SignedDocumentRegistration,
     SignedDocumentSummary,
     SignedDocumentVersionSummary,
+    SignedExhibitConfirmation,
     SignedPublishOutcome,
 )
 from apps.api.signed_document_parse import parse_verified_original
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied
+from domains.disputes.exhibits import ExhibitEntry, ExhibitPage
 
 __all__ = ["DisposableSignedBriefPublisher", "working_brief_id"]
 
@@ -176,6 +179,107 @@ class DisposableSignedBriefPublisher:
         return tuple(
             SignedDocumentSummary(key, labels[key], tuple(versions)) for key, versions in documents.items()
         )
+
+    def confirm_exhibit(
+        self,
+        *,
+        bearer: str,
+        case_id: str,
+        document_id: str,
+        version_id: str,
+        display_label: str,
+    ) -> SignedExhibitConfirmation:
+        subject = self._subject(bearer, case_id)
+        scope = self._authorize(subject, case_id, MatterPermission.EXHIBIT_CONFIRM)
+        case = _uuid(case_id)
+        document = _uuid(document_id)
+        version = _uuid(version_id)
+        if (
+            not isinstance(display_label, str)
+            or not 0 < len(display_label.strip()) <= 200
+            or "\r" in display_label
+            or "\n" in display_label
+        ):
+            raise ValueError("invalid exhibit declaration")
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "select 1 from caseproof.document_versions v "
+                "join caseproof.documents d on d.id=v.document_id and d.org_id=v.org_id "
+                "where v.id=%s and d.id=%s and d.case_id=%s and d.org_id=%s",
+                (version, document, case, _uuid(scope.org_id)),
+            )
+            if not cur.fetchall():
+                raise PrivateStorageDenied("Private source unavailable")
+            cur.execute(
+                "select revision,payload,payload_sha256 from caseproof._m1_exhibit_heads "
+                "where org_id=%s and case_id=%s",
+                (_uuid(scope.org_id), case),
+            )
+            rows = cur.fetchall()
+            if len(rows) != 1:
+                raise PrivateStorageDenied("Private source unavailable")
+            revision, document_head, expected_sha = rows[0]
+            import json as _json
+
+            digest = hashlib.sha256(
+                _json.dumps(document_head, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+            ).hexdigest()
+            if (
+                type(revision) is not int
+                or revision < 1
+                or not isinstance(document_head, dict)
+                or document_head.get("schema") != "caseproof-exhibit-register-v1"
+                or type(document_head.get("entries")) is not list
+                or digest != expected_sha
+            ):
+                raise PrivateStorageDenied("Private source unavailable")
+            try:
+                entries = tuple(
+                    ExhibitEntry(
+                        exhibit_id=e["exhibit_id"],
+                        display_label=e["display_label"],
+                        aliases=tuple(e["aliases"]),
+                        confirmed=e["confirmed"],
+                        manual_inclusion=e["manual_inclusion"],
+                        pages=tuple(ExhibitPage(**pg) for pg in e["pages"]),
+                    )
+                    for e in document_head["entries"]
+                )
+            except (KeyError, TypeError, ValueError):
+                raise PrivateStorageDenied("Private source unavailable") from None
+            exhibit_id = "piece-" + uuid4().hex[:12]
+            augmented = entries + (
+                ExhibitEntry(
+                    exhibit_id,
+                    display_label.strip(),
+                    (
+                        ExhibitPage(
+                            str(document),
+                            str(version),
+                            printed_page=1,
+                        ),
+                    ),
+                    confirmed=True,
+                ),
+            )
+            encoded = serialized_entries(augmented)
+            import psycopg
+
+            try:
+                cur.execute(
+                    "select * from caseproof._m1_disposable_confirm_exhibits(%s,%s,%s,%s,%s::jsonb,%s)",
+                    (
+                        _uuid(subject.subject_id),
+                        case,
+                        uuid4(),
+                        revision,
+                        encoded.decode("utf-8"),
+                        hashlib.sha256(encoded).hexdigest(),
+                    ),
+                )
+            except psycopg.Error:
+                raise ValueError("exhibit confirmation conflict") from None
+        return SignedExhibitConfirmation(exhibit_id=exhibit_id, exhibit_revision=revision + 1)
 
     def register_source_version(
         self,

@@ -470,6 +470,49 @@
       notice("Source declaration failed: "+(error&&error.message?error.message:"unavailable"),"danger");}
     finally{$("register").disabled=false;}
   }
+  async function declareExhibit(evt){
+    evt.preventDefault();
+    // Register digest, upload matching bytes, then confirm the exhibit into
+    // the check denominator at the current register revision.
+    const session=state.session,caseId=state.caseId;
+    const label=$("exhibit-label").value.trim();
+    const file=$("exhibit-file").files?.[0];
+    const mime=file?{txt:"text/plain",pdf:"application/pdf",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg"}[file.name.split(".").pop()?.toLowerCase()]:null;
+    if(!label||!file||file.size<=0||file.size>20*1024*1024||!mime){
+      notice("Enter an exhibit label and choose a supported file under 20 MiB.","danger");return;
+    }
+    $("exhibit").disabled=true;
+    try{
+      const digestBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
+      const digestHex=Array.from(digestBytes,(b)=>b.toString(16).padStart(2,"0")).join("");
+      const d=await api("/dev/signed/matters/"+encodeURIComponent(caseId)+"/documents",{
+        method:"POST",json:{label,media_type:mime,byte_length:file.size,sha256_hex:digestHex}});
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(d.schema!=="caseproof-signed-document-register-v1"||!UUID.test(d.document_id)||!UUID.test(d.version_id))
+        throw Error("invalid_schema");
+      const token=await bearer();
+      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(caseId)+
+        "/documents/"+encodeURIComponent(d.document_id)+"/versions/"+encodeURIComponent(d.version_id)+"/original",{
+          method:"PUT",credentials:"omit",redirect:"error",cache:"no-store",
+          headers:{"Authorization":"Bearer "+token,"Content-Type":mime},body:file,
+        });
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(response.status!==201)throw Error("unavailable");
+      const c=await api("/dev/signed/matters/"+encodeURIComponent(caseId)+"/exhibits/confirm",{
+        method:"POST",json:{document_id:d.document_id,version_id:d.version_id,display_label:label}});
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(c.schema!=="caseproof-signed-exhibit-confirm-v1"||typeof c.exhibit_id!=="string"||
+         !Number.isInteger(c.exhibit_revision))
+        throw Error("invalid_schema");
+      $("exhibit-label").value="";$("exhibit-file").value="";
+      $("exhibit-status").textContent="Exhibit declared, uploaded and confirmed at register revision "+
+        c.exhibit_revision+": "+file.name+" \u00b7 "+file.size+" bytes \u00b7 SHA-256 "+digestHex.slice(0,16)+"\u2026";
+      notice("Exhibit confirmed into the check scope. Published snapshots are stale: publish a new brief version and re-run the check.","ok");
+      await load();
+    }catch(error){if(state.session===session&&state.caseId===caseId)
+      notice("Exhibit declaration failed: "+(error&&error.message?error.message:"unavailable"),"danger");}
+    finally{$("exhibit").disabled=false;}
+  }
   async function loadCatalog() {
     const generation=state.generation;
     // Recharging the catalog must never silently move the publish target:
@@ -875,6 +918,7 @@
     $("review-form").addEventListener("submit",submitReview);
     $("search").addEventListener("click",search);
     $("register-form").addEventListener("submit",registerSource);
+    $("exhibit-form").addEventListener("submit",declareExhibit);
     $("upload-form").addEventListener("submit",upload);
     $("upload-document").addEventListener("change",populateVersions);
     const publishForm=$("publish-form");if(publishForm)publishForm.addEventListener("submit",publishVersion);

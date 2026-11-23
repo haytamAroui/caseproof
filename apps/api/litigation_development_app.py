@@ -70,6 +70,12 @@ class SignedDocumentRegistration:
     version_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class SignedExhibitConfirmation:
+    exhibit_id: str
+    exhibit_revision: int
+
+
 class SignedBriefPublisher(Protocol):
     """Loopback-only port: publish one brief version bound to its verified
     uploaded original. Implementations must verify the bearer, read back the
@@ -97,6 +103,21 @@ class SignedBriefPublisher(Protocol):
         """Declare a new document and first version (label, size, digest)
         before any byte upload; the later upload must match the declared
         digest or fail closed."""
+        ...
+
+    def confirm_exhibit(
+        self,
+        *,
+        bearer: str,
+        case_id: str,
+        document_id: str,
+        version_id: str,
+        display_label: str,
+    ) -> SignedExhibitConfirmation:
+        """Append a registered, already-uploaded source to the matter's
+        confirmed exhibit register at the current revision (optimistic
+        concurrency); the check denominator changes only through this
+        explicit interactive confirmation."""
         ...
 
     def publish_uploaded(
@@ -565,6 +586,57 @@ def create_litigation_development_app(
                 "schema": "caseproof-signed-document-register-v1",
                 "document_id": registration.document_id,
                 "version_id": registration.version_id,
+            },
+            status_code=201,
+        )
+
+    @app.post("/dev/signed/matters/{case_id}/exhibits/confirm", status_code=201)
+    async def signed_exhibit_confirm(
+        case_id: str,
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> JSONResponse:
+        if signed_brief_publisher is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=422, detail="invalid_request") from None
+        if not isinstance(payload, dict) or set(payload) != {
+            "document_id",
+            "version_id",
+            "display_label",
+        }:
+            raise HTTPException(status_code=422, detail="invalid_request")
+        ids = [payload["document_id"], payload["version_id"]]
+        label = payload["display_label"]
+        if (
+            any(type(v) is not str or len(v) != 36 for v in ids)
+            or not isinstance(label, str)
+            or not 0 < len(label.strip()) <= 200
+            or "\r" in label
+            or "\n" in label
+        ):
+            raise HTTPException(status_code=422, detail="invalid_request")
+        try:
+            confirmation = signed_brief_publisher.confirm_exhibit(
+                bearer=_token(authorization),
+                case_id=case_id,
+                document_id=payload["document_id"],
+                version_id=payload["version_id"],
+                display_label=label.strip(),
+            )
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        except ValueError:
+            raise HTTPException(status_code=409, detail="exhibit confirmation conflict") from None
+        return JSONResponse(
+            {
+                "schema": "caseproof-signed-exhibit-confirm-v1",
+                "exhibit_id": confirmation.exhibit_id,
+                "exhibit_revision": confirmation.exhibit_revision,
             },
             status_code=201,
         )
