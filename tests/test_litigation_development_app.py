@@ -3828,6 +3828,23 @@ def test_signed_composed_workflow_on_disposable_postgres():
         facts_port.confirm(request_id=str(uuid4()), **{**kw, "value": False})
         assert facts_port.list(case_id=str(case))[0]["value"] is False  # latest wins, history kept
         assert conn.execute("select count(*) from caseproof._m3_matter_facts").fetchone()[0] == 2
+        # The actor selects a passage that exists verbatim in the named source version.
+        from types import SimpleNamespace
+
+        from apps.api.signed_workbench_routes import FactConfirmBody, _verified_passage
+        wb = SimpleNamespace(checker=checker)
+        pbody = {"request_id": str(uuid4()), "name": "bail_ecrit", "value": True, "confirmed": True,
+                 "source_document_id": contract.document_id, "source_version_id": contract.version_id,
+                 "brief_version_id": out2.brief_version_id, "passage": "Le prix est payable"}
+        locator = _verified_passage(wb, "user-token-a", str(case), FactConfirmBody(**pbody))
+        assert locator.startswith("p.2 offsets ") and "Le prix est payable" in locator
+        with pytest.raises(AccessRejected):  # words that are not in the source
+            _verified_passage(wb, "user-token-a", str(case),
+                              FactConfirmBody(**{**pbody, "passage": "texte absent de la source"}))
+        with pytest.raises(AccessRejected):  # a source version of another document
+            _verified_passage(wb, "user-token-a", str(case), FactConfirmBody(
+                **{**pbody, "source_document_id": brief_reg.document_id,
+                   "source_version_id": brief_reg.version_id}))
         with pytest.raises(Exception, match="append-only"):
             conn.execute("update caseproof._m3_matter_facts set confirmed=false")
 
@@ -4058,4 +4075,36 @@ def test_authenticated_facts_replace_declared_file_facts():
     (fact, prov), = merged.facts
     assert fact.confirmed is True and prov.startswith("authenticated signed session: actor u-1")
     bad = merge_authenticated_facts(base, [{**row, "value": None}])
-    assert bad.failures and bad.facts[0][1] == "file: declared"
+    assert bad.failures
+    # A declared file fact never counts as confirmed once a signed ledger is in use.
+    (declared, why), = bad.facts
+    assert declared.confirmed is False and why.startswith("declared in file, not authenticated")
+    legacy = merge_authenticated_facts(
+        SuitabilityConfig((), ((ConfirmedFact("a", True, True), "file"),)), [],
+        require_authenticated=False)
+    assert legacy.facts[0][0].confirmed is True
+
+
+def test_fact_or_rule_change_makes_a_new_snapshot_so_old_decisions_do_not_carry_over():
+    from dataclasses import replace
+
+    from application.litigation.unified_review import SuitabilityObservation, run_unified_check
+    from tests.test_litigation_m2_unified_review import rig
+    b, register, previews, scope = rig()
+    kw = {"representation": b, "register": register, "previews": previews,
+          "source_scope": scope, "authorized_case_id": "case-1",
+          "authorized_register_revision": 4}
+    obs = SuitabilityObservation(
+        rule_id="r", rule_version="0.1.0", reference="ref", scope="s", status="PASS",
+        reason="ok", article_key="a#1#fr#v", cited_by=("legal-ref-01",), missing=(),
+        facts=(("f", "True", True, "authenticated: actor, source sha"),),
+        input_hashes=(("rule_source", "1" * 64),), subresults=(("p0", "holds"),))
+    base = run_unified_check(**kw, suitability_observations=(obs,)).snapshot_hash
+    assert base == run_unified_check(**kw, suitability_observations=(obs,)).snapshot_hash
+    for changed in (
+        replace(obs, facts=(("f", "False", True, "authenticated: actor, source sha"),)),
+        replace(obs, facts=(("f", "True", True, "authenticated: other source sha"),)),
+        replace(obs, rule_version="0.2.0"),
+        replace(obs, input_hashes=(("rule_source", "2" * 64),)),
+    ):
+        assert run_unified_check(**kw, suitability_observations=(changed,)).snapshot_hash != base

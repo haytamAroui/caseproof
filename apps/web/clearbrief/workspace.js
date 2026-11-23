@@ -380,25 +380,45 @@
     for(const [v,l] of [["true","true"],["false","false"]]){const o=el("option",l);o.value=v;value.append(o);}
     const src=el("select");src.setAttribute("aria-label","Source");
     for(const r of rows){const o=el("option",(labelOf(r.source_id)||r.source_id)+" \u00b7 sha "+r.original_sha256.slice(0,8));o.value=r.document_id+"|"+r.version_id;src.append(o);}
-    const loc=el("input");loc.setAttribute("aria-label","Locator (page, passage)");loc.placeholder="Locator, e.g. page 2, \u00ab \u2026 \u00bb";loc.maxLength=200;
+    const view=el("div","","passage-view");view.tabIndex=0;view.setAttribute("aria-label","Source text: select the supporting passage");
+    const picked=el("p","No passage selected. Select the supporting words in the source text above.","small");
+    let chosen=null;
+    const loadSource=async()=>{
+      chosen=null;picked.textContent="No passage selected. Select the supporting words in the source text above.";
+      view.textContent="Loading source text\u2026";
+      const row=rows.find(r=>r.document_id+"|"+r.version_id===src.value);if(!row)return;
+      try{const d=await api(reviewPath()+"/sources/"+encodeURIComponent(row.source_id));view.textContent=d.text||"No represented text.";}
+      catch(error){view.textContent="Source text unavailable: "+statusFor(error);}
+    };
+    src.addEventListener("change",loadSource);
+    const pick=el("button","Use selected passage","secondary");pick.type="button";
+    pick.addEventListener("click",()=>{
+      const sel=window.getSelection();
+      if(!sel||sel.rangeCount===0||sel.isCollapsed||!view.contains(sel.anchorNode)||sel.anchorNode!==sel.focusNode||!view.firstChild||view.firstChild.nodeType!==3){picked.textContent="Select a passage inside the source text (one block).";return;}
+      const s=Math.min(sel.anchorOffset,sel.focusOffset),e=Math.max(sel.anchorOffset,sel.focusOffset);
+      const text=view.firstChild.data.slice(s,e);
+      if(!text.trim()||text.length>120){picked.textContent="Select between 1 and 120 characters.";return;}
+      chosen={text,start:s};picked.textContent="Selected: \u00ab"+text+"\u00bb (offset "+s+")";
+    });
     const conf=el("input");conf.type="checkbox";conf.checked=true;conf.setAttribute("aria-label","I confirm this value against the source");
     const lab=el("label","I confirm this value against the source");lab.prepend(conf);
     const go=el("button","Record confirmation","secondary");go.type="button";
     const out=el("p","","small");
     go.addEventListener("click",async()=>{
-      if(!names.length||!rows.length||!loc.value.trim()){out.textContent="Choose a fact and a source and give a locator.";return;}
+      if(!names.length||!rows.length||!chosen){out.textContent="Choose a fact and a source, then select the supporting passage.";return;}
       const [doc,ver]=src.value.split("|");
       go.disabled=true;
       try{
         const d=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/facts",{method:"POST",
           json:{request_id:crypto.randomUUID(),
-          name:name.value,value:value.value==="true",confirmed:conf.checked,source_document_id:doc,source_version_id:ver,locator:loc.value.trim()}});
+          name:name.value,value:value.value==="true",confirmed:conf.checked,source_document_id:doc,source_version_id:ver,brief_version_id:state.briefId,passage:chosen.text,passage_start:chosen.start}});
         if(d.schema!=="caseproof-signed-fact-recorded-v1")throw Error("invalid_schema");
         out.textContent="Recorded. "+d.note+" Re-running the check on a new snapshot\u2026";
         await load();
       }catch(error){out.textContent="Not recorded: "+statusFor(error);go.disabled=false;}
     });
-    form.append(name,value,src,loc,lab,go,out);box.append(form);
+    form.append(name,value,src,view,pick,picked,lab,go,out);box.append(form);
+    loadSource();
   }
   function renderSuitability(selected){
     const a=selected.raw,box=$("source-preview");box.replaceChildren();
@@ -410,7 +430,7 @@
     if(a.missing.length)box.append(el("p","Inputs blocking a verdict: "+a.missing.join(", ")+". A fact must be present and lawyer-confirmed.","small"));
     for(const [name,value,confirmed,prov] of a.facts)box.append(el("p","Fact "+name+" = "+value+" \u00b7 "+(confirmed?"confirmed":"NOT confirmed")+" \u00b7 "+prov,"small mono"));
     renderFactForm(box,a);
-    box.append(el("p","Facts marked \"authenticated signed session\" were entered by the signed user against a named source version and hash. Facts from the matter's files are only declared, with no authenticated actor. Neither proves a fact is true. This is the rule's declared condition applied to those facts. It is not a machine legal conclusion and does not assess the brief's argument.","small"));
+    box.append(el("p","Facts marked \"authenticated signed session\" were entered by the signed user against a named source version and hash. Facts from the matter's files are only declared: they are shown but never count as confirmed. The server checks that the selected passage exists verbatim in the named source version, not that it supports the fact: that judgement is the actor's. Neither proves a fact is true. This is the rule's declared condition applied to those facts. It is not a machine legal conclusion and does not assess the brief's argument.","small"));
     state.previewReady=true;$("save-review").disabled=!state.review||state.loading||state.busy;
   }
   async function renderLegalPassage(selected){

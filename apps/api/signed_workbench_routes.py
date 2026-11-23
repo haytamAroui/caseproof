@@ -12,6 +12,7 @@ never proof that the brief is wrong, and never an approval.
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import asdict
 from typing import Annotated, Any, Protocol
@@ -78,7 +79,40 @@ class FactConfirmBody(BaseModel):
     confirmed: bool
     source_document_id: str
     source_version_id: str
-    locator: str = Field(min_length=1, max_length=200)
+    brief_version_id: str
+    passage: str = Field(min_length=1, max_length=120)
+    passage_start: int | None = Field(default=None, ge=0)
+
+
+def _verified_passage(wb: Any, bearer: str, case_id: str, body: FactConfirmBody) -> str:
+    """The actor selects an exact passage of the source's represented text.
+
+    The passage must occur verbatim in the verified representation of the
+    named source version (a repeated passage needs an explicit start offset).
+    The locator stored is the page (when mapped), the offsets and the passage.
+    """
+    sources = SignedBriefSources(wb.checker)
+    inventory = sources.inventory(
+        bearer=bearer, case_id=case_id, brief_version_id=body.brief_version_id)
+    rows = [r for r in inventory["rows"]
+            if r["document_id"] == body.source_document_id
+            and r["version_id"] == body.source_version_id]
+    if len(rows) != 1:
+        raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+    preview = sources.preview(
+        bearer=bearer, case_id=case_id, brief_version_id=body.brief_version_id,
+        source_id=rows[0]["source_id"])
+    text: str = preview["text"]
+    starts = [m.start() for m in re.finditer(re.escape(body.passage), text)]
+    if body.passage_start is not None:
+        starts = [s for s in starts if s == body.passage_start]
+    if len(starts) != 1:
+        raise AccessRejected(AccessFailure.RESOURCE_MASKED)
+    start = starts[0]
+    end = start + len(body.passage)
+    page = next((s[3] for s in preview["spans"] if s[0] <= start < s[1] and s[3] is not None), None)
+    where = f"p.{page} " if page is not None else "page not mapped "
+    return f"{where}offsets {start}-{end}: \u00ab{body.passage}\u00bb"[:200]
 
 
 def _fact_ledger(wb: Any, bearer: str) -> Any:
@@ -179,12 +213,13 @@ def create_signed_workbench_router(
     ) -> dict[str, Any]:
         bearer, wb = bench(authorization)
         ledger = _fact_ledger(wb, bearer)
+        locator = _verified_passage(wb, bearer, case_id, body)
         try:
             recorded = ledger.confirm(
                 case_id=case_id, request_id=body.request_id, name=body.name,
                 value=body.value, confirmed=body.confirmed,
                 source_document_id=body.source_document_id,
-                source_version_id=body.source_version_id, locator=body.locator)
+                source_version_id=body.source_version_id, locator=locator)
         except FactRefused:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         return {"schema": "caseproof-signed-fact-recorded-v1", "recorded": recorded,

@@ -120,6 +120,7 @@ def _read(rule: SuitabilityRule, name: str) -> bool:
 
 def merge_authenticated_facts(
     config: SuitabilityConfig, rows: Iterable[dict[str, object]],
+    *, require_authenticated: bool = True,
 ) -> SuitabilityConfig:
     """Facts entered through the signed session replace same-named file facts.
 
@@ -127,7 +128,13 @@ def merge_authenticated_facts(
     locator and the record time. It records who entered the value against which
     source version; it does not prove the value is true.
     """
-    merged: dict[str, tuple[ConfirmedFact, str]] = {f.name: (f, p) for f, p in config.facts}
+    # With a signed fact ledger, a file can only DECLARE a fact: it is kept
+    # visible but never counts as confirmed (named as missing in results).
+    merged: dict[str, tuple[ConfirmedFact, str]] = {
+        f.name: ((ConfirmedFact(f.name, f.value, False),
+                  ("declared in file, not authenticated: " + p)[:300])
+                 if require_authenticated else (f, p))
+        for f, p in config.facts}
     failures = list(config.failures)
     for row in rows:
         try:
