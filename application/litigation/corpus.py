@@ -117,11 +117,21 @@ def derive_pdf_body_start(layer: str, derived_text: str, article: str, pdf: byte
     if pdf is not None:
         from application.litigation.pdf_text_layer import PdfLayerError, extract_lines
         try:
-            real = [ln.replace(" ", "") for ln in extract_lines(pdf)]
+            extracted = extract_lines(pdf)
+            real = [ln.replace(" ", "") for ln in extracted]
         except (PdfLayerError, ValueError, KeyError, zlib.error) as exc:
             raise CorpusError(f"publisher PDF text could not be re-read: {exc}") from exc
         mine = [ln.replace(" ", "") for ln in span]
-        if not any(real[k:k + len(mine)] == mine for k in range(len(real) - len(mine) + 1)):
+        head = re.compile(rf"Art\.\s*{re.escape(article)}\.")
+        # Bind the identified occurrence: exactly one line of the PDF's own text opens this article,
+        # the layer's lines must be that occurrence, and a heading, a page footer or the end must
+        # follow. Similar lines elsewhere in the PDF prove nothing.
+        starts = [k for k, ln in enumerate(extracted) if head.match(ln)]
+        if len(starts) != 1:
+            raise CorpusError("the PDF does not open this article exactly once")
+        k = starts[0]
+        after = extracted[k + len(mine)] if k + len(mine) < len(extracted) else ""
+        if real[k:k + len(mine)] != mine or (after and not _NEXT_HEADING.match(after) and not after.startswith("Page ")):
             raise CorpusError("text layer lines do not match the preserved PDF's own text")
     want, first = _ws(derived_text), span[1]
     # Shortest word-aligned prefix of that line that identifies the position: a quote that

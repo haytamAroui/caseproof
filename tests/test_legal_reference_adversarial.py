@@ -334,6 +334,19 @@ def test_layer_that_moves_the_line_break_is_refused_against_the_pdf_itself(tmp_p
                            corpus=pdf_corpus(tmp_path, moved))
 
 
+def test_similar_lines_elsewhere_in_the_pdf_do_not_stand_in_for_the_article(tmp_path):
+    """The real occurrence is flat (no heading/body separation); a decoy copy elsewhere is not accepted."""
+    flat = LAYER.replace("certaine\n Hormis", "certaine Hormis")
+    decoy_with_heading = flat + "\n Art. 8.5. Règle générale - preuve certaine\n" + LAYER.split("preuve certaine\n", 1)[1].split("\n\n")[0]
+    for pdf_text in (decoy_with_heading,):
+        report = load_corpus(pdf_corpus(tmp_path, LAYER, pdf_text=pdf_text))
+        assert not report.records and report.failures, pdf_text
+    # decoy without the heading line cannot be the span either
+    decoy_body_only = flat + "\n Hormis les cas où la loi en dispose autrement, la preuve doit être rapportée avec un degré raisonnable de\ncertitude.\n"
+    report = load_corpus(pdf_corpus(tmp_path, LAYER, pdf_text=decoy_body_only))
+    assert not report.records and any("do not match" in f for f in report.failures)
+
+
 def test_exported_pdf_pack_body_start_cannot_be_edited(tmp_path):
     import base64
     p = tmp_path / "q.docx"
