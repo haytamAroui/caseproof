@@ -14,7 +14,7 @@ from application.litigation.matter_policy import (
     OrganizationPermission,
 )
 from application.litigation.unified_review import BriefRepresentation, SourceScope
-from apps.api.access_control import AccessRejected, InvalidBearer, VerifiedSubject
+from apps.api.access_control import AccessFailure, AccessRejected, InvalidBearer, VerifiedSubject
 from apps.api.litigation_check_app import create_litigation_check_app
 from apps.api.litigation_check_service import (
     AuthorizedLitigationChecker,
@@ -171,7 +171,9 @@ def test_grant_revision_changed_after_load_prevents_stale_result():
     store.still_current = changed  # type: ignore[method-assign]
     with pytest.raises(AccessRejected) as failure:
         service.check(bearer="signed-dev-fixture", case_id=CASE, brief_version_id=DRAFT)
-    assert failure.value.http_status == 503
+    # Grant/source drift after load is a typed stale conflict, not an opaque outage.
+    assert failure.value.http_status == 409
+    assert failure.value.code == AccessFailure.STALE_SNAPSHOT
 
 
 def test_body_supplied_authorization_bypass_does_not_work():
@@ -218,7 +220,8 @@ def test_optional_run_publisher_uses_verified_actor_after_fresh_scope_check():
     with pytest.raises(AccessRejected) as error:
         service.check(bearer="signed-dev-fixture",
                       case_id=CASE, brief_version_id=DRAFT)
-    assert error.value.http_status == 503
+    assert error.value.http_status == 409
+    assert error.value.code == AccessFailure.STALE_SNAPSHOT
     assert publisher.calls == [(ORG, ACTOR, run.snapshot_hash)]
 
 
