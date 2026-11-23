@@ -1243,3 +1243,174 @@ def test_signed_document_inventory_proposal_rpc_access_and_contract():
                     " 4, %s)", (str(uuid4()), "b" * 64))
         assert conn.execute("select count(*) from caseproof.documents where case_id=%s",
                             (str(case),)).fetchone()[0] == 1
+
+
+def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals" / "SIGNED_exhibit_confirm.sql"
+    ).read_text(encoding="utf-8")
+    org, case = uuid4(), uuid4()
+    user_a, user_b, user_c, user_d = uuid4(), uuid4(), uuid4(), uuid4()
+    doc_pdf, ver_pdf = uuid4(), uuid4()
+    doc_txt, ver_txt = uuid4(), uuid4()
+    register = {"schema": "caseproof-exhibit-register-v1",
+                "entries": [{"exhibit_id": "piece-abc123def456",
+                             "display_label": "Contrat synthétique",
+                             "aliases": [], "confirmed": True,
+                             "manual_inclusion": False,
+                             "pages": [{"document_id": str(doc_pdf),
+                                        "version_id": str(ver_pdf),
+                                        "pdf_page": 1, "printed_page": None,
+                                        "bundle_page": None}]}]}
+    register_sha = "c" * 64
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute(proposal)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s),(%s, %s),(%s, %s),"
+                     "(%s, %s) on conflict (id) do nothing",
+                     (user_a, org, user_b, org, user_c, org, user_d, org))
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','review:request']::text[]),"
+            " (%s, %s, array['case:read','review:request']::text[]),"
+            " (%s, %s, array['case:read','review:request']::text[])",
+            (org, user_a, org, user_b, org, user_d))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', array['case:read','exhibit:confirm']::text[]),"
+            " (%s, %s, %s, 'viewer', array['case:read','exhibit:confirm']::text[])",
+            (org, case, user_a, org, case, user_d))
+        conn.execute(
+            "insert into caseproof.documents(id, org_id, case_id, source_label)"
+            " values(%s, %s, %s, 'pdf synthétique'),(%s, %s, %s, 'txt synthétique')",
+            (doc_pdf, org, case, doc_txt, org, case))
+        conn.execute(
+            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
+            " original_sha256_hex, byte_length, media_type)"
+            " values(%s, %s, %s, 1, %s, 4, 'application/pdf'),(%s, %s, %s, 1, %s, 4, 'text/plain')",
+            (ver_pdf, org, doc_pdf, "b" * 64, ver_txt, org, doc_txt, "d" * 64))
+        source_audit = uuid4()
+        conn.execute(
+            "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+            " actor_user_id, action, event_schema_version, correlation_id, input_sha256_hex)"
+            " values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
+            (source_audit, org, case, user_a, uuid4(), "a" * 64))
+        conn.execute(
+            "insert into caseproof._dev_journey_sources(org_id, case_id, document_id,"
+            " version_id, original_sha, representation_sha, snapshot_sha, representation,"
+            " audit_id) values(%s, %s, %s, %s, %s, %s, %s, 'représentation synthétique', %s)",
+            (org, case, doc_pdf, ver_pdf, "b" * 64, "e" * 64, "f" * 64, source_audit))
+        conn.execute(
+            "insert into caseproof._dev_journey_parse_manifests(org_id, case_id, version_id,"
+            " original_sha256, representation_sha256, manifest_sha256, manifest)"
+            " values(%s, %s, %s, %s, %s, %s, %s::jsonb)",
+            (org, case, ver_pdf, "b" * 64, "e" * 64, "f" * 64,
+             json.dumps({"schema": "dev-document-parse-v1", "complete": True,
+                         "blocks": [], "warnings": [],
+                         "pages": [{"index": 1}, {"index": 2}, {"index": 3}]})))
+
+        def as_user(sub, role="authenticated"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+
+        def confirm(sub, *, request=None, expected=0, payload=register, sha=register_sha,
+                    document=doc_pdf, version=ver_pdf, mappings=None,
+                    role="authenticated"):
+            as_user(sub, role)
+            return conn.execute(
+                "select public.caseproof_signed_confirm_exhibit"
+                "(%s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb)",
+                (str(case), str(document), str(version), str(request or uuid4()),
+                 expected, json.dumps(payload, ensure_ascii=False), sha,
+                 json.dumps(mappings) if mappings is not None else None)).fetchone()[0]
+
+        # Happy path: compare-and-swap commits revision 1 with audit and event.
+        request = uuid4()
+        outcome = confirm(user_a, request=request)
+        assert outcome == {"ok": True, "exhibit_revision": 1, "replay": False}
+        head = conn.execute(
+            "select revision, payload_sha256 from caseproof._m1_exhibit_heads"
+            " where case_id=%s", (str(case),)).fetchone()
+        assert head == (1, register_sha)
+        assert conn.execute(
+            "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
+            (str(case),)).fetchone()[0] == 1
+
+        # Identical replay returns the committed revision without a new write;
+        # the same request with any different command is a conflict.
+        assert confirm(user_a, request=request) == {
+            "ok": True, "exhibit_revision": 1, "replay": True}
+        assert confirm(user_a, request=request, sha="0" * 64) == {
+            "ok": False, "error": "conflict"}
+        assert conn.execute(
+            "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
+            (str(case),)).fetchone()[0] == 1
+
+        # Stale expected revision fails closed without writing.
+        assert confirm(user_a, expected=0) == {"ok": False, "error": "stale_revision"}
+        assert conn.execute(
+            "select revision from caseproof._m1_exhibit_heads where case_id=%s",
+            (str(case),)).fetchone()[0] == 1
+
+        # Invalid declarations never write: bad digest, wrong payload schema,
+        # mapping beyond the manifest inventory, duplicate physical page,
+        # unknown mapping key, mapping on an unpaginated source, PDF without
+        # a registered parse manifest.
+        for kwargs in (
+            {"expected": 1, "sha": "C" * 64},
+            {"expected": 1, "payload": {"schema": "autre", "entries": []}},
+            {"expected": 1, "mappings": [{"pdf_page": 4}]},
+            {"expected": 1, "mappings": [{"pdf_page": 1}, {"pdf_page": 1}]},
+            {"expected": 1, "mappings": [{"pdf_page": 1, "autre": 2}]},
+            {"expected": 1, "document": doc_txt, "version": ver_txt,
+             "mappings": [{"pdf_page": 1}]},
+        ):
+            assert confirm(user_a, **kwargs) == {"ok": False, "error": "invalid"}
+        other_version = uuid4()
+        conn.execute(
+            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
+            " original_sha256_hex, byte_length, media_type)"
+            " values(%s, %s, %s, 2, %s, 4, 'application/pdf')",
+            (other_version, org, doc_pdf, "b" * 64))
+        assert confirm(user_a, expected=1, version=other_version) == {
+            "ok": False, "error": "invalid"}
+        assert conn.execute(
+            "select revision from caseproof._m1_exhibit_heads where case_id=%s",
+            (str(case),)).fetchone()[0] == 1
+
+        # Denials: member without grant, viewer grant, non-member, anonymous
+        # role, unknown subject; an unknown case and a foreign version are
+        # masked the same way.
+        for sub, role in ((user_b, "authenticated"), (user_d, "authenticated"),
+                          (user_c, "authenticated"), (user_a, "anon"),
+                          (uuid4(), "authenticated")):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    confirm(sub, expected=1, role=role)
+        with conn.transaction(force_rollback=True):
+            as_user(user_a)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute(
+                    "select public.caseproof_signed_confirm_exhibit(%s, %s, %s, %s, 1,"
+                    " %s::jsonb, %s, null)",
+                    (str(uuid4()), str(doc_pdf), str(ver_pdf), str(uuid4()),
+                     json.dumps(register), register_sha))
