@@ -45,6 +45,47 @@ from apps.api.signed_document_parse import parse_verified_original
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage
 
+_MAPPING_KEYS = {"pdf_page", "printed_page", "bundle_page"}
+
+
+def _page_value(value: object) -> bool:
+    return type(value) is int and 1 <= value <= 100_000
+
+
+def _confirmed_pages(
+    document_id: str, version_id: str, page_mappings: object
+) -> tuple[ExhibitPage, ...]:
+    """User-declared page mappings, each numbering space independent.
+
+    Nothing is inferred: absent mappings record only that physical page 1
+    exists (full parser page inventory is not wired into confirmation);
+    printed/bundle stay NOT MAPPED. Duplicate physical pages and unknown
+    keys fail closed, never silently overwrite. Printed labels are the
+    existing numeric domain type; Roman or prefixed labels stay unmapped.
+    """
+    if page_mappings is None:
+        return (ExhibitPage(document_id, version_id, pdf_page=1),)
+    if not isinstance(page_mappings, (list, tuple)) or not 1 <= len(page_mappings) <= 512:
+        raise ValueError("invalid exhibit declaration")
+    seen: set[int] = set()
+    pages = []
+    for mapping in page_mappings:
+        if not isinstance(mapping, dict) or set(mapping) - _MAPPING_KEYS or "pdf_page" not in mapping:
+            raise ValueError("invalid exhibit declaration")
+        pdf = mapping["pdf_page"]
+        printed = mapping.get("printed_page")
+        bundle = mapping.get("bundle_page")
+        if not _page_value(pdf) or pdf in seen:
+            raise ValueError("invalid exhibit declaration")
+        if any(v is not None and not _page_value(v) for v in (printed, bundle)):
+            raise ValueError("invalid exhibit declaration")
+        seen.add(pdf)
+        pages.append(
+            ExhibitPage(document_id, version_id, pdf_page=pdf,
+                        printed_page=printed, bundle_page=bundle)
+        )
+    return tuple(pages)
+
 __all__ = ["DisposableSignedBriefPublisher", "working_brief_id"]
 
 _MAX_BEARER = 8192
@@ -188,6 +229,7 @@ class DisposableSignedBriefPublisher:
         document_id: str,
         version_id: str,
         display_label: str,
+        page_mappings: object = None,
     ) -> SignedExhibitConfirmation:
         subject = self._subject(bearer, case_id)
         scope = self._authorize(subject, case_id, MatterPermission.EXHIBIT_CONFIRM)
@@ -201,6 +243,7 @@ class DisposableSignedBriefPublisher:
             or "\n" in display_label
         ):
             raise ValueError("invalid exhibit declaration")
+        pages = _confirmed_pages(str(document), str(version), page_mappings)
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 "select 1 from caseproof.document_versions v "
@@ -252,13 +295,7 @@ class DisposableSignedBriefPublisher:
                 ExhibitEntry(
                     exhibit_id,
                     display_label.strip(),
-                    (
-                        ExhibitPage(
-                            str(document),
-                            str(version),
-                            printed_page=1,
-                        ),
-                    ),
+                    pages,
                     confirmed=True,
                 ),
             )

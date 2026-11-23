@@ -579,6 +579,34 @@
       notice("Source declaration failed: "+(error&&error.message?error.message:"unavailable"),"danger");}
     finally{$("register").disabled=false;}
   }
+  function mappingRows(){
+    // Optional user-declared page mappings: physical page required per filled
+    // row, each numbering space independent, numeric domain only. Empty rows
+    // are ignored; duplicates fail before sending, never silently overwrite.
+    const rows=[...document.querySelectorAll("#mapping-rows .mapping-row")];
+    const mappings=[],seen=new Set();
+    for(const row of rows){
+      const pdf=row.querySelector(".map-pdf").value.trim();
+      const printed=row.querySelector(".map-printed").value.trim();
+      const bundle=row.querySelector(".map-bundle").value.trim();
+      if(!pdf&&!printed&&!bundle)continue;
+      const num=(v)=>/^[0-9]+$/.test(v)&&Number(v)>=1&&Number(v)<=100000?Number(v):null;
+      const pdfN=num(pdf);
+      if(pdfN===null||seen.has(pdfN))return null;
+      if((printed&&num(printed)===null)||(bundle&&num(bundle)===null))return null;
+      seen.add(pdfN);
+      const m={pdf_page:pdfN};
+      if(printed)m.printed_page=num(printed);
+      if(bundle)m.bundle_page=num(bundle);
+      mappings.push(m);
+    }
+    return mappings;
+  }
+  function resetMappingRows(){
+    const box=$("mapping-rows");
+    box.querySelectorAll(".mapping-row").forEach((row,i)=>{if(i>0)row.remove();});
+    box.querySelectorAll("input").forEach((input)=>{input.value="";});
+  }
   async function declareExhibit(evt){
     evt.preventDefault();
     // Register digest, upload matching bytes, then confirm the exhibit into
@@ -586,6 +614,10 @@
     const session=state.session,caseId=state.caseId;
     const label=$("exhibit-label").value.trim();
     const file=$("exhibit-file").files?.[0];
+    const mappings=mappingRows();
+    if(mappings===null){
+      notice("Page mappings: each filled row needs a unique numeric physical page; printed label and bundle position are numeric or empty.","danger");return;
+    }
     const mime=file?{txt:"text/plain",pdf:"application/pdf",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg"}[file.name.split(".").pop()?.toLowerCase()]:null;
     if(!label||!file||file.size<=0||file.size>20*1024*1024||!mime){
       notice("Enter an exhibit label and choose a supported file under 20 MiB.","danger");return;
@@ -607,13 +639,16 @@
         });
       if(state.session!==session||state.caseId!==caseId)return;
       if(response.status!==201)throw Error("unavailable");
+      const confirmBody={document_id:d.document_id,version_id:d.version_id,display_label:label};
+      if(mappings.length)confirmBody.page_mappings=mappings;
       const c=await api("/dev/signed/matters/"+encodeURIComponent(caseId)+"/exhibits/confirm",{
-        method:"POST",json:{document_id:d.document_id,version_id:d.version_id,display_label:label}});
+        method:"POST",json:confirmBody});
       if(state.session!==session||state.caseId!==caseId)return;
       if(c.schema!=="caseproof-signed-exhibit-confirm-v1"||typeof c.exhibit_id!=="string"||
          !Number.isInteger(c.exhibit_revision))
         throw Error("invalid_schema");
       $("exhibit-label").value="";$("exhibit-file").value="";
+      resetMappingRows();
       $("exhibit-status").textContent="Exhibit declared, uploaded and confirmed at register revision "+
         c.exhibit_revision+": "+file.name+" \u00b7 "+file.size+" bytes \u00b7 SHA-256 "+digestHex.slice(0,16)+"\u2026";
       notice("Exhibit confirmed into the check scope. Published snapshots are stale: publish a new brief version and re-run the check.","ok");
@@ -1028,6 +1063,13 @@
     $("search").addEventListener("click",search);
     $("register-form").addEventListener("submit",registerSource);
     $("exhibit-form").addEventListener("submit",declareExhibit);
+    $("mapping-add").addEventListener("click",()=>{
+      const box=$("mapping-rows"),rows=box.querySelectorAll(".mapping-row");
+      if(rows.length>=8)return;
+      const row=rows[0].cloneNode(true);
+      row.querySelectorAll("input").forEach((input)=>{input.value="";});
+      box.insertBefore(row,$("mapping-add"));
+    });
     $("upload-form").addEventListener("submit",upload);
     $("upload-document").addEventListener("change",populateVersions);
     const publishForm=$("publish-form");if(publishForm)publishForm.addEventListener("submit",publishVersion);

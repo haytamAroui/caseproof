@@ -115,6 +115,12 @@
           <p class="small">Declare an exhibit for this matter's corpus: digest registered first, bytes must match, then it is confirmed into the check scope at the current revision. Adding an exhibit stales published snapshots; publish a new brief version and re-run the check afterwards.</p>
           <form id="exhibit-form"><label>Exhibit label<input id="exhibit-label" maxlength="200" required placeholder="e.g. Code civil, art. 1735"></label>
           <label>Exhibit file<input id="exhibit-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
+          <fieldset id="mapping-rows"><legend>Page mappings (optional, numeric only)</legend>
+          <p class="small">Each row maps one physical PDF page. Printed label accepts numbers only under the current domain: Roman or prefixed labels stay unmapped, never normalized. Empty rows are ignored; an exhibit without mappings displays "not mapped".</p>
+          <div class="mapping-row"><input class="map-pdf" type="number" min="1" max="100000" step="1" placeholder="physical page">
+          <input class="map-printed" type="number" min="1" max="100000" step="1" placeholder="printed label">
+          <input class="map-bundle" type="number" min="1" max="100000" step="1" placeholder="bundle position"></div>
+          <button id="mapping-add" type="button" class="ghost">Add page mapping</button></fieldset>
           <button id="exhibit" type="submit" class="secondary">Declare, upload and confirm exhibit</button></form>
           <p id="exhibit-status" class="small mono" aria-live="polite"></p>
           <p class="small">Or upload bytes to a source the server already registered for this matter.</p>

@@ -473,3 +473,43 @@ def test_unsigned_record_with_trusted_key_fails_closed():
         verify_record_document(valid_offline_record(), trusted_public_key=public)
     steps = verify_record_document(valid_offline_record())
     assert any("integrity-only record" in s for s in steps)
+
+
+# User-declared exhibit page mappings: independent numbering spaces, no
+# inference, duplicate physical pages fail closed, hardcoded printed page
+# removed.
+def test_confirmed_pages_absent_mappings_claim_physical_page_one_only():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    pages = _confirmed_pages("doc", "ver", None)
+    assert len(pages) == 1
+    assert pages[0].pdf_page == 1
+    assert pages[0].printed_page is None and pages[0].bundle_page is None
+
+
+def test_confirmed_pages_user_declared_distinct_spaces():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    pages = _confirmed_pages("doc", "ver", [
+        {"pdf_page": 1, "printed_page": 3, "bundle_page": 7},
+        {"pdf_page": 2},
+    ])
+    assert (pages[0].pdf_page, pages[0].printed_page, pages[0].bundle_page) == (1, 3, 7)
+    assert (pages[1].pdf_page, pages[1].printed_page, pages[1].bundle_page) == (2, None, None)
+
+
+def test_confirmed_pages_reject_invalid_input():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    bad = [
+        [{"pdf_page": 1}, {"pdf_page": 1}],              # duplicate physical page
+        [{"pdf_page": 0}],                                # out of range
+        [{"pdf_page": "1"}],                              # wrong type
+        [{"printed_page": 3}],                            # physical page required
+        [{"pdf_page": 1, "printed_page": 0}],             # invalid printed space
+        [{"pdf_page": 1, "bundle_page": -2}],             # invalid bundle space
+        [{"pdf_page": 1, "other": 2}],                    # unknown key
+        [],                                               # empty list
+        [{"pdf_page": 1}] * 513,                          # over bound
+        "not-a-list",
+    ]
+    for payload in bad:
+        with pytest.raises(ValueError):
+            _confirmed_pages("doc", "ver", payload)

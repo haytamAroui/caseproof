@@ -114,11 +114,14 @@ class SignedBriefPublisher(Protocol):
         document_id: str,
         version_id: str,
         display_label: str,
+        page_mappings: object = None,
     ) -> SignedExhibitConfirmation:
         """Append a registered, already-uploaded source to the matter's
         confirmed exhibit register at the current revision (optimistic
         concurrency); the check denominator changes only through this
-        explicit interactive confirmation."""
+        explicit interactive confirmation. Optional user-declared page
+        mappings keep each numbering space independent; nothing is
+        inferred when absent."""
         ...
 
     def publish_uploaded(
@@ -650,11 +653,18 @@ def create_litigation_development_app(
             payload = await request.json()
         except Exception:
             raise HTTPException(status_code=422, detail="invalid_request") from None
-        if not isinstance(payload, dict) or set(payload) != {
+        if not isinstance(payload, dict) or not {
             "document_id",
             "version_id",
             "display_label",
+        } <= set(payload) <= {
+            "document_id",
+            "version_id",
+            "display_label",
+            "page_mappings",
         }:
+            raise HTTPException(status_code=422, detail="invalid_request")
+        if "page_mappings" in payload and not isinstance(payload["page_mappings"], list):
             raise HTTPException(status_code=422, detail="invalid_request")
         ids = [payload["document_id"], payload["version_id"]]
         label = payload["display_label"]
@@ -673,6 +683,7 @@ def create_litigation_development_app(
                 document_id=payload["document_id"],
                 version_id=payload["version_id"],
                 display_label=label.strip(),
+                page_mappings=payload.get("page_mappings"),
             )
         except PrivateStorageDenied:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
