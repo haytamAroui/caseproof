@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import re
 import tomllib
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -83,35 +84,52 @@ BASIS_PDF = "publisher_pdf_layout"
 _NEXT_HEADING = re.compile(rf"^\s*{_HEADING}(?=[\s\d])")
 
 
-def derive_pdf_body_start(layer: str, derived_text: str, article: str) -> str:
-    """Body start from the publisher PDF's own rendered lines, never from a declaration.
-
-    The layer is the line-preserving text of the preserved PDF. The article is the lines from its
-    "Art. N." heading line up to the next heading line; the derived text must equal exactly that span.
-    The body starts on the first line after the heading line. This is the publisher's rendering
-    (a heading paragraph, then a body paragraph), not structured markup: a heading that wrapped over
-    two lines would shift the boundary into the title. Fail closed when the span is not unique.
-    """
+def _pdf_span(layer: str, derived_text: str, article: str) -> list[str]:
+    """Non-blank normalised layout lines from the article's "Art. N." line to its last line."""
     lines = layer.splitlines()
     want = _ws(derived_text)
-    found: list[str] = []
+    found: list[list[str]] = []
     for i, line in enumerate(lines):
         if not re.match(rf"\s*Art\.\s*{re.escape(article)}\.", line):
             continue
         j = i + 1
         while j < len(lines) and not _NEXT_HEADING.match(lines[j]):
             j += 1
-        if _ws(" ".join(lines[i:j])) != want:
-            continue
-        body = [ln for ln in lines[i + 1:j] if ln.strip()]
-        if body:
-            first = _ws(body[0])
-            # Shortest word-aligned prefix of that line that identifies the position: a quote that
-            # starts at the body start may be shorter than the whole first line.
-            found.append(next((first[:m.end()] for m in re.finditer(r"\S+", first) if m.end() >= 24), first))
-    if len(found) != 1 or want.count(found[0]) != 1 or want.startswith(found[0]):
+        if _ws(" ".join(lines[i:j])) == want:
+            found.append([_ws(ln) for ln in lines[i:j] if ln.strip()])
+    if len(found) != 1 or len(found[0]) < 2:
         raise CorpusError("publisher PDF layout does not give exactly one heading/body boundary")
     return found[0]
+
+
+def derive_pdf_body_start(layer: str, derived_text: str, article: str, pdf: bytes | None = None) -> str:
+    """Body start from the publisher PDF's own rendered lines, never from a declaration.
+
+    The layer is the line-preserving text of the preserved PDF. The article is the lines from its
+    "Art. N." heading line up to the next heading line; the derived text must equal exactly that span.
+    The body starts on the first line after the heading line. When the PDF bytes are given, that span
+    is also re-read from the PDF itself (``pdf_text_layer``): the same lines must occur consecutively
+    in the PDF's own text, so a layer edited to move the line break no longer loads. This is the
+    publisher's rendering (a heading paragraph, then a body paragraph), not structured markup: a heading
+    that wrapped over two lines would shift the boundary into the title.
+    """
+    span = _pdf_span(layer, derived_text, article)
+    if pdf is not None:
+        from application.litigation.pdf_text_layer import PdfLayerError, extract_lines
+        try:
+            real = [ln.replace(" ", "") for ln in extract_lines(pdf)]
+        except (PdfLayerError, ValueError, KeyError, zlib.error) as exc:
+            raise CorpusError(f"publisher PDF text could not be re-read: {exc}") from exc
+        mine = [ln.replace(" ", "") for ln in span]
+        if not any(real[k:k + len(mine)] == mine for k in range(len(real) - len(mine) + 1)):
+            raise CorpusError("text layer lines do not match the preserved PDF's own text")
+    want, first = _ws(derived_text), span[1]
+    # Shortest word-aligned prefix of that line that identifies the position: a quote that
+    # starts at the body start may be shorter than the whole first line.
+    start = next((first[:m.end()] for m in re.finditer(r"\S+", first) if m.end() >= 24), first)[:200]
+    if want.count(start) != 1 or want.startswith(start):
+        raise CorpusError("publisher PDF layout does not give exactly one heading/body boundary")
+    return start
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,7 +263,7 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
             raise CorpusError("publisher PDF original expected")
         layer_text = layer_bytes.decode("utf-8")
         check_derived_binding("official_text_capture", layer_text.encode(), derived_text, article)
-        entry = {**entry, "body_start": derive_pdf_body_start(layer_text, derived_text, article)}
+        entry = {**entry, "body_start": derive_pdf_body_start(layer_text, derived_text, article, original_bytes)}
         basis = BASIS_PDF
     else:
         check_derived_binding(artifact_kind, original_bytes, derived_text, article)

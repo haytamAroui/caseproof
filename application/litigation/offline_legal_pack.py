@@ -67,7 +67,7 @@ def _config(data: dict[str, Any]) -> LegalCorpusConfig:
             if not raw.startswith(b"%PDF-") or _hash(layer.encode()) != record.original_text_layer_sha256:
                 raise CorpusError("PDF text layer changed")
             check_derived_binding("official_text_capture", layer.encode(), text, record.article)
-            if (derive_pdf_body_start(layer, text, record.article) != record.body_start
+            if (derive_pdf_body_start(layer, text, record.article, raw) != record.body_start
                     or record.body_start_basis != BASIS_PDF):
                 raise CorpusError("body start no longer follows the publisher PDF layout")
         else:
@@ -158,7 +158,7 @@ def _report(body: dict[str, Any]) -> bytes:
                   "</code></small><p>Type : ", esc(row["source_artifact_kind"]), "</p><p>", esc(row["source_notes"]), "</p>"]
         if body["review"].get("fingerprint_scheme", 1) >= 2:
             if row.get("body_start_basis") == BASIS_PDF:
-                parts += ["<p>Début du corps de l'article, tiré de la mise en page du PDF consolidé de l'éditeur conservé (première ligne après la ligne d'intitulé, ce n'est pas un balisage structuré ; le texte-couche du PDF n'est pas revérifié contre le PDF par ce logiciel) : <code>",
+                parts += ["<p>Début du corps de l'article, tiré de la mise en page du PDF consolidé de l'éditeur conservé (première ligne après la ligne d'intitulé ; les lignes de l'article sont relues dans le PDF conservé à chaque chargement et à chaque rejeu, mais c'est une mise en page, pas un balisage structuré) : <code>",
                           esc(row["body_start"]), "</code></p></section>"]
                 continue
             parts += ["<p>Début du corps de l'article, déclaré par le préparateur du corpus et borné par le texte conservé, non attesté par l'éditeur : <code>",

@@ -253,10 +253,34 @@ LAYER = ("JUSTEL - Législation consolidée\n\n Art. 8.4. Autre\n Texte voisin.\
 PDF_DERIVED = "Art. 8.5. Règle générale - preuve certaine " + ARTICLE
 
 
-def pdf_corpus(tmp_path: Path, layer: str = LAYER, *, extra: str = "", layer_sha: str | None = None) -> Path:
+def make_pdf(text: str) -> bytes:
+    """A small real PDF (Flate stream, Type0/Identity-H font, ToUnicode) with one BT block per line."""
+    import zlib
+    chars = sorted(set(text) - {"\n"})
+    cid = {c: i + 1 for i, c in enumerate(chars)}
+    ops = []
+    y = 20
+    for ln in text.splitlines():
+        if ln.strip():
+            ops.append(f"BT /F1 14 Tf 1 0 0 -1 0 0 Tm 0 {y} Td <{''.join(f'{cid[c]:04X}' for c in ln)}> Tj ET")
+            y += 17
+    content = zlib.compress("\n".join(ops).encode())
+    cmap = "begincmap\n" + f"{len(chars)} beginbfchar\n" + "".join(
+        f"<{cid[c]:04X}> <{ord(c):04X}>\n" for c in chars) + "endbfchar\nendcmap\n"
+    objs = {1: b"<< /Type /Pages /Kids [2 0 R] /Count 1 >>",
+            2: b"<< /Type /Page /Parent 1 0 R /Contents 3 0 R /Resources 4 0 R >>",
+            3: b"<< /Filter /FlateDecode /Length %d >>\nstream\n" % len(content) + content + b"\nendstream",
+            4: b"<< /Font << /F1 5 0 R >> >>",
+            5: b"<< /Type /Font /Subtype /Type0 /Encoding /Identity-H /ToUnicode 6 0 R >>",
+            6: b"<< /Length %d >>\nstream\n" % len(cmap) + cmap.encode() + b"\nendstream"}
+    return b"%PDF-1.4\n" + b"".join(b"%d 0 obj\n%s\nendobj\n" % (k, v) for k, v in objs.items()) + b"%%EOF\n"
+
+
+def pdf_corpus(tmp_path: Path, layer: str = LAYER, *, extra: str = "", layer_sha: str | None = None,
+               pdf_text: str = LAYER) -> Path:
     d = tmp_path / "pc"
     d.mkdir(exist_ok=True)
-    pdf = b"%PDF-1.4 synthetic stand-in for the publisher PDF"
+    pdf = make_pdf(pdf_text)
     (d / "a.pdf").write_bytes(pdf)
     (d / "layer.txt").write_text(layer)
     (d / "art.txt").write_text(PDF_DERIVED)
@@ -298,6 +322,16 @@ def test_pdf_layer_edit_without_matching_manifest_hash_is_refused(tmp_path):
     with pytest.raises(CorpusError):  # layer changed, manifest hash not
         check_offline_docx(docx=_docx(tmp_path, f"Article 8.5 du Code civil : « {ARTICLE} »"),
                            corpus=pdf_corpus(tmp_path, moved, layer_sha="0" * 64))
+
+
+def test_layer_that_moves_the_line_break_is_refused_against_the_pdf_itself(tmp_path):
+    """Layer and its manifest hash both edited: the PDF's own text still disagrees, so it does not load."""
+    moved = LAYER.replace("autrement, la preuve", "autrement,\n la preuve").replace("certaine\n Hormis", "certaine Hormis")
+    report = load_corpus(pdf_corpus(tmp_path, moved))
+    assert not report.records and any("do not match the preserved PDF" in f for f in report.failures)
+    with pytest.raises(CorpusError):
+        check_offline_docx(docx=_docx(tmp_path, f"Article 8.5 du Code civil : « {ARTICLE} »"),
+                           corpus=pdf_corpus(tmp_path, moved))
 
 
 def test_exported_pdf_pack_body_start_cannot_be_edited(tmp_path):
