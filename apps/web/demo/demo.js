@@ -151,9 +151,9 @@ function renderStatic(data) {
     `<table><tr><th>Pièce</th><th>Version</th><th>Origine</th><th>Empreinte</th></tr>${sourceRows}</table>
     <h3>Registre des pièces</h3>
     <table><tr><th>Pièce</th><th>État</th><th></th></tr>${exhibitRows}</table>
-    <h3>Importer une source (texte .txt/.md ou .docx)</h3>
+    <h3>Importer une source (texte .txt/.md, .docx ou .pdf texte-natif)</h3>
     <p class="meta">La provenance est déclarée par vous, jamais vérifiée par l'outil ; la pièce importée reste non confirmée tant que la relecture (simulée) ne l'a pas confirmée.</p>
-    <p><input type="file" id="source-file" accept=".txt,.md,.docx"></p>
+    <p><input type="file" id="source-file" accept=".txt,.md,.docx,.pdf"></p>
     <p><input type="text" id="source-act" placeholder="Acte (ex. loi du 20 février 1991)" size="30">
     <input type="text" id="source-article" placeholder="Article (ex. 15)" size="10">
     <input type="text" id="source-alias" placeholder="Nom cité dans les conclusions" size="24"></p>
