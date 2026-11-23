@@ -15,13 +15,20 @@ import shutil
 import tomllib
 from pathlib import Path
 
-from application.litigation.corpus import _NEXT_HEADING, _STRUCTURAL, CorpusError, _ws, load_corpus
+from application.litigation.corpus import (
+    _NEXT_HEADING,
+    _STRUCTURAL,
+    CorpusError,
+    _ws,
+    load_corpus,
+    strip_footers,
+)
 
 _HEAD = re.compile(r"^\s*Art\.\s*(\d+\.\d+)\.")
 
 
 def spans(layer: str) -> dict[str, str]:
-    lines = layer.splitlines()
+    lines = strip_footers(layer).splitlines()
     out: dict[str, str] = {}
     dup: set[str] = set()
     for i, line in enumerate(lines):

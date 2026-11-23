@@ -425,3 +425,39 @@ def test_pdf_defined_page_label_is_recorded_as_the_pdf_label_not_as_a_printed_nu
     (tmp_path / "p1.pdf").write_bytes(raw)
     meta = page_meta(tmp_path, {"pieces": [{"number": "1", "file": "p1.pdf", "present": True, "readable": True}]})
     assert meta["1"] == [{"index": 1, "label": "i", "printed": None}]
+
+
+def _shared_form(doc: dict) -> dict:
+    """What the builder writes when articles share originals, applied to this one-article export."""
+    row = doc["articles"][0]
+    blobs = {row["original_sha256"]: row.pop("original_base64")}
+    layers = {}
+    if row.get("original_text_layer_sha256"):
+        layers[row["original_text_layer_sha256"]] = row.pop("original_text_layer")
+    return {**doc, "shared_originals": {"format": "shared-originals-v1", "blobs": blobs, "layers": layers}}
+
+
+def test_shared_originals_form_replays_and_refuses_missing_or_extra_bytes(tmp_path):
+    raw, _, _ = passage_run(tmp_path, ["Le contrat a été signé le 15/03/2024 (pièce 1)."])
+    z = zipfile.ZipFile(BytesIO(raw))
+    report = z.read("report.html")
+    good = _shared_form(json.loads(z.read("review.json")))
+    data, sha = reseal(good, report)
+    verify_legal_pack(data, expected_sha256=sha)  # control: the shared form is accepted
+    for edit in ("extra_blob", "missing_blob", "bad_format", "swapped_layer"):
+        doc = json.loads(json.dumps(good))
+        shared = doc["shared_originals"]
+        if edit == "extra_blob":
+            shared["blobs"]["a" * 64] = "QUJD"
+        elif edit == "missing_blob":
+            shared["blobs"].clear()
+        elif edit == "bad_format":
+            shared["format"] = "other"
+        else:
+            if not shared["layers"]:
+                continue
+            key = next(iter(shared["layers"]))
+            shared["layers"][key] += " altéré"
+        data, sha = reseal(doc, report)
+        with pytest.raises(CorpusError, match="rejected"):
+            verify_legal_pack(data, expected_sha256=sha)

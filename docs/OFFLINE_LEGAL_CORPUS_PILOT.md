@@ -88,3 +88,21 @@ repaired). An article followed by a page footer is accepted only when the footer
 structural title, so an article that continues on the next page is refused instead of truncated.
 Only the FR text of that one PDF is added: no NL text, no other act, no other version. Known cost: every
 export embeds the preserved PDF once per article (about 5.7 MB per check with 33 articles).
+
+### Boundary audit of the extended FR corpus (2026-11-24, one preserved PDF, sha256 c0accd7f...2d197f)
+
+Method: for every added article, the derived text was compared with the layer lines from its "Art. N." heading
+to the next heading or structural title, after removing the running footer line ("Page n de 8 Copyright
+Moniteur belge date"). An independent `pdftotext -layout` run on the same PDF gives a layer identical to the
+preserved one. Each article's last line ends with a full stop and is followed by an article heading, a
+structural title (Section, Sous-section, Chapitre), a footer then a title, or the end of the document.
+- 36 FR articles added besides 8.5: 8.1 to 8.39 except 8.5, 8.23 and 8.25.
+- Articles whose text continues across a page footer (footer elided, running text on both sides checked by
+  eye on the lines around it): 8.1, 8.12, 8.20, 8.26, 8.34. No repeated page header exists in this PDF.
+- Excluded, fail closed, not repaired: 8.23 (the loader cannot identify one unambiguous first body line),
+  8.25 (heading and lines differ between the layer and the PDF's own text around the amended passage).
+- Amendment markers such as "[1 ... ]1" are kept as printed. 8.39 is the last article and ends with a quote mark.
+- No applicability, version or validity claim: this is the consolidated rendering dated 2025-06-05 (updates to
+  2024-03-29) and the lawyer decides temporal applicability. NL still has art. 8.5 only.
+Exports store identical originals and text layers once (`shared_originals`, format shared-originals-v1), used only
+when articles share bytes; exports without it replay as before (26 delivered v5 exports replay 26 of 26).

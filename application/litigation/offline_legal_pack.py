@@ -48,6 +48,7 @@ from application.litigation.unified_review import LegalObservation
 
 MAX_BYTES = 40 * 1024 * 1024
 SCHEMA = "caseproof-offline-legal-review-v1"
+SHARED_FORMAT = "shared-originals-v1"  # optional: identical originals and text layers stored once per export
 NOTE = ("Corpus presence and quotation integrity only. Applicability, interpretation and claim support "
         "are not assessed. Lawyer decision required. This is the legal-reference review slice, "
         "not a complete dossier export. No authenticity or legal signature is established.")
@@ -66,9 +67,23 @@ def _config(data: dict[str, Any]) -> LegalCorpusConfig:
     if not isinstance(rows, list) or not 1 <= len(rows) <= 10000:
         raise CorpusError("bounded article inventory required")
     records = []
+    shared = data.get("shared_originals")
+    if shared is not None and (not isinstance(shared, dict) or set(shared) != {"format", "blobs", "layers"}
+                               or shared["format"] != SHARED_FORMAT):
+        raise CorpusError("shared originals malformed")
     for row in rows:
         values = dict(row)
-        raw = base64.b64decode(values.pop("original_base64"), validate=True)
+        if "original_base64" in values:
+            encoded = values.pop("original_base64")
+        else:
+            if shared is None or values["original_sha256"] not in shared["blobs"]:
+                raise CorpusError("original bytes missing")
+            encoded = shared["blobs"][values["original_sha256"]]
+        if "original_text_layer" not in values:
+            if shared is None or values.get("original_text_layer_sha256") not in shared["layers"]:
+                raise CorpusError("original text layer missing")
+            values["original_text_layer"] = shared["layers"][values["original_text_layer_sha256"]]
+        raw = base64.b64decode(encoded, validate=True)
         if len(raw) > 32 * 1024 * 1024 or _hash(raw) != values["original_sha256"]:
             raise CorpusError("original bytes changed")
         text = values["derived_text"]
@@ -86,6 +101,11 @@ def _config(data: dict[str, Any]) -> LegalCorpusConfig:
         else:
             check_derived_binding(record.source_artifact_kind, raw, text, record.article)
         records.append(record)
+    if shared is not None:
+        used_blobs = {r["original_sha256"] for r in rows if "original_base64" not in r}
+        used_layers = {r["original_text_layer_sha256"] for r in rows if "original_text_layer" not in r}
+        if set(shared["blobs"]) != used_blobs or set(shared["layers"]) != used_layers:
+            raise CorpusError("shared originals hold bytes no article uses")
     if len({r.key for r in records}) != len(records):
         raise CorpusError("duplicate article identity")
     if not all(isinstance(m, dict) and all(isinstance(k, str) and isinstance(v, str)
@@ -288,12 +308,23 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
         raw = row.pop("original_bytes")
         row["original_base64"] = base64.b64encode(raw).decode()
         articles.append(row)
+    shared_body: dict[str, Any] | None = None
+    if len({r["original_sha256"] for r in articles}) < len(articles):
+        blobs: dict[str, str] = {}
+        layers: dict[str, str] = {}
+        for row in articles:
+            blobs.setdefault(row["original_sha256"], row.pop("original_base64"))
+            if row.get("original_text_layer_sha256"):
+                layers.setdefault(row["original_text_layer_sha256"], row.pop("original_text_layer"))
+        shared_body = {"format": SHARED_FORMAT, "blobs": blobs, "layers": layers}
     body = {"schema": SCHEMA, "note": NOTE, "snapshot_hash": run.snapshot_hash,
             "corpus_pack_sha256": config.pack_sha256, "brief_text": brief_text,
             "brief_representation_sha256": run.representation_sha256,
             "act_aliases": dict(config.act_aliases), "chosen_versions": dict(config.chosen_versions),
             "references": [asdict(x) for x in run.legal_observations], "review": review,
             "articles": articles, "article_index": [{"key": r.key, "index": i} for i, r in enumerate(config.records)]}
+    if shared_body is not None:
+        body["shared_originals"] = shared_body
     if exhibits is not None:
         body["exhibits"] = exhibits
     if passages is not None:

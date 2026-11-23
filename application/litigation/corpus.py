@@ -63,7 +63,7 @@ def check_derived_binding(artifact_kind: str, original_bytes: bytes, derived_tex
         original = original_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise CorpusError("text capture original is not UTF-8") from exc
-    needle, hay = _ws(derived_text), _ws(original)
+    needle, hay = _ws(derived_text), _ws(strip_footers(original) if layer else original)
     if not needle:
         raise CorpusError("derived article text is empty")
     if article and not re.match(rf"Art\.\s*{re.escape(article)}(?:\.|\s)", needle):
@@ -77,6 +77,17 @@ def check_derived_binding(artifact_kind: str, original_bytes: bytes, derived_tex
             return
         at = hay.find(needle, at + 1)
     raise CorpusError("derived article text does not occur as that article's own span in its preserved original capture")
+
+
+_FOOT_LINE = re.compile(r"^\s*Page\s+\d+\s+de\s+\d+\s+Copyright Moniteur belge\s+\d{2}-\d{2}-\d{4}\s*$")
+
+
+_FOOT_COMPACT = re.compile(r"^Page\d+de\d+CopyrightMoniteurbelge\d{2}-\d{2}-\d{4}$")
+
+
+def strip_footers(text: str) -> str:
+    """The publisher's running page footer removed, line by line. Nothing else is touched."""
+    return "\n".join(ln for ln in text.splitlines() if not _FOOT_LINE.match(ln))
 
 
 _FOOTER = re.compile(r"\s*Page\s+\d+\s+de\s+\d+\s+Copyright Moniteur belge\s+\d{2}-\d{2}-\d{4}\s*")
@@ -105,7 +116,7 @@ _NEXT_HEADING = re.compile(rf"^\s*{_HEADING}(?=[\s\d])")
 
 def _pdf_span(layer: str, derived_text: str, article: str) -> list[str]:
     """Non-blank normalised layout lines from the article's "Art. N." line to its last line."""
-    lines = layer.splitlines()
+    lines = strip_footers(layer).splitlines()
     want = _ws(derived_text)
     found: list[list[str]] = []
     for i, line in enumerate(lines):
@@ -136,7 +147,7 @@ def derive_pdf_body_start(layer: str, derived_text: str, article: str, pdf: byte
     if pdf is not None:
         from application.litigation.pdf_text_layer import PdfLayerError, extract_lines
         try:
-            extracted = extract_lines(pdf)
+            extracted = [ln for ln in extract_lines(pdf) if not _FOOT_LINE.match(ln) and not _FOOT_COMPACT.match(ln.replace(" ", ""))]
             real = [ln.replace(" ", "") for ln in extracted]
         except (PdfLayerError, ValueError, KeyError, zlib.error) as exc:
             raise CorpusError(f"publisher PDF text could not be re-read: {exc}") from exc
