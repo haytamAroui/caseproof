@@ -43,10 +43,16 @@ from domains.disputes.statute_parser import (
 )
 
 ENGINE = "caseproof-legal-reference-check-v1"
+ENGINE_STRICT = "caseproof-legal-reference-check-v2"
 _WS = re.compile(r"\s+")
 _QUOTE = re.compile(r"«\s*(.+?)\s*»", re.DOTALL)
 # A mention that looks like an article citation, whatever its exact form.
 _MENTION = re.compile(r"(?<![\w])(?:art(?:icles?|ikels?)?\.?)\s+\d", re.IGNORECASE)
+_MENTION_STRICT = re.compile(r"(?<![\w])(?:art(?:icles?|ikels?)?\.?)\s*\d", re.IGNORECASE)
+_QUOTE_STRICT = re.compile(r"«\s*(.+?)\s*»|\u201c\s*(.+?)\s*\u201d|\u201e\s*(.+?)\s*[\u201c\u201d]|\"\s*([^\"]+?)\s*\"", re.DOTALL)
+_LOCATOR = re.compile(r"(?:\bal(?:in[ée]a|\.)\s*\d|§\s*\d|\b(?:lid|paragraaf|section|point|sous-section|littera|lit\.)\s*\d)",
+                      re.IGNORECASE)
+_STATUS_RANK = {"PASS": 0, "UNDETERMINED": 1, "FAIL": 2}
 _BIND_GAP_MAX = 40
 _QUOTE_MAX = 4000
 
@@ -56,6 +62,53 @@ LegalReferenceObservation = LegalObservation
 
 def _norm(text: str) -> str:
     return _WS.sub(" ", text.replace("\u00a0", " ")).strip().casefold()
+
+
+def _qtext(m: re.Match[str]) -> str:
+    return next(g for g in m.groups() if g is not None)
+
+
+def _norm_exact(text: str) -> str:
+    """Whitespace and apostrophe shape only. Case, punctuation and letters stay exact."""
+    return _WS.sub(" ", text.replace("\u00a0", " ").replace("\u2019", "'")).strip()
+
+
+def _excerpt_issue(quote: str, article: str) -> str | None:
+    """None when some literal occurrence starts and ends where a reader expects.
+
+    A fragment that begins mid-sentence or mid-word, or stops before the sentence
+    does, is literally present but omits context (for example an opening
+    reservation). That needs a human decision, not a PASS.
+    """
+    start = article.find(quote)
+    word_issue = False
+    while start != -1:
+        end = start + len(quote)
+        before = article[:start].rstrip()
+        starts_ok = start == 0 or (not article[start - 1].isalnum() and (
+            quote[0].isupper() or (before[-1:] in ".;:!?" and article[start - 1] == " ")))
+        word_ok = (start == 0 or not article[start - 1].isalnum()) and (end == len(article) or not article[end].isalnum())
+        ends_ok = end == len(article) or quote[-1] in ".;:!?" or article[end] in ".;:!?"
+        if starts_ok and word_ok and ends_ok:
+            return None
+        word_issue = word_issue or not word_ok
+        start = article.find(quote, start + 1)
+    return "quotation_starts_or_ends_mid_word" if word_issue else "quotation_partial_excerpt_review_required"
+
+
+def _bound_quote_matches(text: str, cite: AnchoredStatuteCitation,
+                         others: Sequence[AnchoredStatuteCitation]) -> list[re.Match[str]]:
+    found: list[re.Match[str]] = []
+    start, end = cite.span.start, cite.span.end
+    next_start = min((o.span.start for o in others if o.span.start >= end), default=len(text))
+    m = _QUOTE_STRICT.search(text, end, next_start)
+    if m and m.start() - end <= _BIND_GAP_MAX and not re.search(r"[.;!?\n]", text[end:m.start()]):
+        found.append(m)
+    previous_end = max((o.span.end for o in others if o.span.end <= start), default=0)
+    for q in _QUOTE_STRICT.finditer(text, previous_end, start):
+        if re.fullmatch(r"[ \t(,:]*", text[q.end():start]):
+            found.append(q)
+    return found
 
 
 def _article_in_text(record: ArticleRecord) -> str:
@@ -89,6 +142,7 @@ def check_legal_references(
     act_aliases: Mapping[str, str],
     *,
     chosen_versions: Mapping[str, str] | None = None,
+    strict: bool = False,
 ) -> tuple[LegalReferenceObservation, ...]:
     """Check every cited article of ``text`` against the chosen corpus.
 
@@ -107,6 +161,7 @@ def check_legal_references(
         by_base.setdefault(r.base_key, []).append(r)
     out: list[LegalReferenceObservation] = []
     covered: list[tuple[int, int]] = []
+    bound_spans: list[tuple[int, int]] = []
     for index, cite in enumerate(article_cites, start=1):
         c = cite.citation
         covered.append((cite.span.start, cite.span.end))
@@ -114,6 +169,11 @@ def check_legal_references(
         base: dict[str, Any] = dict(reference_id=ref_id, raw_text=c.raw_text, start=cite.span.start,
                     end=cite.span.end, act_code=c.code, article=c.article, language=c.language)
         act = act_aliases.get(c.code)
+        if strict and (_LOCATOR.search(c.raw_text) or _LOCATOR.search(
+                text[max(0, cite.span.start - 40):cite.span.start] + " | " + text[cite.span.end:cite.span.end + 40].split("\n")[0])):
+            out.append(LegalReferenceObservation(
+                **base, status=RuleStatus.UNDETERMINED, reason="sub_article_locator_not_checked_in_corpus"))
+            continue
         if act is None:
             out.append(LegalReferenceObservation(
                 **base, status=RuleStatus.UNDETERMINED,
@@ -146,6 +206,31 @@ def check_legal_references(
         ident: dict[str, Any] = dict(corpus_key=record.key, corpus_version=record.version,
                      corpus_text_sha256=record.derived_sha256,
                      corpus_source_uri=record.source_uri)
+        if strict:
+            matches_q = _bound_quote_matches(text, cite, article_cites)
+            bound_spans.extend(m.span() for m in matches_q)
+            verdicts: list[tuple[str, str, str]] = []
+            article_norm = _norm_exact(record.derived_text)
+            for m in matches_q:
+                raw_q = _qtext(m)[:_QUOTE_MAX]
+                q = _norm_exact(raw_q)
+                if not q:
+                    continue
+                if q not in article_norm:
+                    verdicts.append(("FAIL", "quotation_absent_from_corpus_article_text", raw_q))
+                    continue
+                issue = _excerpt_issue(q, article_norm)
+                verdicts.append(("UNDETERMINED", issue, raw_q) if issue else
+                                ("PASS", "quotation_found_verbatim_in_corpus_article", raw_q))
+            if not verdicts:
+                out.append(LegalReferenceObservation(
+                    **base, **ident, status=RuleStatus.UNDETERMINED,
+                    reason="article_exists_in_corpus_no_quotation_checked_claim_not_verified"))
+                continue
+            worst = max(verdicts, key=lambda v: _STATUS_RANK[v[0]])
+            out.append(LegalReferenceObservation(
+                **base, **ident, quote=worst[2], status=RuleStatus(worst[0]), reason=worst[1]))
+            continue
         quotes = [q for q in _bound_quotes(text, cite, article_cites) if q]
         if len(quotes) > 1 and len({_norm(q) for q in quotes}) > 1:
             out.append(LegalReferenceObservation(
@@ -168,7 +253,17 @@ def check_legal_references(
                 reason="quotation_absent_from_corpus_article_text"))
     # Mentions the Level-1 parser could not read are surfaced, never skipped.
     n = len(out)
-    for m in _MENTION.finditer(text):
+    if strict:
+        for qm in _QUOTE_STRICT.finditer(text):
+            if any(a <= qm.start() and qm.end() <= b or qm.span() == (a, b) for a, b in bound_spans):
+                continue
+            n += 1
+            out.append(LegalReferenceObservation(
+                reference_id=f"legal-ref-{n:02d}", raw_text=qm.group(0)[:60], start=qm.start(),
+                end=min(len(text), qm.start() + 60), act_code=None, article=None, language=None,
+                status=RuleStatus.UNDETERMINED, reason="quotation_not_bound_to_a_checked_reference",
+                quote=_qtext(qm)[:_QUOTE_MAX]))
+    for m in (_MENTION_STRICT if strict else _MENTION).finditer(text):
         if any(s <= m.start() < e for s, e in covered):
             continue
         n += 1

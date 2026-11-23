@@ -38,6 +38,28 @@ class CorpusError(ValueError):
     """Malformed corpus manifest or corpus content."""
 
 
+def _ws(text: str) -> str:
+    return re.sub(r"\s+", " ", text.replace("\u00a0", " ")).strip()
+
+
+def check_derived_binding(artifact_kind: str, original_bytes: bytes, derived_text: str) -> None:
+    """A text capture's derived article must literally occur in its preserved original.
+
+    Hashing both files proves nothing about their relation: a derived text edited
+    beside an intact original would otherwise be checked against as "the source".
+    Other artifact kinds (for example a PDF) need an extraction proof not built yet.
+    """
+    if artifact_kind != "official_text_capture":
+        return
+    try:
+        original = original_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CorpusError("text capture original is not UTF-8") from exc
+    needle = _ws(derived_text)
+    if not needle or needle not in _ws(original):
+        raise CorpusError("derived article text does not occur in its preserved original capture")
+
+
 @dataclass(frozen=True, slots=True)
 class ArticleRecord:
     """One corpus article: identity, declared version, provenance, texts."""
@@ -146,6 +168,7 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
         raise CorpusError("unknown source artifact kind")
     if not isinstance(notes, str) or len(notes) > 4000:
         raise CorpusError("bounded source provenance required")
+    check_derived_binding(artifact_kind, original_bytes, derived_text)
     return ArticleRecord(
         act=act,
         article=article,

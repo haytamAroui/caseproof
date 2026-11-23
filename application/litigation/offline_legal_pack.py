@@ -15,8 +15,8 @@ from dataclasses import asdict
 from typing import Any, Protocol
 from zipfile import ZIP_STORED, BadZipFile, ZipFile
 
-from application.litigation.corpus import ArticleRecord, CorpusError
-from application.litigation.legal_references import LegalCorpusConfig, check_legal_references
+from application.litigation.corpus import ArticleRecord, CorpusError, check_derived_binding
+from application.litigation.legal_references import ENGINE_STRICT, LegalCorpusConfig, check_legal_references
 from application.litigation.legal_review_decisions import fingerprints, validate_review
 from application.litigation.unified_review import LegalObservation
 
@@ -48,7 +48,9 @@ def _config(data: dict[str, Any]) -> LegalCorpusConfig:
         text = values["derived_text"]
         if not isinstance(text, str) or _hash(text.encode()) != values["derived_sha256"]:
             raise CorpusError("article text changed")
-        records.append(ArticleRecord(**values, original_bytes=raw))
+        record = ArticleRecord(**values, original_bytes=raw)
+        check_derived_binding(record.source_artifact_kind, raw, text)
+        records.append(record)
     if len({r.key for r in records}) != len(records):
         raise CorpusError("duplicate article identity")
     if not all(isinstance(m, dict) and all(isinstance(k, str) and isinstance(v, str)
@@ -182,7 +184,8 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
                 or body["review"]["snapshot_hash"] != body["snapshot_hash"]):
             raise CorpusError("review snapshot changed")
         observed = check_legal_references(body["brief_text"], config.records, config.act_aliases,
-                                         chosen_versions=config.chosen_versions)
+                                         chosen_versions=config.chosen_versions,
+                                         strict=body["review"].get("check_engine") == ENGINE_STRICT)
         if _encode([asdict(x) for x in observed]) != _encode(body["references"]):
             raise CorpusError("legal checks do not replay")
         if body["article_index"] != [{"key": r.key, "index": i} for i, r in enumerate(config.records)]:

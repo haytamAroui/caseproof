@@ -12,6 +12,7 @@ from pathlib import Path
 
 from application.litigation.corpus import CorpusError
 from application.litigation.legal_references import (
+    ENGINE_STRICT,
     LegalCorpusConfig,
     check_legal_references,
     load_corpus_config,
@@ -54,7 +55,7 @@ def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
         config = replace(config, chosen_versions=chosen_versions)
     text = artifact["text"]
     observations = check_legal_references(text, config.records, config.act_aliases,
-                                           chosen_versions=config.chosen_versions)
+                                           chosen_versions=config.chosen_versions, strict=True)
     if not observations:
         raise CorpusError("no supported explicit legal reference detected; no success claim")
     representation_sha = hashlib.sha256(text.encode()).hexdigest()
@@ -67,7 +68,8 @@ def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
     run = OfflineLegalRun(snapshot, representation_sha, config.pack_sha256, observations)
     review = {"snapshot_hash": snapshot, "revision": 0, "decisions": [], "release_authorized": False,
               "origin": "local_offline_check_not_authenticated_lawyer_review", "input_binding": identity,
-              "decision_layer": 1}
+              "decision_layer": 1,
+              "check_engine": ENGINE_STRICT}
     if prior is not None:
         # The earlier review is replayed cold first: a changed or forged export carries nothing.
         before = verify_legal_pack(prior[0], expected_sha256=prior[1])
