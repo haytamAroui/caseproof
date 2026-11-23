@@ -35,6 +35,8 @@
       box.append(el("h4","Cited legal articles"));
       if(d.corpus!=="configured"){box.append(el("p","No legal corpus is chosen for this matter: cited articles are not checked. Nothing was looked up online.","empty"));return;}
       box.append(el("p",d.references.length+" cited reference(s) checked against "+d.corpus_articles+" corpus article(s). "+d.note,"small"));
+      if(d.coverage){const c=d.coverage,s=c.by_status;
+        box.append(el("p","Coverage: "+c.detected+" article mention(s) detected \u00b7 "+s.PASS+" in corpus \u00b7 "+s.FAIL+" quotation not found \u00b7 "+s.UNVERIFIED+" absent from corpus \u00b7 "+s.UNDETERMINED+" cannot be decided. Analysed: "+c.analysed+". NOT analysed: "+c.not_analysed.join("; ")+". Counts show reach, not that the brief is supported.","small"));}
       for(const r of d.references){
         const item=el("div","","result-item");
         item.append(el("strong",r.status+" · "+(LEGAL_LABEL[r.status]||r.status)));

@@ -121,6 +121,15 @@ def create_signed_workbench_router(
                 {**asdict(x), "observation_id": f"legal:{x.reference_id}",
                  "claim_support": "not_assessed"} for x in run.legal_observations
             ],
+            "coverage": {
+                "detected": len(run.legal_observations),
+                "by_status": {s: sum(1 for x in run.legal_observations if str(x.status) == s)
+                              for s in ("PASS", "FAIL", "UNVERIFIED", "UNDETERMINED")},
+                "analysed": "explicit 'article N' mentions naming a code or act only",
+                "not_analysed": ["case law and court decisions", "provisions cited without an article number",
+                                 "assertions without an explicit citation",
+                                 "whether a cited article supports the claim"],
+            },
             "suitability": [
                 {**asdict(x), "observation_id": f"suitability:{x.rule_id}"}
                 for x in run.suitability_observations
