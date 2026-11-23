@@ -62,13 +62,11 @@ def _dossier(tmp_path: Path) -> Path:
                         "reference_id": "ref-ok",
                         "exhibit_label": "Pièce 1",
                         "exact_quote": QUOTE_OK,
-                        "pdf_page": 1,
                     },
                     {
                         "reference_id": "ref-bad",
                         "exhibit_label": "Pièce 1",
                         "exact_quote": QUOTE_BAD,
-                        "pdf_page": 1,
                     },
                 ],
                 "claims": [],
@@ -83,7 +81,7 @@ def _dossier(tmp_path: Path) -> Path:
                         "display_label": "Pièce 1",
                         "aliases": ["Code civil"],
                         "confirmed": True,
-                        "pages": [{"source_id": "src-1", "version_id": "v1", "pdf_page": 1}],
+                        "pages": [{"source_id": "src-1", "version_id": "v1"}],
                     }
                 ],
                 "sources": [

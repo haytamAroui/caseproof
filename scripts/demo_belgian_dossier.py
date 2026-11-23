@@ -447,14 +447,29 @@ def _previews(m2: M2Dossier) -> tuple[EvidencePreview, ...]:
             source.document_id,
             source.version_id,
             _sha(source.text),
-            "application/pdf",
+            source.media_type,
             "ready",
             "caseproof-demo-source-v1",
             f"repr-{source.source_id}",
             (),
             (),
         )
-        previews.append(EvidencePreview(row, source.text, ((0, len(source.text), "pdf-page-1", 0),)))
+        spans: tuple[tuple[int, int, str, int | None], ...]
+        if source.media_type == "application/pdf" and source.blocks:
+            # Real physical inventory from the verified bounded parse.
+            spans = tuple(
+                (
+                    int(block["start"]),
+                    int(block["end"]),
+                    "pdf-page-" + str(int(block["page_index"]) + 1),
+                    int(block["page_index"]),
+                )
+                for block in source.blocks
+            )
+        else:
+            # Text/DOCX sources are genuinely unpaginated: no page is invented.
+            spans = ((0, len(source.text), "unpaginated", None),)
+        previews.append(EvidencePreview(row, source.text, spans))
     return tuple(previews)
 
 

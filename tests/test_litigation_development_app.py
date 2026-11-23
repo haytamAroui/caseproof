@@ -3449,3 +3449,80 @@ def test_demo_journey_pdf_source_real_pages_and_visible_refusals(tmp_path):
     assert citation["quote"] == quote
     # La citation est sur la page physique 2 du PDF : résolue, pas déclarée.
     assert citation["source_pdf_page"] == 2
+
+
+def test_demo_journey_page_resolution_abstains_and_text_stays_unpaginated(tmp_path):
+    """Contract: only verified PDF inventory yields physical pages; a quote on
+    two pages abstains; a text source resolves with no page at all."""
+    import json
+
+    from docx import Document
+    from fastapi.testclient import TestClient
+
+    from application.litigation.corpus import CORPUS_FORMAT_VERSION
+    from apps.api.demo_journey_app import create_demo_app
+    from tests.test_demo_belgian_dossier import RULE, SOURCE_TEXT, _corpus_entry
+
+    corpus_quote = "Le congé est notifié au moins six mois"
+    brief = (
+        f"Le preneur : « {corpus_quote} » (Corpus, art. 1732). "
+        "Le juge retient « clause répétée » (Contrat, art. 5)."
+    )
+    dossier = tmp_path / "dossier"
+    (dossier / "corpus").mkdir(parents=True)
+    (dossier / "rules").mkdir()
+    (dossier / "corpus" / "corpus-manifest.toml").write_text(
+        f'format = "{CORPUS_FORMAT_VERSION}"\n' + _corpus_entry(), encoding="utf-8")
+    (dossier / "corpus" / "synthetic-original.html").write_bytes(b"<html>synthetic</html>")
+    (dossier / "corpus" / "synthetic-derived.txt").write_text(SOURCE_TEXT, encoding="utf-8")
+    (dossier / "rules" / "regle.toml").write_text(RULE, encoding="utf-8")
+    (dossier / "facts.json").write_text(json.dumps({"facts": [
+        {"name": "fait_confirme", "value": True, "confirmed": True}]}), encoding="utf-8")
+    (dossier / "decisions.json").write_text(json.dumps(
+        {"decided_at": "2026-11-23T10:00:00+01:00", "decisions": []}), encoding="utf-8")
+    doc = Document()
+    doc.add_paragraph(brief)
+    doc.save(str(dossier / "brief.docx"))
+    (dossier / "meta.json").write_text(
+        json.dumps({"title": "fixture-abstain", "brief": "brief.docx"}), encoding="utf-8")
+    (dossier / "m2.json").write_text(json.dumps({
+        "case_id": "fixture-abstain", "brief_version_id": "brief-v1", "brief_text": brief,
+        "references": [{"reference_id": "ref-declared", "exhibit_label": "Corpus",
+                        "exact_quote": corpus_quote}],
+        "claims": [], "passages": [], "register_revision": 1,
+        "exhibits": [{"exhibit_id": "ex-corpus", "display_label": "Corpus",
+                      "aliases": [], "confirmed": True,
+                      "pages": [{"source_id": "src-corpus", "version_id": "v1"}]}],
+        "sources": [{"source_id": "src-corpus", "document_id": "doc-corpus",
+                     "version_id": "v1", "label": "corpus synthétique",
+                     "synthetic": True, "text": SOURCE_TEXT}],
+        "review": {"decisions": []},
+    }), encoding="utf-8")
+    client = TestClient(create_demo_app(dossier))
+    session = client.get("/demo/api/state").json()["session"]
+    headers = {"x-demo-session": session, "origin": "http://testserver"}
+
+    # Quote present on BOTH physical pages: no unambiguous pinpoint exists.
+    pdf = _pdf_fixture_bytes([["clause répétée"], ["clause répétée"]])
+    params = ("act=Contrat&article=5&alias=Contrat%2C%20art.%205"
+              "&source_uri=https%3A%2F%2Fexample.test%2Fc.pdf&filename=c.pdf")
+    imported = client.post(f"/demo/api/source?{params}", content=pdf,
+                           headers={**headers, "content-type": "application/octet-stream"})
+    assert imported.status_code == 200, imported.text
+    entry = next(e for e in imported.json()["exhibits"]
+                 if e["exhibit_id"] == imported.json()["exhibit_id"])
+    assert [page["pdf_page"] for page in entry["pages"]] == [1, 2]
+    confirmed = client.post("/demo/api/exhibits/confirm",
+                            json={"exhibit_id": imported.json()["exhibit_id"]},
+                            headers=headers)
+    assert confirmed.status_code == 200, confirmed.text
+
+    run = client.post("/demo/api/run", json={}, headers=headers)
+    assert run.status_code == 200, run.text
+    citations = {c["quote"]: c for c in run.json()["findings"]["citations"]}
+    # Text source: exact match, genuinely unpaginated (no page invented).
+    assert citations[corpus_quote]["state"] == "exact_match"
+    assert citations[corpus_quote]["source_pdf_page"] is None
+    # Same quote on two physical pages: abstention, never a guessed page.
+    assert citations["clause répétée"]["state"] == "reference_ambiguous"
+    assert citations["clause répétée"]["source_pdf_page"] is None

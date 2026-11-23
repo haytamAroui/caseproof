@@ -292,7 +292,9 @@ class DemoState:
                 marker.marker_id,
                 self._resolve_exhibit_label(marker.target),
                 marker.quote,
-                1 if marker.quote is not None else None,
+                # Le brouillon ne déclare aucune page physique : la résolution
+                # relève du registre (inventaire vérifié), jamais d'un 1 inventé.
+                None,
             )
             for marker in self.extraction.markers
         )
@@ -780,7 +782,8 @@ def create_demo_app(dossier: Path) -> FastAPI:
                 )
             )
         else:
-            page_rows = (ExhibitPage(source_id, version, 1),)
+            # Source non paginée (texte, DOCX) : aucune page physique n'est inventée.
+            page_rows = (ExhibitPage(source_id, version, None),)
         state.register = state.register.revise(
             expected_revision=state.register.revision,
             entries=state.register.entries

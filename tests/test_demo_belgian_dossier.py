@@ -106,9 +106,9 @@ def _dossier(tmp_path: Path, *, manifest: bool = True) -> Path:
         "brief_text": BRIEF_TEXT,
         "references": [
             {"reference_id": "ref-ok", "exhibit_label": "Pièce 1",
-             "exact_quote": QUOTE_OK, "pdf_page": 1},
+             "exact_quote": QUOTE_OK},
             {"reference_id": "ref-bad", "exhibit_label": "Pièce 1",
-             "exact_quote": QUOTE_BAD, "pdf_page": 1},
+             "exact_quote": QUOTE_BAD},
         ],
         "claims": [],
         "passages": [{"passage_id": "p-bad", "observation_id": "citation:ref-bad",
@@ -116,7 +116,7 @@ def _dossier(tmp_path: Path, *, manifest: bool = True) -> Path:
         "register_revision": 1,
         "exhibits": [{"exhibit_id": "ex-1", "display_label": "Pièce 1", "aliases": [],
                       "confirmed": True,
-                      "pages": [{"source_id": "src-1", "version_id": "v1", "pdf_page": 1}]}],
+                      "pages": [{"source_id": "src-1", "version_id": "v1"}]}],
         "sources": [{"source_id": "src-1", "document_id": "doc-1", "version_id": "v1",
                      "label": "pièce synthétique", "synthetic": True, "text": SOURCE_TEXT}],
         "review": {"decisions": [
