@@ -5,6 +5,7 @@ from pathlib import Path
 from apps.api.data_rights_enforcement import SignedRightsGate
 from apps.api.data_rights_signed import SignedRightsPolicyReader
 from apps.api.litigation_development_app import create_litigation_development_app
+from apps.api.signed_live_composition import signed_dev_app_ports
 from apps.api.signed_supabase_originals import SignedOriginalsStorage
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
 from apps.api.supabase_headless_matter_store import SupabaseHeadlessMatterStore
@@ -18,16 +19,20 @@ enforce_rights = (
 if enforce_rights and not key:
     raise RuntimeError("Document rights enforcement requires signed Supabase identity")
 
+_signed = signed_dev_app_ports(os.environ)
+_originals = _signed.pop("signed_originals", None) or (
+    SignedSourceLibrary(SignedOriginalsStorage(key), rights_shadow_enabled=True)
+    if key and os.environ.get("CASEPROOF_RIGHTS_SHADOW_DEV") == "YES" else None
+)
 app = create_litigation_development_app(
     publishable_key=key,
     rights_gate=SignedRightsGate(SignedRightsPolicyReader(key))
     if key and enforce_rights else None,
-    signed_originals=SignedSourceLibrary(
-        SignedOriginalsStorage(key), rights_shadow_enabled=True,
-    ) if key and os.environ.get("CASEPROOF_RIGHTS_SHADOW_DEV") == "YES" else None,
+    signed_originals=_originals,
     workspace_directory=(Path(__file__).resolve().parents[2] / "frontend/dist") if os.environ.get("CASEPROOF_WORKSPACE_ENABLED") == "YES" else None,
     page_worker_secret=os.environ.get("CASEPROOF_PAGE_WORKER_SECRET"),
     headless=SupabaseHeadlessMatterStore(key) if key else None,
     trusted_ingest_key=os.environ.get("CASEPROOF_DEV_AUTH_ADMIN_KEY"),
     ocr=LocalPDFOCR() if os.environ.get("CASEPROOF_PHASE3_LIVE") == "YES" else None,
+    **_signed,
 )

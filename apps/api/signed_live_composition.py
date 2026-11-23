@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 from apps.api.litigation_check_service import AuthorizedLitigationChecker
 from apps.api.litigation_original_reader import AuthorizedOriginalReader
@@ -120,6 +120,36 @@ def assemble_request_workbench(environ: Mapping[str, str], bearer: str) -> Reque
         library=library,
         originals=AuthorizedOriginalReader(checker, storage),
     )
+
+
+def signed_dev_app_ports(environ: Mapping[str, str]) -> dict[str, Any]:
+    """Keyword arguments that install the SIGNED workbench into the dev app.
+
+    Explicit opt-in (CASEPROOF_SIGNED_WORKBENCH_DEV=YES) and a publishable key
+    are both required; otherwise nothing is installed. Construction performs no
+    network call: every adapter calls Supabase only when a request arrives with
+    a verified bearer. Shared DEV credentials are used only by running the app.
+    """
+    if environ.get("CASEPROOF_SIGNED_WORKBENCH_DEV") != "YES":
+        return {}
+    key = environ.get("CASEPROOF_DEV_PUBLISHABLE_KEY", "")
+    if not key:
+        raise ValueError("signed workbench requires CASEPROOF_DEV_PUBLISHABLE_KEY")
+    env = {**environ, _PUBLISHABLE_ENV: key}
+    ports = live_signed_ports(env)
+    if ports is None:
+        raise ValueError("signed workbench requires a publishable key")
+    publisher, record = ports
+    library = SignedSourceLibrary(storage=SignedOriginalsStorage(publishable_key=key))
+    from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
+
+    return {
+        "signed_originals": library,
+        "signed_brief_publisher": ComposedSignedBriefPublisher(
+            library=library, publisher=publisher, publishable_key=key),
+        "signed_review_record": record,
+        "signed_workbench_factory": lambda bearer: assemble_request_workbench(env, bearer),
+    }
 
 
 def assemble_live_workbench(environ: Mapping[str, str]) -> LiveWorkbenchPorts:

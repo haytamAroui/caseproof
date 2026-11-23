@@ -3797,3 +3797,29 @@ def test_signed_composed_workflow_on_disposable_postgres():
         dumped = json.dumps(body, default=str)
         assert out2.brief_version_id in dumped
         assert run1.snapshot_hash in dumped and run2.snapshot_hash in dumped
+
+
+def test_configured_dev_entry_installs_the_signed_workbench(monkeypatch):
+    """The normal configured entrypoint installs assemble_request_workbench.
+
+    Construction only: no network call, no credential use. Opt-in is explicit.
+    """
+    import importlib
+
+    key = "sb_publishable_" + "D" * 24
+    monkeypatch.setenv("CASEPROOF_DEV_PUBLISHABLE_KEY", key)
+    monkeypatch.delenv("CASEPROOF_SIGNED_WORKBENCH_DEV", raising=False)
+    import apps.api.dev_live_entry as entry
+
+    off = TestClient(importlib.reload(entry).app, client=("127.0.0.1", 50000))
+    assert off.get("/dev/clearbrief/config").json()["signed_workbench"] is False
+    monkeypatch.setenv("CASEPROOF_SIGNED_WORKBENCH_DEV", "YES")
+    on = TestClient(importlib.reload(entry).app, client=("127.0.0.1", 50000))
+    assert on.get("/dev/clearbrief/config").json()["signed_workbench"] is True
+    # Without a bearer the signed routes refuse before any network call.
+    brief = "00000000-0000-4000-8000-000000000001"
+    assert on.get(f"/dev/signed/matters/{brief}/briefs/{brief}/check").status_code == 401
+    assert on.get(f"/dev/signed/matters/{brief}/review-record").status_code == 401
+    monkeypatch.delenv("CASEPROOF_SIGNED_WORKBENCH_DEV")
+    monkeypatch.delenv("CASEPROOF_DEV_PUBLISHABLE_KEY")
+    importlib.reload(entry)
