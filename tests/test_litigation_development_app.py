@@ -3813,6 +3813,9 @@ def test_signed_composed_workflow_on_disposable_postgres():
         assert found.json()["schema"] == "caseproof-evidence-search-v1"
         # Review over HTTP on the current version; replay is idempotent.
         assert client.get(base2 + "/review", headers=auth).json()["revision"] == 0
+        inventory = client.get(base2 + "/review", headers=auth).json()["blocker_inventory"]
+        assert inventory["verdict"] == "not_computed" and inventory["release_authorized"] is False
+
         abst2 = next(f for f in run2.factual_observations
                      if f.state.value in {"needs_context", "not_assessed"})
         rv = {"snapshot_hash": run2.snapshot_hash, "observation_id": f"fact:{abst2.claim_id}",
@@ -3863,6 +3866,8 @@ def test_signed_composed_workflow_on_disposable_postgres():
         flagged_run = checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out2.brief_version_id)
         assert flagged_run.snapshot_hash != run2.snapshot_hash
         assert flagged_run.passage_flags[0]["binding_current"] is True
+        flagged_inventory = client.get(base2 + "/review", headers=auth).json()["blocker_inventory"]
+        assert any(x["observation_id"].startswith("flag:") for x in flagged_inventory["items"])
         assert checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out1.brief_version_id).passage_flags == ()
         assert client.get(base2 + "/review", headers=auth).json()["revision"] == 0
         from application.litigation.unified_review import verification_record
@@ -4257,3 +4262,18 @@ def test_cli_stack_failure_diagnostics_remain_redacted_and_failing():
     diagnostic = output_tail("Error: container failed password=sentinel-secret\npostgres://u:sentinel-password@host/db")
     assert "container failed" in diagnostic
     assert "sentinel-secret" not in diagnostic and "sentinel-password" not in diagnostic
+
+
+def test_blocker_inventory_is_not_readiness_and_human_review_does_not_waive():
+    from application.litigation.review_blockers import review_blockers
+    from application.litigation.unified_review import ObservationReview, ReviewDisposition
+    from tests.test_litigation_m2_unified_review import check
+    run = check()
+    before = review_blockers(run)
+    assert before["verdict"] == "not_computed" and before["release_authorized"] is False
+    assert before["waiver_policy"] == "not_decided"
+    oid = "fact:" + run.factual_observations[0].claim_id
+    after = review_blockers(run, (ObservationReview(oid, "actor", ReviewDisposition.DISMISSED, "Human review"),))
+    assert any(r["observation_id"] == oid and r["reason"] != "human_review_not_recorded" for r in after["items"])
+    assert not any(r["observation_id"] == oid and r["reason"] == "human_review_not_recorded" for r in after["items"])
+    assert after["verdict"] == "not_computed"

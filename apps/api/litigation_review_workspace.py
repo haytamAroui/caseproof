@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Protocol
 from uuid import UUID
 
+from application.litigation.review_blockers import review_blockers
 from application.litigation.review_cycle import ReviewPacket
 from application.litigation.unified_review import (
     ObservationReview,
@@ -83,6 +84,7 @@ class SignedReviewWorkspace:
                 "snapshot_hash": run.snapshot_hash,
                 "revision": state.revision,
                 "decisions": [asdict(x) for x in state.packet.decisions],
+                "blocker_inventory": review_blockers(run, state.packet.decisions),
                 "release_authorized": False,
             }
         except Exception:

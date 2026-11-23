@@ -13,6 +13,13 @@
     if (className) node.className = className;
     return node;
   };
+  function resultLabel(item){
+    if(item.kind==="Event language review"||item.kind==="Human-reported passage"||item.kind==="Suitability rule")return "Appréciation requise";
+    if(item.kind==="Legal reference")return item.state==="PASS"?"Correspondance constatée (corpus/citation seulement)":item.state==="FAIL"?"Écart constaté (citation seulement)":"Contrôle impossible";
+    if(item.kind==="Citation")return item.state==="exact_match"?"Correspondance constatée (texte seulement)":item.state==="quote_not_found"?"Écart constaté (représentation contrôlée)":item.state==="reference_checked_no_quotation"?"Appréciation requise (aucune citation littérale)":"Contrôle impossible";
+    if(item.kind==="Factual value")return item.state==="value_match"?"Correspondance constatée (valeur seulement)":item.state==="candidate_difference"?"Écart constaté (valeur seulement)":item.state==="needs_context"?"Appréciation requise":"Contrôle impossible";
+    return "Appréciation requise";
+  }
   const label = value => String(value || "").replaceAll("_"," ");
   function notice(message, tone="") {
     $("notice").textContent = message; $("notice").className = "notice " + tone;
@@ -351,7 +358,6 @@
       scope.className="check-scope partial";
       scope.textContent="Check not available. Declared sources and exclusions have not been assessed.";
     }
-    renderPassageFlagForm();
     if(state.check)scope.append(el("small","Event-language coverage: "+(state.check.event_observations||[]).length+" paragraph candidate(s). Explicit signature and dispatch-for-signature phrases only (FR/NL/EN), outside quoted text. Source comparison requires one unique existing exact quotation in the same paragraph. Other wording, general paraphrases, event identity and truth are NOT assessed. Uncited candidates receive no automatic source."));
     $("citation-count").textContent=String(state.check?.citation_observations?.length??0);
     $("fact-count").textContent=String(state.check?.factual_observations?.length??0);
@@ -371,7 +377,7 @@
     for(const item of ordered){
       const button=el("button","","observation");button.type="button";
       button.setAttribute("aria-pressed",String(state.selected?.id===item.id));
-      button.append(el("span",item.kind+" / "+label(item.state),"tag"));
+      button.append(el("span",item.kind+" / "+resultLabel(item)+" · "+label(item.state),"tag"));
       button.append(el("strong",item.id.replace("citation:","Reference ").replace("fact:","Fact ").replace("legal:","Legal reference ").replace("suitability:","Suitability rule ")));
       button.append(el("small",(labelOf(item.source)||"No confirmed source")+" · "+item.span));
       button.addEventListener("click",()=>{if(state.loading||state.busy||state.pending)return;
@@ -405,7 +411,17 @@
       try{await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/passage-flags",{method:"POST",json:{request_id:requestId,brief_version_id:state.briefId,source_document_id:doc,source_version_id:ver,draft_passage:draft.value,source_passage:chosen.text,source_start:chosen.start,rationale:rationale.value}});await load();}
       catch(error){status.textContent="Not recorded: "+statusFor(error);save.disabled=false;}};
     box.append(el("p","Human report, not automated detection. Exact text is checked against this brief and source version; semantic support remains your judgment.","small"),draft,src,view,pick,status,rationale,save);
-    void loadText();
+    $("missed-passage").ontoggle=()=>{if($("missed-passage").open)void loadText();};
+    if($("missed-passage").open)void loadText();
+  }
+  function renderBlockers(){
+    const box=$("blocker-inventory");if(!box)return;box.replaceChildren();
+    const d=state.review?.blocker_inventory;
+    if(!d||d.snapshot_hash!==state.check?.snapshot_hash){box.append(el("p","Blocker inventory unavailable. No readiness verdict.","small"));return;}
+    box.append(el("strong","Blocker inventory · no final verdict"));
+    box.append(el("p",d.note,"small"));
+    box.append(el("p",d.items.length+" item(s) requiring review or policy; zero items would not mean ready.","small"));
+    for(const r of d.items)box.append(el("p",r.observation_id+" · "+r.reason+" · "+r.review_disposition,"small"));
   }
   function renderFactForm(box,a){
     const rows=(state.inventory?.rows||[]).filter(r=>r.document_id&&r.version_id);
@@ -506,7 +522,7 @@
     $("save-review").disabled=true;
     if(!selected){$("selected").textContent="Select a finding to inspect and review.";return;}
     $("selected").append(el("strong",selected.kind+" · "+selected.id));
-    $("selected").append(el("p","Check state: "+label(selected.state)));
+    $("selected").append(el("p",resultLabel(selected)+" · Check state: "+label(selected.state)));
     $("selected").append(el("p","Source: "+(labelOf(selected.source)||"not resolved"),"small"));
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
     if(selected.kind==="Human-reported passage"){
@@ -695,7 +711,7 @@
     if(generation!==state.generation)return;
     state.loading=false;$("review-form").removeAttribute("aria-busy");
     state.selected=null;
-    renderSources();renderChecks();renderReview();renderSelected();
+    renderSources();renderChecks();renderReview();renderSelected();renderBlockers();renderPassageFlagForm();
     // The scope is settled: the preview pane shows its idle cue again, never
     // the transient "cleared while the scope reloads" loading text.
     $("source-preview").textContent="Select a source or a finding to inspect its verified representation.";
@@ -726,7 +742,7 @@
       if(generation!==state.generation)return;
       if(review.schema!=="caseproof-clearbrief-review-v1"||review.revision!==receipt.revision)
         throw Error("reload_required");
-      state.review=review;renderReview();
+      state.review=review;renderReview();renderBlockers();
       notice("Review saved at revision "+receipt.revision+". This does not approve publication.","ok");
     }catch(error){
       if(generation!==state.generation)return;
