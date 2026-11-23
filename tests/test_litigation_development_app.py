@@ -1264,20 +1264,30 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
     user_a, user_b, user_c, user_d = uuid4(), uuid4(), uuid4(), uuid4()
     doc_pdf, ver_pdf = uuid4(), uuid4()
     doc_txt, ver_txt = uuid4(), uuid4()
-    register = {"schema": "caseproof-exhibit-register-v1",
-                "entries": [{"exhibit_id": "piece-abc123def456",
-                             "display_label": "Contrat synthétique",
-                             "aliases": [], "confirmed": True,
-                             "manual_inclusion": False,
-                             "pages": [{"document_id": str(doc_pdf),
-                                        "version_id": str(ver_pdf),
-                                        "pdf_page": 1, "printed_page": None,
-                                        "bundle_page": None}]}]}
+
+    def entry(exhibit_id, label, pages, **overrides):
+        base = {"exhibit_id": exhibit_id, "display_label": label, "aliases": [],
+                "confirmed": True, "manual_inclusion": False, "pages": pages}
+        base.update(overrides)
+        return base
+
+    def pdf_pages(source=doc_pdf, version=ver_pdf, count=3, printed=None):
+        return [{"source_id": str(source), "version_id": str(version),
+                 "pdf_page": page,
+                 "printed_page": printed.get(page) if printed else None,
+                 "bundle_page": None}
+                for page in range(1, count + 1)]
+
+    first = entry("piece-aaa111bbb222", "Contrat synthétique", pdf_pages())
+    register = {"schema": "caseproof-exhibit-register-v1", "entries": [first]}
     register_sha = "c" * 64
     with connect() as conn:
         conn.execute(
             "create or replace function auth.jwt() returns jsonb language sql stable as "
             "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute(
+            "drop function if exists public.caseproof_signed_confirm_exhibit"
+            "(uuid,uuid,uuid,uuid,bigint,jsonb,text,jsonb)")
         conn.execute(proposal)
         conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
                      (org, "synthétique"))
@@ -1333,15 +1343,13 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
             conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
 
         def confirm(sub, *, request=None, expected=0, payload=register, sha=register_sha,
-                    document=doc_pdf, version=ver_pdf, mappings=None,
-                    role="authenticated"):
+                    document=doc_pdf, version=ver_pdf, role="authenticated"):
             as_user(sub, role)
             return conn.execute(
                 "select public.caseproof_signed_confirm_exhibit"
-                "(%s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb)",
+                "(%s, %s, %s, %s, %s, %s::jsonb, %s)",
                 (str(case), str(document), str(version), str(request or uuid4()),
-                 expected, json.dumps(payload, ensure_ascii=False), sha,
-                 json.dumps(mappings) if mappings is not None else None)).fetchone()[0]
+                 expected, json.dumps(payload, ensure_ascii=False), sha)).fetchone()[0]
 
         # Happy path: compare-and-swap commits revision 1 with audit and event.
         request = uuid4()
@@ -1367,50 +1375,100 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
 
         # Stale expected revision fails closed without writing.
         assert confirm(user_a, expected=0) == {"ok": False, "error": "stale_revision"}
-        assert conn.execute(
-            "select revision from caseproof._m1_exhibit_heads where case_id=%s",
-            (str(case),)).fetchone()[0] == 1
 
-        # Invalid declarations never write: bad digest, wrong payload schema,
-        # mapping beyond the manifest inventory, duplicate physical page,
-        # unknown mapping key, mapping on an unpaginated source, PDF without
-        # a registered parse manifest.
-        for kwargs in (
-            {"expected": 1, "sha": "C" * 64},
-            {"expected": 1, "payload": {"schema": "autre", "entries": []}},
-            {"expected": 1, "mappings": [{"pdf_page": 4}]},
-            {"expected": 1, "mappings": [{"pdf_page": 1}, {"pdf_page": 1}]},
-            {"expected": 1, "mappings": [{"pdf_page": 1, "autre": 2}]},
-            {"expected": 1, "document": doc_txt, "version": ver_txt,
-             "mappings": [{"pdf_page": 1}]},
-        ):
-            assert confirm(user_a, **kwargs) == {"ok": False, "error": "invalid"}
-        other_version = uuid4()
-        conn.execute(
-            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
-            " original_sha256_hex, byte_length, media_type)"
-            " values(%s, %s, %s, 2, %s, 4, 'application/pdf')",
-            (other_version, org, doc_pdf, "b" * 64))
-        assert confirm(user_a, expected=1, version=other_version) == {
+        # A valid second confirmation appends exactly one entry.
+        second = entry("piece-ccc333ddd444", "Annexe synthétique",
+                       pdf_pages(printed={1: 12, 2: 13, 3: 14}))
+        appended = {"schema": "caseproof-exhibit-register-v1",
+                    "entries": [first, second]}
+        outcome = confirm(user_a, expected=1, payload=appended, sha="d" * 64)
+        assert outcome == {"ok": True, "exhibit_revision": 2, "replay": False}
+
+        # Adversarial direct calls, all refused without writing: a caller
+        # reaching the RPC with the authenticated role cannot smuggle content
+        # past the enforced contract.
+        adversarial = [
+            # rewriting history: prefix entries altered
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [entry("piece-aaa111bbb222", "Falsifié", pdf_pages()), second,
+                         entry("piece-eee555fff666", "Troisième", pdf_pages())]},
+             "sha": "e" * 64},
+            # dropping a confirmed entry
+            {"expected": 2, "payload": register, "sha": "e" * 64},
+            # confirming a foreign document as pages source
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(source=doc_txt, version=ver_txt))]},
+             "sha": "e" * 64},
+            # shrinking the physical inventory (page 2 missing)
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(count=3)[:1] + pdf_pages(count=3)[2:])]},
+             "sha": "e" * 64},
+            # page beyond the manifest inventory
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(count=4))]},
+             "sha": "e" * 64},
+            # duplicate exhibit identity
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-aaa111bbb222", "Doublon", pdf_pages())]},
+             "sha": "e" * 64},
+            # unconfirmed or manually included new entry
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(), confirmed=False)]},
+             "sha": "e" * 64},
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(), manual_inclusion=True)]},
+             "sha": "e" * 64},
+            # case-insensitive alias colliding with the label
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(), aliases=["TROISIÈME"])]},
+             "sha": "e" * 64},
+            # mapping on an unpaginated source
+            {"expected": 2, "document": doc_txt, "version": ver_txt,
+             "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         [{"source_id": str(doc_txt), "version_id": str(ver_txt),
+                           "pdf_page": 1, "printed_page": None, "bundle_page": None}])]},
+             "sha": "e" * 64},
+            # forged digest shape
+            {"expected": 2, "payload": appended, "sha": "E" * 64},
+            # wrong payload schema
+            {"expected": 2, "payload": {"schema": "autre", "entries": []}, "sha": "e" * 64},
+        ]
+        for kwargs in adversarial:
+            assert confirm(user_a, **kwargs) == {"ok": False, "error": "invalid"}, kwargs
+        # A non-boolean confirmed flag must be an invalid contract error, not
+        # an unhandled cast exception.
+        assert confirm(user_a, expected=2, payload={
+            "schema": "caseproof-exhibit-register-v1",
+            "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                        pdf_pages(), confirmed="oui")]}, sha="e" * 64) == {
             "ok": False, "error": "invalid"}
         assert conn.execute(
             "select revision from caseproof._m1_exhibit_heads where case_id=%s",
-            (str(case),)).fetchone()[0] == 1
+            (str(case),)).fetchone()[0] == 2
+        assert conn.execute(
+            "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
+            (str(case),)).fetchone()[0] == 2
 
         # Denials: member without grant, viewer grant, non-member, anonymous
-        # role, unknown subject; an unknown case and a foreign version are
-        # masked the same way.
+        # role, unknown subject; an unknown case is masked the same way.
         for sub, role in ((user_b, "authenticated"), (user_d, "authenticated"),
                           (user_c, "authenticated"), (user_a, "anon"),
                           (uuid4(), "authenticated")):
             with conn.transaction(force_rollback=True):
                 with pytest.raises(errors.InsufficientPrivilege):
-                    confirm(sub, expected=1, role=role)
+                    confirm(sub, expected=2, payload=appended, sha="d" * 64, role=role)
         with conn.transaction(force_rollback=True):
             as_user(user_a)
             with pytest.raises(errors.InsufficientPrivilege):
                 conn.execute(
-                    "select public.caseproof_signed_confirm_exhibit(%s, %s, %s, %s, 1,"
-                    " %s::jsonb, %s, null)",
+                    "select public.caseproof_signed_confirm_exhibit(%s, %s, %s, %s, 2,"
+                    " %s::jsonb, %s)",
                     (str(uuid4()), str(doc_pdf), str(ver_pdf), str(uuid4()),
-                     json.dumps(register), register_sha))
+                     json.dumps(appended), "d" * 64))
