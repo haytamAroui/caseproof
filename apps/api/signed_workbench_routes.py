@@ -20,6 +20,11 @@ from uuid import UUID
 from fastapi import APIRouter, Header
 from pydantic import BaseModel, ConfigDict, Field
 
+from application.litigation.legal_references import (
+    LegalCorpusConfig,
+    check_legal_references,
+)
+from application.litigation.legal_references import to_wire as legal_to_wire
 from application.litigation.review_cycle import CorrectionProposal, preview_correction
 from application.litigation.unified_review import ReviewDisposition
 from apps.api.access_control import AccessFailure, AccessRejected
@@ -34,6 +39,14 @@ __all__ = ["create_signed_workbench_router"]
 _NOTE = (
     "Candidate differences compare typed values in one verified source passage. "
     "They are not legal conclusions, not approval and not a filing decision."
+)
+
+
+_LEGAL_NOTE = (
+    "PASS means the article is in the chosen corpus and any bound quotation is "
+    "literally in its stored text. It never means the article is applicable, "
+    "correctly read or supports the claim. UNVERIFIED means only: article absent "
+    "from the chosen corpus."
 )
 
 
@@ -58,6 +71,7 @@ class CorrectionPreviewBody(BaseModel):
 
 def create_signed_workbench_router(
     factory: Callable[[str], _Workbench] | None,
+    legal_corpus: Callable[[], LegalCorpusConfig] | None = None,
 ) -> APIRouter:
     router = APIRouter()
     base = "/dev/signed/matters/{case_id}/briefs/{brief_version_id}"
@@ -80,6 +94,45 @@ def create_signed_workbench_router(
         bearer, wb = bench(authorization)
         run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
         return {"schema": "caseproof-signed-check-v1", "note": _NOTE, **asdict(run)}
+
+    @router.get(base + "/legal-references")
+    def signed_legal_references(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Cited articles checked against the CHOSEN corpus, version-bound.
+
+        Without a configured corpus the route says so and returns no verdicts:
+        there is no default corpus and no network lookup.
+        """
+        bearer, wb = bench(authorization)
+        run = wb.checker.check(
+            bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        head = {
+            "schema": "caseproof-signed-legal-references-v1",
+            "brief_version_id": brief_version_id,
+            "snapshot_hash": run.snapshot_hash,
+            "note": _LEGAL_NOTE,
+        }
+        if legal_corpus is None:
+            return {**head, "corpus": "not_configured", "references": []}
+        subject = wb.checker._verified(bearer)
+        scope = wb.checker._scope(subject, case_id)
+        try:
+            bundle = wb.store.load_bundle(
+                case_id=case_id, brief_version_id=brief_version_id, access=scope)
+        except Exception:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        config = legal_corpus()
+        refs = check_legal_references(
+            bundle.representation.text, config.records, config.act_aliases,
+            chosen_versions=config.chosen_versions)
+        return {
+            **head, "corpus": "configured",
+            "corpus_articles": len(config.records),
+            "corpus_failures": list(config.failures),
+            "references": [legal_to_wire(r) for r in refs],
+        }
 
     @router.get(base + "/sources")
     def signed_sources(

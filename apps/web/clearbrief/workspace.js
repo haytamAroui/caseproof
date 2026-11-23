@@ -25,6 +25,26 @@
   const reviewPath = () => signedWorkbench
     ? "/dev/signed/matters/" + encodeURIComponent(state.caseId) + "/briefs/" + encodeURIComponent(state.briefId)
     : path();
+  const LEGAL_LABEL={PASS:"in corpus",FAIL:"quotation not in article text",UNVERIFIED:"article absent from chosen corpus",UNDETERMINED:"cannot be decided"};
+  async function loadLegalReferences(generation){
+    const box=$("legal-refs");if(!box)return;box.replaceChildren();box.hidden=false;
+    try{
+      const d=await api(reviewPath()+"/legal-references");
+      if(generation!==state.generation)return;
+      if(d.schema!=="caseproof-signed-legal-references-v1"||d.brief_version_id!==state.briefId||!Array.isArray(d.references))throw Error("invalid_schema");
+      box.append(el("h4","Cited legal articles"));
+      if(d.corpus!=="configured"){box.append(el("p","No legal corpus is chosen for this matter: cited articles are not checked. Nothing was looked up online.","empty"));return;}
+      box.append(el("p",d.references.length+" cited reference(s) checked against "+d.corpus_articles+" corpus article(s). "+d.note,"small"));
+      for(const r of d.references){
+        const item=el("div","","result-item");
+        item.append(el("strong",r.status+" · "+(LEGAL_LABEL[r.status]||r.status)));
+        item.append(el("p",r.raw_text,"small"));
+        item.append(el("p","Reason: "+r.reason+(r.corpus_version?" · corpus version "+r.corpus_version:""),"small mono"));
+        if(r.corpus_text_sha256)item.append(el("p","Corpus text SHA-256 "+r.corpus_text_sha256.slice(0,16)+"\u2026 · "+(r.corpus_source_uri||""),"small mono"));
+        box.append(item);
+      }
+    }catch(error){if(generation===state.generation){box.replaceChildren();box.append(el("p","Legal references unavailable: "+statusFor(error),"error"));}}
+  }
   const labelOf = (id) => (id && state.inventory?.labels?.[id]) || id;
   async function previewCorrection(evt) {
     evt.preventDefault();
@@ -506,6 +526,8 @@
         state.inventory=(inv.schema==="caseproof-clearbrief-brief-sources-v1" &&
           inv.case_id===state.caseId && inv.brief_version_id===state.briefId)?inv:null;
     }catch{if(generation!==state.generation)return;state.inventory=null;}
+    if(signedWorkbench)await loadLegalReferences(generation);
+    if(generation!==state.generation)return;
     try {
       const review=await api(reviewPath()+"/review");
       if(generation===state.generation && review.schema==="caseproof-clearbrief-review-v1" &&

@@ -3863,3 +3863,52 @@ def test_signed_upload_runs_server_side_ingest_on_verified_readback():
     app2 = create_litigation_development_app(
         signed_originals=_Lib(), signed_source_ingest=lambda **k: (_ for _ in ()).throw(ValueError("x")))
     assert TestClient(app2, client=("127.0.0.1", 50000)).put(url, content=b"abc", headers={"Authorization": "Bearer t"}).status_code == 503
+
+
+# --- legal-reference check against a chosen corpus (synthetic corpus text) ---
+def _legal_corpus(*, versions=("v1",), article="12"):
+    import hashlib
+
+    from application.litigation.corpus import ArticleRecord
+    text = "Le preneur répond des dégradations survenues pendant sa jouissance."
+    return [ArticleRecord(
+        act="synthetic-civ", article=article, language="fr", version=v,
+        source_uri="synthetic://corpus", acquired_at="2026-11-22T00:00:00+01:00",
+        consolidated=True, original_sha256="0" * 64, derived_text=text,
+        derived_sha256=hashlib.sha256(text.encode()).hexdigest()) for v in versions]
+
+
+def test_legal_reference_check_statuses_and_honest_boundaries():
+    from application.litigation.legal_references import check_legal_references
+    from application.litigation.rule_results import RuleStatus as S
+    aliases = {"C.civ.": "synthetic-civ"}
+    recs = _legal_corpus()
+
+    def run(text, records=recs, **kw):
+        return check_legal_references(text, records, aliases, **kw)
+
+    ok = run("Selon l'Article 12 du Code civil, « le preneur répond  des dégradations ».")
+    assert [o.status for o in ok] == [S.PASS] and ok[0].reason == "quotation_found_verbatim_in_corpus_article"
+    assert ok[0].corpus_version == "v1" and len(ok[0].corpus_text_sha256) == 64
+    # A quotation that is not in the stored article text fails, narrowly.
+    bad = run("Article 12 du Code civil : « le preneur ne répond de rien ».")
+    assert bad[0].status is S.FAIL and bad[0].reason == "quotation_absent_from_corpus_article_text"
+    # Present article, no bound quotation: existence only, never support.
+    bare = run("Voir Article 12 du Code civil.")
+    assert bare[0].status is S.PASS and bare[0].reason.endswith("no_quotation_bound")
+    # Article absent from the chosen corpus is the one UNVERIFIED case.
+    assert run("Article 99 du Code civil.")[0].status is S.UNVERIFIED
+    # Act not mapped by the corpus owner: UNDETERMINED, never UNVERIFIED.
+    other = check_legal_references("Article 12 du Code judiciaire.", recs, aliases)
+    assert other[0].status is S.UNDETERMINED and other[0].reason == "act_not_mapped_to_chosen_corpus"
+    # Several declared versions and none chosen: UNDETERMINED; choice resolves it.
+    multi = _legal_corpus(versions=("v1", "v2"))
+    assert run("Article 12 du Code civil.", multi)[0].reason == "several_declared_versions_none_chosen"
+    assert run("Article 12 du Code civil.", multi,
+               chosen_versions={"synthetic-civ": "v2"})[0].corpus_version == "v2"
+    # A mention in a form the parser cannot read is surfaced, never skipped.
+    lower = run("Selon l'article 12 du Code civil, ...")
+    assert lower and all(o.status is S.UNDETERMINED for o in lower)
+    assert lower[0].reason == "article_mention_not_readable_by_level1_parser"
+    # Deterministic and bounded to explicit inputs.
+    assert run("Article 12 du Code civil.") == run("Article 12 du Code civil.")
