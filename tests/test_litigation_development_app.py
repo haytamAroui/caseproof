@@ -547,3 +547,246 @@ def test_unpaginated_marker_must_be_sole_row():
             (ExhibitPage("s1", "v1"), ExhibitPage("s1", "v1", pdf_page=1)),
             confirmed=True,
         )
+
+
+# --- Live RPC transport + adapter contracts (no live calls) -----------------
+
+class _StubResponse:
+    def __init__(self, status, body=b""):
+        self.status = status
+        self._body = body
+
+    def read(self, _limit=-1):
+        return self._body
+
+
+class _StubConn:
+    def __init__(self, status=200, body=b"{}", error=None):
+        self._response = _StubResponse(status, body)
+        self._error = error
+        self.requests = []
+        self.closed = False
+
+    def request(self, method, path, body=None, headers=None):
+        if self._error is not None:
+            raise self._error
+        self.requests.append((method, path, body, headers))
+
+    def getresponse(self):
+        return self._response
+
+    def close(self):
+        self.closed = True
+
+
+def _rpc_with(conn):
+    from apps.api.signed_supabase_rpc import call_rpc
+    return call_rpc(publishable_key="sb_publishable_testkey", bearer="jwt",
+                    name="caseproof_signed_test", args={"p_case": "x"},
+                    _conn_factory=lambda: conn)
+
+
+def test_live_rpc_transport_contract():
+    import json as jsonlib
+
+    from apps.api.signed_supabase_originals import (
+        PrivateStorageDenied,
+        PrivateStorageFailure,
+        PrivateStorageOutcomeUnknown,
+    )
+    conn = _StubResponse is None or _StubConn(200, jsonlib.dumps({"ok": True}).encode())
+    assert _rpc_with(conn) == {"ok": True}
+    method, path, body, headers = conn.requests[0]
+    assert (method, path) == ("POST", "/rest/v1/rpc/caseproof_signed_test")
+    assert headers["apikey"] == "sb_publishable_testkey"
+    assert headers["Authorization"] == "Bearer jwt"
+    assert jsonlib.loads(body.decode()) == {"p_case": "x"}
+    assert conn.closed
+    with pytest.raises(PrivateStorageDenied):
+        _rpc_with(_StubConn(403, b"{}"))
+    with pytest.raises(PrivateStorageDenied):
+        _rpc_with(_StubConn(400, jsonlib.dumps({"code": "PGRST202"}).encode()))
+    with pytest.raises(PrivateStorageOutcomeUnknown):
+        _rpc_with(_StubConn(error=OSError("down")))
+    with pytest.raises(PrivateStorageFailure):
+        _rpc_with(_StubConn(200, b"not-json"))
+    with pytest.raises(PrivateStorageFailure):
+        _rpc_with(_StubConn(500, b"{}"))
+
+
+def test_live_rpc_transport_rejects_bad_input():
+    from apps.api.signed_supabase_rpc import call_rpc
+    for kwargs in (
+        {"publishable_key": "sb_secret_nope"},
+        {"bearer": ""},
+        {"bearer": "a\r\nb"},
+        {"name": "drop table"},
+        {"args": ["not-a-dict"]},
+        {"args": {"p_case": "x" * 16384}},
+    ):
+        merged = {"publishable_key": "sb_publishable_testkey", "bearer": "jwt",
+                  "name": "caseproof_signed_test", "args": {}, **kwargs}
+        with pytest.raises(ValueError):
+            call_rpc(**merged)
+
+
+def _publisher_stub(result):
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    calls = []
+
+    def fake_rpc(*, publishable_key, bearer, name, args):
+        calls.append((name, args))
+        return result(calls) if callable(result) else result
+
+    return LiveSignedBriefPublisher(call_rpc=fake_rpc, publishable_key="sb_publishable_k"), calls
+
+
+_UUID_A = "0" * 8 + "-0000-4000-8000-" + "0" * 12
+_UUID_B = "1" * 8 + "-0000-4000-8000-" + "1" * 12
+_UUID_C = "2" * 8 + "-0000-4000-8000-" + "2" * 12
+_SHA = "a" * 64
+
+
+def test_live_publisher_publish_contract():
+    publisher, calls = _publisher_stub(
+        {"ok": True, "brief_id": _UUID_A, "brief_version_id": _UUID_B, "published_revision": 2})
+    outcome = publisher.publish_uploaded(
+        bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
+        document_role="own_draft", expected_revision=1)
+    assert outcome.published_revision == 2
+    name, args = calls[0]
+    assert name == "caseproof_signed_publish_uploaded"
+    assert args == {"p_case": _UUID_A, "p_document": _UUID_B, "p_version": _UUID_C,
+                    "p_role": "own_draft", "p_expected_revision": 1}
+
+
+def test_live_publisher_confirm_exhibit_mappings_contract():
+    publisher, calls = _publisher_stub({"ok": True, "exhibit_id": _UUID_A, "exhibit_revision": 3})
+    confirmed = publisher.confirm_exhibit(
+        bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
+        display_label="Pièce 4",
+        page_mappings=[{"pdf_page": 1, "printed_page": 3, "bundle_page": 7}])
+    assert confirmed.exhibit_revision == 3
+    name, args = calls[0]
+    assert name == "caseproof_signed_confirm_exhibit"
+    assert args["p_page_mappings"] == [{"pdf_page": 1, "printed_page": 3, "bundle_page": 7}]
+
+
+def test_live_publisher_error_mapping():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied
+    for error, expected in (
+        ("denied", PrivateStorageDenied),
+        ("stale_revision", ValueError),
+        ("duplicate_version", ValueError),
+        ("conflict", ValueError),
+        ("invalid", ValueError),
+    ):
+        publisher, _ = _publisher_stub({"ok": False, "error": error})
+        with pytest.raises(expected):
+            publisher.publish_uploaded(
+                bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
+                document_role="own_draft", expected_revision=0)
+
+
+def test_live_publisher_strict_response_and_input():
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+    bad_results = [
+        {"ok": True, "brief_id": "not-a-uuid", "brief_version_id": _UUID_B,
+         "published_revision": 1},
+        {"ok": True, "brief_id": _UUID_A, "brief_version_id": _UUID_B,
+         "published_revision": "1"},
+        {"brief_id": _UUID_A},
+        ["not-a-dict"],
+    ]
+    for result in bad_results:
+        publisher, _ = _publisher_stub(result)
+        with pytest.raises(PrivateStorageFailure):
+            publisher.publish_uploaded(
+                bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
+                document_role="own_draft", expected_revision=0)
+    publisher, _ = _publisher_stub({"ok": True, "exhibit_id": _UUID_A, "exhibit_revision": 1})
+    for bad_mappings in (
+        [{"pdf_page": 1}, {"pdf_page": 1}],
+        [{"pdf_page": "1"}],
+        [{"printed_page": 3}],
+        [{"pdf_page": 1, "unknown": 2}],
+        [{"pdf_page": 0}],
+        "not-a-list",
+    ):
+        with pytest.raises(ValueError):
+            publisher.confirm_exhibit(
+                bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
+                display_label="Pièce 4", page_mappings=bad_mappings)
+    with pytest.raises(ValueError):
+        publisher.register_source_version(
+            bearer="jwt", case_id=_UUID_A, label="x", media_type="application/x-msdownload",
+            byte_length=1, sha256_hex=_SHA)
+
+
+def test_live_publisher_register_and_list_contract():
+    publisher, calls = _publisher_stub(lambda calls: (
+        {"ok": True, "document_id": _UUID_B, "version_id": _UUID_C}
+        if calls[-1][0] == "caseproof_signed_register_source"
+        else {"ok": True, "documents": [
+            {"document_id": _UUID_B, "label": "conclusions",
+             "versions": [{"version_id": _UUID_C, "version_number": 1,
+                           "media_type": "application/pdf", "byte_length": 100,
+                           "sha256_hex": _SHA}]}]}
+    ))
+    registration = publisher.register_source_version(
+        bearer="jwt", case_id=_UUID_A, label="conclusions", media_type="application/pdf",
+        byte_length=100, sha256_hex=_SHA)
+    assert registration.document_id == _UUID_B
+    documents = publisher.list_documents(bearer="jwt", case_id=_UUID_A)
+    assert len(documents) == 1
+    assert documents[0].versions[0].sha256_hex == _SHA
+
+
+def test_live_review_record_contract_and_signature():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+    from apps.api.disposable_review_record import SIGNATURE_DOMAIN, _canonical
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+    body = {"schema": "caseproof-review-record-v1", "record_sha256": _SHA, "case_id": _UUID_A}
+    key = Ed25519PrivateKey.generate()
+    seed = key.private_bytes_raw()
+    calls = []
+
+    def fake_rpc(*, publishable_key, bearer, name, args):
+        calls.append((name, args))
+        return {"ok": True, "record": dict(body)}
+
+    record_port = LiveSignedReviewRecord(
+        call_rpc=fake_rpc, publishable_key="sb_publishable_k", signing_key=seed)
+    signed = record_port.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+    assert calls[0][0] == "caseproof_signed_review_record"
+    receipt = signed["receipt"]
+    assert receipt["scheme"] == "ed25519" and receipt["domain"] == SIGNATURE_DOMAIN
+    key.public_key().verify(
+        bytes.fromhex(receipt["signature"]),
+        _canonical({"domain": SIGNATURE_DOMAIN, "record": body}).encode())
+    unsigned = LiveSignedReviewRecord(call_rpc=fake_rpc, publishable_key="sb_publishable_k")
+    assert "receipt" not in unsigned.record(
+        bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+    public_hex = key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+    assert len(public_hex) == 64
+
+
+def test_live_review_record_denial_and_shape():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied, PrivateStorageFailure
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+    denied = LiveSignedReviewRecord(
+        call_rpc=lambda **kwargs: {"ok": False, "error": "denied"},
+        publishable_key="sb_publishable_k")
+    with pytest.raises(PrivateStorageDenied):
+        denied.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+    for bad in (
+        {"ok": True, "record": {"schema": "other"}},
+        {"ok": True, "record": {"schema": "caseproof-review-record-v1"}},
+        {"ok": True, "record": "not-a-dict"},
+    ):
+        port = LiveSignedReviewRecord(call_rpc=lambda **kwargs: bad,  # noqa: B023
+                                      publishable_key="sb_publishable_k")
+        with pytest.raises(PrivateStorageFailure):
+            port.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
