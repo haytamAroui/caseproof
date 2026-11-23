@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import type { ApiClient } from '../../shared/api';
 import {
   parseLegalPassage,
   parseLegalReferences,
+  type LegalPassageView,
 } from '../../shared/api/legal';
 import { useSession } from '../../shared/session';
 import { Button, Notice } from '../../shared/ui';
@@ -134,22 +135,7 @@ export function LegalScreen({ api }: { api: ApiClient }) {
                         <div className="legal-compare">
                           <div>
                             <h3>Your draft</h3>
-                            <p>
-                              {Array.from(passage.data.brief_excerpt)
-                                .slice(0, passage.data.citation_span[0])
-                                .join('')}
-                              <mark>
-                                {Array.from(passage.data.brief_excerpt)
-                                  .slice(
-                                    passage.data.citation_span[0],
-                                    passage.data.citation_span[1],
-                                  )
-                                  .join('')}
-                              </mark>
-                              {Array.from(passage.data.brief_excerpt)
-                                .slice(passage.data.citation_span[1])
-                                .join('')}
-                            </p>
+                            <DraftExcerpt p={passage.data} />
                           </div>
                           <div>
                             <h3>Stored article text</h3>
@@ -174,8 +160,96 @@ export function LegalScreen({ api }: { api: ApiClient }) {
               ))}
             </ul>
           )}
+          <h2>Lawyer-defined rules on declared facts</h2>
+          {refs.data.suitability.length === 0 ? (
+            <Notice>
+              No lawyer-defined rule was evaluated for this run. Nothing here is
+              a legal conclusion.
+            </Notice>
+          ) : (
+            <ul className="matter-list legal-list" aria-label="Rules">
+              {refs.data.suitability.map((x) => (
+                <li key={x.observation_id}>
+                  <strong>{LABEL[x.status]}</strong> <code>{x.status}</code>
+                  <span className="small">
+                    Rule {x.rule_id} v{x.rule_version}: {x.reference}
+                  </span>
+                  <span className="small">
+                    Reason: <code>{x.reason}</code>
+                  </span>
+                  {x.missing.length > 0 && (
+                    <span className="small">
+                      Missing inputs: {x.missing.join(', ')}
+                    </span>
+                  )}
+                  <span className="small">
+                    Facts used (declared by a person, never confirmed by the
+                    system unless marked):{' '}
+                    {x.facts
+                      .map((f) => `${String(f[0])}=${String(f[1])}`)
+                      .join('; ') || 'none'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </section>
+  );
+}
+
+type Mark = { a: number; b: number; kind: 'checked' | 'cite' | 'other' };
+function DraftExcerpt({ p }: { p: LegalPassageView }) {
+  const chars = Array.from(p.brief_excerpt);
+  const marks: Mark[] = [
+    { a: p.citation_span[0] ?? 0, b: p.citation_span[1] ?? 0, kind: 'cite' },
+  ];
+  if (p.quote_span)
+    marks.push({
+      a: p.quote_span[0] ?? 0,
+      b: p.quote_span[1] ?? 0,
+      kind: 'checked',
+    });
+  for (const o of p.other_findings) {
+    marks.push({ a: o.span[0] ?? 0, b: o.span[1] ?? 0, kind: 'other' });
+    if (o.quote_span)
+      marks.push({
+        a: o.quote_span[0] ?? 0,
+        b: o.quote_span[1] ?? 0,
+        kind: 'other',
+      });
+  }
+  marks.sort((x, y) => x.a - y.a);
+  const overlap = marks.some((m, i) => i > 0 && m.a < (marks[i - 1]?.b ?? 0));
+  const parts: ReactNode[] = [];
+  let at = 0;
+  if (!overlap)
+    marks.forEach((m, i) => {
+      parts.push(chars.slice(at, m.a).join(''));
+      parts.push(
+        <mark key={i} className={`legal-mark legal-mark-${m.kind}`}>
+          {chars.slice(m.a, m.b).join('')}
+        </mark>,
+      );
+      at = m.b;
+    });
+  parts.push(chars.slice(at).join(''));
+  return (
+    <>
+      <p className="small">
+        This row checked:{' '}
+        {p.quote ? <q>{p.quote}</q> : 'no quotation (the citation only)'}
+        {p.quote &&
+          !p.quote_span &&
+          ' (its exact position could not be located)'}
+        . Solid highlight = what this row checked. Dashed = another citation or
+        quotation in the same passage, checked separately in its own row
+        {p.other_findings.length > 0 &&
+          ` (${p.other_findings.map((o) => o.status).join(', ')})`}
+        . {p.status} here does not cover the dashed parts.
+      </p>
+      <p>{overlap ? p.brief_excerpt : parts}</p>
+    </>
   );
 }

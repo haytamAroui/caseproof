@@ -43,6 +43,7 @@ const view = (over: Record<string, unknown> = {}, refs = [ref()]) => ({
     analysed: 'a',
     not_analysed: ['case law'],
   },
+  suitability: [],
   ...over,
 });
 
@@ -82,6 +83,9 @@ describe('legal contract', () => {
       snapshot_hash: sha,
       brief_excerpt: 'abcdef',
       citation_span: [1, 3],
+      quote: 'cd',
+      quote_span: [2, 4],
+      other_findings: [],
       article_text: 'text',
       corpus_key: 'k',
       corpus_version: 'v1',

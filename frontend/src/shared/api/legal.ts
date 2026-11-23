@@ -26,6 +26,9 @@ export function parseLegalReferences(
     ) ||
     (value.corpus === 'not_configured' &&
       value.references.some((r) => r.status === 'PASS')) ||
+    value.suitability.some(
+      (x) => x.status === 'PASS' && x.missing.length > 0,
+    ) ||
     value.references.some(
       (r) => r.claim_support !== 'not_assessed' || r.end < r.start,
     )
@@ -49,7 +52,11 @@ export function parseLegalPassage(
     a < 0 ||
     a > b ||
     b > Array.from(value.brief_excerpt).length ||
-    (value.status === 'PASS' && value.article_text === null)
+    (value.status === 'PASS' && value.article_text === null) ||
+    (value.quote_span !== null &&
+      Array.from(value.brief_excerpt)
+        .slice(value.quote_span[0], value.quote_span[1])
+        .join('') !== value.quote)
   )
     throw new ContractError();
   return value;

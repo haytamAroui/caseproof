@@ -1,4 +1,61 @@
 {
+  "$defs": {
+    "OtherFindingView": {
+      "additionalProperties": false,
+      "description": "Another finding inside the same excerpt, separately checked.",
+      "properties": {
+        "quote_span": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote Span"
+        },
+        "reference_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Reference Id",
+          "type": "string"
+        },
+        "span": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Span",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNVERIFIED",
+            "UNDETERMINED"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference_id",
+        "status",
+        "span"
+      ],
+      "title": "OtherFindingView",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "The lawyer's sentence beside the exact stored article text.",
@@ -93,6 +150,42 @@
       "title": "Observation Id",
       "type": "string"
     },
+    "other_findings": {
+      "items": {
+        "$ref": "#/$defs/OtherFindingView"
+      },
+      "maxItems": 200,
+      "title": "Other Findings",
+      "type": "array"
+    },
+    "quote": {
+      "anyOf": [
+        {
+          "maxLength": 4000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Quote"
+    },
+    "quote_span": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Quote Span"
+    },
     "reason": {
       "maxLength": 400,
       "minLength": 1,
@@ -126,6 +219,9 @@
     "snapshot_hash",
     "brief_excerpt",
     "citation_span",
+    "quote",
+    "quote_span",
+    "other_findings",
     "status",
     "reason",
     "note"

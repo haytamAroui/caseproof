@@ -169,6 +169,38 @@ export type Status = "PASS" | "FAIL" | "UNVERIFIED" | "UNDETERMINED";
 export type References = LegalReferenceView[];
 export type Schema = "caseproof-legal-references-v1";
 export type SnapshotHash = string;
+export type ArticleKey = string;
+/**
+ * @maxItems 1000
+ */
+export type CitedBy = string[];
+/**
+ * @maxItems 200
+ */
+export type Facts = (string | boolean)[][];
+/**
+ * @maxItems 200
+ */
+export type InputHashes = string[][];
+/**
+ * @maxItems 200
+ */
+export type Missing = string[];
+export type ObservationId1 = string;
+export type Reason1 = string;
+export type Reference = string;
+export type RuleId = string;
+export type RuleVersion = string;
+export type Scope = string;
+export type Status1 = "PASS" | "FAIL" | "UNVERIFIED" | "UNDETERMINED";
+/**
+ * @maxItems 200
+ */
+export type Subresults = string[][];
+/**
+ * @maxItems 10000
+ */
+export type Suitability = SuitabilityRowView[];
 
 /**
  * Cited-article results of ONE frozen run. Observations, not verdicts.
@@ -184,6 +216,7 @@ export interface LegalReferencesView {
   references: References;
   schema: Schema;
   snapshot_hash: SnapshotHash;
+  suitability: Suitability;
 }
 export interface LegalCoverageView {
   analysed: Analysed;
@@ -217,4 +250,22 @@ export interface LegalReferenceView {
   reference_id: ReferenceId;
   start: Start;
   status: Status;
+}
+/**
+ * A lawyer-defined rule on declared facts. Never a machine legal conclusion.
+ */
+export interface SuitabilityRowView {
+  article_key: ArticleKey;
+  cited_by: CitedBy;
+  facts: Facts;
+  input_hashes: InputHashes;
+  missing: Missing;
+  observation_id: ObservationId1;
+  reason: Reason1;
+  reference: Reference;
+  rule_id: RuleId;
+  rule_version: RuleVersion;
+  scope: Scope;
+  status: Status1;
+  subresults: Subresults;
 }

@@ -165,6 +165,24 @@ class LegalCoverageView(BaseModel):
         return self
 
 
+class SuitabilityRowView(BaseModel):
+    """A lawyer-defined rule on declared facts. Never a machine legal conclusion."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    observation_id: str = Field(min_length=1, max_length=220)
+    rule_id: str = Field(min_length=1, max_length=200)
+    rule_version: str = Field(min_length=1, max_length=100)
+    reference: str = Field(max_length=400)
+    scope: str = Field(max_length=400)
+    status: LegalStatus
+    reason: str = Field(min_length=1, max_length=400)
+    article_key: str = Field(max_length=400)
+    cited_by: list[str] = Field(max_length=1000)
+    missing: list[str] = Field(max_length=200)
+    facts: list[list[str | bool]] = Field(max_length=200)
+    input_hashes: list[list[str]] = Field(max_length=200)
+    subresults: list[list[str]] = Field(max_length=200)
+
+
 class LegalReferencesView(BaseModel):
     """Cited-article results of ONE frozen run. Observations, not verdicts."""
     model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
@@ -178,6 +196,7 @@ class LegalReferencesView(BaseModel):
     corpus_failures: list[str] = Field(max_length=500)
     references: list[LegalReferenceView] = Field(max_length=10000)
     coverage: LegalCoverageView
+    suitability: list[SuitabilityRowView] = Field(max_length=10000)
 
     @model_validator(mode="after")
     def coverage_matches(self) -> "LegalReferencesView":
@@ -189,7 +208,18 @@ class LegalReferencesView(BaseModel):
                 raise ValueError("status counts disagree")
         if self.corpus == "not_configured" and any(r.status == "PASS" for r in self.references):
             raise ValueError("PASS without a chosen corpus")
+        if any(row.status == "PASS" and row.missing for row in self.suitability):
+            raise ValueError("a rule with missing inputs cannot pass")
         return self
+
+
+class OtherFindingView(BaseModel):
+    """Another finding inside the same excerpt, separately checked."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    reference_id: str = Field(min_length=1, max_length=200)
+    status: LegalStatus
+    span: list[int] = Field(min_length=2, max_length=2)
+    quote_span: list[int] | None = Field(default=None, min_length=2, max_length=2)
 
 
 class LegalPassageView(BaseModel):
@@ -200,6 +230,9 @@ class LegalPassageView(BaseModel):
     snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     brief_excerpt: str = Field(max_length=2000)
     citation_span: list[int] = Field(min_length=2, max_length=2)
+    quote: str | None = Field(max_length=4000)
+    quote_span: list[int] | None = Field(min_length=2, max_length=2)
+    other_findings: list[OtherFindingView] = Field(max_length=200)
     article_text: str | None = Field(default=None, max_length=200000)
     corpus_key: str | None = Field(default=None, max_length=400)
     corpus_version: str | None = Field(default=None, max_length=400)
@@ -212,6 +245,14 @@ class LegalPassageView(BaseModel):
     @model_validator(mode="after")
     def span_inside_excerpt(self) -> "LegalPassageView":
         a, b = self.citation_span
-        if not 0 <= a <= b <= len(self.brief_excerpt):
+        n = len(self.brief_excerpt)
+        if not 0 <= a <= b <= n:
             raise ValueError("citation span outside excerpt")
+        spans = [self.quote_span] if self.quote_span else []
+        for o in self.other_findings:
+            spans += [o.span] + ([o.quote_span] if o.quote_span else [])
+        if any(not 0 <= x <= y <= n for x, y in spans):
+            raise ValueError("span outside excerpt")
+        if self.quote_span and self.brief_excerpt[self.quote_span[0]:self.quote_span[1]] != self.quote:
+            raise ValueError("quote span does not match the checked quotation")
         return self

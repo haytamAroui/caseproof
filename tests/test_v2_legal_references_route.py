@@ -62,7 +62,7 @@ def test_v2_route_returns_contract_and_matches_dev_route(tmp_path):
         [(r["reference_id"], r["status"], r["reason"]) for r in dev["references"]]
     assert body["coverage"]["detected"] == len(legal) >= 1
     assert all(r["claim_support"] == "not_assessed" for r in body["references"])
-    assert "suitability" not in body
+    assert body["suitability"] == []
 
 
 def test_v2_requires_a_bearer(tmp_path):
@@ -79,6 +79,21 @@ def test_v2_passage_is_side_by_side_and_bound_to_the_frozen_hash(tmp_path):
     a, b = body["citation_span"]
     assert body["brief_excerpt"][a:b] == legal[0].raw_text
     assert client.get(f"{BASE}/nope/passage", headers=H).status_code in (403, 404)
+
+
+def test_passage_marks_only_this_rows_quotation_and_lists_other_findings_separately(tmp_path):
+    false_quote = "la preuve est toujours inutile"
+    client, legal = _client(tmp_path, [
+        f"Article 8.5 du Code civil : « {ARTICLE} ». Article 8.5 du Code civil : « {false_quote} »."])
+    assert len(legal) == 2
+    first = client.get(f"{BASE}/{legal[0].reference_id}/passage", headers=H).json()
+    ex = first["brief_excerpt"]
+    a, b = first["quote_span"]
+    assert ex[a:b] == legal[0].quote and false_quote not in ex[a:b]
+    others = first["other_findings"]
+    assert [o["reference_id"] for o in others] == [legal[1].reference_id]
+    oa, ob = others[0]["quote_span"]
+    assert ex[oa:ob] == false_quote and others[0]["status"] != first["status"]
 
 
 def test_v2_no_corpus_means_no_pass(tmp_path):

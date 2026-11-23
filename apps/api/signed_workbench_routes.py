@@ -342,7 +342,25 @@ def create_signed_workbench_router(
                 article_text = rec.derived_text
             else:
                 raise AccessRejected(AccessFailure.STALE_SNAPSHOT)
+        def rel(a: int, b: int) -> list[int] | None:
+            return [a - lo, b - lo] if lo <= a and b <= hi else None
+
+        def quote_at(o: Any) -> list[int] | None:
+            if not o.quote:
+                return None
+            i = text.find(o.quote, o.end)
+            return rel(i, i + len(o.quote)) if i >= 0 else None
+
+        others = []
+        for x in run.legal_observations:
+            span = rel(x.start, x.end)
+            if x.reference_id != obs.reference_id and span is not None:
+                others.append({"reference_id": x.reference_id, "status": x.status,
+                               "span": span, "quote_span": quote_at(x)})
         return {
+            "quote": obs.quote,
+            "quote_span": quote_at(obs),
+            "other_findings": others,
             "schema": "caseproof-signed-legal-passage-v1",
             "observation_id": f"legal:{obs.reference_id}",
             "snapshot_hash": run.snapshot_hash,
@@ -370,9 +388,13 @@ def create_signed_workbench_router(
         """
         from application.litigation.workspace_contract import LegalReferencesView
         raw = signed_legal_references(case_id, brief_version_id, authorization)
-        raw = {k: v for k, v in raw.items() if k != "suitability"}
         raw["schema"] = "caseproof-legal-references-v1"
         raw["corpus_failures"] = [str(x) for x in raw["corpus_failures"]]
+        raw["suitability"] = [
+            {**row, "cited_by": list(row["cited_by"]), "missing": list(row["missing"]),
+             "facts": [list(f) for f in row["facts"]], "input_hashes": [list(h) for h in row["input_hashes"]],
+             "subresults": [list(x) for x in row["subresults"]]}
+            for row in raw["suitability"]]
         try:
             view = LegalReferencesView.model_validate(raw)
         except ValueError:

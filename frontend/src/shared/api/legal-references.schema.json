@@ -216,6 +216,134 @@
       ],
       "title": "LegalReferenceView",
       "type": "object"
+    },
+    "SuitabilityRowView": {
+      "additionalProperties": false,
+      "description": "A lawyer-defined rule on declared facts. Never a machine legal conclusion.",
+      "properties": {
+        "article_key": {
+          "maxLength": 400,
+          "title": "Article Key",
+          "type": "string"
+        },
+        "cited_by": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1000,
+          "title": "Cited By",
+          "type": "array"
+        },
+        "facts": {
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "maxItems": 200,
+          "title": "Facts",
+          "type": "array"
+        },
+        "input_hashes": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 200,
+          "title": "Input Hashes",
+          "type": "array"
+        },
+        "missing": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Missing",
+          "type": "array"
+        },
+        "observation_id": {
+          "maxLength": 220,
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "reference": {
+          "maxLength": 400,
+          "title": "Reference",
+          "type": "string"
+        },
+        "rule_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "rule_version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Rule Version",
+          "type": "string"
+        },
+        "scope": {
+          "maxLength": 400,
+          "title": "Scope",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNVERIFIED",
+            "UNDETERMINED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "subresults": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 200,
+          "title": "Subresults",
+          "type": "array"
+        }
+      },
+      "required": [
+        "observation_id",
+        "rule_id",
+        "rule_version",
+        "reference",
+        "scope",
+        "status",
+        "reason",
+        "article_key",
+        "cited_by",
+        "missing",
+        "facts",
+        "input_hashes",
+        "subresults"
+      ],
+      "title": "SuitabilityRowView",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -288,6 +416,14 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Snapshot Hash",
       "type": "string"
+    },
+    "suitability": {
+      "items": {
+        "$ref": "#/$defs/SuitabilityRowView"
+      },
+      "maxItems": 10000,
+      "title": "Suitability",
+      "type": "array"
     }
   },
   "required": [
@@ -299,7 +435,8 @@
     "corpus_articles",
     "corpus_failures",
     "references",
-    "coverage"
+    "coverage",
+    "suitability"
   ],
   "title": "LegalReferencesView",
   "type": "object"
