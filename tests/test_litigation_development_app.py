@@ -1283,6 +1283,35 @@ def test_fact_extraction_deterministic_with_explicit_abstention():
     assert extract_fact_assertions("Le paiement de € 10 est intervenu.", ()) == ()
 
 
+def test_fact_extraction_trailing_currency_belgian_form():
+    from application.litigation.fact_extraction import extract_fact_assertions
+    from application.litigation.factual_values import FactKind, FactRole, _extract, _money_value
+
+    # Forme belge/française usuelle : la devise suit le montant.
+    text = ("«clause prix» (Contrat). Le demandeur réclame le paiement de 12.500,00 EUR. "
+            "Le paiement de 12 500,00 € est dû.")
+    citations = (("ref-01", text.index("(Contrat).") + len("(Contrat).")),)
+    first = extract_fact_assertions(text, citations)
+    assert first == extract_fact_assertions(text, citations)  # replay stable
+    money = [a for a in first if a.kind is FactKind.MONEY]
+    assert len(money) == 2
+    assert all(a.role is FactRole.PAYMENT for a in money)
+    assert {a.text for a in money} == {
+        "Le demandeur réclame le paiement de 12.500,00 EUR",
+        "Le paiement de 12 500,00 € est dû",
+    }
+    for assertion in money:
+        assert text[assertion.text_start:assertion.text_end] == assertion.text
+    # Les formes menant restent acceptées, la valeur est identique.
+    assert _money_value("12.500,00 EUR", "fr") == _money_value("EUR 12.500,00", "fr")
+    # Ambiguïté de groupement : abstention, jamais de valeur devinée.
+    assert _money_value("14,500 EUR", "fr") is None
+    assert _money_value("1,234 EUR", "fr") is None
+    # Pas de devise, pas de montant ; préfixe collé refusé.
+    assert _extract("2026-041", FactKind.MONEY, "fr") == []
+    assert _extract("12.500,00 EUROS", FactKind.MONEY, "fr") == []
+
+
 def test_fact_extraction_attachments_and_span_integrity():
     from application.litigation.fact_extraction import extract_fact_assertions
 
