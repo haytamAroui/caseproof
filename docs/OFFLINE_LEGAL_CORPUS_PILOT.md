@@ -72,3 +72,9 @@ une tranche juridique et non la validation du parcours complet du dossier.
 `scripts/review_offline_legal.py decide` ajoute une décision (confirmer, nuancer, rejeter, déroger) à un constat précis et écrit une nouvelle revue figée, sans modifier l'export précédent. La décision porte un libellé local non authentifié, jamais une identité d'avocat, et n'autorise aucun dépôt. Elle est liée à l'empreinte du constat : référence citée, statut, citation, texte exact de l'article et pack de corpus.
 
 `scripts/review_offline_legal.py recheck` contrôle un Word corrigé après relecture à froid de la revue précédente. Une décision n'est conservée (origine « carried ») que si le constat est identique. Sinon elle reste visible comme décision antérieure sans effet et le nouveau constat demande une nouvelle décision. Un autre pack de corpus ne reprend jamais une décision. Les exports antérieurs à cette couche restent lisibles et vérifiables, mais refusent de recevoir des décisions.
+
+## Décisions et revérification dans l'écran local
+
+L'écran local (`scripts/serve_offline_legal_workbench.py`) propose, pour chaque finding sans décision, Confirmer, Confirmer avec réserve, Rejeter ou Écarter, avec un motif (obligatoire sauf pour Confirmer) et une étiquette locale. Chaque décision produit une nouvelle revue figée ; l'ancienne n'est jamais modifiée. L'étiquette n'est pas authentifiée : ce n'est pas une décision d'avocat et elle n'autorise aucun dépôt.
+
+« Revérifier un Word corrigé » relance le contrôle. Une décision n'est reprise que pour un finding strictement identique ; sinon elle reste visible sous « Décisions remplacées » et le nouveau finding attend une nouvelle décision. Points d'accès : `POST /decide` et `POST /recheck`, loopback seulement, même jeton local que `/check`.
