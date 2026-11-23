@@ -3,8 +3,14 @@
 Rejoue l'intégrité du journal exporté (caseproof-review-record-v1) SANS base
 ni serveur : digests des payloads de contrôle recalculés, chaîne de hash des
 décisions de revue rejouée depuis la genèse, digest global du corps vérifié.
-Toute altération échoue fermée. Ceci prouve l'intégrité et la rejouabilité du
-contenu ; ce n'est ni une signature ni une approbation juridique.
+Toute altération PONCTUELLE d'un champ échoue fermée ; c'est une
+vérification d'intégrité et de rejouabilité, jamais une signature.
+Modèle de menace explicite : la chaîne n'est pas signée (pas de clé),
+donc un modificateur peut recalculer TOUS les digests internes et le
+digest du corps après une modification arbitraire. Ce vérificateur ne
+détecte pas une falsification complète, ne prouve ni l'exhaustivité ni
+l'auteur, et ne garantit pas la détection générale d'altération ; il
+vérifie la cohérence interne d'un fichier donné, point.
 """
 
 from __future__ import annotations

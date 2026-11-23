@@ -250,3 +250,127 @@ def test_physical_page_fail_closed_on_tamper_and_ambiguous_binding():
                                                   EvidencePreview(row, "", ())))
     assert dup.get(f"{PAGE_PATH}/1", headers=headers).status_code == 404
     assert dup_originals.calls == 0
+
+
+# Offline review-record replay (scripts/verify_review_record_file.py): synthetic
+# records only, no server involved. Lives in this CI-listed file because
+# clearbrief-workspace.yml runs explicit file lists, not pytest discovery.
+def _record_canonical(value):
+    import json
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def _record_digest(text):
+    return sha256(text.encode("utf-8")).hexdigest()
+
+
+def valid_offline_record():
+    run = {"schema": "check-run", "snapshot": "x", "observations": []}
+    snapshot = _record_digest("snapshot-a")
+    decision = {"actor_id": "11111111-1111-4111-8111-111111111111",
+                "disposition": "verified", "rationale": "synthetique"}
+    event = {
+        "run": snapshot,
+        "revision": 1,
+        "request": "22222222-2222-4222-8222-222222222222",
+        "actor": decision["actor_id"],
+        "previous_sha": "0" * 64,
+        "decision": decision,
+    }
+    event_sha = _record_digest(_record_canonical(event))
+    body = {
+        "schema": "caseproof-review-record-v1",
+        "case_id": "case-a",
+        "document_role": "own_draft",
+        "brief": {
+            "brief_id": "b", "head_revision": 1, "head_version_id": "v",
+            "graph_sha256": _record_digest("g"), "original_sha256": _record_digest("o"),
+            "document_id": "d", "document_version_id": "dv",
+            "case_revision": 1, "exhibit_revision": 1,
+        },
+        "checks": [{
+            "snapshot_sha256": snapshot, "payload_sha256": _record_digest(_record_canonical(run)),
+            "payload_sha256_verified": True, "case_revision": 1, "exhibit_revision": 1,
+            "run": run,
+        }],
+        "reviews": [{
+            "snapshot_sha256": snapshot, "head_sha256": event_sha, "chain_verified": True,
+            "decisions": [{
+                "revision": 1, "request_id": event["request"],
+                "actor_id": decision["actor_id"], "event_sha256": event_sha,
+                "decision": decision,
+            }],
+        }],
+        "note": "synthetique",
+    }
+    body["record_sha256"] = _record_digest(_record_canonical(body))
+    return body
+
+
+def _recompute_body_digest(body):
+    return _record_digest(_record_canonical(
+        {k: v for k, v in body.items() if k != "record_sha256"}))
+
+
+def test_valid_offline_record_replays():
+    from scripts.verify_review_record_file import verify_record_document
+    steps = verify_record_document(valid_offline_record())
+    assert any("payload digest replayed" in s for s in steps)
+    assert any("replayed from genesis" in s for s in steps)
+    assert any("record body digest" in s for s in steps)
+
+
+def test_offline_record_tampered_decision_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body = valid_offline_record()
+    body["reviews"][0]["decisions"][0]["decision"]["disposition"] = "approved"
+    body["record_sha256"] = _recompute_body_digest(body)
+    with pytest.raises(RecordVerificationError, match="tampered recorded review event"):
+        verify_record_document(body)
+
+
+def test_offline_record_tampered_run_payload_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body = valid_offline_record()
+    body["checks"][0]["run"]["observations"] = ["forged"]
+    body["record_sha256"] = _recompute_body_digest(body)
+    with pytest.raises(RecordVerificationError, match="payload digest mismatch"):
+        verify_record_document(body)
+
+
+def test_offline_record_tampered_body_digest_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body = valid_offline_record()
+    body["brief"]["head_revision"] = 2
+    with pytest.raises(RecordVerificationError, match="record body digest mismatch"):
+        verify_record_document(body)
+
+
+def test_offline_record_wrong_schema_rejected():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    with pytest.raises(RecordVerificationError, match="not a caseproof-review-record-v1"):
+        verify_record_document({"schema": "other"})
+
+
+def test_offline_record_broken_chain_head_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body = valid_offline_record()
+    body["reviews"][0]["head_sha256"] = _record_digest("other-head")
+    body["record_sha256"] = _recompute_body_digest(body)
+    with pytest.raises(RecordVerificationError, match="review head mismatch"):
+        verify_record_document(body)
