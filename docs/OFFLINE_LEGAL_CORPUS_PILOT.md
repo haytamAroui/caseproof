@@ -66,3 +66,9 @@ La bibliothèque est locale et contrôlée par l'utilisateur du poste, pas un
 service d'authentification ni une signature d'éditeur. Une sauvegarde externe est
 nécessaire pour résister à la suppression des fichiers du poste. L'export reste
 une tranche juridique et non la validation du parcours complet du dossier.
+
+## Décisions locales et recontrôle
+
+`scripts/review_offline_legal.py decide` ajoute une décision (confirmer, nuancer, rejeter, déroger) à un constat précis et écrit une nouvelle revue figée, sans modifier l'export précédent. La décision porte un libellé local non authentifié, jamais une identité d'avocat, et n'autorise aucun dépôt. Elle est liée à l'empreinte du constat : référence citée, statut, citation, texte exact de l'article et pack de corpus.
+
+`scripts/review_offline_legal.py recheck` contrôle un Word corrigé après relecture à froid de la revue précédente. Une décision n'est conservée (origine « carried ») que si le constat est identique. Sinon elle reste visible comme décision antérieure sans effet et le nouveau constat demande une nouvelle décision. Un autre pack de corpus ne reprend jamais une décision. Les exports antérieurs à cette couche restent lisibles et vérifiables, mais refusent de recevoir des décisions.

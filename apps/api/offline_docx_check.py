@@ -16,7 +16,8 @@ from application.litigation.legal_references import (
     check_legal_references,
     load_corpus_config,
 )
-from application.litigation.offline_legal_pack import build_legal_pack
+from application.litigation.legal_review_decisions import carry, finding_fingerprint
+from application.litigation.offline_legal_pack import build_legal_pack, verify_legal_pack
 from application.litigation.unified_review import LegalObservation
 from infrastructure.parsers.engines import parse_docx
 
@@ -30,7 +31,8 @@ class OfflineLegalRun:
 
 
 def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
-                       chosen_versions: dict[str, str] | None = None) -> tuple[bytes, str]:
+                       chosen_versions: dict[str, str] | None = None,
+                       prior: tuple[bytes, str] | None = None) -> tuple[bytes, str]:
     """Checks execute now from local bytes, never from saved/precomputed results.
 
     Corpus selection is explicit. Override only for an intentionally requested
@@ -64,5 +66,13 @@ def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
                                          separators=(",", ":")).encode()).hexdigest()
     run = OfflineLegalRun(snapshot, representation_sha, config.pack_sha256, observations)
     review = {"snapshot_hash": snapshot, "revision": 0, "decisions": [], "release_authorized": False,
-              "origin": "local_offline_check_not_authenticated_lawyer_review", "input_binding": identity}
+              "origin": "local_offline_check_not_authenticated_lawyer_review", "input_binding": identity,
+              "decision_layer": 1}
+    if prior is not None:
+        # The earlier review is replayed cold first: a changed or forged export carries nothing.
+        before = verify_legal_pack(prior[0], expected_sha256=prior[1])
+        by_key = {r.key: r.derived_sha256 for r in config.records}
+        current = [finding_fingerprint(asdict(o), by_key, config.pack_sha256) for o in observations]
+        review.update(carry(before["review"], prior[1], current))
+        review["revision"] = int(before["review"].get("revision", 0)) + 1
     return build_legal_pack(config=config, run=run, brief_text=text, review=review)

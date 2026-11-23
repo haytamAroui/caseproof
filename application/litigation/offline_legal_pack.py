@@ -17,6 +17,7 @@ from zipfile import ZIP_STORED, BadZipFile, ZipFile
 
 from application.litigation.corpus import ArticleRecord, CorpusError
 from application.litigation.legal_references import LegalCorpusConfig, check_legal_references
+from application.litigation.legal_review_decisions import fingerprints, validate_review
 from application.litigation.unified_review import LegalObservation
 
 MAX_BYTES = 40 * 1024 * 1024
@@ -72,7 +73,10 @@ def _report(body: dict[str, Any]) -> bytes:
              "<p>Pack figé <code>", esc(body["corpus_pack_sha256"]), "</code></p>",
              "<p>Revue <code>", esc(body["snapshot_hash"]), "</code></p><h2>Références vérifiées</h2>"]
     by_key = {r["key"]: r for r in body["article_index"]}
-    for obs in body["references"]:
+    prints = fingerprints(body["references"], body["articles"], body["article_index"], body["corpus_pack_sha256"])
+    layered = body["review"].get("decision_layer") == 1
+    decided = {d["fingerprint"]: d for d in body["review"].get("decisions", [])}
+    for obs, fp in zip(body["references"], prints, strict=True):
         parts += ["<article><h3>", esc(obs["raw_text"]), "</h3><strong>", esc(obs["status"]),
                   "</strong> · ", esc(obs["reason"]), "<pre>", esc(obs["quote"] or "Aucune citation liée"), "</pre>"]
         row = by_key.get(obs["corpus_key"])
@@ -80,7 +84,20 @@ def _report(body: dict[str, Any]) -> bytes:
             parts += [f"<a href='#article-{row['index']}'>Rouvrir le passage exact du pack figé</a>"]
         else:
             parts += ["<p>Pas de passage sélectionné. Aucune substitution par une autre version.</p>"]
+        d = decided.get(fp)
+        if not layered:
+            pass
+        elif d is None:
+            parts += ["<p><strong>Décision requise.</strong> Aucune décision locale ne couvre ce constat exact.</p>"]
+        else:
+            parts += ["<p><strong>Décision locale : ", esc(d["action"]), "</strong> · ", esc(d["reviewer_label"]),
+                      " (libellé local non authentifié, ", esc(d["origin"]), ")<br>", esc(d["reason"]), "</p>"]
         parts += ["</article>"]
+    superseded = body["review"].get("superseded", [])
+    if superseded and layered:
+        parts += ["<h2>Décisions antérieures sans effet sur ce constat</h2><p>Revue précédente <code>",
+                  esc(body["review"].get("prior_checkpoint")), "</code>. Ces décisions restent visibles mais ne couvrent plus aucun constat identique.</p><pre>",
+                  esc(json.dumps(superseded, ensure_ascii=False, indent=2, sort_keys=True)), "</pre>"]
     parts += ["<h2>Décisions de revue enregistrées</h2><pre>", esc(json.dumps(body["review"], ensure_ascii=False, indent=2, sort_keys=True)),
               "</pre><h2>Texte du mémoire vérifié</h2><pre>", esc(body["brief_text"]), "</pre><h2>Articles conservés</h2>"]
     for i, row in enumerate(body["articles"]):
@@ -170,6 +187,8 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
             raise CorpusError("legal checks do not replay")
         if body["article_index"] != [{"key": r.key, "index": i} for i, r in enumerate(config.records)]:
             raise CorpusError("article passage index changed")
+        validate_review(body["review"], fingerprints(body["references"], body["articles"],
+                                                    body["article_index"], body["corpus_pack_sha256"]))
         if report != _report(body):
             raise CorpusError("offline reading view changed")
         return body
