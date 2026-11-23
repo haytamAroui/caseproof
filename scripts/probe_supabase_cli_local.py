@@ -140,6 +140,7 @@ def run_probe() -> dict[str, object]:
                 return base | {
                     "status": "CLI_START_UNAVAILABLE",
                     "error_category": error_category(start.stdout + start.stderr),
+                    "cli_output_tail": output_tail(start.stdout + "\n" + start.stderr),
                 }
             for name in names:
                 src, dst = MIGRATIONS / name, migrations / name

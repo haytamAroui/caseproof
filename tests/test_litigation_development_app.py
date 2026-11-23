@@ -4252,8 +4252,9 @@ def test_event_review_supported_languages_abstentions(claim, source):
 def test_cli_stack_failure_diagnostics_remain_redacted_and_failing():
     import inspect
 
-    from scripts import fresh_supabase_cli_profile, probe_historical_74_upgrade
+    from scripts import fresh_supabase_cli_profile, probe_historical_74_upgrade, probe_supabase_cli_local
     from scripts.probe_supabase_cli_local import output_tail
+    assert '"cli_output_tail": output_tail(start.stdout' in inspect.getsource(probe_supabase_cli_local)
     # The failure report must include redacted startup output, not only a category.
     for module in (fresh_supabase_cli_profile, probe_historical_74_upgrade):
         code = inspect.getsource(module)
