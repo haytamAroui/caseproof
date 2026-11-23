@@ -53,11 +53,12 @@ def record_decisions(*, pack: bytes, checkpoint: str,
     config: LegalCorpusConfig = _config(body)
     run = _Run(body["snapshot_hash"], body["brief_representation_sha256"], body["corpus_pack_sha256"],
                tuple(LegalObservation(**r) for r in body["references"]))
-    return build_legal_pack(config=config, run=run, brief_text=body["brief_text"], review=review)
+    return build_legal_pack(config=config, run=run, brief_text=body["brief_text"], review=review,
+                            exhibits=body.get("exhibits"))
 
 
 def recheck(*, docx: Path, corpus: Path | LegalCorpusConfig, prior_pack: bytes, prior_checkpoint: str,
-            chosen_versions: dict[str, str] | None = None) -> tuple[bytes, str]:
+            chosen_versions: dict[str, str] | None = None, exhibits: Path | None = None) -> tuple[bytes, str]:
     """Fresh check of a corrected Word. Only identical findings keep their decision."""
     return check_offline_docx(docx=docx, corpus=corpus, chosen_versions=chosen_versions,
-                              prior=(prior_pack, prior_checkpoint))
+                              prior=(prior_pack, prior_checkpoint), exhibits=exhibits)

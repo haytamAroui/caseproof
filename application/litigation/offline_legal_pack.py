@@ -23,12 +23,15 @@ from application.litigation.corpus import (
     check_derived_binding,
     derive_pdf_body_start,
 )
+from application.litigation.exhibit_coverage import coverage as exhibit_coverage
+from application.litigation.exhibit_coverage import exhibit_observations
 from application.litigation.legal_references import (
     _QUOTE_STRICT,
     _QUOTE_V3,
     LegalCorpusConfig,
     check_legal_references,
     engine_authority,
+    engine_exhibits,
     engine_mode,
 )
 from application.litigation.legal_review_decisions import body_fingerprints, validate_review
@@ -92,6 +95,12 @@ _SCOPE = {
     "article_exists_in_corpus_no_quotation_checked_claim_not_verified": "Article présent dans le corpus. Aucune citation n'a été contrôlée : l'affirmation n'est pas vérifiée.",
     "sub_article_locator_not_checked_in_corpus": "Alinéa, paragraphe ou autre subdivision cité : non contrôlé, le corpus ne contient pas ce niveau.",
     "quotation_delimiter_not_recognised_text_not_checked": "Guillemet ouvrant non reconnu : le texte qui suit n'est pas contrôlé.",
+    "exhibit_located_by_number_bytes_read_content_not_compared": "Renvoi à une pièce retrouvé dans le bordereau par son numéro ; le fichier a été lu (empreinte SHA-256 calculée sur ses octets). Le CONTENU de la pièce n'a PAS été comparé à l'affirmation : appréciation de l'avocat requise.",
+    "exhibit_number_absent_from_bordereau": "Numéro de pièce absent du bordereau : renvoi non résolu.",
+    "exhibit_listed_but_file_missing_check_impossible": "Pièce inscrite au bordereau, fichier absent : contrôle impossible.",
+    "exhibit_file_has_no_readable_text_check_impossible": "Fichier présent mais sans texte lisible (scan, protégé ou illisible) : contrôle impossible, aucune lecture OCR.",
+    "exhibit_range_endpoints_not_integers_not_expanded": "Plage de pièces non numérique : non développée, à vérifier à la main.",
+    "exhibit_page_reference_not_checked_pdf_page_vs_printed_number_unresolved": "Renvoi à une page de pièce : non contrôlé. La page du PDF, le numéro imprimé et la position dans le dossier ne sont pas distingués ici.",
     "quotation_not_bound_to_a_checked_reference": "Citation entre guillemets non rattachée à un article contrôlé : non vérifiée.",
 }
 
@@ -115,11 +124,22 @@ def _report(body: dict[str, Any]) -> bytes:
         quotes = [m for m in (_QUOTE_V3 if v3 else _QUOTE_STRICT).finditer(body["brief_text"])]
         accounted = sum(any(o.get("quote") and " ".join(o["quote"].split()) == " ".join(next(g for g in m.groups() if g is not None).split())
                             for o in body["references"]) for m in quotes)
-        parts += ["<p class='note'>Moteur de contrôle strict (", "v4" if engine_authority(body["review"].get("check_engine")) else "v3" if v3 else "v2", "). Les exports plus anciens, sans cette mention, utilisent un moteur plus large. ",
+        parts += ["<p class='note'>Moteur de contrôle strict (", "v5" if engine_exhibits(body["review"].get("check_engine")) else "v4" if engine_authority(body["review"].get("check_engine")) else "v3" if v3 else "v2", "). Les exports plus anciens, sans cette mention, utilisent un moteur plus large. ",
                   "Un PASS signifie seulement : extrait littéralement présent dans le texte conservé. Le contexte, les réserves, la portée et ",
                   "l'applicabilité restent à l'avocat.</p><h2>Couverture</h2><p>Citations entre guillemets dans le Word : ", str(len(quotes)),
                   ". Citations avec un constat visible ci-dessous : ", str(accounted), ". Références d'article : ",
                   str(sum(1 for o in body["references"] if o["act_code"] is not None)), ".</p>"]
+    if "exhibits" in body:
+        cov = exhibit_coverage(body["brief_text"], body["exhibits"])
+        parts += ["<h2>Pièces : résolution des renvois et octets lus</h2><p class='note'>Ce contrôle résout les renvois « Pièce » / « Stuk » ",
+                  "dans le bordereau local et lit les fichiers. Il ne vérifie PAS que le contenu d'une pièce établit ce que les conclusions affirment. ",
+                  "Les empreintes ont été calculées sur les octets au moment du contrôle ; ce rejeu relit le bordereau enregistré, pas les fichiers.</p><p>",
+                  "Pièces au bordereau : ", str(cov["listed"]), ". Numéros cités : ", esc(", ".join(cov["cited_numbers"]) or "aucun"),
+                  ". Pièces jamais citées : ", esc(", ".join(cov["unreferenced"]) or "aucune"),
+                  ". Fichiers absents : ", esc(", ".join(cov["missing_files"]) or "aucun"),
+                  ". Sans texte lisible : ", esc(", ".join(cov["unreadable"]) or "aucune"), ".</p><pre>"]
+        parts += [esc(f"{p['number']} | {p['label']} | {p['file']} | {p['sha256'] or 'absent'} | pages={p['pages']} | lisible={p['readable']}\n") for p in body["exhibits"]["pieces"]]
+        parts += ["</pre>"]
     by_key = {r["key"]: r for r in body["article_index"]}
     prints = body_fingerprints(body)
     layered = body["review"].get("decision_layer") == 1
@@ -180,8 +200,21 @@ class LegalRun(Protocol):
     def legal_observations(self) -> tuple[LegalObservation, ...]: ...
 
 
+def observe(text: str, config: LegalCorpusConfig, marker: object, exhibits: dict[str, Any] | None) -> tuple[Any, ...]:
+    """The one place legal and exhibit observations are produced, for build and cold replay alike."""
+    strict, v3 = engine_mode(marker)
+    obs = list(check_legal_references(text, config.records, config.act_aliases, chosen_versions=config.chosen_versions,
+                                      strict=strict, v3=v3, authority=engine_authority(marker)))
+    if engine_exhibits(marker):
+        if exhibits is None:
+            raise CorpusError("exhibit manifest required by this engine")
+        obs += exhibit_observations(text, exhibits, len(obs) + 1)
+        obs.sort(key=lambda o: o.start)
+    return tuple(obs)
+
+
 def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
-                     brief_text: str, review: dict[str, Any]) -> tuple[bytes, str]:
+                     brief_text: str, review: dict[str, Any], exhibits: dict[str, Any] | None = None) -> tuple[bytes, str]:
     if config.failures or not config.records or run.corpus_pack_sha256 != config.pack_sha256:
         raise CorpusError("complete exact chosen corpus required for export")
     if _hash(brief_text.encode()) != run.representation_sha256 or review.get("snapshot_hash") != run.snapshot_hash:
@@ -200,6 +233,8 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
             "act_aliases": dict(config.act_aliases), "chosen_versions": dict(config.chosen_versions),
             "references": [asdict(x) for x in run.legal_observations], "review": review,
             "articles": articles, "article_index": [{"key": r.key, "index": i} for i, r in enumerate(config.records)]}
+    if exhibits is not None:
+        body["exhibits"] = exhibits
     payload = _encode(body)
     checkpoint = _hash(payload)
     report = _report(body)
@@ -239,11 +274,10 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
         if (_hash(body["brief_text"].encode()) != body["brief_representation_sha256"]
                 or body["review"]["snapshot_hash"] != body["snapshot_hash"]):
             raise CorpusError("review snapshot changed")
-        observed = check_legal_references(body["brief_text"], config.records, config.act_aliases,
-                                         chosen_versions=config.chosen_versions,
-                                         strict=engine_mode(body["review"].get("check_engine"))[0],
-                                         v3=engine_mode(body["review"].get("check_engine"))[1],
-                                         authority=engine_authority(body["review"].get("check_engine")))
+        marker = body["review"].get("check_engine")
+        if engine_exhibits(marker) != ("exhibits" in body):
+            raise CorpusError("exhibit coverage section does not match the engine marker")
+        observed = observe(body["brief_text"], config, marker, body.get("exhibits"))
         if _encode([asdict(x) for x in observed]) != _encode(body["references"]):
             raise CorpusError("legal checks do not replay")
         if body["article_index"] != [{"key": r.key, "index": i} for i, r in enumerate(config.records)]:

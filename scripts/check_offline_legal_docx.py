@@ -12,6 +12,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('docx', type=Path)
     parser.add_argument('--corpus', type=Path, required=True)
+    parser.add_argument('--exhibits', type=Path, help='Directory with bordereau.toml and the exhibit files (reference resolution and byte coverage only)')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--versions-json', type=Path, help='Explicit act-to-requested-version mapping')
     args = parser.parse_args()
@@ -21,7 +22,7 @@ def main() -> None:
         if not isinstance(versions, dict) or not all(isinstance(k, str) and isinstance(v, str)
                                                     for k, v in versions.items()):
             parser.error('version selection must map act identity to version')
-    raw, checkpoint = check_offline_docx(docx=args.docx, corpus=args.corpus, chosen_versions=versions)
+    raw, checkpoint = check_offline_docx(docx=args.docx, corpus=args.corpus, chosen_versions=versions, exhibits=args.exhibits)
     with args.output.open('xb') as handle:
         handle.write(raw)
     print(json.dumps({'output': str(args.output), 'review_sha256': checkpoint,

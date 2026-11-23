@@ -52,15 +52,21 @@ _AUTHORITY_CUE = re.compile(
     r"krachtens|overeenkomstig|rechtspraak|hof van cassatie|raad van state|de wet (?:bepaalt|bepaalt|schrijft|eist))\b")
 ENGINE_STRICT3 = "caseproof-legal-reference-check-v3"
 ENGINE_STRICT4 = "caseproof-legal-reference-check-v4"  # v3 + authority cues
+ENGINE_STRICT5 = "caseproof-legal-reference-check-v5"  # v4 + exhibit reference coverage
 
 
 def engine_mode(marker: object) -> tuple[bool, bool]:
     """(strict, v3) for a review's check_engine marker. Unmarked reviews replay with the original engine."""
-    return marker in (ENGINE_STRICT, ENGINE_STRICT3, ENGINE_STRICT4), marker in (ENGINE_STRICT3, ENGINE_STRICT4)
+    return (marker in (ENGINE_STRICT, ENGINE_STRICT3, ENGINE_STRICT4, ENGINE_STRICT5),
+            marker in (ENGINE_STRICT3, ENGINE_STRICT4, ENGINE_STRICT5))
 
 
 def engine_authority(marker: object) -> bool:
-    return marker == ENGINE_STRICT4
+    return marker in (ENGINE_STRICT4, ENGINE_STRICT5)
+
+
+def engine_exhibits(marker: object) -> bool:
+    return marker == ENGINE_STRICT5
 _WS = re.compile(r"\s+")
 _QUOTE = re.compile(r"«\s*(.+?)\s*»", re.DOTALL)
 # A mention that looks like an article citation, whatever its exact form.

@@ -43,7 +43,7 @@ const b64=async(file)=>{const buf=new Uint8Array(await file.arrayBuffer());let s
 const LABELS={confirm:'Confirmer',qualify:'Confirmer avec réserve',reject:'Rejeter',waive:'Écarter'};
 async function post(path,body,type){const r=await fetch(path,{method:'POST',headers:{...H,'Content-Type':type},body});if(!r.ok)throw Error(await r.text());return r.json();}
 function render(payload){current=payload;const result=document.getElementById('result');result.replaceChildren();
-result.append(el('p','Corpus de cette revue : '+payload.corpus_pack_sha256));
+result.append(el('p','Corpus de cette revue : '+payload.corpus_pack_sha256));if(payload.exhibit_note)result.append(el('p',payload.exhibit_note,'note'));
 result.append(el('p','Révision locale n° '+payload.revision+'. Les décisions ci-dessous portent une étiquette locale non authentifiée, ce ne sont pas des décisions d\u2019avocat et elles n\u2019autorisent aucun dépôt.'));
 payload.references.forEach((finding,index)=>{const section=el('section'),brief=el('pre',finding.quote||'Aucune citation liée'),article=el('pre',finding.article_text||'Version ou article non sélectionné : aucun passage de substitution.');
 section.append(el('h2',finding.status+' · '+finding.raw_text),el('p',finding.scope),brief,article);
@@ -79,6 +79,7 @@ def _payload(data: bytes, checkpoint: str) -> dict[str, object]:
     prints = body_fingerprints(body)
     return {"checkpoint": checkpoint, "summary": summary, "revision": review.get("revision", 1),
             "corpus_pack_sha256": body["corpus_pack_sha256"],
+            "exhibit_note": (exhibit_note(body) if "exhibits" in body else None),
             "archive_base64": base64.b64encode(data).decode(),
             "decisions": [by_print.get(fp) for fp in prints],
             "superseded": list(review.get("superseded", [])),
@@ -86,7 +87,16 @@ def _payload(data: bytes, checkpoint: str) -> dict[str, object]:
                             "scope": _SCOPE.get(row["reason"], row["reason"])} for row in body["references"]]}
 
 
-def serve(corpus: Path, port: int, *, open_browser: bool = True, library: Path | None = None) -> None:
+def exhibit_note(body: dict) -> str:
+    from application.litigation.exhibit_coverage import coverage
+    cov = coverage(body["brief_text"], body["exhibits"])
+    return ("Pièces : renvois résolus dans le bordereau local et fichiers lus (empreintes SHA-256). Le CONTENU des pièces n'est PAS comparé aux conclusions. "
+            f"Au bordereau : {cov['listed']} · jamais citées : {', '.join(cov['unreferenced']) or 'aucune'} · "
+            f"fichiers absents : {', '.join(cov['missing_files']) or 'aucun'} · sans texte lisible : {', '.join(cov['unreadable']) or 'aucune'}.")
+
+
+def serve(corpus: Path, port: int, *, open_browser: bool = True, library: Path | None = None,
+          exhibits: Path | None = None) -> None:
     config = load_corpus_config(corpus)
     if config.failures or not config.records:
         raise CorpusError("complete chosen corpus required")
@@ -174,7 +184,7 @@ def serve(corpus: Path, port: int, *, open_browser: bool = True, library: Path |
                         source.write_bytes(base64.b64decode(req["docx_base64"], validate=True))
                         data, checkpoint = recheck(docx=source, corpus=selected,
                                                    prior_pack=base64.b64decode(req["archive_base64"], validate=True),
-                                                   prior_checkpoint=str(req["checkpoint"]))
+                                                   prior_checkpoint=str(req["checkpoint"]), exhibits=exhibits)
                     out = json.dumps(_payload(data, checkpoint), ensure_ascii=False).encode()
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -190,7 +200,7 @@ def serve(corpus: Path, port: int, *, open_browser: bool = True, library: Path |
                 with tempfile.TemporaryDirectory(prefix="caseproof-offline-") as temp:
                     source = Path(temp) / "brief.docx"
                     source.write_bytes(raw)
-                    data, checkpoint = check_offline_docx(docx=source, corpus=selected, chosen_versions=versions)
+                    data, checkpoint = check_offline_docx(docx=source, corpus=selected, chosen_versions=versions, exhibits=exhibits)
             except Exception as exc:
                 message = str(exc) if isinstance(exc, (CorpusError, ValueError)) else "Word input refused"
                 self.send_response(422)
@@ -232,9 +242,10 @@ def main() -> None:
     parser.add_argument("--corpus", type=Path, required=True)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--exhibits", type=Path, help="Directory with bordereau.toml and exhibit files (reference resolution and byte coverage only)")
     parser.add_argument("--library", type=Path, help="Append-only local corpus pack directory")
     args = parser.parse_args()
-    serve(args.corpus, args.port, open_browser=not args.no_browser, library=args.library)
+    serve(args.corpus, args.port, open_browser=not args.no_browser, library=args.library, exhibits=args.exhibits)
 
 
 if __name__ == "__main__":

@@ -11,14 +11,15 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from application.litigation.corpus import CorpusError
+from application.litigation.exhibit_coverage import load_exhibit_set
 from application.litigation.legal_references import (
     ENGINE_STRICT4,
+    ENGINE_STRICT5,
     LegalCorpusConfig,
-    check_legal_references,
     load_corpus_config,
 )
 from application.litigation.legal_review_decisions import FINGERPRINT_SCHEME, carry, occurrence_fingerprints
-from application.litigation.offline_legal_pack import build_legal_pack, verify_legal_pack
+from application.litigation.offline_legal_pack import build_legal_pack, observe, verify_legal_pack
 from application.litigation.unified_review import LegalObservation
 from infrastructure.parsers.engines import parse_docx
 
@@ -33,7 +34,7 @@ class OfflineLegalRun:
 
 def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
                        chosen_versions: dict[str, str] | None = None,
-                       prior: tuple[bytes, str] | None = None) -> tuple[bytes, str]:
+                       prior: tuple[bytes, str] | None = None, exhibits: Path | None = None) -> tuple[bytes, str]:
     """Checks execute now from local bytes, never from saved/precomputed results.
 
     Corpus selection is explicit. Override only for an intentionally requested
@@ -54,8 +55,9 @@ def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
     if chosen_versions is not None:
         config = replace(config, chosen_versions=chosen_versions)
     text = artifact["text"]
-    observations = check_legal_references(text, config.records, config.act_aliases,
-                                           chosen_versions=config.chosen_versions, strict=True, v3=True, authority=True)
+    exhibit_set = load_exhibit_set(exhibits, lambda raw: parse_docx(raw)["text"]) if exhibits is not None else None
+    engine = ENGINE_STRICT5 if exhibit_set is not None else ENGINE_STRICT4
+    observations = observe(text, config, engine, exhibit_set)
     if not observations:
         raise CorpusError("no supported explicit legal reference detected; no success claim")
     representation_sha = hashlib.sha256(text.encode()).hexdigest()
@@ -69,7 +71,7 @@ def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
     review = {"snapshot_hash": snapshot, "revision": 0, "decisions": [], "release_authorized": False,
               "origin": "local_offline_check_not_authenticated_lawyer_review", "input_binding": identity,
               "decision_layer": 1, "fingerprint_scheme": FINGERPRINT_SCHEME,
-              "check_engine": ENGINE_STRICT4}
+              "check_engine": engine}
     if prior is not None:
         # The earlier review is replayed cold first: a changed or forged export carries nothing.
         before = verify_legal_pack(prior[0], expected_sha256=prior[1])
@@ -77,4 +79,4 @@ def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
         current = occurrence_fingerprints([asdict(o) for o in observations], by_key, config.pack_sha256, text)
         review.update(carry(before["review"], prior[1], current))
         review["revision"] = int(before["review"].get("revision", 0)) + 1
-    return build_legal_pack(config=config, run=run, brief_text=text, review=review)
+    return build_legal_pack(config=config, run=run, brief_text=text, review=review, exhibits=exhibit_set)
