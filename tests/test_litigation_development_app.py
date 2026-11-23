@@ -790,3 +790,35 @@ def test_live_review_record_denial_and_shape():
                                       publishable_key="sb_publishable_k")
         with pytest.raises(PrivateStorageFailure):
             port.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+
+
+def test_qr_payload_is_bounded_and_text_free():
+    from apps.api.review_record_qr import build_qr_payload
+
+    digest = "a" * 64
+    pubkey = "b" * 64
+    signed = {"record_sha256": digest, "receipt": {"public_key": pubkey}}
+    payload = build_qr_payload(signed)
+    assert payload == f"caseproof-review-record-v1|sha256:{digest}|key:{pubkey}"
+    assert len(payload) <= 256
+    assert "http" not in payload
+    unsigned = build_qr_payload({"record_sha256": digest})
+    assert unsigned == f"caseproof-review-record-v1|sha256:{digest}|key:unsigned"
+    with pytest.raises(ValueError):
+        build_qr_payload({"record_sha256": "not-a-digest"})
+    with pytest.raises(ValueError):
+        build_qr_payload({"record_sha256": digest, "receipt": {"public_key": "not-hex!"}})
+    with pytest.raises(ValueError):
+        build_qr_payload({"record_sha256": digest, "receipt": "tampered"})
+
+
+def test_qr_png_renders_and_is_deterministic():
+    from apps.api.review_record_qr import build_qr_payload, render_qr_png
+
+    payload = build_qr_payload({"record_sha256": "c" * 64,
+                                "receipt": {"public_key": "d" * 64}})
+    png = render_qr_png(payload)
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    assert png == render_qr_png(payload)
+    assert render_qr_png(payload + "x") != png
+    assert len(png) < 16384

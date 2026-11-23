@@ -31,6 +31,7 @@ from apps.api.litigation_review_app import create_clearbrief_review_router
 from apps.api.litigation_review_workspace import SignedReviewWorkspace
 from apps.api.litigation_search_app import create_litigation_search_app
 from apps.api.litigation_workspace_sources import create_clearbrief_sources_router
+from apps.api.review_record_qr import build_qr_payload, render_qr_png
 from apps.api.signed_supabase_matter_catalog import SignedMatterCatalog
 from apps.api.signed_supabase_originals import MAX_BYTES, PrivateStorageDenied, PrivateStorageFailure
 from apps.api.signed_supabase_source_library import SignedSourceLibrary
@@ -769,5 +770,32 @@ def create_litigation_development_app(
         except ValueError:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return JSONResponse(body)
+
+    @app.get("/dev/signed/matters/{case_id}/review-record/verification-qr")
+    def signed_review_record_qr(
+        case_id: str,
+        role: str = Query(default="own_draft", pattern="^(own_draft|opponent_brief)$"),
+        authorization: str | None = Header(default=None),
+    ) -> Response:
+        """Bounded offline-verification QR for the record (digest + key).
+
+        No URL, no case text, no secret: scanning cannot imply hosted
+        public verification. Same authorized read as the record route.
+        """
+        if signed_review_record is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            body = signed_review_record.record(
+                bearer=_token(authorization), case_id=case_id, document_role=role
+            )
+            png = render_qr_png(build_qr_payload(body))
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except ValueError:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return Response(
+            png, media_type="image/png",
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        )
 
     return app
