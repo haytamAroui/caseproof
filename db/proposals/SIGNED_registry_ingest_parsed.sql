@@ -1,5 +1,7 @@
 -- Proposal (not applied): trusted-registry ingestion for parsed originals
--- (DOCX today), where the parse cannot run in SQL. The TXT path decodes
+-- (DOCX, and text-native PDF on a complete zero-warning parse only — the
+-- coverage gate runs in the fail-closed service derivation, never here),
+-- where the parse cannot run in SQL. The TXT path decodes
 -- UTF-8 inside caseproof_dev_journey; a DOCX needs the bounded fail-closed
 -- service parser, so the trusted writer here is service_role ONLY and the
 -- function re-verifies everything SQL can verify without trusting the
@@ -45,7 +47,9 @@ begin
  from caseproof.documents d
  join caseproof.document_versions dv on dv.org_id=d.org_id and dv.document_id=d.id
  where d.case_id=p_case and d.id=p_document and dv.id=p_version
-   and dv.media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+   and dv.media_type in (
+     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+     'application/pdf')
    and exists(
      select 1 from storage.objects o
      where o.bucket_id='caseproof-originals-dev'

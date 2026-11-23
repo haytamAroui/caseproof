@@ -58,6 +58,12 @@ _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 # unverified and references carry pdf_page=None (never inferred). Any other
 # warning marks a real coverage gap (images, fields, headers) and refuses.
 _DOCX_PUBLISHABLE_WARNINGS = frozenset({"docx_layout_page_numbers_unverified"})
+_PDF_MIME = "application/pdf"
+# Text-native PDF publishes only on a COMPLETE parse: zero warnings. Any
+# warning (annotation, image/XObject, page without a text layer) marks real
+# uncovered content and refuses. Scanned/OCR PDFs never publish: no OCR is
+# claimed and no page is guessed.
+_PDF_PUBLISHABLE_WARNINGS: frozenset[str] = frozenset()
 _MAX_REPRESENTATION_BYTES = 480_000
 _MAX_REFERENCES = 512
 _MAX_QUOTE = 4000
@@ -160,10 +166,10 @@ class ComposedSignedBriefPublisher:
         parser identity; DOCX goes through the bounded fail-closed parser
         and publishes only when every block maps the text contiguously and
         no warning beyond unverified layout page numbers remains (page
-        numbers are never inferred: references keep pdf_page=None). PDF
-        stays refused: its OCR-assisted coverage is not reproducible
-        across environments, so it abstains explicitly rather than
-        publishing a partial representation.
+        numbers are never inferred: references keep pdf_page=None).
+        Text-native PDF publishes only on a complete zero-warning parse;
+        any annotation, visual object or page without a text layer is a
+        coverage gap that refuses. Scanned/OCR PDFs never publish.
         """
         if media_type == "text/plain":
             try:
@@ -192,6 +198,27 @@ class ComposedSignedBriefPublisher:
             parser_id = manifest.get("parser_id")
             if type(parser_id) is not str or not 0 < len(parser_id) <= 256:
                 raise PrivateStorageFailure("trusted DOCX parser identity missing")
+            return text, parser_id
+        if media_type == _PDF_MIME:
+            try:
+                text, manifest = parse_verified_original(
+                    document_id=document_id, version_id=version_id,
+                    data=data, media_type=media_type,
+                )
+            except ExtractionError:
+                raise PrivateStorageFailure(
+                    "original outside the trusted PDF parser"
+                ) from None
+            warnings = manifest.get("warnings")
+            if (
+                not isinstance(warnings, list)
+                or set(warnings) - _PDF_PUBLISHABLE_WARNINGS
+                or not manifest.get("blocks")
+            ):
+                raise PrivateStorageFailure("PDF coverage gap never publishes")
+            parser_id = manifest.get("parser_id")
+            if type(parser_id) is not str or not 0 < len(parser_id) <= 256:
+                raise PrivateStorageFailure("trusted PDF parser identity missing")
             return text, parser_id
         raise PrivateStorageFailure("original media outside the trusted parsers")
 

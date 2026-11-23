@@ -29,6 +29,8 @@ from apps.api.signed_document_parse import parse_verified_original
 from apps.api.signed_live_brief_composer import (
     _DOCX_MIME,
     _DOCX_PUBLISHABLE_WARNINGS,
+    _PDF_MIME,
+    _PDF_PUBLISHABLE_WARNINGS,
 )
 from apps.api.signed_supabase_originals import (
     PrivateStorageDenied,
@@ -56,8 +58,12 @@ def derive_registry_ingest(
     coverage gap, unsupported media or over-limit result raises
     ExtractionError — a partial extraction is never ingested as trusted.
     """
-    if media_type != _DOCX_MIME:
+    if media_type not in (_DOCX_MIME, _PDF_MIME):
         raise ExtractionError("unsupported_parsed_ingest_media")
+    publishable = (
+        _DOCX_PUBLISHABLE_WARNINGS if media_type == _DOCX_MIME
+        else _PDF_PUBLISHABLE_WARNINGS
+    )
     text, manifest = parse_verified_original(
         document_id=document_id, version_id=version_id,
         data=data, media_type=media_type,
@@ -65,7 +71,7 @@ def derive_registry_ingest(
     warnings = manifest.get("warnings")
     if (
         not isinstance(warnings, list)
-        or set(warnings) - _DOCX_PUBLISHABLE_WARNINGS
+        or set(warnings) - publishable
         or not manifest.get("blocks")
     ):
         raise ExtractionError("parsed_coverage_gap")

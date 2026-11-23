@@ -1356,6 +1356,38 @@ def _docx_fixture_bytes(lines, *, keep_custom_xml=False):
     return data
 
 
+def _pdf_fixture_bytes(pages, *, image_page=None):
+    import io
+    import os
+
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    target = "/tmp/caseproof-pdf-fixture.pdf"
+    writer = canvas.Canvas(target, pagesize=A4)
+    for index, lines in enumerate(pages):
+        if image_page == index:
+            from PIL import Image
+            from reportlab.lib.utils import ImageReader
+
+            image = Image.new("RGB", (400, 200), "white")
+            buffer = io.BytesIO()
+            image.save(buffer, "PNG")
+            buffer.seek(0)
+            writer.drawImage(ImageReader(buffer), 72, 500, width=400, height=200)
+        else:
+            height = 780
+            for line in lines:
+                writer.drawString(72, height, line)
+                height -= 18
+        writer.showPage()
+    writer.save()
+    with open(target, "rb") as handle:
+        data = handle.read()
+    os.unlink(target)
+    return data
+
+
 def test_composed_publisher_docx_path_derives_from_trusted_parser():
     data = _docx_fixture_bytes(_BRIEF_TEXT.split(". "))
     composer, captured = _composer_rig(
@@ -1368,6 +1400,29 @@ def test_composed_publisher_docx_path_derives_from_trusted_parser():
     assert captured["p_parser_id"].startswith("caseproof-parser-v1;")
     assert "«paiement sous 30 jours» (Contrat)" in captured["p_representation"]
     assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02"]
+
+
+def test_composed_publisher_pdf_text_native_complete_only():
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+
+    data = _pdf_fixture_bytes([_BRIEF_TEXT.split(". ")])
+    composer, captured = _composer_rig(data, _REGISTER, media="application/pdf")
+    outcome = composer.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert outcome.published_revision == 1
+    assert "pypdf" in captured["p_parser_id"]
+    assert "«paiement sous 30 jours» (Contrat)" in captured["p_representation"]
+    assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02"]
+    # Page de citation : jamais inférée côté démo, toujours « non mappée ».
+    assert [r["pdf_page"] for r in captured["p_references"]] == [None, None]
+    # Page image (scannée) ou visuelle : refus visible, jamais de partiel.
+    gap = _pdf_fixture_bytes([["Page texte native."], []], image_page=1)
+    refusing, _captured = _composer_rig(gap, _REGISTER, media="application/pdf")
+    with pytest.raises(PrivateStorageFailure):
+        refusing.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
 
 
 def test_registry_ingest_service_transport_contract():
@@ -1428,9 +1483,21 @@ def test_registry_ingest_derive_gate_fail_closed():
                                      data=data, media_type=docx_media)
     assert derived["parser_id"].startswith("caseproof-parser-v1;")
     assert "Texte propre et complet." in derived["representation"]
+    # Des octets DOCX sous media PDF : le parseur borné refuse la signature.
     with pytest.raises(ExtractionError):
         derive_registry_ingest(document_id="d", version_id="v", data=data,
                                media_type="application/pdf")
+    # PDF texte-natif complet : accepté ; avec page image : refus visible.
+    pdf_data = _pdf_fixture_bytes([["Texte PDF natif complet."]])
+    derived_pdf = derive_registry_ingest(document_id="d", version_id="v",
+                                         data=pdf_data, media_type="application/pdf")
+    assert "Texte PDF natif complet." in derived_pdf["representation"]
+    assert "pypdf" in derived_pdf["parser_id"]
+    with pytest.raises(ExtractionError):
+        derive_registry_ingest(
+            document_id="d", version_id="v",
+            data=_pdf_fixture_bytes([["Page texte."], []], image_page=1),
+            media_type="application/pdf")
     with pytest.raises(ExtractionError):
         derive_registry_ingest(
             document_id="d", version_id="v",
@@ -1500,8 +1567,8 @@ def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
     ).read_text(encoding="utf-8")
     docx_media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     org, case, user = uuid4(), uuid4(), uuid4()
-    doc, ver, ver_no_storage, ver_pending = uuid4(), uuid4(), uuid4(), uuid4()
-    sha, sha2, sha3 = "a" * 64, "b" * 64, "c" * 64
+    doc, ver, ver_no_storage, ver_pending, ver_pdf = (uuid4() for _ in range(5))
+    sha, sha2, sha3, sha4 = "a" * 64, "b" * 64, "c" * 64, "d" * 64
 
     with connect() as conn:
         conn.execute(
@@ -1533,9 +1600,10 @@ def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
             "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
             " original_sha256_hex, byte_length, media_type)"
             " values(%s, %s, %s, 1, %s, 4, %s),(%s, %s, %s, 2, %s, 4, %s),"
-            " (%s, %s, %s, 3, %s, 4, %s)",
+            " (%s, %s, %s, 3, %s, 4, %s),(%s, %s, %s, 4, %s, 4, %s)",
             (ver, org, doc, sha, docx_media, ver_no_storage, org, doc, sha2, docx_media,
-             ver_pending, org, doc, sha3, docx_media))
+             ver_pending, org, doc, sha3, docx_media,
+             ver_pdf, org, doc, sha4, "application/pdf"))
         audits = [uuid4() for _ in range(6)]
         for audit in audits:
             conn.execute(
@@ -1545,7 +1613,7 @@ def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
                 (audit, org, case, user, uuid4(), "a" * 64))
         for version, version_sha, state in (
             (ver, sha, "verified"), (ver_no_storage, sha2, "verified"),
-            (ver_pending, sha3, "pending"),
+            (ver_pending, sha3, "pending"), (ver_pdf, sha4, "verified"),
         ):
             conn.execute(
                 "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
@@ -1558,8 +1626,10 @@ def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
                  state, audits[0], audits[1]))
         conn.execute(
             "insert into storage.objects(bucket_id, name) values"
-            " ('caseproof-originals-dev', %s),('caseproof-originals-dev', %s)",
-            (f"{org}/{case}/{doc}/{ver}/{sha}", f"{org}/{case}/{doc}/{ver_pending}/{sha3}"))
+            " ('caseproof-originals-dev', %s),('caseproof-originals-dev', %s),"
+            " ('caseproof-originals-dev', %s)",
+            (f"{org}/{case}/{doc}/{ver}/{sha}", f"{org}/{case}/{doc}/{ver_pending}/{sha3}",
+             f"{org}/{case}/{doc}/{ver_pdf}/{sha4}"))
 
         def as_role(role):
             conn.execute(
@@ -1617,6 +1687,15 @@ def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
         with conn.transaction(force_rollback=True):
             with pytest.raises(errors.UniqueViolation):
                 ingest()
+        # Text-native PDF media follows the same verified path and digests.
+        outcome_pdf = ingest(version=ver_pdf,
+                             representation="Page texte native complète.",
+                             parser="caseproof-parser-v1;engine=pypdf:6.21.2:page-text-v1")
+        assert outcome_pdf["original_sha"] == sha4
+        assert conn.execute(
+            "select parser_id from caseproof._dev_journey_sources"
+            " where case_id=%s and version_id=%s",
+            (str(case), str(ver_pdf))).fetchone()[0].endswith("page-text-v1")
 
 
 def test_live_workbench_assembly_refuses_mixed_backends():
