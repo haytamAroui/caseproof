@@ -15,7 +15,6 @@ instead of exporting. It approves nothing and files nothing.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from typing import Any
 from uuid import UUID
@@ -25,11 +24,11 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from application.litigation.matter_policy import MatterPermission, authorize_matter
 from apps.api.access_control import VerifiedSubject
-from apps.api.disposable_litigation_brief_graph import _canonical, _hash
-from apps.api.disposable_litigation_review_ledger import ZERO_HASH, _digest
+from apps.api.disposable_litigation_brief_graph import _canonical
 from apps.api.disposable_postgres_vault_ledger import Connection
 from apps.api.disposable_signed_brief_publisher import working_brief_id
 from apps.api.litigation_check_service import PrivateMatterAccess
+from apps.api.review_record_assembly import RecordConflict, assemble_record_body
 from apps.api.signed_supabase_originals import PrivateStorageDenied
 
 __all__ = ["DisposableSignedReviewRecord", "RecordConflict", "SIGNATURE_DOMAIN", "sign_record_body"]
@@ -64,10 +63,6 @@ _MAX_BEARER = 8192
 _MAX_RUNS = 20
 _MAX_EVENTS = 256
 _ROLES = {"own_draft", "opponent_brief"}
-
-
-class RecordConflict(ValueError):
-    """Recorded state is missing, inconsistent or tampered."""
 
 
 def _uuid(value: object) -> UUID:
@@ -182,7 +177,10 @@ class DisposableSignedReviewRecord:
                 "where org_id=%s and case_id=%s",
                 keys[:2],
             )
-            review_heads = {str(row[0]): str(row[1]) for row in cur.fetchall()}
+            review_head_rows = [
+                {"snapshot_sha256": str(row[0]), "event_sha256": str(row[1])}
+                for row in cur.fetchall()
+            ]
             cur.execute(
                 "select snapshot_sha, revision, request_id, actor_id, event_sha, decision "
                 "from caseproof._m2_review_events "
@@ -194,94 +192,36 @@ class DisposableSignedReviewRecord:
             if len(events) > _MAX_EVENTS:
                 raise RecordConflict("unbounded recorded review history")
 
-        checks: list[dict[str, Any]] = []
-        for snapshot_sha, payload_sha, payload, run_case_rev, run_exhibit_rev in runs:
-            if (
-                not isinstance(payload, str)
-                or _digest(payload) != payload_sha
-                or type(run_case_rev) is not int
-                or type(run_exhibit_rev) is not int
-            ):
-                raise RecordConflict("recorded check payload digest mismatch")
-            try:
-                decoded = json.loads(payload)
-            except ValueError:
-                raise RecordConflict("recorded check payload unreadable") from None
-            checks.append(
-                {
-                    "snapshot_sha256": str(snapshot_sha),
-                    "payload_sha256": str(payload_sha),
-                    "payload_sha256_verified": True,
-                    "case_revision": run_case_rev,
-                    "exhibit_revision": run_exhibit_rev,
-                    "run": decoded,
-                }
-            )
-
-        reviews: list[dict[str, Any]] = []
-        by_snapshot: dict[str, list[tuple[object, ...]]] = {}
-        for snapshot_sha, revision_no, request_id, actor_id, event_sha, raw_decision in events:
-            by_snapshot.setdefault(str(snapshot_sha), []).append(
-                (revision_no, str(request_id), str(actor_id), str(event_sha), raw_decision)
-            )
-        for snapshot_sha in sorted(by_snapshot):
-            current = ZERO_HASH
-            decisions: list[dict[str, Any]] = []
-            rows = by_snapshot[snapshot_sha]
-            for expected, (revision_no, request_id, actor_id, event_sha, raw) in enumerate(rows, 1):
-                decision: Any = raw
-                if isinstance(decision, str):
-                    try:
-                        decision = json.loads(decision)
-                    except ValueError:
-                        raise RecordConflict("unreadable recorded review event") from None
-                if revision_no != expected or not isinstance(decision, dict):
-                    raise RecordConflict("broken recorded review chain")
-                actor = str(_uuid(actor_id))
-                digest = _digest(
-                    _canonical(
-                        {
-                            "run": snapshot_sha,
-                            "revision": revision_no,
-                            "request": str(_uuid(request_id)),
-                            "actor": actor,
-                            "previous_sha": current,
-                            "decision": decision,
-                        }
-                    )
-                )
-                if digest != event_sha or decision.get("actor_id") != actor:
-                    raise RecordConflict("tampered recorded review event")
-                decisions.append(
-                    {
-                        "revision": revision_no,
-                        "request_id": str(_uuid(request_id)),
-                        "actor_id": actor,
-                        "event_sha256": event_sha,
-                        "decision": decision,
-                    }
-                )
-                current = digest
-            head_sha = review_heads.get(snapshot_sha)
-            if head_sha is None or head_sha != current:
-                raise RecordConflict("recorded review head mismatch")
-            reviews.append(
-                {
-                    "snapshot_sha256": snapshot_sha,
-                    "head_sha256": head_sha,
-                    "chain_verified": True,
-                    "decisions": decisions,
-                }
-            )
-
-        body: dict[str, Any] = {
-            "schema": "caseproof-review-record-v1",
-            "case_id": str(case),
-            "document_role": document_role,
-            "brief": {
+        check_rows = [
+            {
+                "snapshot_sha256": str(snapshot_sha),
+                "payload_sha256": str(payload_sha),
+                "payload": payload,
+                "case_revision": run_case_rev,
+                "exhibit_revision": run_exhibit_rev,
+            }
+            for snapshot_sha, payload_sha, payload, run_case_rev, run_exhibit_rev in runs
+        ]
+        event_rows = [
+            {
+                "snapshot_sha256": str(snapshot_sha),
+                "revision": revision_no,
+                "request_id": str(request_id),
+                "actor_id": str(actor_id),
+                "event_sha256": str(event_sha),
+                "decision": raw_decision,
+            }
+            for snapshot_sha, revision_no, request_id, actor_id, event_sha, raw_decision in events
+        ]
+        # Same replay and assembly as the live adapter: one code path, one
+        # canonicalization, fail-closed on tamper from either backend.
+        body = assemble_record_body(
+            case_id=str(case),
+            document_role=document_role,
+            brief={
                 "brief_id": str(brief),
                 "head_revision": revision,
-                "head_version_id": str(version_id),
+                "version_id": str(version_id),
                 "graph_sha256": str(graph_sha),
                 "original_sha256": str(original_sha),
                 "document_id": str(document_id),
@@ -289,14 +229,10 @@ class DisposableSignedReviewRecord:
                 "case_revision": case_revision,
                 "exhibit_revision": exhibit_revision,
             },
-            "checks": checks,
-            "reviews": reviews,
-            "note": (
-                "Transcript of recorded development state. Digests recomputed; "
-                "review hash chain replayed. Not a legal approval or filing."
-            ),
-        }
-        body["record_sha256"] = _hash(body)
+            check_rows=check_rows,
+            review_head_rows=review_head_rows,
+            review_event_rows=event_rows,
+        )
         if self._signing_key is not None:
             body["receipt"] = sign_record_body(body, self._signing_key)
         return body

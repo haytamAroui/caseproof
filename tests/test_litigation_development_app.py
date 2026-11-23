@@ -742,35 +742,70 @@ def test_live_publisher_register_and_list_contract():
     assert documents[0].versions[0].sha256_hex == _SHA
 
 
+def _raw_record_fixture(actor=None):
+    import json as _json
+
+    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, _canonical, _digest
+
+    actor = actor or _UUID_A
+    version = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
+    snapshot = "f" * 64
+    payload = _json.dumps({"schema": "caseproof-m2-check-headless-v1"})
+    request_id = "cccccccc-3333-4333-8333-cccccccccccc"
+    decision = {"actor_id": actor, "disposition": "verified",
+                "observation_id": "citation:ref-01", "rationale": "contrôle synthétique"}
+    event_sha = _digest(_canonical({
+        "run": snapshot, "revision": 1, "request": request_id,
+        "actor": actor, "previous_sha": ZERO_HASH, "decision": decision}))
+    brief = {"brief_id": "dddddddd-4444-4444-8444-dddddddddddd", "head_revision": 1,
+             "version_id": version, "graph_sha256": "1" * 64, "original_sha256": "2" * 64,
+             "document_id": "eeeeeeee-5555-4555-8555-eeeeeeeeeeee",
+             "document_version_id": "ffffffff-6666-4666-8666-ffffffffffff",
+             "case_revision": 1, "exhibit_revision": 1}
+    checks = [{"snapshot_sha256": snapshot, "payload_sha256": _digest(payload),
+               "case_revision": 1, "exhibit_revision": 1, "payload": payload}]
+    heads = [{"snapshot_sha256": snapshot, "event_sha256": event_sha}]
+    events = [{"snapshot_sha256": snapshot, "revision": 1, "request_id": request_id,
+               "actor_id": actor, "event_sha256": event_sha,
+               "decision": _json.dumps(decision, ensure_ascii=False, sort_keys=True,
+                                       separators=(",", ":"))}]
+    return {"ok": True, "brief": brief, "checks": checks,
+            "review_heads": heads, "review_events": events}
+
+
 def test_live_review_record_contract_and_signature():
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+        Ed25519PrivateKey,
+        Ed25519PublicKey,
+    )
 
     from apps.api.disposable_review_record import SIGNATURE_DOMAIN, _canonical
     from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
-    body = {"schema": "caseproof-review-record-v1", "record_sha256": _SHA, "case_id": _UUID_A}
     key = Ed25519PrivateKey.generate()
     seed = key.private_bytes_raw()
     calls = []
+    raw = _raw_record_fixture()
 
     def fake_rpc(*, publishable_key, bearer, name, args):
         calls.append((name, args))
-        return {"ok": True, "record": dict(body)}
+        return dict(raw)
 
     record_port = LiveSignedReviewRecord(
         call_rpc=fake_rpc, publishable_key="sb_publishable_k", signing_key=seed)
     signed = record_port.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
-    assert calls[0][0] == "caseproof_signed_review_record"
-    receipt = signed["receipt"]
+    assert calls == [("caseproof_signed_review_record",
+                      {"p_case": _UUID_A, "p_role": "own_draft"})]
+    assert signed["schema"] == "caseproof-review-record-v1"
+    assert signed["checks"][0]["payload_sha256_verified"] is True
+    assert signed["reviews"][0]["chain_verified"] is True
+    receipt = signed.pop("receipt")
     assert receipt["scheme"] == "ed25519" and receipt["domain"] == SIGNATURE_DOMAIN
-    key.public_key().verify(
-        bytes.fromhex(receipt["signature"]),
-        _canonical({"domain": SIGNATURE_DOMAIN, "record": body}).encode())
+    public = Ed25519PublicKey.from_public_bytes(bytes.fromhex(receipt["public_key"]))
+    public.verify(bytes.fromhex(receipt["signature"]),
+                  _canonical({"domain": SIGNATURE_DOMAIN, "record": signed}).encode())
     unsigned = LiveSignedReviewRecord(call_rpc=fake_rpc, publishable_key="sb_publishable_k")
     assert "receipt" not in unsigned.record(
         bearer="jwt", case_id=_UUID_A, document_role="own_draft")
-    public_hex = key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
-    assert len(public_hex) == 64
 
 
 def test_live_review_record_denial_and_shape():
@@ -782,11 +817,45 @@ def test_live_review_record_denial_and_shape():
     with pytest.raises(PrivateStorageDenied):
         denied.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
     for bad in (
-        {"ok": True, "record": {"schema": "other"}},
-        {"ok": True, "record": {"schema": "caseproof-review-record-v1"}},
-        {"ok": True, "record": "not-a-dict"},
+        {"ok": True, "brief": "not-a-dict"},
+        {"ok": True, "brief": {}, "checks": "not-a-list"},
+        {"ok": False, "error": "weird"},
+        "not-a-dict",
     ):
         port = LiveSignedReviewRecord(call_rpc=lambda **kwargs: bad,  # noqa: B023
+                                      publishable_key="sb_publishable_k")
+        with pytest.raises(PrivateStorageFailure):
+            port.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+
+
+def test_live_review_record_replay_rejects_tamper():
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+    raw = _raw_record_fixture()
+
+    def variant(**mutate):
+        import copy
+
+        body = copy.deepcopy(raw)
+        for key_path, value in mutate.items():
+            target = body
+            parts = key_path.split(".")
+            for part in parts[:-1]:
+                target = target[int(part)] if isinstance(target, list) else target[part]
+            last = parts[-1]
+            if isinstance(target, list):
+                target[int(last)] = value
+            else:
+                target[last] = value
+        return body
+
+    tampered_event = variant(**{"review_events.0.decision": '{"actor_id":"' + _UUID_A
+                                + '","disposition":"verified","observation_id":'
+                                  '"citation:ref-01","rationale":"ALTÉRÉ"}'})
+    wrong_head = variant(**{"review_heads.0.event_sha256": "9" * 64})
+    bad_payload = variant(**{"checks.0.payload_sha256": "9" * 64})
+    for body in (tampered_event, wrong_head, bad_payload):
+        port = LiveSignedReviewRecord(call_rpc=lambda **kwargs: body,  # noqa: B023
                                       publishable_key="sb_publishable_k")
         with pytest.raises(PrivateStorageFailure):
             port.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
@@ -921,3 +990,133 @@ def test_live_workbench_entry_point_fails_closed():
              "CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_" + "D" * 24}, check=False)
     assert configured.returncode == 3
     assert "fail-closed" in configured.stderr
+
+
+def test_signed_review_record_rpc_access_and_contract():
+    """Proposed read RPC (db/proposals): real access denial + bounded contract.
+
+    Runs only on the disposable PostgreSQL cluster; never applied to live.
+    """
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, _canonical, _digest
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals" / "SIGNED_review_record_read.sql"
+    ).read_text(encoding="utf-8")
+    org, case, brief, version = uuid4(), uuid4(), uuid4(), uuid4()
+    doc, doc_version = uuid4(), uuid4()
+    user_a, user_b, user_c = uuid4(), uuid4(), uuid4()
+    snapshot = "a" * 64
+    payload = json.dumps({"schema": "caseproof-m2-check-headless-v1"})
+    payload_sha = _digest(payload)
+    decision = {"actor_id": str(user_a), "disposition": "verified",
+                "observation_id": "citation:ref-01", "rationale": "contrôle synthétique"}
+    request_id, audit_id = uuid4(), uuid4()
+    event_sha = _digest(_canonical({
+        "run": snapshot, "revision": 1, "request": str(request_id),
+        "actor": str(user_a), "previous_sha": ZERO_HASH, "decision": decision}))
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute(proposal)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s),(%s, %s),(%s, %s) "
+                     "on conflict (id) do nothing",
+                     (user_a, org, user_b, org, user_c, org))
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','evidence:read']::text[]),"
+            " (%s, %s, array['case:read','evidence:read']::text[])",
+            (org, user_a, org, user_b))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', array['case:read','evidence:read']::text[])",
+            (org, case, user_a))
+        conn.execute(
+            "insert into caseproof.documents(id, org_id, case_id, source_label)"
+            " values(%s, %s, %s, 'synthétique')", (doc, org, case))
+        conn.execute(
+            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
+            " original_sha256_hex, byte_length, media_type)"
+            " values(%s, %s, %s, 1, %s, 4, 'text/plain')", (doc_version, org, doc, "b" * 64))
+        conn.execute(
+            "insert into caseproof._m2_brief_versions(org_id, case_id, brief_id, version_id,"
+            " revision, document_id, document_version_id, vault_intent_id, original_sha256,"
+            " representation_sha256, parser_id, representation, document_role, graph_sha256,"
+            " case_revision, exhibit_revision, actor_id)"
+            " values(%s,%s,%s,%s,1,%s,%s,%s,%s,%s,'synthetic-parser','{}','own_draft',%s,1,1,%s)",
+            (org, case, brief, version, doc, doc_version, uuid4(), "b" * 64, "c" * 64,
+             "d" * 64, user_a))
+        conn.execute(
+            "insert into caseproof._m2_brief_heads(org_id, case_id, brief_id, revision, version_id)"
+            " values(%s, %s, %s, 1, %s)", (org, case, brief, version))
+        conn.execute(
+            "insert into caseproof._m2_check_runs(org_id, case_id, snapshot_sha, payload_sha,"
+            " payload, brief_version_id, case_revision, exhibit_revision, actor_id)"
+            " values(%s, %s, %s, %s, %s, %s, 1, 1, %s)",
+            (org, case, snapshot, payload_sha, payload, str(version), user_a))
+        conn.execute(
+            "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+            " actor_user_id, action, event_schema_version, correlation_id, input_sha256_hex)"
+            " values(%s, %s, %s, 'human', %s, 'review', 'v1', %s, %s)",
+            (audit_id, org, case, user_a, uuid4(), "e" * 64))
+        conn.execute(
+            "insert into caseproof._m2_review_events(org_id, case_id, snapshot_sha, revision,"
+            " request_id, actor_id, previous_sha, event_sha, decision, audit_id)"
+            " values(%s, %s, %s, 1, %s, %s, %s, %s, %s, %s)",
+            (org, case, snapshot, request_id, user_a, ZERO_HASH, event_sha,
+             json.dumps(decision, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+             audit_id))
+        conn.execute(
+            "insert into caseproof._m2_review_heads(org_id, case_id, snapshot_sha, revision,"
+            " event_sha) values(%s, %s, %s, 1, %s)", (org, case, snapshot, event_sha))
+
+        def call(sub, role="authenticated", doc_role="own_draft"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+            return conn.execute(
+                "select public.caseproof_signed_review_record(%s, %s)",
+                (str(case), doc_role)).fetchone()[0]
+
+        result = call(user_a)
+        assert result["ok"] is True
+        assert result["brief"]["version_id"] == str(version)
+        assert result["brief"]["head_revision"] == 1
+        assert len(result["checks"]) == 1
+        assert result["checks"][0]["payload_sha256"] == payload_sha
+        assert result["review_heads"] == [
+            {"snapshot_sha256": snapshot, "event_sha256": event_sha}]
+        assert len(result["review_events"]) == 1
+        assert result["review_events"][0]["event_sha256"] == event_sha
+
+        for sub, role, doc_role in (
+            (user_b, "authenticated", "own_draft"),  # member without matter grant
+            (user_c, "authenticated", "own_draft"),  # not a member at all
+            (user_a, "anon", "own_draft"),           # not the authenticated role
+            (user_a, "authenticated", "judge"),      # unknown document role
+            (uuid4(), "authenticated", "own_draft"),  # unknown subject
+        ):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    call(sub, role, doc_role)
+        # Unknown case is masked the same way as a denied one.
+        with conn.transaction(force_rollback=True):
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(user_a),))
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute("select public.caseproof_signed_review_record(%s, 'own_draft')",
+                             (str(uuid4()),))

@@ -1,29 +1,32 @@
 """Live SignedReviewRecord adapter over the pinned RPC surface.
 
-The proposed caseproof_signed_review_record RPC (migration NOT applied)
-replays the recorded digests and the review hash chain server side under
-security definer and returns the completed record body. This adapter
-validates the body shape, then applies the Ed25519 installation signature
-with the service-held key (sign_record_body): the private key stays service
-configuration, never database or client. The offline verifier independently
-re-checks digest, chain and signature; this adapter does not reassess
-content, and the record remains a transcript of recorded state, never an
-approval or filing.
+The proposed caseproof_signed_review_record RPC (db/proposals, NOT applied)
+authenticates the signed user, authorizes evidence read on the matter and
+returns the RAW recorded rows (brief head, check runs, review heads/events),
+bounded. It never recomputes digests in SQL: this adapter replays the review
+hash chain and re-verifies every payload digest with the exact Python
+canonicalization (review_record_assembly), failing closed on any tamper.
+The Ed25519 installation signature is then applied with the service-held key
+(sign_record_body): the private key stays service configuration, never
+database or client. The offline verifier independently re-checks digest,
+chain and signature; the record remains a transcript of recorded state,
+never an approval or filing.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
 from typing import Any
 
-from apps.api.disposable_review_record import sign_record_body
+from apps.api.disposable_review_record import RecordConflict, sign_record_body
+from apps.api.review_record_assembly import assemble_record_body
 from apps.api.signed_supabase_originals import PrivateStorageDenied, PrivateStorageFailure
 
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _ALLOWED_ROLES = {"own_draft", "opponent_brief"}
-_MAX_BODY_BYTES = 200_000
+_MAX_RESULT_BYTES = 600_000
 
 RpcCaller = Callable[..., Any]
 
@@ -56,19 +59,33 @@ class LiveSignedReviewRecord:
         )
         if not isinstance(result, dict):
             raise PrivateStorageFailure("RPC result outside the signed contract")
-        if result.get("ok") is False:
+        if result.get("ok") is not True:
             if result.get("error") == "denied":
                 raise PrivateStorageDenied("Private record unavailable")
-            raise ValueError("inconsistent recorded state")
-        body = result.get("record")
+            raise PrivateStorageFailure("RPC result outside the signed contract")
+        brief = result.get("brief")
+        checks = result.get("checks")
+        review_heads = result.get("review_heads")
+        review_events = result.get("review_events")
         if (
-            not isinstance(body, dict)
-            or body.get("schema") != "caseproof-review-record-v1"
-            or type(body.get("record_sha256")) is not str
-            or not _SHA256.fullmatch(body["record_sha256"])
-            or len(str(body)) > _MAX_BODY_BYTES
+            not isinstance(brief, dict)
+            or not isinstance(checks, list)
+            or not isinstance(review_heads, list)
+            or not isinstance(review_events, list)
+            or len(json.dumps(result, ensure_ascii=False, default=str)) > _MAX_RESULT_BYTES
         ):
             raise PrivateStorageFailure("RPC result outside the signed contract")
+        try:
+            body = assemble_record_body(
+                case_id=case_id,
+                document_role=document_role,
+                brief=brief,
+                check_rows=checks,
+                review_head_rows=review_heads,
+                review_event_rows=review_events,
+            )
+        except RecordConflict:
+            raise PrivateStorageFailure("recorded state failed replay verification") from None
         if self._signing_key is None:
             return body
         body["receipt"] = sign_record_body(body, self._signing_key)
