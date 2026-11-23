@@ -11,7 +11,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from application.litigation.corpus import CorpusError
-from application.litigation.legal_references import check_legal_references, load_corpus_config
+from application.litigation.legal_references import (
+    LegalCorpusConfig,
+    check_legal_references,
+    load_corpus_config,
+)
 from application.litigation.offline_legal_pack import build_legal_pack
 from application.litigation.unified_review import LegalObservation
 from infrastructure.parsers.engines import parse_docx
@@ -25,7 +29,7 @@ class OfflineLegalRun:
     legal_observations: tuple[LegalObservation, ...]
 
 
-def check_offline_docx(*, docx: Path, corpus: Path,
+def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
                        chosen_versions: dict[str, str] | None = None) -> tuple[bytes, str]:
     """Checks execute now from local bytes, never from saved/precomputed results.
 
@@ -41,7 +45,7 @@ def check_offline_docx(*, docx: Path, corpus: Path,
     warnings = set(artifact["warnings"]) - {"docx_layout_page_numbers_unverified"}
     if warnings or not artifact["text"]:
         raise CorpusError("unsupported Word content: " + ", ".join(sorted(warnings)))
-    config = load_corpus_config(corpus)
+    config = corpus if isinstance(corpus, LegalCorpusConfig) else load_corpus_config(corpus)
     if config.failures:
         raise CorpusError("corpus ingestion failed; partial corpus refused")
     if chosen_versions is not None:

@@ -4618,3 +4618,59 @@ def test_local_offline_legal_browser_requires_local_origin_and_fresh_word(tmp_pa
             server.shutdown()
             server.server_close()
             thread.join(timeout=3)
+
+
+def test_local_corpus_library_append_only_versions_and_frozen_review(tmp_path):
+    from dataclasses import replace
+
+    from application.litigation.corpus import CorpusError
+    from application.litigation.legal_references import load_corpus_config
+    from application.litigation.local_corpus_library import LocalCorpusLibrary, encode_corpus_pack
+    from application.litigation.offline_legal_pack import verify_legal_pack
+    from apps.api.offline_docx_check import check_offline_docx
+    from tests.signed_composed_rig import docx_without_custom_xml
+    from tests.test_corpus import _entry, _write_corpus
+    corpus = tmp_path / 'corpus'
+    corpus.mkdir()
+    _write_corpus(corpus, [_entry(article='12')])
+    (corpus / 'act-aliases.toml').write_text('[act_aliases]\n"C.civ." = "synthetic-act-2026"\n')
+    first = load_corpus_config(corpus)
+    library = LocalCorpusLibrary(tmp_path / 'library')
+    first_id = library.install(encode_corpus_pack(first))
+    docx = tmp_path / 'brief.docx'
+    docx.write_bytes(docx_without_custom_xml(['Article 12 du Code civil : « texte derive synthetique 12 ».']))
+    raw, checkpoint = check_offline_docx(docx=docx, corpus=library.select(first_id))
+    second = replace(first, records=tuple(replace(r, version='v2-explicit-synthetic') for r in first.records))
+    second_id = library.install(encode_corpus_pack(second))
+    assert second_id != first_id
+    assert library.install(encode_corpus_pack(first)) == first_id
+    assert len(library.inventory()) == 2
+    assert library.select(first_id).records[0].version == first.records[0].version
+    frozen = verify_legal_pack(raw, expected_sha256=checkpoint)
+    assert frozen['corpus_pack_sha256'] == first_id and frozen['references'][0]['status'] == 'PASS'
+    for bad in ('latest', '../escape', '0' * 64):
+        with pytest.raises(CorpusError):
+            library.select(bad)
+    # A damaged path cannot be repaired by overwriting its old declared identity.
+    (library.directory / (first_id + '.zip')).write_bytes(encode_corpus_pack(second))
+    with pytest.raises(CorpusError):
+        library.select(first_id)
+    with pytest.raises(CorpusError):
+        library.install(encode_corpus_pack(first))
+    assert verify_legal_pack(raw, expected_sha256=checkpoint)['corpus_pack_sha256'] == first_id
+
+
+@pytest.mark.parametrize('name', ['../escape', '/absolute', 'data/../../escape', 'rules.toml'])
+def test_local_corpus_pack_refuses_unsafe_inventory(name):
+    import io
+    from zipfile import ZIP_STORED, ZipFile
+
+    from application.litigation.corpus import CorpusError
+    from application.litigation.local_corpus_library import decode_corpus_pack
+    output = io.BytesIO()
+    with ZipFile(output, 'w', compression=ZIP_STORED) as archive:
+        archive.writestr('corpus-manifest.toml', b'bad')
+        archive.writestr('act-aliases.toml', b'')
+        archive.writestr(name, b'bad')
+    with pytest.raises(CorpusError):
+        decode_corpus_pack(output.getvalue())

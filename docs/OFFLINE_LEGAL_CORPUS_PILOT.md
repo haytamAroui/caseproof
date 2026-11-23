@@ -40,3 +40,29 @@ Les conditions permettent la réutilisation des informations sauf mention contra
 Les six Word FR/NL ont été contrôlés à neuf après démarrage d'un nouveau processus dans un espace réseau sans route externe, puis avec création de sockets interdite pendant les contrôles. Les résultats sont PASS, FAIL et UNDETERMINED dans chaque langue. Le serveur local a ensuite accepté un Word modifié via le navigateur, produit FAIL et son ZIP avec seulement la boucle locale disponible. Après arrêt du serveur et du navigateur, un nouveau navigateur a rouvert le passage exact depuis cet export sans requête HTTP.
 
 Cela prouve un contrôle borné sur un article réel capturé et une réouverture gelée, pas un installateur cabinet validé, l'exhaustivité du droit belge, la couverture historique, la pagination authentique du Moniteur ou une décision d'applicabilité. Les décisions locales ne sont pas des revues d'avocat authentifiées. Le produit complet et ses critères de validation restent ouverts.
+
+## Bibliothèque locale de corpus figés
+
+Le parcours local accepte désormais une bibliothèque append-only. Préparer un
+pack ne démontre ni son authenticité ni les droits de redistribution : conserver
+la provenance explicite et n'utiliser que des textes dont la réutilisation est
+permise. Les conditions de cabinet ne sont pas transportées dans ce pack juridique.
+
+```sh
+uv run --locked python -m scripts.local_legal_corpus prepare --corpus /chemin/corpus --output /chemin/corpus.zip
+uv run --locked python -m scripts.serve_offline_legal_workbench --corpus /chemin/corpus --library /chemin/bibliotheque
+```
+
+Dans la page locale, « Importer un pack local » ajoute un ZIP validé. Recharger
+la page, puis sélectionner explicitement le corpus de la nouvelle vérification.
+Chaque option montre les versions déclarées, les langues et l'empreinte complète.
+Aucun alias « latest » et aucune mise à jour automatique ne sont utilisés. Le
+résultat affiche aussi l'identité réellement contrôlée. L'import n'écrase pas les
+packs antérieurs. Un pack modifié derrière son identité est refusé, même lors
+d'une tentative de réimport. Les ZIP de revue déjà exportés restent autonomes :
+ils ne consultent pas cette bibliothèque lors de leur réouverture.
+
+La bibliothèque est locale et contrôlée par l'utilisateur du poste, pas un
+service d'authentification ni une signature d'éditeur. Une sauvegarde externe est
+nécessaire pour résister à la suppression des fichiers du poste. L'export reste
+une tranche juridique et non la validation du parcours complet du dossier.
