@@ -128,6 +128,12 @@ begin
      and v.document_version_id<>p_document_version;
    if not found then return jsonb_build_object('ok',false,'error','invalid'); end if;
  end if;
+ -- a version id names one version per case: it can never migrate to another
+ -- brief head, otherwise version-id-keyed readers become ambiguous
+ if exists(select 1 from caseproof._m2_brief_versions v
+   where v.org_id=v_org and v.case_id=p_case and v.version_id=p_version
+     and v.brief_id<>v_working)
+ then return jsonb_build_object('ok',false,'error','invalid'); end if;
 
  for v_ref in select value from jsonb_array_elements(p_references) loop
    if jsonb_typeof(v_ref)<>'object' or not (v_ref ?& array['reference_id','exhibit_label','exact_quote'])

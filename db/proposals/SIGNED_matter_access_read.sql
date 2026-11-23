@@ -35,6 +35,7 @@ begin
 
  return jsonb_build_object(
    'ok',true,
+   'actor_id',v_actor,
    'org_id',v_org,
    'case_revision',v_case_rev,
    'member_actions',to_jsonb(v_member.actions),

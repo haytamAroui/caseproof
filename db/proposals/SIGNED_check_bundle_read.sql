@@ -34,6 +34,11 @@ begin
  select v.* into v_version from caseproof._m2_brief_versions v
  where v.org_id=v_org and v.case_id=p_case and v.version_id=p_brief_version;
  if v_version.version_id is null then raise exception 'matter unavailable' using errcode='42501'; end if;
+ -- fail closed if legacy data ever made a version id span two brief heads
+ if exists(select 1 from caseproof._m2_brief_versions v
+   where v.org_id=v_org and v.case_id=p_case and v.version_id=p_brief_version
+     and v.brief_id<>v_version.brief_id)
+ then raise exception 'matter unavailable' using errcode='42501'; end if;
 
  select e.payload,e.revision into v_register,v_register_rev
  from caseproof._m1_exhibit_heads e where e.org_id=v_org and e.case_id=p_case;

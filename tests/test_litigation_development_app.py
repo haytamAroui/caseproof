@@ -1665,7 +1665,7 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
     doc_up, ver_up, ver_up2 = uuid4(), uuid4(), uuid4()
     doc_ex, ver_ex = uuid4(), uuid4()
     intent = uuid4()
-    brief_v1, brief_v2 = uuid4(), uuid4()
+    brief_v1, brief_v2, brief_v3 = uuid4(), uuid4(), uuid4()
 
     rep_text = "Mémoire synthétique: le contrat exige le paiement."
     rep_sha = hashlib.sha256(rep_text.encode("utf-8")).hexdigest()
@@ -1852,9 +1852,13 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
         # Reusing the preserved source version is invalid.
         assert publish(user_a, expected=1, version=brief_v2) == {"ok": False, "error": "invalid"}
 
+        # A version id can never migrate to another brief head: readers
+        # keyed by version id alone would become ambiguous.
+        assert publish(user_e, role="opponent_brief", version=brief_v1) == {
+            "ok": False, "error": "invalid"}
         # Second authorized user operates the independent opponent brief head.
-        assert publish(user_e, role="opponent_brief") == {"ok": True, "replay": False,
-                                                          "revision": 1}
+        assert publish(user_e, role="opponent_brief", version=brief_v3) == {
+            "ok": True, "replay": False, "revision": 1}
 
         # Brief-head read proposal: masked authorization, recomputed identity,
         # revision 0 before first publication, head after publication.
@@ -1925,6 +1929,26 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
         assert source["document_id"] == str(doc_ex) and source["version_id"] == str(ver_ex)
         assert source["intent_verified"] is False
         assert source["representation"] == exhibit_rep
+        # A version id spanning two brief heads (only reachable by bypassing
+        # the write RPC) fails closed with the same masked denial.
+        with conn.transaction(force_rollback=True):
+            conn.execute(
+                "insert into caseproof._m2_brief_versions(org_id,case_id,brief_id,"
+                "version_id,revision,parent_version_id,document_id,document_version_id,"
+                "vault_intent_id,original_sha256,representation_sha256,parser_id,"
+                "representation,document_role,graph_sha256,case_revision,exhibit_revision,"
+                "actor_id,created_at) "
+                "select org_id,case_id,%s,version_id,revision,parent_version_id,"
+                "document_id,document_version_id,vault_intent_id,original_sha256,"
+                "representation_sha256,parser_id,representation,document_role,graph_sha256,"
+                "case_revision,exhibit_revision,actor_id,created_at "
+                "from caseproof._m2_brief_versions "
+                "where org_id=%s and case_id=%s and version_id=%s",
+                (str(uuid4()), str(org), str(case), str(brief_v1)))
+            as_user(user_a)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute("select public.caseproof_signed_check_bundle(%s, %s)",
+                             (str(case), str(brief_v1)))
         for sub, role, version in (
             (user_b, "authenticated", brief_v1),
             (user_a, "anon", brief_v1),
@@ -1949,6 +1973,7 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
         access = conn.execute(
             "select public.caseproof_signed_matter_access(%s)", (str(case),)).fetchone()[0]
         assert access["ok"] is True and access["org_id"] == str(org)
+        assert access["actor_id"] == str(user_a)
         assert access["case_revision"] == 1 and access["membership_revision"] >= 1
         assert "draft:check" in access["grant_permissions"]
         assert access["grant_role"] == "reviewer" and access["grant_revision"] >= 1
@@ -1967,3 +1992,154 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
                 with pytest.raises(errors.InsufficientPrivilege):
                     conn.execute("select public.caseproof_signed_matter_access(%s)",
                                  (str(target),))
+
+
+def _live_check_store(result, library_bytes=None):
+    from apps.api.signed_supabase_check_store import LiveMatterCheckStore
+    calls = []
+    if library_bytes is None:
+        library_bytes = "contrat synthétique".encode()
+
+    def fake_rpc(*, publishable_key, bearer, name, args):
+        calls.append((name, args))
+        return result(calls) if callable(result) else result
+
+    class _Library:
+        def read(self, *, bearer, case_id, document_id, version_id):
+            return library_bytes
+
+    store = LiveMatterCheckStore(call_rpc=fake_rpc, publishable_key="sb_publishable_k",
+                                 bearer="jwt", library=_Library())
+    return store, calls
+
+
+_UUID_D = "3" * 8 + "-0000-4000-8000-" + "3" * 12
+_UUID_E = "4" * 8 + "-0000-4000-8000-" + "4" * 12
+
+
+def _access_payload(**overrides):
+    payload = {"ok": True, "actor_id": _UUID_B, "org_id": _UUID_A, "case_revision": 1,
+               "member_actions": ["case:read", "evidence:read", "finding:write"],
+               "membership_revision": 1, "grant_role": "reviewer",
+               "grant_permissions": ["case:read", "evidence:read", "draft:check"],
+               "grant_revision": 1}
+    payload.update(overrides)
+    return payload
+
+
+def test_live_check_store_current_access():
+    store, calls = _live_check_store(_access_payload())
+    access = store.current_access(_UUID_B, _UUID_C)
+    assert access is not None
+    assert access.org_id == _UUID_A and access.case_id == _UUID_C
+    assert access.case_revision == 1 and access.grant.active is True
+    assert calls[0] == ("caseproof_signed_matter_access", {"p_case": _UUID_C})
+
+
+def test_live_check_store_current_access_identity_and_denial():
+    from apps.api.postgres_litigation_check_store import PrivateCheckStoreError
+    # An RPC snapshot resolved for another actor is never accepted.
+    store, _ = _live_check_store(_access_payload(actor_id=_UUID_D))
+    with pytest.raises(PrivateCheckStoreError):
+        store.current_access(_UUID_B, _UUID_C)
+    # Masked denial (RPC failure) yields no access, like the disposable store.
+    store, _ = _live_check_store({"ok": False, "error": "denied"})
+    assert store.current_access(_UUID_B, _UUID_C) is None
+
+
+def _bundle_payload(rep_text, source_bytes):
+    import hashlib
+    rep_sha = hashlib.sha256(rep_text.encode("utf-8")).hexdigest()
+    src_sha = hashlib.sha256(source_bytes).hexdigest()
+    return {
+        "ok": True, "case_revision": 1, "register_revision": 1,
+        "register": {"schema": "caseproof-exhibit-register-v1", "entries": [
+            {"exhibit_id": "piece-aaa111bbb222", "display_label": "Contrat", "aliases": [],
+             "confirmed": True, "manual_inclusion": False,
+             "pages": [{"source_id": _UUID_D, "version_id": _UUID_E, "pdf_page": None,
+                        "printed_page": None, "bundle_page": None}]}]},
+        "brief": {"brief_id": _UUID_A, "version_id": _UUID_B, "revision": 1,
+                  "parent_version_id": None, "document_id": _UUID_C,
+                  "document_version_id": _UUID_D, "vault_intent_id": _UUID_E,
+                  "original_sha256": src_sha, "representation_sha256": rep_sha,
+                  "parser_id": "identity-utf8-v1", "representation": rep_text,
+                  "document_role": "own_draft", "graph_sha256": "f" * 64,
+                  "case_revision": 1, "exhibit_revision": 1, "actor_id": _UUID_B,
+                  "created_at": "2026-11-23T00:00:00+00:00"},
+        "references": [{"reference_id": "ref-1", "reference_order": 0,
+                        "exhibit_label": "Contrat", "exact_quote": "contrat",
+                        "pdf_page": None}],
+        "assertions": [],
+        "sources": [{"document_id": _UUID_D, "version_id": _UUID_E,
+                     "original_sha256_hex": src_sha, "byte_length": len(source_bytes),
+                     "media_type": "text/plain", "intent_verified": True,
+                     "representation": rep_text, "representation_sha": rep_sha}],
+    }
+
+
+def test_live_check_store_load_bundle_and_still_current():
+    rep_text = "contrat synthétique"
+    source_bytes = "contrat synthétique".encode()
+    payload = _bundle_payload(rep_text, source_bytes)
+
+    def stub(calls):
+        if calls[-1][0] == "caseproof_signed_matter_access":
+            return _access_payload()
+        return payload
+
+    store, _ = _live_check_store(stub, library_bytes=source_bytes)
+    access = store.current_access(_UUID_B, _UUID_C)
+    assert access is not None
+    bundle = store.load_bundle(case_id=_UUID_C, brief_version_id=_UUID_B, access=access)
+    assert bundle.representation.brief.version_id == _UUID_B
+    assert bundle.representation.text == rep_text
+    assert len(bundle.register.entries) == 1
+    assert bundle.source_scope.declared_source_versions == ((_UUID_D, _UUID_E),)
+    assert len(bundle.previews) == 1 and bundle.previews[0].row.status == "ready"
+    assert store.still_current(access=access, bundle=bundle) is True
+
+
+def test_live_check_store_stale_and_tampered():
+    from apps.api.litigation_check_service import MatterCheckUnavailable
+    from apps.api.postgres_litigation_check_store import PrivateCheckStoreError
+    rep_text = "contrat synthétique"
+    source_bytes = "contrat synthétique".encode()
+    payload = _bundle_payload(rep_text, source_bytes)
+
+    def stub(calls):
+        if calls[-1][0] == "caseproof_signed_matter_access":
+            return _access_payload()
+        return payload
+
+    store, _ = _live_check_store(stub, library_bytes=source_bytes)
+    access = store.current_access(_UUID_B, _UUID_C)
+    assert access is not None
+    # Stale published snapshot (register moved on): typed stale signal.
+    stale = _bundle_payload(rep_text, source_bytes)
+    stale["brief"] = dict(stale["brief"], exhibit_revision=2)
+    stale_store, _ = _live_check_store(
+        lambda calls: _access_payload()
+        if calls[-1][0] == "caseproof_signed_matter_access" else stale,
+        library_bytes=source_bytes)
+    stale_access = stale_store.current_access(_UUID_B, _UUID_C)
+    assert stale_access is not None
+    with pytest.raises(MatterCheckUnavailable):
+        stale_store.load_bundle(case_id=_UUID_C, brief_version_id=_UUID_B, access=stale_access)
+    # Representation digest mismatch (tampered stored column): fail closed.
+    tampered = _bundle_payload(rep_text, source_bytes)
+    tampered["brief"] = dict(tampered["brief"], representation_sha256="0" * 64)
+    tampered_store, _ = _live_check_store(
+        lambda calls: _access_payload()
+        if calls[-1][0] == "caseproof_signed_matter_access" else tampered,
+        library_bytes=source_bytes)
+    tampered_access = tampered_store.current_access(_UUID_B, _UUID_C)
+    assert tampered_access is not None
+    with pytest.raises(PrivateCheckStoreError):
+        tampered_store.load_bundle(case_id=_UUID_C, brief_version_id=_UUID_B,
+                                   access=tampered_access)
+    # Verified bytes drift: the library's bytes no longer match the declared sha.
+    drift_store, _ = _live_check_store(stub, library_bytes="octets falsifiés".encode())
+    drift_access = drift_store.current_access(_UUID_B, _UUID_C)
+    assert drift_access is not None
+    with pytest.raises(PrivateCheckStoreError):
+        drift_store.load_bundle(case_id=_UUID_C, brief_version_id=_UUID_B, access=drift_access)
