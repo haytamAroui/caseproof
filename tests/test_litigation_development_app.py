@@ -4674,3 +4674,32 @@ def test_local_corpus_pack_refuses_unsafe_inventory(name):
         archive.writestr(name, b'bad')
     with pytest.raises(CorpusError):
         decode_corpus_pack(output.getvalue())
+
+
+_MIXED_BRIEF = ("Le juge constate que «paiement sous 30 jours» (Contrat). "
+                "Le paiement du 20/01/2024 de 1.250,00 EUR a été fait le 15/03/2024. "
+                "Le paiement de 1.250,00 EUR est dû.")
+
+
+def test_composed_publisher_thousands_amount_with_second_date_abstains_and_is_stable():
+    """Changed-shape regression through the unit/fake-port signed composer (no real signed stack).
+
+    A thousands dot used to end the sentence, so the first date became a truncated
+    assertion "…de 1" while the amount and the second date vanished from its window.
+    """
+    import json
+    runs = []
+    for _ in range(2):
+        composer, captured = _composer_rig(_MIXED_BRIEF.encode("utf-8"), _REGISTER)
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+        runs.append(captured)
+    assertions = runs[0]["p_assertions"]
+    assert not [a for a in assertions if a["kind"] == "date"]  # two dates in one sentence: abstain
+    money = [a for a in assertions if a["kind"] == "money"]
+    assert money and all(_MIXED_BRIEF[a["text_start"]:a["text_end"]] == a["assertion_text"] for a in assertions)
+    assert all("1.250,00 EUR" in a["assertion_text"] for a in money)  # never cut at the thousands dot
+    # Re-publishing the same text yields identical claim ids and offsets (what a carried decision binds to).
+    assert [a["claim_id"] for a in assertions] == [a["claim_id"] for a in runs[1]["p_assertions"]]
+    assert json.loads(runs[0]["p_graph_text"])["assertions"] == assertions
