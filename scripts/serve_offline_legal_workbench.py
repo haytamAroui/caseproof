@@ -7,6 +7,7 @@ filesystem path. The source/parser gate is the same as the CLI.
 from __future__ import annotations
 
 import argparse
+import base64
 import html
 import json
 import secrets
@@ -30,7 +31,7 @@ HTML = """<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewp
 <label for="version">Version demandée</label><select id="version"><option value="installed">Version déclarée du pack</option><option value="missing">Version historique volontairement absente (test)</option></select>
 <small>Ce choix de test n'affirme pas qu'une version manque chez l'éditeur.</small><button id="check">Vérifier maintenant, en local</button></form>
 <p id="status" role="status"></p><div id="result"></div>
-<script>const token='TOKEN';document.getElementById('form').onsubmit=async(e)=>{e.preventDefault();const button=document.getElementById('check'),status=document.getElementById('status'),result=document.getElementById('result');button.disabled=true;result.replaceChildren();status.textContent='Lecture du Word et contrôle du corpus local…';try{const file=document.getElementById('docx').files[0];if(!file||file.size>8388608)throw Error('DOCX requis, maximum 8 Mo.');const response=await fetch('/check?version='+document.getElementById('version').value,{method:'POST',headers:{'X-CaseProof-Local':token,'Content-Type':'application/octet-stream'},body:await file.arrayBuffer()});if(!response.ok)throw Error(await response.text());const checkpoint=response.headers.get('X-CaseProof-Legal-Review-SHA256');const blob=await response.blob(),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='caseproof-offline-legal-review.zip';a.textContent='Télécharger la revue et ses passages figés';result.append(a);const p=document.createElement('p');p.textContent='Empreinte de revue à conserver séparément : '+checkpoint;result.append(p);const note=document.createElement('p');note.textContent='Décompressez le ZIP puis ouvrez report.html. Les passages sont conservés dans le pack exporté, sans accès Internet.';result.append(note);status.textContent='Contrôle exécuté depuis les octets Word et le corpus local. '+response.headers.get('X-CaseProof-Legal-Summary')+'. Export prêt.';}catch(error){status.textContent='Contrôle impossible : '+error.message;}finally{button.disabled=false;}};</script></html>"""
+<script>const token='TOKEN';document.getElementById('form').onsubmit=async(e)=>{e.preventDefault();const button=document.getElementById('check'),status=document.getElementById('status'),result=document.getElementById('result');button.disabled=true;result.replaceChildren();status.textContent='Lecture du Word et contrôle du corpus local…';try{const file=document.getElementById('docx').files[0];if(!file||file.size>8388608)throw Error('DOCX requis, maximum 8 Mo.');const response=await fetch('/check?version='+document.getElementById('version').value,{method:'POST',headers:{'X-CaseProof-Local':token,'Content-Type':'application/octet-stream','Accept':'application/json'},body:await file.arrayBuffer()});if(!response.ok)throw Error(await response.text());const payload=await response.json(),checkpoint=payload.checkpoint;for(const finding of payload.references){const section=document.createElement('section'),heading=document.createElement('h2'),reason=document.createElement('p'),brief=document.createElement('pre'),article=document.createElement('pre');heading.textContent=finding.status+' · '+finding.raw_text;reason.textContent=finding.reason;brief.textContent=finding.quote||'Aucune citation liée';article.textContent=finding.article_text||'Version ou article non sélectionné : aucun passage de substitution.';section.append(heading,reason,brief,article);result.append(section);}const bytes=Uint8Array.from(atob(payload.archive_base64),c=>c.charCodeAt(0)),blob=new Blob([bytes],{type:'application/zip'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='caseproof-offline-legal-review.zip';a.textContent='Télécharger la revue et ses passages figés';result.append(a);const p=document.createElement('p');p.textContent='Empreinte de revue à conserver séparément : '+checkpoint;result.append(p);const note=document.createElement('p');note.textContent='Décompressez le ZIP puis ouvrez report.html. Les passages sont conservés dans le pack exporté, sans accès Internet.';result.append(note);status.textContent='Contrôle exécuté depuis les octets Word et le corpus local. '+payload.summary+'. Export prêt.';}catch(error){status.textContent='Contrôle impossible : '+error.message;}finally{button.disabled=false;}};</script></html>"""
 
 
 def serve(corpus: Path, port: int, *, open_browser: bool = True) -> None:
@@ -70,6 +71,8 @@ def serve(corpus: Path, port: int, *, open_browser: bool = True) -> None:
                 size = int(self.headers.get("Content-Length", "0"))
                 if not 0 < size <= 8 * 1024 * 1024:
                     raise CorpusError("DOCX byte limit")
+                if load_corpus_config(corpus).pack_sha256 != config.pack_sha256:
+                    raise CorpusError("chosen corpus changed; restart with the intended immutable pack")
                 raw = self.rfile.read(size)
                 if len(raw) != size:
                     raise CorpusError("truncated DOCX")
@@ -93,6 +96,20 @@ def serve(corpus: Path, port: int, *, open_browser: bool = True) -> None:
             counts = {status: sum(r["status"] == status for r in body["references"])
                       for status in ("PASS", "FAIL", "UNDETERMINED", "UNVERIFIED")}
             summary = "; ".join(f"{status}: {count}" for status, count in counts.items() if count)
+            if self.headers.get("Accept") == "application/json":
+                by_key = {row["key"]: body["articles"][row["index"]]["derived_text"]
+                          for row in body["article_index"]}
+                payload = {"checkpoint": checkpoint, "summary": summary,
+                           "archive_base64": base64.b64encode(data).decode(),
+                           "references": [{**row, "article_text": by_key.get(row["corpus_key"])}
+                                          for row in body["references"]]}
+                encoded = json.dumps(payload, ensure_ascii=False).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(encoded)
+                return
             self.send_response(200)
             self.send_header("Content-Type", "application/zip")
             self.send_header("X-CaseProof-Legal-Summary", summary)

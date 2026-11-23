@@ -4599,6 +4599,21 @@ def test_local_offline_legal_browser_requires_local_origin_and_fresh_word(tmp_pa
                 assert body['references'][0]['status'] == 'PASS'
                 assert response.headers['X-CaseProof-Legal-Summary'] == 'PASS: 1'
                 assert json.dumps(body['review']['decisions']) == '[]'
+            import base64
+            request = urllib.request.Request(base+'/check?version=installed', data=raw,
+                                             headers={'X-CaseProof-Local': token, 'Origin': base,
+                                                      'Accept': 'application/json'})
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read())
+                assert payload['references'][0]['status'] == 'PASS'
+                assert 'synthetique 12' in payload['references'][0]['article_text']
+                assert verify_legal_pack(base64.b64decode(payload['archive_base64']),
+                                         expected_sha256=payload['checkpoint'])['references'][0]['status'] == 'PASS'
+            # An edited installed pack is never silently substituted behind the displayed identity.
+            (corpus / 'act-aliases.toml').write_text('[act_aliases]\n"C.civ." = "different-act"\n')
+            with pytest.raises(urllib.error.HTTPError) as exc:
+                urllib.request.urlopen(request)
+            assert exc.value.code == 422
         finally:
             server.shutdown()
             server.server_close()
