@@ -28,6 +28,7 @@ from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_review_app import ReviewBody
 from apps.api.litigation_review_workspace import ReviewCommand, SignedReviewWorkspace
 from apps.api.litigation_workspace_sources import SignedBriefSources
+from apps.api.signed_supabase_facts import FactRefused
 
 __all__ = ["create_signed_workbench_router"]
 
@@ -62,6 +63,29 @@ class CorrectionPreviewBody(BaseModel):
     before: str = Field(min_length=1, max_length=4000)
     after: str = Field(min_length=1, max_length=4000)
     rationale: str = Field(min_length=1, max_length=2000)
+
+
+_FACT_NOTE = (
+    "Records that the signed session user entered this value against this source "
+    "version. It is not proof the fact is true and not a legal conclusion.")
+
+
+class FactConfirmBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    request_id: str
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
+    value: bool | int | float | str
+    confirmed: bool
+    source_document_id: str
+    source_version_id: str
+    locator: str = Field(min_length=1, max_length=200)
+
+
+def _fact_ledger(wb: Any, bearer: str) -> Any:
+    provider = getattr(wb.checker, "fact_ledger_for", None)
+    if not callable(provider):
+        raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+    return provider(bearer)
 
 
 def _corpus_for(wb: Any, case_id: str) -> Any:
@@ -135,6 +159,36 @@ def create_signed_workbench_router(
                 for x in run.suitability_observations
             ],
         }
+
+    @router.get("/dev/signed/matters/{case_id}/facts")
+    def signed_facts(
+        case_id: str, authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        bearer, wb = bench(authorization)
+        ledger = _fact_ledger(wb, bearer)
+        try:
+            rows = ledger.list(case_id=case_id)
+        except FactRefused:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return {"schema": "caseproof-signed-facts-v1", "note": _FACT_NOTE, "facts": list(rows)}
+
+    @router.post("/dev/signed/matters/{case_id}/facts")
+    def signed_fact_confirm(
+        case_id: str, body: FactConfirmBody,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        bearer, wb = bench(authorization)
+        ledger = _fact_ledger(wb, bearer)
+        try:
+            recorded = ledger.confirm(
+                case_id=case_id, request_id=body.request_id, name=body.name,
+                value=body.value, confirmed=body.confirmed,
+                source_document_id=body.source_document_id,
+                source_version_id=body.source_version_id, locator=body.locator)
+        except FactRefused:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        return {"schema": "caseproof-signed-fact-recorded-v1", "recorded": recorded,
+                "note": _FACT_NOTE}
 
     @router.get(base + "/legal-references/{reference_id}/passage")
     def signed_legal_passage(

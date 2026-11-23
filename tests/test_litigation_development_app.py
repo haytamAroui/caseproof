@@ -3631,6 +3631,7 @@ def test_signed_composed_workflow_on_disposable_postgres():
         "SIGNED_registry_ingest_parsed", "SIGNED_exhibit_register_read",
         "SIGNED_exhibit_confirm", "SIGNED_publish_uploaded",
         "SIGNED_brief_head_read", "SIGNED_check_bundle_read",
+        "SIGNED_matter_fact_confirm",
     )
     with connect() as conn:
         install_shims(conn, root, names)
@@ -3806,6 +3807,29 @@ def test_signed_composed_workflow_on_disposable_postgres():
         dumped = json.dumps(body, default=str)
         assert out2.brief_version_id in dumped
         assert run1.snapshot_hash in dumped and run2.snapshot_hash in dumped
+
+        # Fact confirmation: actor and source hash come from the server, append-only.
+        from apps.api.signed_supabase_facts import FactRefused, LiveMatterFacts
+        facts_port = LiveMatterFacts(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY, bearer="user-token-a")
+        rid = str(uuid4())
+        kw = {"case_id": str(case), "name": "bail_ecrit", "value": True, "confirmed": True,
+              "source_document_id": contract.document_id, "source_version_id": contract.version_id,
+              "locator": "page 1"}
+        assert facts_port.confirm(request_id=rid, **kw) is True
+        assert facts_port.confirm(request_id=rid, **kw) is False  # exact replay
+        with pytest.raises(FactRefused):  # same request id, different content
+            facts_port.confirm(request_id=rid, **{**kw, "value": False})
+        with pytest.raises(FactRefused):  # unknown source version of this matter
+            facts_port.confirm(request_id=str(uuid4()), **{**kw, "source_version_id": str(uuid4())})
+        listed = facts_port.list(case_id=str(case))
+        assert [(r["name"], r["value"], r["confirmed"]) for r in listed] == [("bail_ecrit", True, True)]
+        assert listed[0]["actor_id"] == str(user)
+        assert listed[0]["source_sha256"] == hashlib.sha256(pdf).hexdigest()
+        facts_port.confirm(request_id=str(uuid4()), **{**kw, "value": False})
+        assert facts_port.list(case_id=str(case))[0]["value"] is False  # latest wins, history kept
+        assert conn.execute("select count(*) from caseproof._m3_matter_facts").fetchone()[0] == 2
+        with pytest.raises(Exception, match="append-only"):
+            conn.execute("update caseproof._m3_matter_facts set confirmed=false")
 
 
 def test_configured_dev_entry_installs_the_signed_workbench(monkeypatch):
@@ -4018,3 +4042,20 @@ all = [ { fact = "a", op = "eq", value = true }, { fact = "b", op = "eq", value 
         (Path(d) / "confirmed-facts.toml").write_text('[[fact]]\nname = "a"\nvalue = true\nconfirmed = true\n')
         cfg = load_suitability_config(Path(d))
         assert cfg.facts == () and cfg.failures
+
+
+def test_authenticated_facts_replace_declared_file_facts():
+    from application.litigation.suitability_review import (
+        SuitabilityConfig,
+        merge_authenticated_facts,
+    )
+    from application.litigation.suitability_rules import ConfirmedFact
+    base = SuitabilityConfig((), ((ConfirmedFact("a", True, False), "file: declared"),))
+    row = {"name": "a", "value": True, "confirmed": True, "actor_id": "u-1",
+           "source_version_id": "v-1", "source_sha256": "ab" * 32, "locator": "p2",
+           "recorded_at": "2026-11-23T15:00:00+01:00"}
+    merged = merge_authenticated_facts(base, [row])
+    (fact, prov), = merged.facts
+    assert fact.confirmed is True and prov.startswith("authenticated signed session: actor u-1")
+    bad = merge_authenticated_facts(base, [{**row, "value": None}])
+    assert bad.failures and bad.facts[0][1] == "file: declared"

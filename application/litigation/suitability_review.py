@@ -116,3 +116,27 @@ def _read(rule: SuitabilityRule, name: str) -> bool:
         elif getattr(node, "fact", None) == name:
             return True
     return False
+
+
+def merge_authenticated_facts(
+    config: SuitabilityConfig, rows: Iterable[dict[str, object]],
+) -> SuitabilityConfig:
+    """Facts entered through the signed session replace same-named file facts.
+
+    Provenance names the verified actor, the source version and hash, the
+    locator and the record time. It records who entered the value against which
+    source version; it does not prove the value is true.
+    """
+    merged: dict[str, tuple[ConfirmedFact, str]] = {f.name: (f, p) for f, p in config.facts}
+    failures = list(config.failures)
+    for row in rows:
+        try:
+            fact = ConfirmedFact(str(row["name"]), row["value"], row["confirmed"])  # type: ignore[arg-type]
+        except (RuleFormatError, KeyError) as exc:
+            failures.append(f"signed fact refused: {exc}")
+            continue
+        merged[fact.name] = (fact, (
+            f"authenticated signed session: actor {row['actor_id']}, source version "
+            f"{row['source_version_id']} sha256 {str(row['source_sha256'])[:12]}, "
+            f"{row['locator']}, recorded {row['recorded_at']}")[:300])
+    return SuitabilityConfig(config.rules, tuple(merged.values()), tuple(failures))

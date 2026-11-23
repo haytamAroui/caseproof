@@ -19,7 +19,7 @@ from application.litigation.matter_policy import (
     MatterPermission,
     authorize_matter,
 )
-from application.litigation.suitability_review import evaluate_suitability
+from application.litigation.suitability_review import evaluate_suitability, merge_authenticated_facts
 from application.litigation.unified_review import (
     BriefRepresentation,
     SourceScope,
@@ -88,6 +88,7 @@ class AuthorizedLitigationChecker:
         issuer: str, audience: str, clock: Callable[[], datetime] | None = None,
         publisher: CheckedRunPublisher | None = None,
         legal_corpus_for: Callable[[str], Any] | None = None,
+        fact_ledger_for: Callable[[str], Any] | None = None,
     ) -> None:
         if not issuer or not audience:
             raise ValueError("trusted Supabase issuer and audience required")
@@ -97,6 +98,8 @@ class AuthorizedLitigationChecker:
         # Per-matter chosen corpus: case_id -> LegalCorpusConfig | None. No
         # default corpus; a matter without one has its articles unchecked.
         self.legal_corpus_for = legal_corpus_for
+        # bearer -> ledger with list()/confirm(): lawyer fact confirmations.
+        self.fact_ledger_for = fact_ledger_for
         self.issuer = issuer
         self.audience = audience
         self.clock = clock or (lambda: datetime.now(UTC))
@@ -162,8 +165,13 @@ class AuthorizedLitigationChecker:
                     bundle.representation.text, config.records, config.act_aliases,
                     chosen_versions=config.chosen_versions)
                 if config.suitability is not None:
+                    rules_config = config.suitability
+                    if self.fact_ledger_for is not None:
+                        rules_config = merge_authenticated_facts(
+                            rules_config,
+                            self.fact_ledger_for(bearer).list(case_id=scope.case_id))
                     suitability = evaluate_suitability(
-                        legal, config.suitability,
+                        legal, rules_config,
                         frozenset(r.key for r in config.records))
             report = run_unified_check(
                 representation=bundle.representation, register=bundle.register,

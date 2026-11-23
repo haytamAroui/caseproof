@@ -369,6 +369,37 @@
       node.append(button);
     }
   }
+  function renderFactForm(box,a){
+    const rows=(state.inventory?.rows||[]).filter(r=>r.document_id&&r.version_id);
+    const form=el("div","","fact-form");
+    form.append(el("strong","Record a fact against a source (signed session)"));
+    const name=el("select");name.setAttribute("aria-label","Fact name");
+    const names=[...new Set([...(a.missing||[]),...a.facts.map(f=>f[0])])];
+    for(const n of names){const o=el("option",n);o.value=n;name.append(o);}
+    const value=el("select");value.setAttribute("aria-label","Fact value");
+    for(const [v,l] of [["true","true"],["false","false"]]){const o=el("option",l);o.value=v;value.append(o);}
+    const src=el("select");src.setAttribute("aria-label","Source");
+    for(const r of rows){const o=el("option",(labelOf(r.source_id)||r.source_id)+" \u00b7 sha "+r.original_sha256.slice(0,8));o.value=r.document_id+"|"+r.version_id;src.append(o);}
+    const loc=el("input");loc.setAttribute("aria-label","Locator (page, passage)");loc.placeholder="Locator, e.g. page 2, \u00ab \u2026 \u00bb";loc.maxLength=200;
+    const conf=el("input");conf.type="checkbox";conf.checked=true;conf.setAttribute("aria-label","I confirm this value against the source");
+    const lab=el("label","I confirm this value against the source");lab.prepend(conf);
+    const go=el("button","Record confirmation","secondary");go.type="button";
+    const out=el("p","","small");
+    go.addEventListener("click",async()=>{
+      if(!names.length||!rows.length||!loc.value.trim()){out.textContent="Choose a fact and a source and give a locator.";return;}
+      const [doc,ver]=src.value.split("|");
+      go.disabled=true;
+      try{
+        const d=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/facts",{method:"POST",
+          json:{request_id:crypto.randomUUID(),
+          name:name.value,value:value.value==="true",confirmed:conf.checked,source_document_id:doc,source_version_id:ver,locator:loc.value.trim()}});
+        if(d.schema!=="caseproof-signed-fact-recorded-v1")throw Error("invalid_schema");
+        out.textContent="Recorded. "+d.note+" Re-running the check on a new snapshot\u2026";
+        await load();
+      }catch(error){out.textContent="Not recorded: "+statusFor(error);go.disabled=false;}
+    });
+    form.append(name,value,src,loc,lab,go,out);box.append(form);
+  }
   function renderSuitability(selected){
     const a=selected.raw,box=$("source-preview");box.replaceChildren();
     box.append(el("strong","Suitability rule "+a.rule_id+" v"+a.rule_version));
@@ -378,7 +409,8 @@
     for(const [k,v] of a.subresults)box.append(el("p",k+" \u2192 "+v,"small mono"));
     if(a.missing.length)box.append(el("p","Inputs blocking a verdict: "+a.missing.join(", ")+". A fact must be present and lawyer-confirmed.","small"));
     for(const [name,value,confirmed,prov] of a.facts)box.append(el("p","Fact "+name+" = "+value+" \u00b7 "+(confirmed?"confirmed":"NOT confirmed")+" \u00b7 "+prov,"small mono"));
-    box.append(el("p","The rule text and each fact's provenance are declared in the matter's files. No authenticated lawyer confirmation (actor, source, version) is bound yet, so \"confirmed\" means declared, not verified. This is the declared condition applied to those facts. It is not a machine legal conclusion and does not assess the brief's argument.","small"));
+    renderFactForm(box,a);
+    box.append(el("p","Facts marked \"authenticated signed session\" were entered by the signed user against a named source version and hash. Facts from the matter's files are only declared, with no authenticated actor. Neither proves a fact is true. This is the rule's declared condition applied to those facts. It is not a machine legal conclusion and does not assess the brief's argument.","small"));
     state.previewReady=true;$("save-review").disabled=!state.review||state.loading||state.busy;
   }
   async function renderLegalPassage(selected){
