@@ -290,7 +290,20 @@
         d.row.original_sha256!==state.selected.sourceSha ||
         d.row.representation_id!==state.selected.representation)
         throw Error("source_version_mismatch");
-      $("source-preview").textContent=d.text||"Source has no available text representation.";
+      const preview=$("source-preview");preview.replaceChildren();
+      const text=d.text||"";
+      const obs=state.selected?.raw||{};
+      const start=obs.text_start,end=obs.text_end;
+      if(Number.isInteger(start)&&Number.isInteger(end)&&start>=0&&end>start&&end<=text.length){
+        preview.append(el("p","Matched passage · offsets "+start+"–"+end+" in this verified source representation:","small"));
+        const passage=el("p","","matched-passage");
+        passage.append(el("span",text.slice(0,start)),el("mark",text.slice(start,end),"matched"),el("span",text.slice(end)));
+        preview.append(passage);
+      }else{
+        if(String(state.selected?.id||"").startsWith("citation:"))
+          preview.append(el("p","No aligned passage offsets are recorded for this observation; the source text is shown without highlight.","small"));
+        preview.append(el("p",text||"Source has no available text representation."));
+      }
       state.previewReady=true;$("save-review").disabled=!state.review||state.busy||state.loading;
     }catch(error){if(current()){
       state.previewReady=false;$("save-review").disabled=true;

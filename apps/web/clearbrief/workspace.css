@@ -20,3 +20,4 @@
 @media(max-width:760px){.fidelity-pair{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(forced-colors:active){:root{scrollbar-color:auto}.notice,.fidelity-region{border:1px solid CanvasText}}
+mark.matched{background:#fbeec2;color:inherit;border-radius:3px;padding:0 1px}.matched-passage{white-space:pre-wrap}

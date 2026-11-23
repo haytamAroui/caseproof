@@ -53,3 +53,55 @@ test("source preview and download require matching provenance",async()=>{
     assert.equal(preview.children.length,0);
   }
 });
+
+async function runObservationPreview(observation) {
+  const nodes=new Map();
+  const get=id=>{ if(!nodes.has(id)) nodes.set(id,new Element()); return nodes.get(id); };
+  const caseId="11111111-1111-4111-8111-111111111111";
+  const briefId="22222222-2222-4222-8222-222222222222";
+  const row={source_id:"source",version_id:"version-a",original_sha256:"a".repeat(64),
+    representation_id:"representation-a",warnings:[],pages:[]};
+  const response=data=>({ok:true,json:async()=>data});
+  const fetch=async url=>{
+    if(url.endsWith("/check")) return response({schema:"caseproof-m2-check-headless-v1",
+      case_id:caseId,brief_version_id:briefId,snapshot_hash:"b".repeat(64),
+      citation_observations:observation?[observation]:[],factual_observations:[]});
+    if(url.endsWith("/sources")) return response({schema:"caseproof-clearbrief-brief-sources-v1",
+      case_id:caseId,brief_version_id:briefId,rows:[row]});
+    if(url.endsWith("/sources/source")) return response({schema:"caseproof-clearbrief-brief-source-preview-v1",
+      case_id:caseId,brief_version_id:briefId,row,text:"sensitive version text"});
+    if(url.endsWith("/review")) return response({schema:"caseproof-clearbrief-review-v1",case_id:caseId,
+      snapshot_hash:"b".repeat(64),revision:0});
+    throw Error("unexpected request");
+  };
+  const document={getElementById:get,createElement:()=>new Element()};
+  const window={caseproofSession:{caseId,briefVersionId:briefId,getBearer:async()=>"test"}};
+  vm.runInNewContext(fs.readFileSync("apps/web/clearbrief/workspace.js","utf8"),
+    {document,window,fetch,console,setTimeout});
+  await get("connection-form").listeners.submit({preventDefault(){}});
+  get("observations").children[0].listeners.click();
+  await new Promise(r=>setTimeout(r,0));
+  await new Promise(r=>setTimeout(r,0));
+  return get("source-preview");
+}
+
+test("citation observation preview highlights the recorded passage offsets",async()=>{
+  const preview=await runObservationPreview({reference_id:"ref-01",state:"exact_match",
+    source_id:"source",source_version_id:"version-a",source_sha256:"a".repeat(64),
+    representation_id:"representation-a",text_start:5,text_end:14});
+  const caption=preview.children.find(x=>x.textContent.includes("offsets 5\u201314"));
+  assert(caption,"caption with recorded offsets");
+  const passage=preview.children.find(x=>x.className==="matched-passage");
+  const mark=passage.children.find(x=>x.className==="matched");
+  assert.equal(mark.textContent,"tive vers");
+  assert.equal(passage.children.map(x=>x.textContent).join(""),"sensitive version text");
+});
+
+test("citation observation without aligned offsets shows unhighlighted text",async()=>{
+  const preview=await runObservationPreview({reference_id:"ref-01",state:"reference_unresolved",
+    source_id:"source",source_version_id:"version-a",source_sha256:"a".repeat(64),
+    representation_id:"representation-a",text_start:null,text_end:null});
+  assert(preview.children.some(x=>x.textContent.includes("without highlight")));
+  assert(preview.children.some(x=>x.textContent==="sensitive version text"));
+  assert(!preview.children.some(x=>x.className==="matched-passage"));
+});
