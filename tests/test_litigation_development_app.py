@@ -4455,7 +4455,8 @@ def test_offline_legal_pack_cold_replay_pins_exact_corpus(tmp_path, monkeypatch,
                             corpus_pack_sha256=config.pack_sha256)
     review = {'snapshot_hash': run.snapshot_hash, 'revision': 0, 'decisions': [], 'release_authorized': False}
     raw, checkpoint = build_legal_pack(config=config, run=run, brief_text=brief, review=review)
-    path = tmp_path / 'review.zip'; path.write_bytes(raw)
+    path = tmp_path / 'review.zip'
+    path.write_bytes(raw)
     # The installed pack can change; the exported old review never consults it.
     newer = replace(config, chosen_versions={'synthetic-act': 'pack-v2'})
     assert newer.pack_sha256 != config.pack_sha256
@@ -4514,10 +4515,11 @@ def test_fresh_offline_word_checks_run_without_network_and_refuse_hidden_content
     import socket
 
     from application.litigation.corpus import CORPUS_FORMAT_VERSION, CorpusError
-    from apps.api.offline_docx_check import check_offline_docx
     from application.litigation.offline_legal_pack import verify_legal_pack
+    from apps.api.offline_docx_check import check_offline_docx
     from tests.signed_composed_rig import docx_without_custom_xml
-    corpus = tmp_path / 'corpus'; corpus.mkdir()
+    corpus = tmp_path / 'corpus'
+    corpus.mkdir()
     text = 'Article synthétique de contrôle uniquement.'
     (corpus / 'source.txt').write_text(text)
     (corpus / 'article.txt').write_text(text)
@@ -4554,9 +4556,11 @@ def test_local_offline_legal_browser_requires_local_origin_and_fresh_word(tmp_pa
 
     from scripts.serve_offline_legal_workbench import serve
     from tests.signed_composed_rig import docx_without_custom_xml
+
     # Reuse the corpus-manifest helper: synthetic-only local server contract.
     from tests.test_corpus import _entry, _write_corpus
-    corpus = tmp_path / 'corpus'; corpus.mkdir()
+    corpus = tmp_path / 'corpus'
+    corpus.mkdir()
     _write_corpus(corpus, [_entry(article='12')])
     (corpus / 'act-aliases.toml').write_text('[act_aliases]\n"C.civ." = "synthetic-act-2026"\n')
     captured = {}
@@ -4568,11 +4572,14 @@ def test_local_offline_legal_browser_requires_local_origin_and_fresh_word(tmp_pa
         return original(server, *args, **kwargs)
 
     from unittest.mock import patch
-    ready = threading.Event(); captured['ready'] = ready
+    ready = threading.Event()
+    captured['ready'] = ready
     with patch.object(HTTPServer, 'serve_forever', bounded_server):
         thread = threading.Thread(target=serve, args=(corpus, 0), kwargs={'open_browser': False}, daemon=True)
-        thread.start(); assert ready.wait(3)
-        server = captured['server']; port = server.server_port
+        thread.start()
+        assert ready.wait(3)
+        server = captured['server']
+        port = server.server_port
         base = f'http://127.0.0.1:{port}'
         try:
             with urllib.request.urlopen(base) as response:
@@ -4593,4 +4600,6 @@ def test_local_offline_legal_browser_requires_local_origin_and_fresh_word(tmp_pa
                 assert response.headers['X-CaseProof-Legal-Summary'] == 'PASS: 1'
                 assert json.dumps(body['review']['decisions']) == '[]'
         finally:
-            server.shutdown(); server.server_close(); thread.join(timeout=3)
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
