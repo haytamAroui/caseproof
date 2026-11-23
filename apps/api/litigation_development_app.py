@@ -38,7 +38,8 @@ from apps.api.workspace_auth import SupabaseWorkspaceAuth, create_workspace_auth
 from apps.api.workspace_catalog import create_workspace_catalog_router
 from apps.api.workspace_intake import WorkspaceIntake, create_workspace_intake_router
 from apps.api.workspace_reports import WorkspaceReports, create_workspace_reports_router
-from infrastructure.parsers.pdf_ocr import LocalPDFOCR
+from infrastructure.parsers.pdf_ocr import LocalPDFOCR, OCRUnavailable
+from infrastructure.parsers.pdf_source_crop import render_pdf_page
 
 
 @dataclass(frozen=True, slots=True)
@@ -433,6 +434,53 @@ def create_litigation_development_app(
                 "Content-Disposition": "attachment; filename=caseproof-original",
                 "X-CaseProof-Original-SHA256": item.sha256_hex,
                 "X-CaseProof-Original-Media-Type": item.media_type,
+            },
+        )
+
+    @app.get(
+        "/v2/matters/{case_id}/briefs/{brief_version_id}"
+        "/evidence/{source_id}/versions/{version_id}/pages/{pdf_page}"
+    )
+    def original_page(
+        case_id: str,
+        brief_version_id: str,
+        source_id: str,
+        version_id: str,
+        pdf_page: int,
+        authorization: str | None = Header(default=None),
+    ) -> Response:
+        """Physical-page PNG rendering of the verified original bytes.
+
+        Same authorized, digest-bound read as the original-bytes route; the
+        image is a display rendering, never a visual-verification verdict.
+        Unavailable pages (non-PDF source, invalid or out-of-range page)
+        fail closed as 404; infrastructure absence stays 503.
+        """
+        if originals is None or checker is None or originals.checker is not checker:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        item = originals.read(
+            bearer=_token(authorization),
+            case_id=case_id,
+            brief_version_id=brief_version_id,
+            source_id=source_id,
+            version_id=version_id,
+        )
+        if item.media_type != "application/pdf":
+            raise HTTPException(status_code=404, detail="physical_page_unavailable")
+        try:
+            png = render_pdf_page(item.data, page_number=pdf_page)
+        except OCRUnavailable as exc:
+            if str(exc) in {"crop_rasterizer_unavailable", "crop_pillow_unavailable"}:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+            raise HTTPException(status_code=404, detail="physical_page_unavailable") from None
+        return Response(
+            png,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "X-CaseProof-Original-SHA256": item.sha256_hex,
+                "X-CaseProof-Physical-Page": str(pdf_page),
             },
         )
 

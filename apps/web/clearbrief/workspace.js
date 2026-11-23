@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const state = {session:null, external:false, caseId:"", briefId:"", inventory:null, check:null,
     review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null, justPublished:false,
-    catalog:null, publishRevision:0};
+    catalog:null, publishRevision:0, pageImageUrl:null, pageImageNode:null};
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const sha = /^[0-9a-f]{64}$/;
   const el = (tag, content, className) => {
@@ -45,7 +45,14 @@
   const fidelityPanel=window.CaseProofFidelity?.mount({root:$("fidelity-panel"),
     api:async(url,options)=>{await authenticate();return api(url,options);},
     context:()=>({caseId:$("case-id").value.trim(),briefId:$("brief-id").value.trim()})});
+  function revokePageImage() {
+    if (state.pageImageUrl) { URL.revokeObjectURL(state.pageImageUrl); state.pageImageUrl = null; }
+    const node = state.pageImageNode;
+    state.pageImageNode = null;
+    if (node && node.parentNode) node.parentNode.removeChild(node);
+  }
   function clearView() {
+    revokePageImage();
     fidelityPanel?.clear();
     state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null;
     state.previewSeq+=1;state.loading=false;
@@ -249,6 +256,7 @@
   }
   function renderSelected(){
     const selected=state.selected;
+    revokePageImage();
     $("selected").replaceChildren();
     state.previewReady=false;
     $("save-review").disabled=true;
@@ -315,6 +323,36 @@
         preview.append(el("p","Page provenance · physical PDF page: "+(physical===null?"not mapped":physical)+
           " · printed label: "+(reg&&Number.isInteger(reg.printed_page)?reg.printed_page:"not mapped")+
           " · bundle position: "+(reg&&Number.isInteger(reg.bundle_page)?reg.bundle_page:"not mapped"),"small"));
+        // Physical page image: an authenticated, digest-checked rendering of
+        // the verified original bytes. Availability depends only on the
+        // resolved physical page, never on printed/bundle labels. The image
+        // is a rendering, never a visual-verification verdict. Late responses
+        // are dropped and revoked so they cannot land on another finding.
+        if(physical!==null&&row.media_type==="application/pdf"){
+          const imgBox=el("div","","page-image");
+          imgBox.append(el("p","Physical page rendering of the verified original bytes · a rendering, not a verification.","small"));
+          imgBox.append(el("p","Loading physical page "+physical+"…","small"));
+          preview.parentNode.insertBefore(imgBox,preview.nextSibling);
+          state.pageImageNode=imgBox;
+          try{
+            const resp=await api(path()+"/evidence/"+encodeURIComponent(row.source_id)+
+              "/versions/"+encodeURIComponent(row.version_id)+"/pages/"+physical,{raw:true});
+            if(resp.headers.get("x-caseproof-original-sha256")!==row.original_sha256)
+              throw Error("source_version_mismatch");
+            const blob=await resp.blob();
+            if(!current())return;
+            const url=URL.createObjectURL(blob);
+            if(state.pageImageUrl)URL.revokeObjectURL(state.pageImageUrl);
+            state.pageImageUrl=url;
+            const img=new Image();
+            img.alt="Physical PDF page "+physical+" rendering of the verified original";
+            img.src=url;
+            imgBox.replaceChildren(
+              el("p","Physical page rendering of the verified original bytes · a rendering, not a verification.","small"),
+              img);
+          }catch(error){if(current())
+            imgBox.replaceChildren(el("p","Physical page image unavailable for this source; the text representation above stands on its own.","small"));}
+        }
       }else{
         if(String(state.selected?.id||"").startsWith("citation:"))
           preview.append(el("p","No aligned passage offsets are recorded for this observation; the source text is shown without highlight.","small"));
@@ -346,7 +384,7 @@
     if(state.busy||state.pending){notice("Resolve the pending review save before refreshing this snapshot.","danger");return;}
     const generation=++state.generation;
     state.previewSeq+=1;state.loading=true;state.check=null;state.review=null;state.previewReady=false;
-    state.inventory=null;state.selected=null;
+    state.inventory=null;state.selected=null;revokePageImage();
     if(state.justPublished)$("publish-status").textContent="Reloading current scope after publication\u2026";
     $("save-review").disabled=true;
     $("review-form").setAttribute("aria-busy","true");
@@ -894,7 +932,7 @@
     finally{if(generation===state.generation)journey.busy=false;}
   }
   function signout(){
-    state.generation+=1;state.previewSeq+=1;
+    state.generation+=1;state.previewSeq+=1;revokePageImage();
     if(!state.external)state.session?.clear?.();
     state.session=null;state.external=false;state.caseId="";state.briefId="";
     state.catalog=null;state.publishRevision=0;

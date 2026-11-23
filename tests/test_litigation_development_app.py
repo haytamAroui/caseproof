@@ -1,12 +1,19 @@
 """Combined API tests use synthetic identity and source bytes only."""
+import shutil
 from hashlib import sha256
+from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
 
+from application.litigation.brief_checks import DraftReference, VersionedBrief
+from application.litigation.library import EvidencePreview, EvidenceRow
+from application.litigation.unified_review import BriefRepresentation, SourceScope
 from apps.api.access_control import AccessRejected
+from apps.api.litigation_check_service import CheckBundle
 from apps.api.litigation_development_app import create_litigation_development_app
 from apps.api.litigation_original_reader import AuthorizedOriginalReader, Original
+from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 from tests.test_litigation_evidence_search import ACTOR, CASE, DRAFT, search_rig
 
 
@@ -133,3 +140,113 @@ def test_preview_page_mappings_keep_numbering_spaces_distinct():
     ]
     # Wire spans are 1-based physical PDF pages (store blocks are zero-based).
     assert preview.json()["spans"] == [[0, 27, "pdf", 1]]
+
+
+def _pdf_bytes() -> bytes:
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+PDF_BYTES = _pdf_bytes()
+PNG_MAGIC = bytes((137, 80, 78, 71, 13, 10, 26, 10))
+
+
+def _pdf_bundle(*, case_id: str, brief_version_id: str, previews=None) -> CheckBundle:
+    text = "Page PDF synthetique de test."
+    brief = VersionedBrief(case_id, brief_version_id, sha256(text.encode()).hexdigest(),
+                           (DraftReference("r1", "Stuk 1", None, 1),))
+    representation = BriefRepresentation(
+        brief, text, sha256(text.encode()).hexdigest(), "fixture-parser", (),
+    )
+    registered = ExhibitRegister(1, (
+        ExhibitEntry("e1", "Stuk 1", (ExhibitPage("s1", "v1", 1),), confirmed=True),
+    ))
+    row = EvidenceRow("s1", "d1", "v1", sha256(PDF_BYTES).hexdigest(),
+                      "application/pdf", "ready", "fixture-parser", "rep1", (), ())
+    return CheckBundle(representation, registered,
+                       previews if previews is not None else (EvidencePreview(row, "", ()),),
+                       SourceScope((("s1", "v1"),)))
+
+
+class PdfOriginals:
+    calls = 0
+    tamper = False
+
+    def read(self, *, access, source_id, version_id):
+        self.calls += 1
+        return Original(b"tampered" if self.tamper else PDF_BYTES,
+                        sha256(PDF_BYTES).hexdigest(), "application/pdf")
+
+
+def pdf_client_rig(*, previews=None):
+    search, store = search_rig()
+    originals = PdfOriginals()
+
+    def load_bundle(*, case_id, brief_version_id, access):
+        store.load_calls += 1
+        return _pdf_bundle(case_id=case_id, brief_version_id=brief_version_id, previews=previews)
+
+    store.load_bundle = load_bundle
+    reader = AuthorizedOriginalReader(search.checker, originals)
+    client = TestClient(create_litigation_development_app(checker=search.checker, originals=reader),
+                        client=("127.0.0.1", 50000))
+    return client, originals
+
+
+PAGE_PATH = f"/v2/matters/{CASE}/briefs/{DRAFT}/evidence/s1/versions/v1/pages"
+
+
+@pytest.mark.skipif(shutil.which("pdftoppm") is None, reason="pdftoppm rasterizer not installed")
+def test_physical_page_render_is_authorized_and_digest_bound():
+    client, _ = pdf_client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    page = client.get(f"{PAGE_PATH}/1", headers=headers)
+    assert page.status_code == 200
+    assert page.headers["content-type"] == "image/png"
+    assert page.content[:8] == PNG_MAGIC
+    assert page.headers["x-caseproof-original-sha256"] == sha256(PDF_BYTES).hexdigest()
+    assert page.headers["x-caseproof-physical-page"] == "1"
+    assert page.headers["cache-control"] == "no-store"
+    assert page.headers["x-content-type-options"] == "nosniff"
+
+
+def test_physical_page_rejects_non_pdf_and_out_of_range():
+    client, _ = pdf_client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    assert client.get(f"{PAGE_PATH}/0", headers=headers).status_code == 404
+    assert client.get(f"{PAGE_PATH}/99", headers=headers).status_code == 404
+    # Non-PDF original: no physical page rendering, fail closed.
+    plain, _, _, _ = client_rig()
+    response = plain.get(
+        f"/v2/matters/{CASE}/briefs/{DRAFT}/evidence/s1/versions/v1/pages/1", headers=headers)
+    assert response.status_code == 404
+
+
+def test_physical_page_masks_unknown_source_and_requires_bearer():
+    client, originals = pdf_client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    assert client.get(f"/v2/matters/{CASE}/briefs/{DRAFT}/evidence/foreign/versions/v1/pages/1",
+                      headers=headers).status_code == 404
+    assert originals.calls == 0
+    assert client.get(f"{PAGE_PATH}/1").status_code == 401
+    assert originals.calls == 0
+
+
+def test_physical_page_fail_closed_on_tamper_and_ambiguous_binding():
+    client, originals = pdf_client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    originals.tamper = True
+    assert client.get(f"{PAGE_PATH}/1", headers=headers).status_code == 503
+    # Ambiguous source binding (two preview rows for one source version):
+    # masked before any byte read or rasterization.
+    row = EvidenceRow("s1", "d1", "v1", sha256(PDF_BYTES).hexdigest(),
+                      "application/pdf", "ready", "fixture-parser", "rep1", (), ())
+    dup, dup_originals = pdf_client_rig(previews=(EvidencePreview(row, "", ()),
+                                                  EvidencePreview(row, "", ())))
+    assert dup.get(f"{PAGE_PATH}/1", headers=headers).status_code == 404
+    assert dup_originals.calls == 0
