@@ -113,6 +113,11 @@
           <label>Original file<input id="original-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
           <button id="upload" type="submit" class="secondary">Upload immutable original</button></form>
           <p id="upload-current" class="small mono" aria-live="polite"></p>
+          <form id="publish-form"><label>Brief UUID<input id="publish-brief-id" required spellcheck="false"></label>
+          <label>Brief version UUID<input id="publish-brief-version-id" required spellcheck="false"></label>
+          <label>Expected revision<input id="publish-expected-revision" type="number" min="0" value="0" required></label>
+          <button id="publish" type="submit" class="secondary">Publish uploaded original as brief version</button></form>
+          <p id="publish-status" class="small mono" aria-live="polite"></p>
         </details>
       </section>
       <section class="card checks-panel" aria-labelledby="check-title">

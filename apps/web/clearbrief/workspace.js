@@ -404,6 +404,35 @@
       if(!d.hits.length)node.append(el("p","No match in the searched scope; review exclusions and incomplete sources.","small"));
     }catch(error){if(generation===state.generation)node.append(el("p",statusFor(error),"error"));}
   }
+  async function publishVersion(evt){
+    evt.preventDefault();
+    const generation=state.generation;
+    const documentId=$("document-id").value.trim(),versionId=$("version-id").value.trim();
+    const briefId=$("publish-brief-id").value.trim(),briefVersionId=$("publish-brief-version-id").value.trim();
+    const expectedRevision=Number($("publish-expected-revision").value);
+    if(!UUID.test(documentId)||!UUID.test(versionId)||!UUID.test(briefId)||!UUID.test(briefVersionId)||
+       !Number.isInteger(expectedRevision)||expectedRevision<0){
+      notice("Exact document, version, brief and brief-version UUIDs plus a non-negative expected revision are required.","danger");return;
+    }
+    $("publish").disabled=true;
+    try{
+      const token=await bearer();
+      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/briefs/publish",{
+        method:"POST",credentials:"omit",redirect:"error",cache:"no-store",
+        headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},
+        body:JSON.stringify({document_id:documentId,version_id:versionId,brief_id:briefId,
+          brief_version_id:briefVersionId,document_role:"own_draft",expected_revision:expectedRevision}),
+      });
+      if(generation!==state.generation||!state.session)return;
+      if(response.status!==201)throw Error("unavailable");
+      const d=await response.json();
+      $("publish-status").textContent="Published brief version at revision "+d.published_revision+". Run the factual check.";
+      notice("Brief version published from the verified uploaded original.","ok");
+      await load();
+    }catch(error){if(generation===state.generation)
+      notice("Publication was denied or its outcome is unknown. Verify the exact identifiers before retrying.","danger");}
+    finally{$("publish").disabled=false;}
+  }
   async function upload(evt){
     evt.preventDefault();
     const generation=state.generation;
@@ -734,6 +763,7 @@
     $("review-form").addEventListener("submit",submitReview);
     $("search").addEventListener("click",search);
     $("upload-form").addEventListener("submit",upload);
+    const publishForm=$("publish-form");if(publishForm)publishForm.addEventListener("submit",publishVersion);
     $("signout").addEventListener("click",signout);
     $("refresh").addEventListener("click",()=>{void load();});
     $("recheck").addEventListener("click",()=>{void load();});

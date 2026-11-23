@@ -3,10 +3,12 @@
 Dependencies are injected. This factory does not construct a database role,
 accept credentials from requests, install schemas or authorize live deployment.
 """
+
 from __future__ import annotations
 
 from ipaddress import ip_address
 from pathlib import Path
+from typing import Protocol
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -38,10 +40,35 @@ from apps.api.workspace_reports import WorkspaceReports, create_workspace_report
 from infrastructure.parsers.pdf_ocr import LocalPDFOCR
 
 
+class SignedBriefPublisher(Protocol):
+    """Loopback-only port: publish one brief version bound to its verified
+    uploaded original. Implementations must verify the bearer, read back the
+    stored bytes, derive the checked representation with the real parser and
+    refuse stale expected revisions. Raises PrivateStorageDenied for masked or
+    unauthorized access, PrivateStorageFailure for uncertain storage outcomes
+    and ValueError for an immutable graph conflict (stale revision, duplicate
+    version)."""
+
+    def publish(
+        self,
+        *,
+        bearer: str,
+        case_id: str,
+        document_id: str,
+        version_id: str,
+        brief_id: str,
+        brief_version_id: str,
+        document_role: str,
+        expected_revision: int,
+    ) -> int: ...
+
+
 def create_litigation_development_app(
-    *, checker: AuthorizedLitigationChecker | None = None,
+    *,
+    checker: AuthorizedLitigationChecker | None = None,
     originals: AuthorizedOriginalReader | None = None,
     signed_originals: SignedSourceLibrary | None = None,
+    signed_brief_publisher: SignedBriefPublisher | None = None,
     evidence: EvidenceReader | None = None,
     reviews: SignedReviewWorkspace | None = None,
     publishable_key: str | None = None,
@@ -58,31 +85,46 @@ def create_litigation_development_app(
     # allowing an independently injected checker to bypass signed policies.
     legacy_checker = checker if rights_gate is None else None
     app.include_router(create_litigation_check_app(legacy_checker).router)
-    app.include_router(create_litigation_search_app(
-        AuthorizedEvidenceSearch(legacy_checker) if legacy_checker else None,
-    ).router)
+    app.include_router(
+        create_litigation_search_app(
+            AuthorizedEvidenceSearch(legacy_checker) if legacy_checker else None,
+        ).router
+    )
     app.include_router(create_evidence_app(evidence if rights_gate is None else None).router)
     app.include_router(create_clearbrief_sources_router(legacy_checker))
-    app.include_router(create_clearbrief_review_router(
-        reviews
-        if legacy_checker is not None and reviews is not None and reviews.checker is legacy_checker
-        else None,
-    ))
+    app.include_router(
+        create_clearbrief_review_router(
+            reviews
+            if legacy_checker is not None and reviews is not None and reviews.checker is legacy_checker
+            else None,
+        )
+    )
 
     if publishable_key is not None and (
         not publishable_key.startswith("sb_publishable_")
         or len(publishable_key) > 512
-        or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in publishable_key)
+        or any(
+            c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+            for c in publishable_key
+        )
     ):
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
-    dossier_store = DossierStore(publishable_key, trusted_ingest_key, rights_gate=rights_gate) if publishable_key else None
+    dossier_store = (
+        DossierStore(publishable_key, trusted_ingest_key, rights_gate=rights_gate)
+        if publishable_key
+        else None
+    )
     app.include_router(create_dossier_router(dossier_store))
-    app.include_router(create_workspace_intake_router(
-        WorkspaceIntake(dossier_store.client, dossier_store) if dossier_store else None))
+    app.include_router(
+        create_workspace_intake_router(
+            WorkspaceIntake(dossier_store.client, dossier_store) if dossier_store else None
+        )
+    )
     app.include_router(create_dossier_viewer_router(dossier_store))
     if dossier_store is not None and page_worker_secret is not None:
         from apps.api.signed_page_jobs import SignedPageJobs, create_page_job_router
+
         app.include_router(create_page_job_router(SignedPageJobs(dossier_store, page_worker_secret)))
     app.include_router(create_headless_review_router(headless))
     # The direct legacy RPCs are now wrapped with transactional rights checks
@@ -90,10 +132,14 @@ def create_litigation_development_app(
     # review/correction flow. This remains a no-op when no publishable key is
     # configured, and never expands the underlying actor's matter grants.
     app.include_router(create_live_review_router(publishable_key))
-    app.include_router(create_live_journey_router(
-        publishable_key, trusted_ingest_key, ocr=ocr,
-        **({"rights_gate": rights_gate} if rights_gate is not None else {}),
-    ))
+    app.include_router(
+        create_live_journey_router(
+            publishable_key,
+            trusted_ingest_key,
+            ocr=ocr,
+            **({"rights_gate": rights_gate} if rights_gate is not None else {}),
+        )
+    )
 
     @app.get("/dev/clearbrief/config", include_in_schema=False)
     def lawyer_config() -> dict[str, str | None]:
@@ -101,30 +147,36 @@ def create_litigation_development_app(
 
     catalog = SignedMatterCatalog(publishable_key) if publishable_key else None
     app.include_router(create_workspace_catalog_router(catalog))
-    app.include_router(create_workspace_reports_router(WorkspaceReports(publishable_key) if publishable_key else None))
-    app.include_router(create_workspace_auth_router(SupabaseWorkspaceAuth(publishable_key) if publishable_key else None))
+    app.include_router(
+        create_workspace_reports_router(WorkspaceReports(publishable_key) if publishable_key else None)
+    )
+    app.include_router(
+        create_workspace_auth_router(SupabaseWorkspaceAuth(publishable_key) if publishable_key else None)
+    )
 
     @app.get("/dev/clearbrief/matters", include_in_schema=False)
     def lawyer_matters(authorization: str | None = Header(default=None)) -> dict[str, object]:
         if catalog is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        return {"schema": "caseproof-clearbrief-matters-v1",
-                "matters": catalog.list_matters(_token(authorization))}
+        return {
+            "schema": "caseproof-clearbrief-matters-v1",
+            "matters": catalog.list_matters(_token(authorization)),
+        }
 
     if workspace_directory is not None:
         root = workspace_directory.resolve(strict=True)
-        assets = {str(p.relative_to(root)): p for p in root.rglob('*') if p.is_file() and not p.is_symlink()}
-        if 'index.html' not in assets:
-            raise ValueError('Built workspace index required')
+        assets = {str(p.relative_to(root)): p for p in root.rglob("*") if p.is_file() and not p.is_symlink()}
+        if "index.html" not in assets:
+            raise ValueError("Built workspace index required")
 
-        @app.get('/workspace', include_in_schema=False)
-        @app.get('/workspace/{workspace_path:path}', include_in_schema=False)
-        def workspace_asset(workspace_path: str = '') -> FileResponse:
-            if workspace_path.startswith('assets/'):
+        @app.get("/workspace", include_in_schema=False)
+        @app.get("/workspace/{workspace_path:path}", include_in_schema=False)
+        def workspace_asset(workspace_path: str = "") -> FileResponse:
+            if workspace_path.startswith("assets/"):
                 if workspace_path not in assets:
                     raise AccessRejected(AccessFailure.RESOURCE_MASKED)
                 return FileResponse(assets[workspace_path])
-            return FileResponse(assets['index.html'], media_type='text/html')
+            return FileResponse(assets["index.html"], media_type="text/html")
 
     # Fixed static assets: no user-defined paths and no production mount.
     _workspace = Path(__file__).resolve().parents[1] / "web" / "clearbrief"
@@ -138,7 +190,6 @@ def create_litigation_development_app(
         if asset not in {"workspace.css", "workspace.js", "fidelity-panel.js"}:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED)
         return FileResponse(_workspace / asset)
-
 
     # Word's pinned localhost sideload origin now serves the same signed
     # application APIs. The browser receives only a publishable key. No
@@ -160,8 +211,7 @@ def create_litigation_development_app(
     def word_public_config() -> dict[str, str]:
         if publishable_key is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        return {"projectUrl": "https://ldwmocpxwskvhoojndrd.supabase.co",
-                "publishableKey": publishable_key}
+        return {"projectUrl": "https://ldwmocpxwskvhoojndrd.supabase.co", "publishableKey": publishable_key}
 
     @app.get("/index.html", include_in_schema=False)
     def signed_word_entry(request: Request) -> FileResponse:
@@ -217,31 +267,39 @@ def create_litigation_development_app(
             local = False
         if not local:
             return JSONResponse({"error": "loopback_only"}, status_code=403)
-        if request.method == 'POST' and request.url.path.startswith('/v2/workspace/intake/'):
+        if request.method == "POST" and request.url.path.startswith("/v2/workspace/intake/"):
             chunks = []
             size = 0
             async for chunk in request.stream():
                 size += len(chunk)
                 if size > 17_000_000:
-                    return JSONResponse({'error': 'intake_body_too_large'}, status_code=413)
+                    return JSONResponse({"error": "intake_body_too_large"}, status_code=413)
                 chunks.append(chunk)
-            request._body = b''.join(chunks)
+            request._body = b"".join(chunks)
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        if request.url.path in {"/index.html", "/caseproof-public-config.json",
-            "/taskpane.js", "/taskpane.css", "/demo-session.js",
-            "/auth/live-ui.js", "/auth/office-callback.js", "/auth-callback.html",
-            "/dist/live-auth.js", "/manifest-live-dev.xml"} or request.url.path.startswith("/word-assets/"):
+        if request.url.path in {
+            "/index.html",
+            "/caseproof-public-config.json",
+            "/taskpane.js",
+            "/taskpane.css",
+            "/demo-session.js",
+            "/auth/live-ui.js",
+            "/auth/office-callback.js",
+            "/auth-callback.html",
+            "/dist/live-auth.js",
+            "/manifest-live-dev.xml",
+        } or request.url.path.startswith("/word-assets/"):
             response.headers["Content-Security-Policy"] = (
                 "default-src 'none'; script-src 'self' https://appsforoffice.microsoft.com; "
                 "style-src 'self'; connect-src 'self' https://ldwmocpxwskvhoojndrd.supabase.co; "
                 "img-src 'self' data:; base-uri 'none'; form-action 'none'; "
                 "frame-ancestors 'self' https://*.office.com https://*.officeapps.live.com"
             )
-        elif request.url.path == '/workspace' or request.url.path.startswith('/workspace/'):
-            response.headers['Content-Security-Policy'] = (
+        elif request.url.path == "/workspace" or request.url.path.startswith("/workspace/"):
+            response.headers["Content-Security-Policy"] = (
                 "default-src 'none'; script-src 'self'; style-src 'self'; "
                 "connect-src 'self'; img-src 'self' blob:; font-src 'self'; worker-src 'self'; "
                 "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
@@ -265,44 +323,68 @@ def create_litigation_development_app(
     async def invalid(request: Request, exc: RequestValidationError) -> JSONResponse:
         return JSONResponse({"error": "invalid_request"}, status_code=422)
 
-    @app.get("/v2/matters/{case_id}/briefs/{brief_version_id}/evidence/{source_id}/versions/{version_id}/original")
-    def original(case_id: str, brief_version_id: str, source_id: str, version_id: str,
-                 authorization: str | None = Header(default=None)) -> Response:
+    @app.get(
+        "/v2/matters/{case_id}/briefs/{brief_version_id}/evidence/{source_id}/versions/{version_id}/original"
+    )
+    def original(
+        case_id: str,
+        brief_version_id: str,
+        source_id: str,
+        version_id: str,
+        authorization: str | None = Header(default=None),
+    ) -> Response:
         if originals is None or checker is None or originals.checker is not checker:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
-        item = originals.read(bearer=_token(authorization), case_id=case_id,
-                              brief_version_id=brief_version_id, source_id=source_id, version_id=version_id)
+        item = originals.read(
+            bearer=_token(authorization),
+            case_id=case_id,
+            brief_version_id=brief_version_id,
+            source_id=source_id,
+            version_id=version_id,
+        )
         # Original bytes are never interpreted as active HTML or shown inline.
-        return Response(item.data, media_type="application/octet-stream", headers={
-            "Content-Disposition": "attachment; filename=caseproof-original",
-            "X-CaseProof-Original-SHA256": item.sha256_hex,
-            "X-CaseProof-Original-Media-Type": item.media_type,
-        })
-
+        return Response(
+            item.data,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": "attachment; filename=caseproof-original",
+                "X-CaseProof-Original-SHA256": item.sha256_hex,
+                "X-CaseProof-Original-Media-Type": item.media_type,
+            },
+        )
 
     @app.get("/dev/signed/matters/{case_id}/documents/{document_id}/versions/{version_id}/original")
-    def signed_original(case_id: str, document_id: str, version_id: str,
-                        authorization: str | None = Header(default=None)) -> Response:
+    def signed_original(
+        case_id: str, document_id: str, version_id: str, authorization: str | None = Header(default=None)
+    ) -> Response:
         if signed_originals is None:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         try:
             data = signed_originals.read(
-                bearer=_token(authorization), case_id=case_id,
-                document_id=document_id, version_id=version_id,
+                bearer=_token(authorization),
+                case_id=case_id,
+                document_id=document_id,
+                version_id=version_id,
             )
         except PrivateStorageDenied:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         except PrivateStorageFailure:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return Response(
-            content=data, media_type="application/octet-stream",
+            content=data,
+            media_type="application/octet-stream",
             headers={"Content-Disposition": "attachment; filename=caseproof-original"},
         )
 
-    @app.put("/dev/signed/matters/{case_id}/documents/{document_id}/versions/{version_id}/original",
-             status_code=201)
+    @app.put(
+        "/dev/signed/matters/{case_id}/documents/{document_id}/versions/{version_id}/original",
+        status_code=201,
+    )
     async def signed_original_upload(
-        case_id: str, document_id: str, version_id: str, request: Request,
+        case_id: str,
+        document_id: str,
+        version_id: str,
+        request: Request,
         authorization: str | None = Header(default=None),
     ) -> Response:
         if signed_originals is None:
@@ -319,8 +401,11 @@ def create_litigation_development_app(
             raise HTTPException(status_code=422, detail="Empty original")
         try:
             signed_originals.put_once(
-                bearer=bearer, case_id=case_id, document_id=document_id,
-                version_id=version_id, data=b"".join(chunks),
+                bearer=bearer,
+                case_id=case_id,
+                document_id=document_id,
+                version_id=version_id,
+                data=b"".join(chunks),
             )
         except PrivateStorageDenied:
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
@@ -328,5 +413,55 @@ def create_litigation_development_app(
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return Response(status_code=201)
 
-    return app
+    @app.post("/dev/signed/matters/{case_id}/briefs/publish", status_code=201)
+    async def signed_brief_publish(
+        case_id: str,
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ) -> JSONResponse:
+        if signed_brief_publisher is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=422, detail="invalid_request") from None
+        if not isinstance(payload, dict) or set(payload) != {
+            "document_id",
+            "version_id",
+            "brief_id",
+            "brief_version_id",
+            "document_role",
+            "expected_revision",
+        }:
+            raise HTTPException(status_code=422, detail="invalid_request")
+        ids = [payload[k] for k in ("document_id", "version_id", "brief_id", "brief_version_id")]
+        if (
+            any(type(v) is not str or len(v) != 36 for v in ids)
+            or payload["document_role"] not in {"own_draft", "opponent_brief"}
+            or type(payload["expected_revision"]) is not int
+            or payload["expected_revision"] < 0
+        ):
+            raise HTTPException(status_code=422, detail="invalid_request")
+        try:
+            published_revision = signed_brief_publisher.publish(
+                bearer=_token(authorization),
+                case_id=case_id,
+                document_id=payload["document_id"],
+                version_id=payload["version_id"],
+                brief_id=payload["brief_id"],
+                brief_version_id=payload["brief_version_id"],
+                document_role=payload["document_role"],
+                expected_revision=payload["expected_revision"],
+            )
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        except ValueError:
+            raise HTTPException(status_code=409, detail="immutable publication conflict") from None
+        return JSONResponse(
+            {"schema": "caseproof-signed-brief-publish-v1", "published_revision": published_revision},
+            status_code=201,
+        )
 
+    return app
