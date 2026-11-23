@@ -24,6 +24,8 @@ Status mapping onto the shared four-status contract:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import tomllib
 from collections.abc import Mapping, Sequence
@@ -192,6 +194,27 @@ class LegalCorpusConfig:
     chosen_versions: Mapping[str, str]
     failures: tuple[str, ...] = ()
     suitability: Any = None  # SuitabilityConfig (lawyer rules + confirmed facts), optional
+
+    @property
+    def pack_sha256(self) -> str:
+        """Entire chosen pack and selection, including unavailable requested versions.
+
+        This is an integrity identity, not an authenticity or completeness claim.
+        The source bytes are addressed by their checked hashes, never re-fetched.
+        """
+        body = {
+            "schema": "caseproof-corpus-selection-v1",
+            "articles": sorted((
+                {"key": r.key, "source_uri": r.source_uri, "acquired_at": r.acquired_at,
+                 "consolidated": r.consolidated, "original_sha256": r.original_sha256,
+                 "derived_sha256": r.derived_sha256, "source_artifact_kind": r.source_artifact_kind,
+                 "source_notes": r.source_notes}
+                for r in self.records), key=lambda row: str(row["key"])),
+            "act_aliases": dict(self.act_aliases),
+            "chosen_versions": dict(self.chosen_versions), "failures": list(self.failures),
+        }
+        return hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True,
+                                         separators=(",", ":")).encode()).hexdigest()
 
 
 def load_corpus_config(directory: Path) -> LegalCorpusConfig:

@@ -198,6 +198,7 @@ class AuthorizedLitigationChecker:
                 authorized_case_id=scope.case_id,
                 authorized_register_revision=bundle.register.revision,
                 legal_observations=legal, suitability_observations=suitability,
+                corpus_pack_sha256=config.pack_sha256 if config is not None else None,
                 passage_flags=tuple(flags),
             )
             # Prevent accidental use of a revoked/grant-changed or source-stale result.

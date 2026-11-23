@@ -4421,3 +4421,176 @@ def test_offline_requested_historical_version_never_falls_back(language,brief,ar
     assert missing[0].status=="UNDETERMINED"
     assert missing[0].reason=="requested_version_absent_from_chosen_corpus"
     assert missing[0].corpus_version is None and missing[0].corpus_text_sha256 is None
+
+
+@pytest.mark.parametrize('language,citation,text', [
+    ('fr', 'Article 12 du Code civil', 'Texte entièrement synthétique pour le test.'),
+    ('nl', 'Art. 12 BW', 'Volledig synthetische tekst voor deze test.'),
+])
+@pytest.mark.parametrize('scenario', ['correct', 'modified', 'missing-history'])
+def test_offline_legal_pack_cold_replay_pins_exact_corpus(tmp_path, monkeypatch, language, citation, text, scenario):
+    import hashlib
+    import json
+    import socket
+    from dataclasses import replace
+    from zipfile import ZipFile
+
+    from application.litigation.corpus import ArticleRecord, CorpusError
+    from application.litigation.legal_references import LegalCorpusConfig, check_legal_references
+    from application.litigation.offline_legal_pack import build_legal_pack, verify_legal_pack
+    from application.litigation.unified_review import run_unified_check
+    from tests.test_litigation_m2_unified_review import rig
+    quote = text if scenario != 'modified' else 'Invented words absent from the chosen corpus.'
+    brief = citation + ': « ' + quote + ' ».'
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    article = ArticleRecord('synthetic-act', '12', language, 'pack-v1', 'urn:synthetic:corpus',
+                            '2026-11-23', True, sha, text, sha, text.encode(), 'synthetic', 'Test only')
+    versions = {'synthetic-act': 'not-installed-1990' if scenario == 'missing-history' else 'pack-v1'}
+    config = LegalCorpusConfig((article,), {'C.civ.': 'synthetic-act'}, versions)
+    b, register, previews, scope = rig(brief)
+    run = run_unified_check(representation=b, register=register, previews=previews, source_scope=scope,
+                            authorized_case_id='case-1', authorized_register_revision=4,
+                            legal_observations=check_legal_references(brief, config.records, config.act_aliases,
+                                                                     chosen_versions=config.chosen_versions),
+                            corpus_pack_sha256=config.pack_sha256)
+    review = {'snapshot_hash': run.snapshot_hash, 'revision': 0, 'decisions': [], 'release_authorized': False}
+    raw, checkpoint = build_legal_pack(config=config, run=run, brief_text=brief, review=review)
+    path = tmp_path / 'review.zip'; path.write_bytes(raw)
+    # The installed pack can change; the exported old review never consults it.
+    newer = replace(config, chosen_versions={'synthetic-act': 'pack-v2'})
+    assert newer.pack_sha256 != config.pack_sha256
+    monkeypatch.setattr(socket, 'socket', lambda *a, **k: (_ for _ in ()).throw(AssertionError('network forbidden')))
+    reopened = verify_legal_pack(path.read_bytes(), expected_sha256=checkpoint)
+    obs = reopened['references'][0]
+    assert obs['status'] == {'correct': 'PASS', 'modified': 'FAIL', 'missing-history': 'UNDETERMINED'}[scenario]
+    assert reopened['articles'][0]['derived_text'] == text
+    assert reopened['corpus_pack_sha256'] == config.pack_sha256
+    if scenario == 'missing-history':
+        assert obs['corpus_key'] is None and obs['reason'] == 'requested_version_absent_from_chosen_corpus'
+    else:
+        assert obs['corpus_version'] == 'pack-v1'
+    with pytest.raises(CorpusError):
+        verify_legal_pack(raw, expected_sha256='0' * 64)
+    # Altering the inert HTML view is rejected too, even if JSON remains intact.
+    from io import BytesIO
+    output = BytesIO()
+    with ZipFile(BytesIO(raw)) as source, ZipFile(output, 'w') as target:
+        target.writestr('review.json', source.read('review.json'))
+        target.writestr('report.html', b'changed')
+    with pytest.raises(CorpusError):
+        verify_legal_pack(output.getvalue(), expected_sha256=checkpoint)
+    # A newly selected but still absent historical version changes run identity.
+    other = replace(config, chosen_versions={'synthetic-act': 'different-missing-version'})
+    other_run = run_unified_check(representation=b, register=register, previews=previews, source_scope=scope,
+                                  authorized_case_id='case-1', authorized_register_revision=4,
+                                  legal_observations=run.legal_observations, corpus_pack_sha256=other.pack_sha256)
+    assert run.snapshot_hash != other_run.snapshot_hash
+    assert json.loads(json.dumps(reopened))['review']['release_authorized'] is False
+
+
+def test_offline_legal_pack_export_refuses_missing_original_and_drift():
+    from dataclasses import replace
+
+    from application.litigation.corpus import CorpusError
+    from application.litigation.legal_references import LegalCorpusConfig
+    from application.litigation.offline_legal_pack import build_legal_pack
+    from application.litigation.unified_review import run_unified_check
+    from tests.test_litigation_m2_unified_review import rig
+    config = LegalCorpusConfig(tuple(_legal_corpus()), {'C.civ.': 'synthetic-civ'}, {})
+    b, register, previews, scope = rig()
+    run = run_unified_check(representation=b, register=register, previews=previews, source_scope=scope,
+                            authorized_case_id='case-1', authorized_register_revision=4,
+                            corpus_pack_sha256=config.pack_sha256)
+    with pytest.raises(CorpusError):
+        build_legal_pack(config=config, run=run, brief_text=b.text, review={'snapshot_hash': run.snapshot_hash})
+    with pytest.raises(CorpusError):
+        build_legal_pack(config=config, run=replace(run, corpus_pack_sha256='0' * 64), brief_text=b.text,
+                         review={'snapshot_hash': run.snapshot_hash})
+
+
+def test_fresh_offline_word_checks_run_without_network_and_refuse_hidden_content(tmp_path, monkeypatch):
+    import hashlib
+    import json
+    import socket
+
+    from application.litigation.corpus import CORPUS_FORMAT_VERSION, CorpusError
+    from apps.api.offline_docx_check import check_offline_docx
+    from application.litigation.offline_legal_pack import verify_legal_pack
+    from tests.signed_composed_rig import docx_without_custom_xml
+    corpus = tmp_path / 'corpus'; corpus.mkdir()
+    text = 'Article synthétique de contrôle uniquement.'
+    (corpus / 'source.txt').write_text(text)
+    (corpus / 'article.txt').write_text(text)
+    entry = {'act': 'synthetic-civ', 'article': '12', 'language': 'fr', 'version': 'v1',
+             'source_uri': 'urn:synthetic:offline-test', 'acquired_at': '2026-11-23', 'consolidated': True,
+             'original_file': 'source.txt', 'derived_file': 'article.txt',
+             'original_sha256': hashlib.sha256(text.encode()).hexdigest(), 'source_artifact_kind': 'synthetic'}
+    lines = ['format = ' + json.dumps(CORPUS_FORMAT_VERSION), '[[publication]]']
+    lines += [k + ' = ' + (str(v).lower() if isinstance(v, bool) else json.dumps(v)) for k, v in entry.items()]
+    (corpus / 'corpus-manifest.toml').write_text('\n'.join(lines))
+    (corpus / 'act-aliases.toml').write_text('[act_aliases]\n"C.civ." = "synthetic-civ"\n[chosen_versions]\n"synthetic-civ" = "v1"\n')
+    path = tmp_path / 'brief.docx'
+    path.write_bytes(docx_without_custom_xml(['Article 12 du Code civil : « '+text+' ».']))
+    monkeypatch.setattr(socket, 'socket', lambda *a, **k: (_ for _ in ()).throw(AssertionError('network forbidden')))
+    for scenario, versions, expected in [('correct', None, 'PASS'), ('changed', None, 'FAIL'),
+                                          ('history', {'synthetic-civ': 'v0-missing'}, 'UNDETERMINED')]:
+        if scenario == 'changed':
+            path.write_bytes(docx_without_custom_xml(['Article 12 du Code civil : « invented quotation ».']))
+        raw, checkpoint = check_offline_docx(docx=path, corpus=corpus, chosen_versions=versions)
+        body = verify_legal_pack(raw, expected_sha256=checkpoint)
+        assert body['references'][0]['status'] == expected
+        assert body['review']['origin'] == 'local_offline_check_not_authenticated_lawyer_review'
+    path.write_bytes(_docx_with_note_story('<w:p><w:r><w:rPr><w:vanish/></w:rPr><w:t>hidden</w:t></w:r></w:p>'))
+    with pytest.raises(CorpusError):
+        check_offline_docx(docx=path, corpus=corpus)
+
+
+def test_local_offline_legal_browser_requires_local_origin_and_fresh_word(tmp_path):
+    import json
+    import threading
+    import urllib.error
+    import urllib.request
+    from http.server import HTTPServer
+
+    from scripts.serve_offline_legal_workbench import serve
+    from tests.signed_composed_rig import docx_without_custom_xml
+    # Reuse the corpus-manifest helper: synthetic-only local server contract.
+    from tests.test_corpus import _entry, _write_corpus
+    corpus = tmp_path / 'corpus'; corpus.mkdir()
+    _write_corpus(corpus, [_entry(article='12')])
+    (corpus / 'act-aliases.toml').write_text('[act_aliases]\n"C.civ." = "synthetic-act-2026"\n')
+    captured = {}
+    original = HTTPServer.serve_forever
+
+    def bounded_server(server, *args, **kwargs):
+        captured['server'] = server
+        captured['ready'].set()
+        return original(server, *args, **kwargs)
+
+    from unittest.mock import patch
+    ready = threading.Event(); captured['ready'] = ready
+    with patch.object(HTTPServer, 'serve_forever', bounded_server):
+        thread = threading.Thread(target=serve, args=(corpus, 0), kwargs={'open_browser': False}, daemon=True)
+        thread.start(); assert ready.wait(3)
+        server = captured['server']; port = server.server_port
+        base = f'http://127.0.0.1:{port}'
+        try:
+            with urllib.request.urlopen(base) as response:
+                page = response.read().decode()
+            import re
+            token = re.search("const token='([0-9a-f]+)'", page).group(1)
+            raw = docx_without_custom_xml(['Article 12 du Code civil : « texte derive synthetique 12 ».'])
+            for headers in ({}, {'X-CaseProof-Local': token, 'Origin': 'https://untrusted.invalid'}):
+                with pytest.raises(urllib.error.HTTPError) as exc:
+                    urllib.request.urlopen(urllib.request.Request(base+'/check?version=installed', data=raw, headers=headers))
+                assert exc.value.code == 403
+            request = urllib.request.Request(base+'/check?version=installed', data=raw,
+                                             headers={'X-CaseProof-Local': token, 'Origin': base})
+            with urllib.request.urlopen(request) as response:
+                from application.litigation.offline_legal_pack import verify_legal_pack
+                body = verify_legal_pack(response.read(), expected_sha256=response.headers['X-CaseProof-Legal-Review-SHA256'])
+                assert body['references'][0]['status'] == 'PASS'
+                assert response.headers['X-CaseProof-Legal-Summary'] == 'PASS: 1'
+                assert json.dumps(body['review']['decisions']) == '[]'
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=3)

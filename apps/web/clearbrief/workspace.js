@@ -158,7 +158,7 @@
     state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null; state.showAll=false;
     state.previewSeq+=1;state.loading=false;
     $("check-scope").textContent="Check source scope not assessed.";
-    $("workspace").hidden=true; $("connection").hidden=false; $("record").disabled=true;
+    $("workspace").hidden=true; $("connection").hidden=false; $("record").disabled=true;$("offline-legal-pack").disabled=true;
     $("record-status").textContent="";
     $("sources").replaceChildren(); $("observations").replaceChildren();
     $("search-results").replaceChildren(); $("source-preview").textContent="";
@@ -694,7 +694,7 @@
     $("check-scope").textContent="Checking current source denominator…";
     $("connection").hidden=true;
     $("workspace").hidden=false;
-    $("record").disabled=false;
+    $("record").disabled=false;$("offline-legal-pack").disabled=!state.briefId;
     $("matter-meta").textContent="Matter "+state.caseId+" · brief "+state.briefId;
     notice("Checking private access and current evidence scope…");
     try{
@@ -1291,9 +1291,27 @@
     const fidelity=$("fidelity-panel");
     if(fidelity)fidelity.hidden=true;
   }
+  async function downloadOfflineLegalPack(){
+    if(!state.session||!state.briefId)return;
+    const button=$("offline-legal-pack");button.disabled=true;
+    try{
+      const token=await bearer();
+      const response=await fetch(reviewPath()+"/offline-legal-pack",{
+        headers:{Authorization:"Bearer "+token},credentials:"omit",redirect:"error",cache:"no-store"});
+      if(!response.ok)throw Error("Offline export unavailable. The chosen corpus must retain verified original bytes.");
+      const checkpoint=response.headers.get("X-CaseProof-Legal-Review-SHA256");
+      if(!sha.test(checkpoint||""))throw Error("Missing integrity checkpoint");
+      const link=document.createElement("a"),blob=await response.blob();
+      link.href=URL.createObjectURL(blob);link.download="caseproof-offline-legal-review.zip";link.click();
+      setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+      $("offline-pack-status").textContent="Legal-reference slice exported, not the full dossier. Keep this checkpoint separately: "+checkpoint+
+        ". Extract and open report.html offline. The old pack is frozen; applicability stays with the lawyer.";
+    }catch(error){$("offline-pack-status").textContent=error.message;}
+    finally{button.disabled=!state.session||!state.briefId;}
+  }
   async function downloadRecord(){
     if(!state.session)return;
-    $("record").disabled=true;
+    $("record").disabled=true;$("offline-legal-pack").disabled=true;
     try{
       const data=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/review-record");
       if(data.schema!=="caseproof-review-record-v1"||!sha.test(data.record_sha256)||
@@ -1324,9 +1342,10 @@
         }
       }catch{wrap.hidden=true;}
     }catch(error){if(error?.message!=="no_session")notice(statusFor(error),"danger");}
-    finally{$("record").disabled=!state.session;}
+    finally{$("record").disabled=!state.session;$("offline-legal-pack").disabled=!state.session||!state.briefId;}
   }
   async function init(){
+    $("offline-legal-pack").addEventListener("click",downloadOfflineLegalPack);
     $("connection-form").addEventListener("submit",startSession);
     $("journey-find-orgs").addEventListener("click",journeyOrganizations);
     $("journey-create-form").addEventListener("submit",journeyCreate);

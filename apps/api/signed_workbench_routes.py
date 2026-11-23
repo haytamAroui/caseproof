@@ -171,6 +171,39 @@ def create_signed_workbench_router(
         run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
         return {"schema": "caseproof-signed-check-v1", "note": _NOTE, **asdict(run)}
 
+    @router.get(base + "/offline-legal-pack")
+    def signed_offline_legal_pack(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Authorized legal slice with locally preserved corpus, no online fallback."""
+        from application.litigation.corpus import CorpusError
+        from application.litigation.offline_legal_pack import build_legal_pack
+        bearer, wb = bench(authorization)
+        run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        config = _corpus_for(wb, case_id)
+        if config is None:
+            raise HTTPException(status_code=409, detail="chosen_corpus_unavailable")
+        subject = wb.checker._verified(bearer)
+        access = wb.checker._scope(subject, case_id)
+        from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
+        AuthorizedEvidenceSearch._require_evidence(access)
+        bundle = wb.store.load_bundle(case_id=case_id, brief_version_id=brief_version_id, access=access)
+        review = wb.workspace.state(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        try:
+            data, checkpoint = build_legal_pack(config=config, run=run,
+                                                brief_text=bundle.representation.text, review=review)
+        except CorpusError:
+            raise HTTPException(status_code=409, detail="offline_corpus_bytes_unavailable_or_changed") from None
+        if (wb.checker._scope(wb.checker._verified(bearer), case_id) != access
+                or not wb.store.still_current(access=access, bundle=bundle)):
+            raise AccessRejected(AccessFailure.STALE_SNAPSHOT)
+        return Response(data, media_type="application/zip", headers={
+            "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": 'attachment; filename="caseproof-offline-legal-review.zip"',
+            "X-CaseProof-Legal-Review-SHA256": checkpoint,
+        })
+
     @router.get(base + "/legal-references")
     def signed_legal_references(
         case_id: str, brief_version_id: str,
@@ -192,6 +225,7 @@ def create_signed_workbench_router(
             "snapshot_hash": run.snapshot_hash,
             "note": _LEGAL_NOTE,
             "corpus": "configured" if config is not None else "not_configured",
+            "corpus_pack_sha256": run.corpus_pack_sha256,
             "corpus_articles": len(config.records) if config is not None else 0,
             "corpus_failures": list(config.failures) if config is not None else [],
             "references": [

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any
@@ -167,14 +168,17 @@ class VerificationRun:
     suitability_observations: tuple[SuitabilityObservation, ...] = ()
     event_observations: tuple[EventObservation, ...] = ()
     passage_flags: tuple[dict[str, Any], ...] = ()
+    corpus_pack_sha256: str | None = None
     # Separate kinds: a literal/value mismatch is not a legal conclusion.
 
 
 def _payload(run: VerificationRun, reviews: tuple[ObservationReview, ...] = ()) -> dict[str, Any]:
-    legal = (
+    legal: dict[str, Any] = (
         {"legal_references": [asdict(x) for x in run.legal_observations]}
         if run.legal_observations else {}
     )
+    if run.corpus_pack_sha256 is not None:
+        legal["corpus_pack_sha256"] = run.corpus_pack_sha256
     if run.suitability_observations:
         legal = {**legal, "suitability": [asdict(x) for x in run.suitability_observations]}
     if run.event_observations:
@@ -222,6 +226,7 @@ def run_unified_check(
     legal_observations: tuple[LegalObservation, ...] = (),
     suitability_observations: tuple[SuitabilityObservation, ...] = (),
     passage_flags: tuple[dict[str, Any], ...] = (),
+    corpus_pack_sha256: str | None = None,
 ) -> VerificationRun:
     """No implicit trust from request parameters; authorized_* are server-owned."""
     if not isinstance(representation, BriefRepresentation) or not isinstance(source_scope, SourceScope):
@@ -302,6 +307,10 @@ def run_unified_check(
         "factual": [asdict(x) for x in facts],
         "rule_version": ENGINE,
     }
+    if corpus_pack_sha256 is not None:
+        if re.fullmatch(r"[0-9a-f]{64}", corpus_pack_sha256) is None:
+            raise VerificationError("invalid corpus pack identity")
+        identity["corpus_pack_sha256"] = corpus_pack_sha256
     if passage_flags:
         if len(passage_flags) > 512:
             raise VerificationError("too many human passage flags")
@@ -321,6 +330,7 @@ def run_unified_check(
         source_scope.excluded_source_versions, processed, incomplete,
         citations.observations, tuple(facts), _hash(identity),
         tuple(legal_observations), tuple(suitability_observations), event_rows, passage_flags,
+        corpus_pack_sha256,
     )
 
 

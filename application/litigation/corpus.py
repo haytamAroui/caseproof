@@ -52,6 +52,9 @@ class ArticleRecord:
     original_sha256: str
     derived_text: str
     derived_sha256: str
+    original_bytes: bytes | None = field(default=None, repr=False)
+    source_artifact_kind: str = "publisher_file"
+    source_notes: str = ""
 
     @property
     def key(self) -> str:
@@ -91,7 +94,8 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
     if not isinstance(entry, dict):
         raise CorpusError(f"manifest entry {index} is not a table")
     allowed = {"act", "article", "language", "version", "source_uri", "acquired_at",
-               "consolidated", "original_file", "original_sha256", "derived_file"}
+               "consolidated", "original_file", "original_sha256", "derived_file",
+               "source_artifact_kind", "source_notes"}
     if not set(entry) <= allowed:
         raise CorpusError(f"manifest entry {index} holds unknown keys: {sorted(set(entry) - allowed)}")
     act = _require_str(entry.get("act"), "act", 256)
@@ -116,6 +120,9 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
             raise CorpusError(f"unsafe corpus path: {name!r}")
     original_path = directory / original_file
     derived_path = directory / derived_file
+    for path in (original_path, derived_path):
+        if not path.resolve().is_relative_to(directory.resolve()) or path.is_symlink():
+            raise CorpusError("corpus path escapes its pack")
     if not original_path.is_file():
         raise CorpusError(f"missing original publication file: {original_file}")
     if not derived_path.is_file():
@@ -133,6 +140,12 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
     except UnicodeDecodeError as exc:
         raise CorpusError(f"derived text is not valid UTF-8: {derived_file}") from exc
 
+    artifact_kind = entry.get("source_artifact_kind", "publisher_file")
+    notes = entry.get("source_notes", "")
+    if artifact_kind not in ("publisher_file", "official_text_capture", "synthetic"):
+        raise CorpusError("unknown source artifact kind")
+    if not isinstance(notes, str) or len(notes) > 4000:
+        raise CorpusError("bounded source provenance required")
     return ArticleRecord(
         act=act,
         article=article,
@@ -144,6 +157,8 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
         original_sha256=original_sha,
         derived_text=derived_text,
         derived_sha256=hashlib.sha256(derived_bytes).hexdigest(),
+        original_bytes=original_bytes,
+        source_artifact_kind=artifact_kind, source_notes=notes,
     )
 
 
