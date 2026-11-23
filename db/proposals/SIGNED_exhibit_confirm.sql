@@ -17,17 +17,16 @@
 -- invented source, shrink or reorder the physical inventory, or smuggle a
 -- page outside the verified manifest.
 --
--- The stored payload digest p_sha is asserted by the caller and CANNOT be
--- recomputed here: sha256 needs pgcrypto, absent from the disposable test
--- environments, and jsonb::text does not reproduce the Python canonical
--- bytes. Availability poisoning is eliminated READ-SIDE: readers derive the
--- digest from the content and never gate on this column, so a well-formed
--- false digest cannot block the other authorized users of the matter.
--- RESIDUAL OPEN GAP: the stored digest is an unverified actor claim at
--- write time. Content injection remains impossible (everything above is
--- validated against authorized state). Full fix on live (pgcrypto
--- available): recompute digest(p_payload_canonical) here and reject any
--- mismatch; the disposable harness then needs a pgcrypto-capable cluster.
+-- The digest is VERIFIED at write time with the core sha256(bytea)
+-- primitive (PostgreSQL >= 14, no pgcrypto needed): the service passes the
+-- canonical payload as TEXT (exact bytes it serialized) and the RPC rejects
+-- any p_sha that is not encode(sha256(convert_to(p_payload,'UTF8')),'hex').
+-- A forged or mismatched digest is therefore refused at write, and a
+-- well-formed false digest cannot be persisted at all. Readers still derive
+-- the digest from the stored content and never gate on the column (the
+-- stored jsonb may differ from the submitted bytes by jsonb normalization;
+-- the validated contract admits only strings, integers, booleans and nulls,
+-- which jsonb round-trips exactly).
 --
 -- security definer, search_path=''. Denials raise 42501 so PostgREST masks
 -- the matter. Contract errors return {ok:false,error:...} without writing:
@@ -52,7 +51,7 @@ end $check$;
 
 create or replace function public.caseproof_signed_confirm_exhibit(
   p_case uuid, p_document uuid, p_version uuid, p_request uuid,
-  p_expected bigint, p_payload jsonb, p_sha text
+  p_expected bigint, p_payload text, p_sha text
 ) returns jsonb language plpgsql security definer set search_path=''
 as $body$
 declare
@@ -64,6 +63,7 @@ declare
   v_head_entries jsonb;
   v_previous caseproof._m1_exhibit_events%rowtype;
   v_audit uuid;
+  v_payload jsonb;
   v_entries jsonb;
   v_old_count int;
   v_new jsonb;
@@ -99,15 +99,23 @@ begin
     raise exception 'matter unavailable' using errcode='42501';
   end if;
 
+  -- Digest verified against the exact submitted bytes before anything else.
   if p_request is null or p_expected is null or p_expected < 0
-    or p_payload is null or jsonb_typeof(p_payload) != 'object'
-    or p_payload->>'schema' != 'caseproof-exhibit-register-v1'
-    or jsonb_typeof(p_payload->'entries') != 'array'
-    or jsonb_array_length(p_payload->'entries') > 512
-    or octet_length(p_payload::text) > 300000
+    or p_payload is null or octet_length(p_payload) > 300000
     or p_sha is null or p_sha !~ '^[0-9a-f]{64}$'
+    or p_sha != encode(sha256(convert_to(p_payload, 'UTF8')), 'hex')
   then return jsonb_build_object('ok', false, 'error', 'invalid'); end if;
-  v_entries := p_payload->'entries';
+  begin
+    v_payload := p_payload::jsonb;
+  exception when others then
+    return jsonb_build_object('ok', false, 'error', 'invalid');
+  end;
+  if jsonb_typeof(v_payload) != 'object'
+    or v_payload->>'schema' != 'caseproof-exhibit-register-v1'
+    or jsonb_typeof(v_payload->'entries') != 'array'
+    or jsonb_array_length(v_payload->'entries') > 512
+  then return jsonb_build_object('ok', false, 'error', 'invalid'); end if;
+  v_entries := v_payload->'entries';
 
   insert into caseproof._m1_exhibit_heads(org_id, case_id) values (v_org, p_case)
     on conflict do nothing;
@@ -118,8 +126,10 @@ begin
   select * into v_previous from caseproof._m1_exhibit_events e
   where e.org_id=v_org and e.case_id=p_case and e.request_id=p_request;
   if found then
-    if v_previous.payload_sha256 != p_sha
-      or v_previous.payload != p_payload
+    -- Replay identity is the CONTENT (jsonb equality, insensitive to the
+    -- submitted serialization), actor and expected revision; each verified
+    -- digest binds its own submitted bytes.
+    if v_previous.payload != v_payload
       or v_previous.actor_user_id != v_actor
       or v_previous.expected_revision != p_expected
     then return jsonb_build_object('ok', false, 'error', 'conflict'); end if;
@@ -239,16 +249,16 @@ begin
     'm1-v1', p_request, p_sha
   );
   update caseproof._m1_exhibit_heads h
-    set revision=p_expected+1, payload=p_payload, payload_sha256=p_sha, updated_at=now()
+    set revision=p_expected+1, payload=v_payload, payload_sha256=p_sha, updated_at=now()
     where h.org_id=v_org and h.case_id=p_case and h.revision=p_expected;
   if not found then
     return jsonb_build_object('ok', false, 'error', 'stale_revision'); end if;
   insert into caseproof._m1_exhibit_events (
     org_id, case_id, revision, request_id, actor_user_id,
     expected_revision, payload_sha256, payload, audit_id
-  ) values (v_org, p_case, p_expected+1, p_request, v_actor, p_expected, p_sha, p_payload, v_audit);
+  ) values (v_org, p_case, p_expected+1, p_request, v_actor, p_expected, p_sha, v_payload, v_audit);
   return jsonb_build_object('ok', true, 'exhibit_revision', p_expected+1, 'replay', false);
 end $body$;
 
-revoke all on function public.caseproof_signed_confirm_exhibit(uuid,uuid,uuid,uuid,bigint,jsonb,text) from public, anon;
-grant execute on function public.caseproof_signed_confirm_exhibit(uuid,uuid,uuid,uuid,bigint,jsonb,text) to authenticated;
+revoke all on function public.caseproof_signed_confirm_exhibit(uuid,uuid,uuid,uuid,bigint,text,text) from public, anon;
+grant execute on function public.caseproof_signed_confirm_exhibit(uuid,uuid,uuid,uuid,bigint,text,text) to authenticated;

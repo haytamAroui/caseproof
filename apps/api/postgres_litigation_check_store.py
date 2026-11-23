@@ -10,7 +10,6 @@ or proof of complete OCR, page fidelity, or confidential-data readiness.
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -132,19 +131,21 @@ class PostgresPrivateMatterCheckStore:
             ).fetchall()
         if len(rows) != 1:
             raise PrivateCheckStoreError("confirmed exhibit head required")
-        revision, document, expected_sha = rows[0]
+        revision, document, stored_sha = rows[0]
         if (type(revision) is not int or revision < 1
                 or not isinstance(document, dict)
                 or document.get("schema") != "caseproof-exhibit-register-v1"
                 or type(document.get("entries")) is not list
                 or len(document["entries"]) > 512):
             raise PrivateCheckStoreError("malformed confirmed exhibit head")
-        digest = hashlib.sha256(json.dumps(
-            document, sort_keys=True, ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode()).hexdigest()
-        if digest != expected_sha:
-            raise PrivateCheckStoreError("exhibit snapshot hash mismatch")
+        # The register digest is DERIVED from the content, never gated on
+        # the stored column: the signed write RPC cannot recompute sha256
+        # without pgcrypto, so a well-formed false stored digest must not
+        # block every authorized check run of the matter. Content is fully
+        # validated below and at write time; the stored column stays as
+        # audit correlation of the writer's claim.
+        if stored_sha is not None and type(stored_sha) is not str:
+            raise PrivateCheckStoreError("malformed confirmed exhibit head")
         try:
             entries = tuple(
                 ExhibitEntry(

@@ -1261,7 +1261,7 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
         Path(__file__).resolve().parents[1] / "db" / "proposals" / "SIGNED_exhibit_confirm.sql"
     ).read_text(encoding="utf-8")
     org, case = uuid4(), uuid4()
-    user_a, user_b, user_c, user_d = uuid4(), uuid4(), uuid4(), uuid4()
+    user_a, user_b, user_c, user_d, user_e = uuid4(), uuid4(), uuid4(), uuid4(), uuid4()
     doc_pdf, ver_pdf = uuid4(), uuid4()
     doc_txt, ver_txt = uuid4(), uuid4()
 
@@ -1292,14 +1292,15 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
         conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
                      (org, "synthétique"))
         conn.execute("insert into auth.users(id, instance_id) values(%s, %s),(%s, %s),(%s, %s),"
-                     "(%s, %s) on conflict (id) do nothing",
-                     (user_a, org, user_b, org, user_c, org, user_d, org))
+                     "(%s, %s),(%s, %s) on conflict (id) do nothing",
+                     (user_a, org, user_b, org, user_c, org, user_d, org, user_e, org))
         conn.execute(
             "insert into caseproof.organization_members(org_id, user_id, actions)"
             " values(%s, %s, array['case:read','evidence:read','review:request']::text[]),"
             " (%s, %s, array['case:read','review:request']::text[]),"
-            " (%s, %s, array['case:read','review:request']::text[])",
-            (org, user_a, org, user_b, org, user_d))
+            " (%s, %s, array['case:read','review:request']::text[]),"
+            " (%s, %s, array['case:read','evidence:read','review:request']::text[])",
+            (org, user_a, org, user_b, org, user_d, org, user_e))
         conn.execute(
             "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
             " values(%s, %s, %s, 'v1')", (case, org, user_a))
@@ -1307,8 +1308,9 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
             "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
             " values(%s, %s, %s, 'reviewer',"
             " array['case:read','evidence:read','exhibit:confirm']::text[]),"
-            " (%s, %s, %s, 'viewer', array['case:read','exhibit:confirm']::text[])",
-            (org, case, user_a, org, case, user_d))
+            " (%s, %s, %s, 'viewer', array['case:read','exhibit:confirm']::text[]),"
+            " (%s, %s, %s, 'reviewer', array['case:read','evidence:read']::text[])",
+            (org, case, user_a, org, case, user_d, org, case, user_e))
         conn.execute(
             "insert into caseproof.documents(id, org_id, case_id, source_label)"
             " values(%s, %s, %s, 'pdf synthétique'),(%s, %s, %s, 'txt synthétique')",
@@ -1343,19 +1345,33 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
             conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
             conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
 
-        def confirm(sub, *, request=None, expected=0, payload=register, sha=register_sha,
-                    document=doc_pdf, version=ver_pdf, role="authenticated"):
+        def canonical(payload, **dump_kwargs):
+            return json.dumps(payload, ensure_ascii=False, sort_keys=True,
+                              separators=(",", ":"), **dump_kwargs)
+
+        def digest_of(text_payload):
+            import hashlib
+            return hashlib.sha256(text_payload.encode("utf-8")).hexdigest()
+
+        def confirm(sub, *, request=None, expected=0, payload=register, sha=None,
+                    document=doc_pdf, version=ver_pdf, role="authenticated",
+                    text_payload=None):
             as_user(sub, role)
+            body = text_payload if text_payload is not None else canonical(payload)
             return conn.execute(
                 "select public.caseproof_signed_confirm_exhibit"
-                "(%s, %s, %s, %s, %s, %s::jsonb, %s)",
+                "(%s, %s, %s, %s, %s, %s, %s)",
                 (str(case), str(document), str(version), str(request or uuid4()),
-                 expected, json.dumps(payload, ensure_ascii=False), sha)).fetchone()[0]
+                 expected, body, sha if sha is not None else digest_of(body))).fetchone()[0]
 
+        appended_preview = {"schema": "caseproof-exhibit-register-v1",
+                            "entries": [first, entry("piece-zzz999yyy888",
+                                        "Autre", pdf_pages())]}
         # Happy path: compare-and-swap commits revision 1 with audit and event.
         request = uuid4()
         outcome = confirm(user_a, request=request)
         assert outcome == {"ok": True, "exhibit_revision": 1, "replay": False}
+        register_sha = digest_of(canonical(register))
         head = conn.execute(
             "select revision, payload_sha256 from caseproof._m1_exhibit_heads"
             " where case_id=%s", (str(case),)).fetchone()
@@ -1368,7 +1384,7 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
         # the same request with any different command is a conflict.
         assert confirm(user_a, request=request) == {
             "ok": True, "exhibit_revision": 1, "replay": True}
-        assert confirm(user_a, request=request, sha="0" * 64) == {
+        assert confirm(user_a, request=request, payload=appended_preview) == {
             "ok": False, "error": "conflict"}
         assert conn.execute(
             "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
@@ -1382,7 +1398,7 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
                        pdf_pages(printed={1: 12, 2: 13, 3: 14}))
         appended = {"schema": "caseproof-exhibit-register-v1",
                     "entries": [first, second]}
-        outcome = confirm(user_a, expected=1, payload=appended, sha="d" * 64)
+        outcome = confirm(user_a, expected=1, payload=appended)
         assert outcome == {"ok": True, "exhibit_revision": 2, "replay": False}
 
         # Adversarial direct calls, all refused without writing: a caller
@@ -1392,54 +1408,43 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
             # rewriting history: prefix entries altered
             {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
              "entries": [entry("piece-aaa111bbb222", "Falsifié", pdf_pages()), second,
-                         entry("piece-eee555fff666", "Troisième", pdf_pages())]},
-             "sha": "e" * 64},
+                         entry("piece-eee555fff666", "Troisième", pdf_pages())]}},
             # dropping a confirmed entry
-            {"expected": 2, "payload": register, "sha": "e" * 64},
+            {"expected": 2, "payload": register},
             # confirming a foreign document as pages source
             {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
              "entries": [first, second, entry("piece-eee555fff666", "Troisième",
-                         pdf_pages(source=doc_txt, version=ver_txt))]},
-             "sha": "e" * 64},
+                         pdf_pages(source=doc_txt, version=ver_txt))]}},
             # shrinking the physical inventory (page 2 missing)
             {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
              "entries": [first, second, entry("piece-eee555fff666", "Troisième",
-                         pdf_pages(count=3)[:1] + pdf_pages(count=3)[2:])]},
-             "sha": "e" * 64},
+                         pdf_pages(count=3)[:1] + pdf_pages(count=3)[2:])]}},
             # page beyond the manifest inventory
             {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
              "entries": [first, second, entry("piece-eee555fff666", "Troisième",
-                         pdf_pages(count=4))]},
-             "sha": "e" * 64},
+                         pdf_pages(count=4))]}},
             # duplicate exhibit identity
             {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
-             "entries": [first, second, entry("piece-aaa111bbb222", "Doublon", pdf_pages())]},
-             "sha": "e" * 64},
+             "entries": [first, second, entry("piece-aaa111bbb222", "Doublon", pdf_pages())]}},
             # unconfirmed or manually included new entry
             {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
              "entries": [first, second, entry("piece-eee555fff666", "Troisième",
-                         pdf_pages(), confirmed=False)]},
-             "sha": "e" * 64},
+                         pdf_pages(), confirmed=False)]}},
             {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
              "entries": [first, second, entry("piece-eee555fff666", "Troisième",
-                         pdf_pages(), manual_inclusion=True)]},
-             "sha": "e" * 64},
+                         pdf_pages(), manual_inclusion=True)]}},
             # case-insensitive alias colliding with the label
             {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
              "entries": [first, second, entry("piece-eee555fff666", "Troisième",
-                         pdf_pages(), aliases=["TROISIÈME"])]},
-             "sha": "e" * 64},
+                         pdf_pages(), aliases=["TROISIÈME"])]}},
             # mapping on an unpaginated source
             {"expected": 2, "document": doc_txt, "version": ver_txt,
              "payload": {"schema": "caseproof-exhibit-register-v1",
              "entries": [first, second, entry("piece-eee555fff666", "Troisième",
                          [{"source_id": str(doc_txt), "version_id": str(ver_txt),
-                           "pdf_page": 1, "printed_page": None, "bundle_page": None}])]},
-             "sha": "e" * 64},
-            # forged digest shape
-            {"expected": 2, "payload": appended, "sha": "E" * 64},
+                           "pdf_page": 1, "printed_page": None, "bundle_page": None}])]}},
             # wrong payload schema
-            {"expected": 2, "payload": {"schema": "autre", "entries": []}, "sha": "e" * 64},
+            {"expected": 2, "payload": {"schema": "autre", "entries": []}},
         ]
         for kwargs in adversarial:
             assert confirm(user_a, **kwargs) == {"ok": False, "error": "invalid"}, kwargs
@@ -1448,8 +1453,23 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
         assert confirm(user_a, expected=2, payload={
             "schema": "caseproof-exhibit-register-v1",
             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
-                        pdf_pages(), confirmed="oui")]}, sha="e" * 64) == {
+                        pdf_pages(), confirmed="oui")]}) == {
             "ok": False, "error": "invalid"}
+        # Digest gate: a syntactically valid but FALSE digest (64 hex) is
+        # refused at write, as is a malformed one — no poisoning is possible.
+        assert confirm(user_a, expected=2, payload=appended, sha="9" * 64) == {
+            "ok": False, "error": "invalid"}
+        assert confirm(user_a, expected=2, payload=appended, sha="E" * 64) == {
+            "ok": False, "error": "invalid"}
+        # A digest verified for the exact submitted bytes, however
+        # serialized, commits: the digest binds bytes, jsonb binds content.
+        third = {"schema": "caseproof-exhibit-register-v1",
+                 "entries": [first, second, entry("piece-eee555fff666",
+                             "Troisième", pdf_pages())]}
+        with conn.transaction(force_rollback=True):
+            outcome = confirm(user_a, expected=2, payload=third,
+                              text_payload=canonical(third) + " ")
+            assert outcome == {"ok": True, "exhibit_revision": 3, "replay": False}
         assert conn.execute(
             "select revision from caseproof._m1_exhibit_heads where case_id=%s",
             (str(case),)).fetchone()[0] == 2
@@ -1466,45 +1486,44 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
                 with pytest.raises(errors.InsufficientPrivilege):
                     confirm(sub, expected=2, payload=appended, sha="d" * 64, role=role)
 
-        # Same JSON content reserialized differently (key order, whitespace):
-        # jsonb comparison treats it as the identical command, so it replays
-        # without a new write and without a false conflict.
+        # Same JSON content reserialized differently (key order, whitespace),
+        # with the verified digest of THOSE bytes: content equality makes it
+        # an exact replay, neither a new write nor a false conflict.
         reorder = json.dumps({"entries": [first],
                               "schema": "caseproof-exhibit-register-v1"},
                              ensure_ascii=False, indent=2)
-        as_user(user_a)
-        replayed = conn.execute(
-            "select public.caseproof_signed_confirm_exhibit(%s, %s, %s, %s, 0, %s::jsonb, %s)",
-            (str(case), str(doc_pdf), str(ver_pdf), str(request),
-             reorder, register_sha)).fetchone()[0]
-        assert replayed == {"ok": True, "exhibit_revision": 1, "replay": True}
+        assert confirm(user_a, request=request, expected=0,
+                       text_payload=reorder) == {
+            "ok": True, "exhibit_revision": 1, "replay": True}
         assert conn.execute(
             "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
             (str(case),)).fetchone()[0] == 2
-                # A well-formed but FALSE digest (64 hex) is accepted: the write RPC
-        # cannot recompute sha256 without pgcrypto. This cannot poison
-        # availability, because readers derive the digest from the content
-        # and never gate on the stored column (proven in the disposable
-        # publisher suite: false stored digest, reads continue). RESIDUAL
-        # OPEN GAP: the stored digest is an unverified actor claim until the
-        # live migration adds SQL-side recomputation (pgcrypto on live).
+        # The demanded real path: a hostile authorized caller tries to
+        # poison the SHARED register with a well-formed but FALSE digest
+        # (64 hex). The write is refused at the digest gate, the register
+        # stays at revision 2, and ANOTHER authorized user then reads it
+        # normally. No poisoning is possible at write; readers additionally
+        # derive the digest from content and never gate on the stored
+        # column (proven in the disposable publisher suite).
         poison = uuid4()
-        outcome = confirm(user_a, request=poison, expected=2, payload={
-            "schema": "caseproof-exhibit-register-v1",
-            "entries": [first, second, entry("piece-eee555fff666", "Troisième",
-                        pdf_pages())]}, sha="9" * 64)
-        assert outcome == {"ok": True, "exhibit_revision": 3, "replay": False}
-        stored = conn.execute(
-            "select payload_sha256 from caseproof._m1_exhibit_heads where case_id=%s",
-            (str(case),)).fetchone()[0]
-        assert stored == "9" * 64  # false digest persists as an actor claim
-        # ...while content validation still rejects an invalid payload even
-        # with a "truthful-looking" digest:
-        assert confirm(user_a, expected=3, payload={
+        assert confirm(user_a, request=poison, expected=2, payload=third,
+                       sha="9" * 64) == {"ok": False, "error": "invalid"}
+        assert conn.execute(
+            "select revision from caseproof._m1_exhibit_heads where case_id=%s",
+            (str(case),)).fetchone()[0] == 2
+        as_user(user_e)
+        clean_read = conn.execute(
+            "select public.caseproof_signed_exhibit_register(%s, %s)",
+            (str(case), str(ver_pdf))).fetchone()[0]
+        assert clean_read["ok"] is True
+        assert clean_read["register_revision"] == 2
+        assert len(clean_read["payload"]["entries"]) == 2
+        # Content validation still rejects an invalid payload even with a
+        # digest correctly computed over the invalid content:
+        assert confirm(user_a, expected=2, payload={
             "schema": "caseproof-exhibit-register-v1",
             "entries": [first, second, entry("piece-eee555fff666", "Falsifié",
-                        pdf_pages(count=4))]}, sha="8" * 64) == {
-            "ok": False, "error": "invalid"}
+                        pdf_pages(count=4))]}) == {"ok": False, "error": "invalid"}
         with conn.transaction(force_rollback=True):
             as_user(user_a)
             with pytest.raises(errors.InsufficientPrivilege):
@@ -1530,11 +1549,11 @@ def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
 
         state = read_register(user_a)
         assert state["ok"] is True
-        assert state["register_revision"] == 3
+        assert state["register_revision"] == 2
         assert state["media_type"] == "application/pdf"
         assert state["page_count"] == 3
         assert state["payload"]["schema"] == "caseproof-exhibit-register-v1"
-        assert len(state["payload"]["entries"]) == 3
+        assert len(state["payload"]["entries"]) == 2
         txt_state = read_register(user_a, version=ver_txt)
         assert txt_state["media_type"] == "text/plain"
         assert txt_state["page_count"] is None
