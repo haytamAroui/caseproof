@@ -3832,3 +3832,34 @@ def test_configured_dev_entry_installs_the_signed_workbench(monkeypatch):
     monkeypatch.delenv("CASEPROOF_SIGNED_WORKBENCH_DEV")
     monkeypatch.delenv("CASEPROOF_DEV_PUBLISHABLE_KEY")
     importlib.reload(entry)
+
+
+def test_signed_upload_runs_server_side_ingest_on_verified_readback():
+    # Fake library and fake ingest port: this proves route wiring only, not RPC behaviour.
+    from types import SimpleNamespace
+
+    from fastapi.testclient import TestClient
+
+    from apps.api.litigation_development_app import create_litigation_development_app
+    stored, ingested = {}, []
+
+    class _Lib:
+        def put_once(self, *, bearer, case_id, document_id, version_id, data):
+            stored["bytes"] = data
+
+        def read(self, *, bearer, case_id, document_id, version_id):
+            return b"READBACK:" + stored["bytes"]
+
+        def source(self, *, bearer, case_id, document_id, version_id):
+            return SimpleNamespace(content_type="application/pdf"), 1
+
+    app = create_litigation_development_app(
+        signed_originals=_Lib(), signed_source_ingest=lambda **k: ingested.append(k))
+    url = f"/dev/signed/matters/{_UUID_C}/documents/{_UUID_D}/versions/{_UUID_E}/original"
+    r = TestClient(app, client=("127.0.0.1", 50000)).put(url, content=b"abc", headers={"Authorization": "Bearer t"})
+    assert r.status_code == 201
+    assert ingested[0]["data"] == b"READBACK:abc" and ingested[0]["media_type"] == "application/pdf"
+    # An ingest failure is never reported as a successful upload.
+    app2 = create_litigation_development_app(
+        signed_originals=_Lib(), signed_source_ingest=lambda **k: (_ for _ in ()).throw(ValueError("x")))
+    assert TestClient(app2, client=("127.0.0.1", 50000)).put(url, content=b"abc", headers={"Authorization": "Bearer t"}).status_code == 503

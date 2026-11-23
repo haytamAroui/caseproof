@@ -625,6 +625,7 @@
       if(state.catalog.some(doc=>doc.document_id===d.document_id)){
         $("upload-document").value=d.document_id;
         populateVersions(d.version_id);
+        $("publish").disabled=false;$("publish-status").textContent="";
       }
     }catch(error){if(state.session===session&&state.caseId===caseId)
       notice("Source declaration failed: "+(error&&error.message?error.message:"unavailable"),"danger");}
@@ -717,6 +718,7 @@
       const data=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/documents");
       if(generation!==state.generation||!state.session)return;
       state.catalog=(data.schema==="caseproof-signed-documents-v1"&&Array.isArray(data.documents))?data.documents:[];
+      if(Number.isInteger(data.own_draft_revision)&&data.own_draft_revision>=0)state.publishRevision=data.own_draft_revision;
     }catch{if(generation!==state.generation)return;state.catalog=[];}
     const select=$("upload-document");select.replaceChildren();
     for(const document of state.catalog){

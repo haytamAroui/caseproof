@@ -98,6 +98,25 @@ class ComposedSignedBriefPublisher:
     def list_documents(self, *, bearer: str, case_id: str) -> Any:
         return self.publisher.list_documents(bearer=bearer, case_id=case_id)
 
+    def brief_head_revision(
+        self, *, bearer: str, case_id: str, document_role: str = "own_draft",
+    ) -> int:
+        """Current signed head revision (0 when nothing was published yet).
+
+        The browser must not guess the optimistic-concurrency revision: this
+        is the same head read the post-publish verification uses.
+        """
+        if document_role not in {"own_draft", "opponent_brief"}:
+            raise ValueError("invalid document role")
+        head = self.publisher._call(
+            bearer, "caseproof_signed_brief_head",
+            {"p_case": _uuid(case_id, "case_id"), "p_role": document_role},
+        )
+        revision = head.get("revision")
+        if type(revision) is not int or not 0 <= revision <= 1_000_000:
+            raise PrivateStorageFailure("head revision outside the signed contract")
+        return revision
+
     def register_source_version(self, **kwargs: Any) -> Any:
         return self.publisher.register_source_version(**kwargs)
 

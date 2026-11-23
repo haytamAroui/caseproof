@@ -162,6 +162,7 @@ def create_litigation_development_app(
     evidence: EvidenceReader | None = None,
     reviews: SignedReviewWorkspace | None = None,
     signed_workbench_factory: Callable[[str], Any] | None = None,
+    signed_source_ingest: Callable[..., object] | None = None,
     publishable_key: str | None = None,
     trusted_ingest_key: str | None = None,
     ocr: LocalPDFOCR | None = None,
@@ -555,6 +556,28 @@ def create_litigation_development_app(
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         except PrivateStorageFailure:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        if signed_source_ingest is not None:
+            # Server-side step after the verified write: the privileged ingest
+            # port derives the registry payload from the verified READBACK,
+            # never from the request body. Without this port a published
+            # brief cannot cite the new source.
+            try:
+                verified = signed_originals.read(
+                    bearer=bearer, case_id=case_id, document_id=document_id,
+                    version_id=version_id,
+                )
+                ref, _length = signed_originals.source(
+                    bearer=bearer, case_id=case_id, document_id=document_id,
+                    version_id=version_id,
+                )
+                signed_source_ingest(
+                    case_id=case_id, document_id=document_id, version_id=version_id,
+                    data=verified, media_type=ref.content_type,
+                )
+            except PrivateStorageDenied:
+                raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+            except (PrivateStorageFailure, ValueError):
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return Response(status_code=201)
 
     @app.get("/dev/signed/matters/{case_id}/documents")
@@ -567,9 +590,20 @@ def create_litigation_development_app(
             raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         except PrivateStorageFailure:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        head = getattr(signed_brief_publisher, "brief_head_revision", None)
+        try:
+            revision = (
+                head(bearer=_token(authorization), case_id=case_id)
+                if callable(head) else None
+            )
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except PrivateStorageFailure:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return JSONResponse(
             {
                 "schema": "caseproof-signed-documents-v1",
+                "own_draft_revision": revision,
                 "documents": [
                     {
                         "document_id": document.document_id,
