@@ -1892,8 +1892,46 @@ def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
         assert empty_head == {"ok": True, "brief_id": empty_head["brief_id"],
                               "revision": 0, "version_id": None}
         for sub, role in ((user_b, "authenticated"), (user_a, "anon")):
-            as_user(sub, role)
-            with pytest.raises(errors.InsufficientPrivilege):
-                conn.execute("select public.caseproof_signed_brief_head(%s, 'own_draft')",
-                             (str(case),))
-            conn.rollback()
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute("select public.caseproof_signed_brief_head(%s, 'own_draft')",
+                                 (str(case),))
+
+        # Check-bundle read proposal: one masked call returns access, register,
+        # pinned brief version with references/assertions and the declared
+        # confirmed source universe; every gap is the same masked denial.
+        bundle_proposal = (
+            Path(__file__).resolve().parents[1] / "db" / "proposals"
+            / "SIGNED_check_bundle_read.sql"
+        ).read_text(encoding="utf-8")
+        conn.execute(bundle_proposal)
+        as_user(user_a)
+        bundle = conn.execute(
+            "select public.caseproof_signed_check_bundle(%s, %s)",
+            (str(case), str(brief_v1))).fetchone()[0]
+        assert bundle["ok"] is True
+        assert bundle["case_revision"] == 1 and bundle["register_revision"] == 1
+        assert bundle["brief"]["brief_id"] == working_brief("own_draft")
+        assert bundle["brief"]["representation"] == rep_text
+        assert bundle["brief"]["representation_sha256"] == rep_sha
+        assert bundle["brief"]["graph_sha256"] == graph_sha
+        assert bundle["references"] == [{"reference_id": "ref-1", "reference_order": 0,
+                                         "exhibit_label": "contrat", "exact_quote": quote,
+                                         "pdf_page": 2}]
+        assert [a["claim_id"] for a in bundle["assertions"]] == ["c1"]
+        assert len(bundle["sources"]) == 1
+        source = bundle["sources"][0]
+        assert source["document_id"] == str(doc_ex) and source["version_id"] == str(ver_ex)
+        assert source["intent_verified"] is False
+        assert source["representation"] == exhibit_rep
+        for sub, role, version in (
+            (user_b, "authenticated", brief_v1),
+            (user_a, "anon", brief_v1),
+            (user_a, "authenticated", uuid4()),
+        ):
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute("select public.caseproof_signed_check_bundle(%s, %s)",
+                                 (str(case), str(version)))
