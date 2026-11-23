@@ -9,6 +9,8 @@ from application.litigation.frontend_contract import DossierView
 from application.litigation.viewer_contract import ViewerContext
 from application.litigation.workspace_contract import (
     DraftExcerptView,
+    LegalPassageView,
+    LegalReferencesView,
     MatterCatalogView,
     ReportCatalogView,
     ReviewLedgerView,
@@ -49,6 +51,8 @@ def main() -> None:
         (ViewerContext, TARGET.with_name("viewer.schema.json")),
         (ReviewLedgerView, TARGET.with_name("review-ledger.schema.json")),
         (DraftExcerptView, TARGET.with_name("draft-excerpt.schema.json")),
+        (LegalReferencesView, TARGET.with_name("legal-references.schema.json")),
+        (LegalPassageView, TARGET.with_name("legal-passage.schema.json")),
         (VisualDecisionBody, TARGET.with_name("review-command.schema.json")),
         (DocxLocatorIdentity, TARGET.with_name("docx-locator-v1.schema.json")),
         (CorrectionPreviewBody, TARGET.with_name("correction-preview-v1.schema.json")),

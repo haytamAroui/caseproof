@@ -1,3 +1,4 @@
+import { LegalScreen } from '../features/legal';
 import { CorrectionPanel, CorrectionRecovery } from '../features/corrections';
 import { ScopedDocxEditor } from '../features/docx-editor';
 import { ExportsScreen } from '../features/exports';
@@ -276,6 +277,10 @@ function Workspace({ api }: { api: ApiClient }) {
             <Route
               path="/matters/:caseId/briefs/:briefId/edit"
               element={<ScopedDocxEditor api={api} />}
+            />
+            <Route
+              path="/matters/:caseId/briefs/:briefId/legal"
+              element={<LegalScreen api={api} />}
             />
             <Route
               path="/matters/:caseId/briefs/:briefId"

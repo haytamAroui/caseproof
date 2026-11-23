@@ -27,15 +27,21 @@ export function PrimaryNavigation({
   const reportUrl = reportReady
     ? `/matters/${matter}/briefs/${brief}?snapshot=${snapshot}`
     : null;
+  const legalUrl =
+    uuid.test(matter ?? '') && uuid.test(brief ?? '')
+      ? `/matters/${matter}/briefs/${brief}/legal`
+      : null;
   const exportUrl = reportReady
     ? `/matters/${matter}/exports?brief=${brief}&snapshot=${snapshot}`
     : null;
   const current =
     segments[2] === 'exports'
       ? 'export'
-      : segments[2] === 'briefs'
-        ? 'verification'
-        : 'matter';
+      : segments[2] === 'briefs' && segments[4] === 'legal'
+        ? 'legal'
+        : segments[2] === 'briefs'
+          ? 'verification'
+          : 'matter';
   return (
     <nav className="app-primary-nav" aria-label="Primary workspace">
       <Link to="/" aria-current={current === 'matter' ? 'page' : undefined}>
@@ -54,6 +60,21 @@ export function PrimaryNavigation({
       ) : (
         <span className="app-primary-unavailable" aria-disabled="true">
           Verification
+        </span>
+      )}
+      <span className="app-primary-divider" aria-hidden="true">
+        ·
+      </span>
+      {legalUrl ? (
+        <Link
+          to={legalUrl}
+          aria-current={current === 'legal' ? 'page' : undefined}
+        >
+          Legal articles
+        </Link>
+      ) : (
+        <span className="app-primary-unavailable" aria-disabled="true">
+          Legal articles
         </span>
       )}
       <span className="app-primary-divider" aria-hidden="true">

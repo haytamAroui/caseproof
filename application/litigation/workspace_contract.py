@@ -113,3 +113,105 @@ class DraftExcerptView(BaseModel):
             raise ValueError("Unsupported excerpt cannot claim an anchor")
         return self
 
+
+
+LegalStatus = Literal["PASS", "FAIL", "UNVERIFIED", "UNDETERMINED"]
+
+
+class LegalReferenceView(BaseModel):
+    """One cited article checked against the matter's chosen corpus.
+
+    status says corpus presence and quotation integrity only. It is never
+    applicability, correct reading or support for the claim.
+    """
+    model_config = ConfigDict(extra="forbid", strict=True)
+    reference_id: str = Field(min_length=1, max_length=200)
+    observation_id: str = Field(min_length=1, max_length=220)
+    raw_text: str = Field(max_length=4000)
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    act_code: str | None = Field(default=None, max_length=200)
+    article: str | None = Field(default=None, max_length=200)
+    language: str | None = Field(default=None, max_length=20)
+    status: LegalStatus
+    reason: str = Field(min_length=1, max_length=400)
+    corpus_key: str | None = Field(default=None, max_length=400)
+    corpus_version: str | None = Field(default=None, max_length=400)
+    corpus_text_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    corpus_source_uri: str | None = Field(default=None, max_length=1000)
+    quote: str | None = Field(default=None, max_length=4000)
+    claim_support: Literal["not_assessed"]
+
+    @model_validator(mode="after")
+    def ordered_span(self) -> "LegalReferenceView":
+        if self.end < self.start:
+            raise ValueError("citation span reversed")
+        return self
+
+
+class LegalCoverageView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    detected: int = Field(ge=0, le=100000)
+    by_status: dict[LegalStatus, int]
+    analysed: str = Field(max_length=400)
+    not_analysed: list[str] = Field(max_length=20)
+
+    @model_validator(mode="after")
+    def totals(self) -> "LegalCoverageView":
+        if set(self.by_status) != {"PASS", "FAIL", "UNVERIFIED", "UNDETERMINED"} or sum(
+            self.by_status.values()
+        ) != self.detected:
+            raise ValueError("coverage does not add up")
+        return self
+
+
+class LegalReferencesView(BaseModel):
+    """Cited-article results of ONE frozen run. Observations, not verdicts."""
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-legal-references-v1"] = Field(alias="schema")
+    brief_version_id: str = Field(min_length=1, max_length=200)
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    note: str = Field(max_length=1000)
+    corpus: Literal["configured", "not_configured"]
+    corpus_pack_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    corpus_articles: int = Field(ge=0, le=100000)
+    corpus_failures: list[str] = Field(max_length=500)
+    references: list[LegalReferenceView] = Field(max_length=10000)
+    coverage: LegalCoverageView
+
+    @model_validator(mode="after")
+    def coverage_matches(self) -> "LegalReferencesView":
+        ids = [r.reference_id for r in self.references]
+        if len(ids) != len(set(ids)) or self.coverage.detected != len(ids):
+            raise ValueError("references and coverage disagree")
+        for status, n in self.coverage.by_status.items():
+            if n != sum(1 for r in self.references if r.status == status):
+                raise ValueError("status counts disagree")
+        if self.corpus == "not_configured" and any(r.status == "PASS" for r in self.references):
+            raise ValueError("PASS without a chosen corpus")
+        return self
+
+
+class LegalPassageView(BaseModel):
+    """The lawyer's sentence beside the exact stored article text."""
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-legal-passage-v1"] = Field(alias="schema")
+    observation_id: str = Field(min_length=1, max_length=220)
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    brief_excerpt: str = Field(max_length=2000)
+    citation_span: list[int] = Field(min_length=2, max_length=2)
+    article_text: str | None = Field(default=None, max_length=200000)
+    corpus_key: str | None = Field(default=None, max_length=400)
+    corpus_version: str | None = Field(default=None, max_length=400)
+    corpus_text_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    corpus_source_uri: str | None = Field(default=None, max_length=1000)
+    status: LegalStatus
+    reason: str = Field(min_length=1, max_length=400)
+    note: str = Field(max_length=1000)
+
+    @model_validator(mode="after")
+    def span_inside_excerpt(self) -> "LegalPassageView":
+        a, b = self.citation_span
+        if not 0 <= a <= b <= len(self.brief_excerpt):
+            raise ValueError("citation span outside excerpt")
+        return self

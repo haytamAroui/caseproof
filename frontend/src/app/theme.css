@@ -1804,3 +1804,21 @@ main {
     border-color: CanvasText;
   }
 }
+
+.legal-list li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.legal-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  width: 100%;
+}
+@media (max-width: 800px) {
+  .legal-compare {
+    grid-template-columns: 1fr;
+  }
+}

@@ -356,6 +356,43 @@ def create_signed_workbench_router(
             "note": _LEGAL_NOTE,
         }
 
+    v2 = "/v2/matters/{case_id}/briefs/{brief_version_id}/legal-references"
+
+    @router.get(v2)
+    def v2_legal_references(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Same signed run and checks as the /dev route, under the product contract.
+
+        The body is validated by LegalReferencesView before it leaves: counts
+        must add up and a PASS cannot exist without a chosen corpus.
+        """
+        from application.litigation.workspace_contract import LegalReferencesView
+        raw = signed_legal_references(case_id, brief_version_id, authorization)
+        raw = {k: v for k, v in raw.items() if k != "suitability"}
+        raw["schema"] = "caseproof-legal-references-v1"
+        raw["corpus_failures"] = [str(x) for x in raw["corpus_failures"]]
+        try:
+            view = LegalReferencesView.model_validate(raw)
+        except ValueError:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return view.model_dump(by_alias=True)
+
+    @router.get(v2 + "/{reference_id}/passage")
+    def v2_legal_passage(
+        case_id: str, brief_version_id: str, reference_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        from application.litigation.workspace_contract import LegalPassageView
+        raw = signed_legal_passage(case_id, brief_version_id, reference_id, authorization)
+        raw["schema"] = "caseproof-legal-passage-v1"
+        try:
+            view = LegalPassageView.model_validate(raw)
+        except ValueError:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return view.model_dump(by_alias=True)
+
     @router.get(base + "/sources")
     def signed_sources(
         case_id: str, brief_version_id: str,

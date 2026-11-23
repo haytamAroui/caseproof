@@ -20,6 +20,8 @@ export default tseslint.config(
       'src/shared/api/docx-locator-v1-generated*',
       'src/shared/api/correction-preview-v1-generated*',
       'src/shared/api/correction-commit-v1-generated*',
+      'src/shared/api/legal-references-generated*',
+      'src/shared/api/legal-passage-generated*',
     ],
   },
   js.configs.recommended,

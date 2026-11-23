@@ -14,6 +14,8 @@ for (const [name, type, stem] of [
   ['confirmation', 'InventoryConfirmation', 'confirmation-generated'],
   ['review-ledger', 'ReviewLedgerView', 'review-ledger-generated'],
   ['draft-excerpt', 'DraftExcerptView', 'draft-excerpt-generated'],
+  ['legal-references', 'LegalReferencesView', 'legal-references-generated'],
+  ['legal-passage', 'LegalPassageView', 'legal-passage-generated'],
   ['review-command', 'VisualDecisionBody', 'review-command-generated'],
   ['docx-locator-v1', 'DocxLocatorIdentity', 'docx-locator-v1-generated'],
   [

@@ -1,0 +1,306 @@
+{
+  "$defs": {
+    "LegalCoverageView": {
+      "additionalProperties": false,
+      "properties": {
+        "analysed": {
+          "maxLength": 400,
+          "title": "Analysed",
+          "type": "string"
+        },
+        "by_status": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "propertyNames": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "UNVERIFIED",
+              "UNDETERMINED"
+            ]
+          },
+          "title": "By Status",
+          "type": "object"
+        },
+        "detected": {
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Detected",
+          "type": "integer"
+        },
+        "not_analysed": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Not Analysed",
+          "type": "array"
+        }
+      },
+      "required": [
+        "detected",
+        "by_status",
+        "analysed",
+        "not_analysed"
+      ],
+      "title": "LegalCoverageView",
+      "type": "object"
+    },
+    "LegalReferenceView": {
+      "additionalProperties": false,
+      "description": "One cited article checked against the matter's chosen corpus.\n\nstatus says corpus presence and quotation integrity only. It is never\napplicability, correct reading or support for the claim.",
+      "properties": {
+        "act_code": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Act Code"
+        },
+        "article": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Article"
+        },
+        "claim_support": {
+          "const": "not_assessed",
+          "title": "Claim Support",
+          "type": "string"
+        },
+        "corpus_key": {
+          "anyOf": [
+            {
+              "maxLength": 400,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Corpus Key"
+        },
+        "corpus_source_uri": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Corpus Source Uri"
+        },
+        "corpus_text_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Corpus Text Sha256"
+        },
+        "corpus_version": {
+          "anyOf": [
+            {
+              "maxLength": 400,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Corpus Version"
+        },
+        "end": {
+          "minimum": 0,
+          "title": "End",
+          "type": "integer"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "observation_id": {
+          "maxLength": 220,
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "raw_text": {
+          "maxLength": 4000,
+          "title": "Raw Text",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "reference_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Reference Id",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNVERIFIED",
+            "UNDETERMINED"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference_id",
+        "observation_id",
+        "raw_text",
+        "start",
+        "end",
+        "status",
+        "reason",
+        "claim_support"
+      ],
+      "title": "LegalReferenceView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Cited-article results of ONE frozen run. Observations, not verdicts.",
+  "properties": {
+    "brief_version_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Brief Version Id",
+      "type": "string"
+    },
+    "corpus": {
+      "enum": [
+        "configured",
+        "not_configured"
+      ],
+      "title": "Corpus",
+      "type": "string"
+    },
+    "corpus_articles": {
+      "maximum": 100000,
+      "minimum": 0,
+      "title": "Corpus Articles",
+      "type": "integer"
+    },
+    "corpus_failures": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 500,
+      "title": "Corpus Failures",
+      "type": "array"
+    },
+    "corpus_pack_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Corpus Pack Sha256"
+    },
+    "coverage": {
+      "$ref": "#/$defs/LegalCoverageView"
+    },
+    "note": {
+      "maxLength": 1000,
+      "title": "Note",
+      "type": "string"
+    },
+    "references": {
+      "items": {
+        "$ref": "#/$defs/LegalReferenceView"
+      },
+      "maxItems": 10000,
+      "title": "References",
+      "type": "array"
+    },
+    "schema": {
+      "const": "caseproof-legal-references-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "brief_version_id",
+    "snapshot_hash",
+    "note",
+    "corpus",
+    "corpus_articles",
+    "corpus_failures",
+    "references",
+    "coverage"
+  ],
+  "title": "LegalReferencesView",
+  "type": "object"
+}
