@@ -12,15 +12,51 @@ service keys are rejected by the transport itself.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
 from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
 from apps.api.signed_supabase_rpc import API_KEY, call_rpc
 
-__all__ = ["live_signed_ports"]
+__all__ = ["LiveWorkbenchPorts", "assemble_live_workbench", "live_signed_ports"]
 
 _PUBLISHABLE_ENV = "CASEPROOF_SUPABASE_PUBLISHABLE_KEY"
 _SIGNING_KEY_ENV = "CASEPROOF_REVIEW_RECORD_SIGNING_KEY_HEX"
+
+
+@dataclass(frozen=True)
+class LiveWorkbenchPorts:
+    """Ports the live adapters cover, plus those still missing an adapter.
+
+    missing names the port protocols with no live implementation yet; the
+    caller must refuse to start rather than silently mix live and disposable
+    backends on the same matter.
+    """
+
+    publisher: LiveSignedBriefPublisher
+    review_record: LiveSignedReviewRecord
+    missing: tuple[str, ...]
+
+
+# Ports the workbench needs that have no live adapter today: the signed
+# source library/originals exist as modules but are not assembled into this
+# composition, and the check store / review workspace have no live adapter
+# at all (legacy caseproof_dev_live_review is a different, uncabled surface).
+_MISSING_PORTS = (
+    "SignedSourceLibrary",
+    "AuthorizedOriginalReader",
+    "SignedReviewWorkspace",
+    "AuthorizedLitigationChecker",
+)
+
+
+def assemble_live_workbench(environ: Mapping[str, str]) -> LiveWorkbenchPorts:
+    """Assemble every live port the workbench can use, refusing silently-mixed boots."""
+    ports = live_signed_ports(environ)
+    if ports is None:
+        raise ValueError(f"{_PUBLISHABLE_ENV} required for the live workbench")
+    publisher, record = ports
+    return LiveWorkbenchPorts(publisher=publisher, review_record=record, missing=_MISSING_PORTS)
 
 
 def live_signed_ports(

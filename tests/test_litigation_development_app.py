@@ -887,3 +887,37 @@ def test_workbench_without_wired_publisher_stays_503():
     response = client.get(f"/dev/signed/matters/{CASE}/documents",
                           headers={"Authorization": "Bearer signed-user-token"})
     assert response.status_code == 503
+
+
+def test_live_workbench_assembly_refuses_mixed_backends():
+    from apps.api.signed_live_composition import assemble_live_workbench
+
+    with pytest.raises(ValueError):
+        assemble_live_workbench({})
+    key = "sb_publishable_" + "C" * 24
+    ports = assemble_live_workbench({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": key})
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+
+    assert isinstance(ports.publisher, LiveSignedBriefPublisher)
+    assert isinstance(ports.review_record, LiveSignedReviewRecord)
+    assert "SignedReviewWorkspace" in ports.missing
+    assert "AuthorizedLitigationChecker" in ports.missing
+
+
+def test_live_workbench_entry_point_fails_closed():
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    script = root / "scripts" / "run_signed_workbench_live.py"
+    no_config = subprocess.run([sys.executable, str(script)], capture_output=True, text=True,
+                               env={"PYTHONPATH": str(root), "PATH": "/usr/bin:/bin"}, check=False)
+    assert no_config.returncode == 2
+    configured = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True,
+        env={"PYTHONPATH": str(root), "PATH": "/usr/bin:/bin",
+             "CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_" + "D" * 24}, check=False)
+    assert configured.returncode == 3
+    assert "fail-closed" in configured.stderr
