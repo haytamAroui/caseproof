@@ -86,7 +86,7 @@ def _norm_exact(text: str) -> str:
     return _WS.sub(" ", text.replace("\u00a0", " ").replace("\u2019", "'")).strip()
 
 
-def _excerpt_issue(quote: str, article: str, body_start: str = "", v3: bool = False) -> str | None:
+def _excerpt_issue(quote: str, article: str, body_start: str = "", v3: bool = False, attested: bool = False) -> str | None:
     """None when some literal occurrence starts and ends where a reader expects.
 
     A fragment that begins mid-sentence or mid-word, or stops before the sentence
@@ -106,13 +106,13 @@ def _excerpt_issue(quote: str, article: str, body_start: str = "", v3: bool = Fa
         sentence_ok = start == 0 or (article[start - 1] == " " and before[-1:] in ".;:!?")
         # v3: a declared body_start is preparer metadata, not publisher evidence. It can never
         # turn a quote that begins mid-sentence into a PASS; it only leaves it for a human.
-        starts_ok = sentence_ok or (at_body and not v3)
+        starts_ok = sentence_ok or (at_body and (not v3 or attested))
         word_ok = (start == 0 or not article[start - 1].isalnum()) and (end == len(article) or not article[end].isalnum())
         ends_ok = end == len(article) or quote[-1] in ".;:!?" or article[end] in ".;:!?"
         if starts_ok and word_ok and ends_ok:
             return None
         word_issue = word_issue or not word_ok
-        unattested_body = unattested_body or (v3 and at_body and not sentence_ok and word_ok and ends_ok)
+        unattested_body = unattested_body or (v3 and not attested and at_body and not sentence_ok and word_ok and ends_ok)
         start = article.find(quote, start + 1)
     if unattested_body and not word_issue:
         return "quotation_starts_at_declared_body_start_not_attested"
@@ -250,7 +250,8 @@ def check_legal_references(
                 if q not in article_norm:
                     verdicts.append(("FAIL", "quotation_absent_from_corpus_article_text", raw_q))
                     continue
-                issue = _excerpt_issue(q, article_norm, _norm_exact(record.body_start), v3)
+                issue = _excerpt_issue(q, article_norm, _norm_exact(record.body_start), v3,
+                                       record.body_start_basis == "publisher_pdf_layout")
                 verdicts.append(("UNDETERMINED", issue, raw_q) if issue else
                                 ("PASS", "quotation_found_verbatim_in_corpus_article", raw_q))
             if not verdicts:
@@ -345,7 +346,9 @@ class LegalCorpusConfig:
                 {"key": r.key, "source_uri": r.source_uri, "acquired_at": r.acquired_at,
                  "consolidated": r.consolidated, "original_sha256": r.original_sha256,
                  "derived_sha256": r.derived_sha256, "source_artifact_kind": r.source_artifact_kind,
-                 "source_notes": r.source_notes, **({"body_start": r.body_start} if r.body_start else {})}
+                 "source_notes": r.source_notes, **({"body_start": r.body_start} if r.body_start else {}),
+                 **({"original_text_layer_sha256": r.original_text_layer_sha256,
+                     "body_start_basis": r.body_start_basis} if r.original_text_layer_sha256 else {})}
                 for r in self.records), key=lambda row: str(row["key"])),
             "act_aliases": dict(self.act_aliases),
             "chosen_versions": dict(self.chosen_versions), "failures": list(self.failures),

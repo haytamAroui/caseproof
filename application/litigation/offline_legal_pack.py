@@ -15,7 +15,14 @@ from dataclasses import asdict
 from typing import Any, Protocol
 from zipfile import ZIP_STORED, BadZipFile, ZipFile
 
-from application.litigation.corpus import ArticleRecord, CorpusError, check_derived_binding
+from application.litigation.corpus import (
+    BASIS_PDF,
+    PDF_KIND,
+    ArticleRecord,
+    CorpusError,
+    check_derived_binding,
+    derive_pdf_body_start,
+)
 from application.litigation.legal_references import (
     _QUOTE_STRICT,
     _QUOTE_V3,
@@ -55,7 +62,16 @@ def _config(data: dict[str, Any]) -> LegalCorpusConfig:
         if not isinstance(text, str) or _hash(text.encode()) != values["derived_sha256"]:
             raise CorpusError("article text changed")
         record = ArticleRecord(**values, original_bytes=raw)
-        check_derived_binding(record.source_artifact_kind, raw, text, record.article)
+        if record.source_artifact_kind == PDF_KIND:
+            layer = record.original_text_layer
+            if not raw.startswith(b"%PDF-") or _hash(layer.encode()) != record.original_text_layer_sha256:
+                raise CorpusError("PDF text layer changed")
+            check_derived_binding("official_text_capture", layer.encode(), text, record.article)
+            if (derive_pdf_body_start(layer, text, record.article) != record.body_start
+                    or record.body_start_basis != BASIS_PDF):
+                raise CorpusError("body start no longer follows the publisher PDF layout")
+        else:
+            check_derived_binding(record.source_artifact_kind, raw, text, record.article)
         records.append(record)
     if len({r.key for r in records}) != len(records):
         raise CorpusError("duplicate article identity")
@@ -141,6 +157,10 @@ def _report(body: dict[str, Any]) -> bytes:
                   "</code></small><small>Artefact source SHA-256 : <code>", esc(row["original_sha256"]),
                   "</code></small><p>Type : ", esc(row["source_artifact_kind"]), "</p><p>", esc(row["source_notes"]), "</p>"]
         if body["review"].get("fingerprint_scheme", 1) >= 2:
+            if row.get("body_start_basis") == BASIS_PDF:
+                parts += ["<p>Début du corps de l'article, tiré de la mise en page du PDF consolidé de l'éditeur conservé (première ligne après la ligne d'intitulé, ce n'est pas un balisage structuré ; le texte-couche du PDF n'est pas revérifié contre le PDF par ce logiciel) : <code>",
+                          esc(row["body_start"]), "</code></p></section>"]
+                continue
             parts += ["<p>Début du corps de l'article, déclaré par le préparateur du corpus et borné par le texte conservé, non attesté par l'éditeur : <code>",
                       esc(row.get("body_start") or "non déclaré (la première phrase n'est pas supposée complète)"), "</code></p>"]
         parts += ["</section>"]

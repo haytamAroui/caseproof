@@ -244,3 +244,67 @@ def test_signed_service_and_offline_check_give_identical_findings_for_the_same_w
         checker.check(bearer="t", case_id="c", brief_version_id="v")
     assert seen["strict"] is True and seen["v3"] is True
     assert seen["obs"] == offline
+
+
+LAYER = ("JUSTEL - Législation consolidée\n\n Art. 8.4. Autre\n Texte voisin.\n\n"
+         " Art. 8.5. Règle générale - preuve certaine\n"
+         " Hormis les cas où la loi en dispose autrement, la preuve doit être rapportée avec un degré raisonnable de\n"
+         "certitude.\n\n Art. 8.6. Suite\n Texte.\n")
+PDF_DERIVED = "Art. 8.5. Règle générale - preuve certaine " + ARTICLE
+
+
+def pdf_corpus(tmp_path: Path, layer: str = LAYER, *, extra: str = "", layer_sha: str | None = None) -> Path:
+    d = tmp_path / "pc"
+    d.mkdir(exist_ok=True)
+    pdf = b"%PDF-1.4 synthetic stand-in for the publisher PDF"
+    (d / "a.pdf").write_bytes(pdf)
+    (d / "layer.txt").write_text(layer)
+    (d / "art.txt").write_text(PDF_DERIVED)
+    sha = layer_sha or hashlib.sha256(layer.encode()).hexdigest()
+    entry = {"act": "be-civ", "article": "8.5", "language": "fr", "version": "v1",
+             "source_uri": "urn:synthetic:pdf", "acquired_at": "2026-11-23", "consolidated": True,
+             "original_file": "a.pdf", "derived_file": "art.txt",
+             "original_sha256": hashlib.sha256(pdf).hexdigest(),
+             "original_text_layer_file": "layer.txt", "original_text_layer_sha256": sha,
+             "source_artifact_kind": "official_consolidated_pdf"}
+    lines = ["format = " + json.dumps(CORPUS_FORMAT_VERSION), "[[publication]]"]
+    lines += [k + " = " + (str(v).lower() if isinstance(v, bool) else json.dumps(v)) for k, v in entry.items()]
+    (d / "corpus-manifest.toml").write_text("\n".join(lines) + extra)
+    (d / "act-aliases.toml").write_text('[act_aliases]\n"C.civ." = "be-civ"\n[chosen_versions]\n"be-civ" = "v1"\n')
+    return d
+
+
+def _pdf_run(tmp_path: Path, quote: str, **kw):
+    p = tmp_path / "q.docx"
+    p.write_bytes(docx_without_custom_xml([f"Article 8.5 du Code civil : « {quote} »"]))
+    raw, cp = check_offline_docx(docx=p, corpus=pdf_corpus(tmp_path, **kw))
+    return verify_legal_pack(raw, expected_sha256=cp)["references"]
+
+
+def test_publisher_pdf_layout_gives_body_pass_and_still_flags_the_omitted_reserve(tmp_path):
+    assert verdict(_pdf_run(tmp_path, ARTICLE))[0] == "PASS"
+    rest = "la preuve doit être rapportée avec un degré raisonnable de certitude."
+    assert verdict(_pdf_run(tmp_path, rest)) == ("UNDETERMINED", "quotation_partial_excerpt_review_required")
+
+
+def test_pdf_entry_cannot_declare_its_own_body_start(tmp_path):
+    with pytest.raises(CorpusError):
+        check_offline_docx(docx=_docx(tmp_path, f"Article 8.5 du Code civil : « {ARTICLE} »"),
+                           corpus=pdf_corpus(tmp_path, extra='\nbody_start = "la preuve doit"'))
+
+
+def test_pdf_layer_edit_without_matching_manifest_hash_is_refused(tmp_path):
+    moved = LAYER.replace("autrement, la preuve", "autrement,\n la preuve")
+    with pytest.raises(CorpusError):  # layer changed, manifest hash not
+        check_offline_docx(docx=_docx(tmp_path, f"Article 8.5 du Code civil : « {ARTICLE} »"),
+                           corpus=pdf_corpus(tmp_path, moved, layer_sha="0" * 64))
+
+
+def test_exported_pdf_pack_body_start_cannot_be_edited(tmp_path):
+    import base64
+    p = tmp_path / "q.docx"
+    p.write_bytes(docx_without_custom_xml([f"Article 8.5 du Code civil : « {ARTICLE} »"]))
+    raw, cp = check_offline_docx(docx=p, corpus=pdf_corpus(tmp_path))
+    body = verify_legal_pack(raw, expected_sha256=cp)
+    assert body["articles"][0]["body_start_basis"] == "publisher_pdf_layout"
+    assert base64.b64decode(body["articles"][0]["original_base64"]).startswith(b"%PDF-")

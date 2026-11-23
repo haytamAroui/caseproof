@@ -39,7 +39,12 @@ def encode_corpus_pack(config: LegalCorpusConfig) -> bytes:
         values = {key: getattr(record, key) for key in (
             "act", "article", "language", "version", "source_uri", "acquired_at", "consolidated",
             "original_sha256", "source_artifact_kind", "source_notes", "body_start")}
-        if not values["body_start"]:
+        if record.original_text_layer_sha256:
+            layer = f"data/{i}-layer.txt"
+            files[layer] = record.original_text_layer.encode()
+            del values["body_start"]
+            values.update(original_text_layer_file=layer, original_text_layer_sha256=record.original_text_layer_sha256)
+        elif not values["body_start"]:
             del values["body_start"]
         values.update(original_file=source, derived_file=derived)
         lines += ["", "[[publication]]"] + [k + " = " + _toml(v) for k, v in values.items()]
