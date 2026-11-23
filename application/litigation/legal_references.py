@@ -124,13 +124,18 @@ def check_legal_references(
                 reason="article_absent_from_chosen_corpus"))
             continue
         record = None
-        if len(matches) == 1:
-            record = matches[0]
-        else:
-            wanted = (chosen_versions or {}).get(act)
-            picked = [r for r in matches if wanted is not None and r.version == wanted]
+        wanted = (chosen_versions or {}).get(act)
+        if wanted is not None:
+            picked = [r for r in matches if r.version == wanted]
+            if not picked:
+                out.append(LegalReferenceObservation(
+                    **base, status=RuleStatus.UNDETERMINED,
+                    reason="requested_version_absent_from_chosen_corpus"))
+                continue
             if len(picked) == 1:
                 record = picked[0]
+        elif len(matches) == 1:
+            record = matches[0]
         if record is None:
             out.append(LegalReferenceObservation(
                 **base, status=RuleStatus.UNDETERMINED,

@@ -4399,3 +4399,25 @@ def test_signed_docx_unsupported_story_content_never_publishes(story,element):
                              body_xml=f'<w:p>{element}</w:p>' if story=="body" else None)
     with pytest.raises(PrivateStorageFailure):
         ComposedSignedBriefPublisher._parse_verified_text(document_id=_PUBLISH_DOC,version_id=_PUBLISH_VER,data=raw,media_type=media)
+
+
+@pytest.mark.parametrize("language,brief,article_text",[
+    ("fr","Art. 1382 du Code civil : « Chaque fait oblige à réparation. »","Chaque fait oblige à réparation."),
+    ("nl","Art. 1382 BW: « Elke daad verplicht tot vergoeding. »","Elke daad verplicht tot vergoeding."),
+])
+def test_offline_requested_historical_version_never_falls_back(language,brief,article_text):
+    import hashlib
+
+    from application.litigation.corpus import ArticleRecord
+    from application.litigation.legal_references import check_legal_references
+    sha=hashlib.sha256(article_text.encode()).hexdigest()
+    record=ArticleRecord("code-civil","1382",language,"snapshot-current","urn:synthetic:offline", "2026-11-23",True,sha,article_text,sha)
+    aliases={"C.civ.":"code-civil","BW":"code-civil"}
+    present=check_legal_references(brief,(record,),aliases,chosen_versions={"code-civil":"snapshot-current"})
+    assert present and present[0].status=="PASS",present
+    changed=check_legal_references(brief.replace(article_text,"Texte modifié sans correspondance."),(record,),aliases,chosen_versions={"code-civil":"snapshot-current"})
+    assert changed[0].status=="FAIL",changed
+    missing=check_legal_references(brief,(record,),aliases,chosen_versions={"code-civil":"historical-not-installed"})
+    assert missing[0].status=="UNDETERMINED"
+    assert missing[0].reason=="requested_version_absent_from_chosen_corpus"
+    assert missing[0].corpus_version is None and missing[0].corpus_text_sha256 is None

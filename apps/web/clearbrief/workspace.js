@@ -46,7 +46,7 @@
         box.append(el("p","Coverage: "+c.detected+" article mention(s) detected \u00b7 "+s.PASS+" in corpus \u00b7 "+s.FAIL+" quotation not found \u00b7 "+s.UNVERIFIED+" absent from corpus \u00b7 "+s.UNDETERMINED+" cannot be decided. Analysed: "+c.analysed+". NOT analysed: "+c.not_analysed.join("; ")+". Counts show reach, not that the brief is supported.","small"));}
       for(const r of d.references){
         const item=el("div","","result-item");
-        item.append(el("strong",r.status+" · "+(LEGAL_LABEL[r.status]||r.status)));
+        item.append(el("strong",r.status+" · "+(r.reason==="requested_version_absent_from_chosen_corpus"?"version absente du corpus":(LEGAL_LABEL[r.status]||r.status))));
         item.append(el("p",r.raw_text,"small"));
         item.append(el("p","Reason: "+r.reason+(r.corpus_version?" · corpus version "+r.corpus_version:""),"small mono"));
         if(r.corpus_text_sha256)item.append(el("p","Corpus text SHA-256 "+r.corpus_text_sha256.slice(0,16)+"\u2026 · "+(r.corpus_source_uri||""),"small mono"));
