@@ -165,3 +165,50 @@ test("page provenance abstains per space when nothing is recorded",async()=>{
   assert(preview.children.some(x=>x.textContent===
     "Page provenance · physical PDF page: not mapped · printed label: not mapped · bundle position: not mapped"));
 });
+
+function observation(referenceId, state) {
+  return {reference_id:referenceId,state,source_id:"source",source_version_id:"version",
+    source_sha256:"a".repeat(64),representation_id:"rep",text_start:0,text_end:3};
+}
+
+async function runChecks() {
+  const nodes=new Map();
+  const get=id=>{ if(!nodes.has(id)) nodes.set(id,new Element()); return nodes.get(id); };
+  const caseId="11111111-1111-4111-8111-111111111111";
+  const briefId="22222222-2222-4222-8222-222222222222";
+  const response=data=>({ok:true,json:async()=>data});
+  const check={schema:"caseproof-m2-check-headless-v1",case_id:caseId,brief_version_id:briefId,
+    snapshot_hash:"b".repeat(64),declared:[["source","version"]],processed:[["source","version"]],
+    excluded:[],incomplete:[],
+    citation_observations:[observation("r-clean","exact_match"),
+      observation("r-unmapped","page_unmapped"),observation("r-missing","quote_not_found")],
+    factual_observations:[]};
+  const fetch=async url=>{
+    if(url.endsWith("/check")) return response(check);
+    if(url.endsWith("/sources")) return response({schema:"caseproof-clearbrief-brief-sources-v1",
+      case_id:caseId,brief_version_id:briefId,rows:[]});
+    if(url.endsWith("/review")) return response({schema:"caseproof-clearbrief-review-v1",
+      case_id:caseId,snapshot_hash:"b".repeat(64),revision:0});
+    throw Error("unexpected request");
+  };
+  const document={getElementById:get,createElement:()=>new Element()};
+  const window={caseproofSession:{caseId,briefVersionId:briefId,getBearer:async()=>"test"}};
+  vm.runInNewContext(fs.readFileSync("apps/web/clearbrief/workspace.js","utf8"),
+    {document,window,fetch,console,setTimeout});
+  await get("connection-form").listeners.submit({preventDefault(){}});
+  return {observations:get("observations"),toggle:get("observations-filter")};
+}
+
+test("observations render exceptions first with an explicit show-all toggle",async()=>{
+  const {observations,toggle}=await runChecks();
+  assert(toggle.textContent.includes("Show all 3"));
+  assert(toggle.textContent.includes("2 to review first"));
+  assert(toggle.textContent.includes("1 clean"));
+  const order=()=>observations.children.map(x=>x.children[1].textContent);
+  assert.deepEqual(order(),["Reference r-unmapped","Reference r-missing","Reference r-clean"]);
+  await toggle.onclick();
+  assert(toggle.textContent.includes("Exceptions first"));
+  assert.deepEqual(order(),["Reference r-clean","Reference r-unmapped","Reference r-missing"]);
+  await toggle.onclick();
+  assert.deepEqual(order(),["Reference r-unmapped","Reference r-missing","Reference r-clean"]);
+});

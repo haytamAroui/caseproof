@@ -138,6 +138,7 @@
         <div class="section-head"><div><p class="kicker">02 / VERIFY</p><h3 id="check-title">Brief check</h3></div><span class="pill neutral">Deterministic</span></div>
         <p class="small">Citation, quotation and same-role date/value checks are observations, not legal determinations.</p>
         <div id="check-scope" class="check-scope" role="status" aria-live="polite">Check source scope not assessed.</div>
+        <button id="observations-filter" class="secondary" type="button" hidden></button>
         <div id="observations" class="observation-list"><div class="empty">Run a factual check to inspect this versioned brief.</div></div>
       </section>
       <section class="card review-panel" aria-labelledby="review-title">
@@ -158,7 +159,9 @@
       <p class="small">Citation insertion, reversible Word edits, approved DOCX/PDF, dynamic exhibit bundle and recipient sharing require separate host and release acceptance.</p></div>
       <div class="handoff-actions"><button disabled>Insert into Word · pending host acceptance</button><button disabled>Release package · not enabled</button>
         <button id="record" type="button" class="secondary" disabled>Download review record (development)</button></div>
-      <p id="record-status" class="small mono" aria-live="polite"></p></div>
+      <p id="record-status" class="small mono" aria-live="polite"></p>
+      <div id="record-qr-wrap" hidden><img id="record-qr" alt="QR de vérification hors ligne du record" width="132" height="132">
+        <p class="small">QR = digest + clé de signature uniquement. Vérification hors ligne documentée ; sans clé de confiance épinglée par un canal indépendant, la clé est un émetteur d'installation/de test auto-déclaré. Aucune vérification publique hébergée n'existe.</p></div></div>
   </section>
 </main>
 <footer><span>ClearBrief / CaseProof</span><span>Review ≠ approval · Export ≠ filing · Source hash ≠ authenticity</span></footer>

@@ -92,7 +92,7 @@
   function clearView() {
     revokePageImage();
     fidelityPanel?.clear();
-    state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null;
+    state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null; state.showAll=false;
     state.previewSeq+=1;state.loading=false;
     $("check-scope").textContent="Check source scope not assessed.";
     $("workspace").hidden=true; $("connection").hidden=false; $("record").disabled=true;
@@ -279,9 +279,20 @@
     }
     $("citation-count").textContent=String(state.check?.citation_observations?.length??0);
     $("fact-count").textContent=String(state.check?.factual_observations?.length??0);
-    if(!state.check){node.append(el("p","Check is unavailable. No success or correctness is implied.","empty"));return;}
-    if(!values.length){node.append(el("p","No observations in this declared scope. This is not a certification.","empty"));return;}
-    for(const item of values){
+    if(!state.check){$("observations-filter").hidden=true;node.append(el("p","Check is unavailable. No success or correctness is implied.","empty"));return;}
+    if(!values.length){$("observations-filter").hidden=true;node.append(el("p","No observations in this declared scope. This is not a certification.","empty"));return;}
+    const cleanStates=new Set(["exact_match","ready"]);
+    const attention=values.filter(v=>!cleanStates.has(v.state));
+    const clean=values.filter(v=>cleanStates.has(v.state));
+    state.showAll=state.showAll===true;
+    const ordered=state.showAll?values:[...attention,...clean];
+    const toggle=$("observations-filter");
+    toggle.hidden=false;
+    toggle.textContent=state.showAll?
+      "Exceptions first ("+attention.length+" to review · "+clean.length+" clean)":
+      "Show all "+values.length+" ("+attention.length+" to review first · "+clean.length+" clean)";
+    toggle.onclick=()=>{state.showAll=!state.showAll;renderChecks();};
+    for(const item of ordered){
       const button=el("button","","observation");button.type="button";
       button.setAttribute("aria-pressed",String(state.selected?.id===item.id));
       button.append(el("span",item.kind+" / "+label(item.state),"tag"));
@@ -1044,6 +1055,22 @@
       $("record-status").textContent="Record SHA-256 "+data.record_sha256.slice(0,16)+
         "\u2026 · revision "+data.brief.head_revision+" · "+data.checks.length+" recorded check(s) · "+
         data.reviews.reduce((n,r)=>n+r.decisions.length,0)+" review decision(s). Transcript of recorded state, not an approval.";
+      const qr=$("record-qr"),wrap=$("record-qr-wrap");
+      wrap.hidden=true;
+      try{
+        const token=await bearer();
+        const qrResponse=await fetch("/dev/signed/matters/"+encodeURIComponent(state.caseId)+
+          "/review-record/verification-qr",
+          {headers:{Authorization:"Bearer "+token},credentials:"omit",redirect:"error",cache:"no-store"});
+        if(qrResponse.ok){
+          const qrBlob=await qrResponse.blob();
+          if(qrBlob.type==="image/png"&&qrBlob.size>0&&qrBlob.size<=65536){
+            qr.onload=()=>{wrap.hidden=false;};
+            qr.onerror=()=>{wrap.hidden=true;};
+            qr.src=URL.createObjectURL(qrBlob);
+          }
+        }
+      }catch{wrap.hidden=true;}
     }catch(error){if(error?.message!=="no_session")notice(statusFor(error),"danger");}
     finally{$("record").disabled=!state.session;}
   }

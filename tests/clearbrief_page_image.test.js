@@ -146,12 +146,15 @@ test("stale page response cannot land on a newer finding and leaves no blob behi
       headers: { get: k => (k === "x-caseproof-original-sha256" ? SHA : null) },
       blob: async () => "PNGBYTES" }; } });
   const { get, created, revoked } = env;
-  get("observations").children[0].listeners.click();
+  // Exceptions-first ordering places the unresolved reference before the exact match.
+  const pick = id => get("observations").children.find(
+    c => c.children[1] && c.children[1].textContent === "Reference " + id);
+  pick("ref-01").listeners.click();
   await flush();
   assert.equal(findClass(get("review-card-parent"), "page-image").length, 1,
     "loading block attached for the first finding");
   // Switch finding while the page fetch is still in flight.
-  get("observations").children[1].listeners.click();
+  pick("ref-02").listeners.click();
   await flush();
   release();
   await flush();
