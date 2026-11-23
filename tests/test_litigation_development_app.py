@@ -647,35 +647,101 @@ _UUID_C = "2" * 8 + "-0000-4000-8000-" + "2" * 12
 _SHA = "a" * 64
 
 
+def _live_publish_kwargs():
+    import hashlib
+    rep = "Mémoire synthétique."
+    graph = "graphe synthétique v1"
+    return {
+        "bearer": "jwt", "case_id": _UUID_A, "document_id": _UUID_B, "version_id": _UUID_C,
+        "intent_id": "3" * 8 + "-0000-4000-8000-" + "3" * 12,
+        "document_role": "own_draft", "expected_revision": 1,
+        "brief_version_id": "4" * 8 + "-0000-4000-8000-" + "4" * 12,
+        "request_id": "5" * 8 + "-0000-4000-8000-" + "5" * 12,
+        "representation": rep,
+        "representation_sha256": hashlib.sha256(rep.encode("utf-8")).hexdigest(),
+        "parser_id": "parser-synthétique-v1",
+        "references": [{"reference_id": "ref-1", "exhibit_label": "Contrat",
+                        "exact_quote": "paiement", "pdf_page": 2}],
+        "assertions": [{"claim_id": "c1", "reference_id": "ref-1", "text_start": 0,
+                        "text_end": 7, "assertion_text": rep[0:7], "kind": "money",
+                        "fact_role": "payment", "language": "fr", "source_language": "nl"}],
+        "graph_text": graph,
+        "graph_sha256": hashlib.sha256(graph.encode("utf-8")).hexdigest(),
+    }
+
+
 def test_live_publisher_publish_contract():
-    publisher, calls = _publisher_stub(
-        {"ok": True, "brief_id": _UUID_A, "brief_version_id": _UUID_B, "published_revision": 2})
-    outcome = publisher.publish_uploaded(
-        bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
-        document_role="own_draft", expected_revision=1)
+    import hashlib
+    import uuid
+    publisher, calls = _publisher_stub({"ok": True, "replay": False, "revision": 2})
+    kwargs = _live_publish_kwargs()
+    outcome = publisher.publish_uploaded(**kwargs)
     assert outcome.published_revision == 2
+    assert outcome.brief_version_id == kwargs["brief_version_id"]
     name, args = calls[0]
     assert name == "caseproof_signed_publish_uploaded"
-    assert args == {"p_case": _UUID_A, "p_document": _UUID_B, "p_version": _UUID_C,
-                    "p_role": "own_draft", "p_expected_revision": 1}
+    raw = bytearray(
+        hashlib.sha256(f"caseproof-working-brief:own_draft:{_UUID_A}".encode()).digest()[:16])
+    raw[6] = (raw[6] & 0x0F) | 0x40
+    raw[8] = (raw[8] & 0x3F) | 0x80
+    assert args["p_brief"] == str(uuid.UUID(bytes=bytes(raw)))
+    assert outcome.brief_id == args["p_brief"]
+    assert args["p_expected"] == 1 and args["p_intent"] == kwargs["intent_id"]
+    assert args["p_references"] == kwargs["references"]
+    assert args["p_assertions"] == kwargs["assertions"]
+    assert args["p_representation"] == kwargs["representation"]
+    assert args["p_representation_sha"] == kwargs["representation_sha256"]
+    assert args["p_graph_sha"] == kwargs["graph_sha256"]
 
 
 def test_live_publisher_confirm_exhibit_mappings_contract():
-    publisher, calls = _publisher_stub({"ok": True, "exhibit_id": _UUID_A, "exhibit_revision": 3})
+    import hashlib
+    import json
+    existing = {"exhibit_id": "piece-aaa111bbb222", "display_label": "Contrat", "aliases": [],
+                "confirmed": True, "manual_inclusion": False,
+                "pages": [{"source_id": _UUID_B, "version_id": _UUID_C, "pdf_page": 1,
+                           "printed_page": None, "bundle_page": None}]}
+
+    def stub(calls):
+        if calls[-1][0] == "caseproof_signed_exhibit_register":
+            return {"ok": True, "register_revision": 3,
+                    "payload": {"schema": "caseproof-exhibit-register-v1", "entries": [existing]},
+                    "media_type": "application/pdf", "page_count": 3}
+        return {"ok": True, "exhibit_revision": 4, "replay": False}
+
+    publisher, calls = _publisher_stub(stub)
     confirmed = publisher.confirm_exhibit(
         bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
         display_label="Pièce 4",
         page_mappings=[{"pdf_page": 1, "printed_page": 3, "bundle_page": 7}])
-    assert confirmed.exhibit_revision == 3
-    name, args = calls[0]
+    assert confirmed.exhibit_revision == 4
+    assert confirmed.exhibit_id.startswith("piece-")
+    assert calls[0][0] == "caseproof_signed_exhibit_register"
+    name, args = calls[1]
     assert name == "caseproof_signed_confirm_exhibit"
-    assert args["p_page_mappings"] == [{"pdf_page": 1, "printed_page": 3, "bundle_page": 7}]
+    assert args["p_expected"] == 3
+    assert args["p_sha"] == hashlib.sha256(args["p_payload"].encode("utf-8")).hexdigest()
+    register = json.loads(args["p_payload"])
+    assert register["schema"] == "caseproof-exhibit-register-v1"
+    assert register["entries"][0] == existing
+    new = register["entries"][1]
+    assert new["exhibit_id"] == confirmed.exhibit_id
+    assert new["display_label"] == "Pièce 4" and new["confirmed"] is True
+    assert new["manual_inclusion"] is False and new["aliases"] == []
+    assert new["pages"] == [
+        {"source_id": _UUID_B, "version_id": _UUID_C, "pdf_page": 1,
+         "printed_page": 3, "bundle_page": 7},
+        {"source_id": _UUID_B, "version_id": _UUID_C, "pdf_page": 2,
+         "printed_page": None, "bundle_page": None},
+        {"source_id": _UUID_B, "version_id": _UUID_C, "pdf_page": 3,
+         "printed_page": None, "bundle_page": None}]
 
 
 def test_live_publisher_error_mapping():
     from apps.api.signed_supabase_originals import PrivateStorageDenied
     for error, expected in (
         ("denied", PrivateStorageDenied),
+        ("forbidden", PrivateStorageDenied),
         ("stale_revision", ValueError),
         ("duplicate_version", ValueError),
         ("conflict", ValueError),
@@ -683,27 +749,38 @@ def test_live_publisher_error_mapping():
     ):
         publisher, _ = _publisher_stub({"ok": False, "error": error})
         with pytest.raises(expected):
-            publisher.publish_uploaded(
-                bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
-                document_role="own_draft", expected_revision=0)
+            publisher.publish_uploaded(**_live_publish_kwargs())
 
 
 def test_live_publisher_strict_response_and_input():
     from apps.api.signed_supabase_originals import PrivateStorageFailure
     bad_results = [
-        {"ok": True, "brief_id": "not-a-uuid", "brief_version_id": _UUID_B,
-         "published_revision": 1},
-        {"ok": True, "brief_id": _UUID_A, "brief_version_id": _UUID_B,
-         "published_revision": "1"},
-        {"brief_id": _UUID_A},
+        {"ok": True, "replay": False, "revision": "1"},
+        {"ok": True, "revision": 1},
+        {"ok": True, "replay": False},
         ["not-a-dict"],
     ]
     for result in bad_results:
         publisher, _ = _publisher_stub(result)
         with pytest.raises(PrivateStorageFailure):
-            publisher.publish_uploaded(
-                bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
-                document_role="own_draft", expected_revision=0)
+            publisher.publish_uploaded(**_live_publish_kwargs())
+    publisher, _ = _publisher_stub({"ok": True, "replay": False, "revision": 2})
+    bad_inputs = []
+    wrong_sha = _live_publish_kwargs()
+    wrong_sha["representation_sha256"] = "0" * 64
+    bad_inputs.append(wrong_sha)
+    dup_refs = _live_publish_kwargs()
+    dup_refs["references"] = dup_refs["references"] * 2
+    bad_inputs.append(dup_refs)
+    ghost_ref = _live_publish_kwargs()
+    ghost_ref["assertions"] = [dict(ghost_ref["assertions"][0], reference_id="fantôme")]
+    bad_inputs.append(ghost_ref)
+    bad_role = _live_publish_kwargs()
+    bad_role["document_role"] = "judge"
+    bad_inputs.append(bad_role)
+    for kwargs in bad_inputs:
+        with pytest.raises(ValueError):
+            publisher.publish_uploaded(**kwargs)
     publisher, _ = _publisher_stub({"ok": True, "exhibit_id": _UUID_A, "exhibit_revision": 1})
     for bad_mappings in (
         [{"pdf_page": 1}, {"pdf_page": 1}],
