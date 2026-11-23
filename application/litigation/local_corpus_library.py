@@ -77,7 +77,7 @@ def decode_corpus_pack(raw: bytes) -> LegalCorpusConfig:
                     or any(x.compress_type != ZIP_STORED or x.flag_bits & 1 for x in infos)
                     or sum(x.file_size for x in infos) > MAX_PACK_BYTES
                     or any(not (name in ("corpus-manifest.toml", "act-aliases.toml")
-                                or re.fullmatch(r"data/[0-9]+-(?:source\.bin|article\.txt)", name)) for name in names)):
+                                or re.fullmatch(r"data/[0-9]+-(?:source\.bin|article\.txt|layer\.txt)", name)) for name in names)):
                 raise CorpusError("corpus transport inventory refused")
             with tempfile.TemporaryDirectory(prefix="caseproof-corpus-") as temp:
                 directory = Path(temp)

@@ -101,7 +101,7 @@ structural title (Section, Sous-section, Chapitre), a footer then a title, or th
   eye on the lines around it): 8.1, 8.12, 8.20, 8.26, 8.34. No repeated page header exists in this PDF.
 - Excluded, fail closed, not repaired: 8.23 (the loader cannot identify one unambiguous first body line),
   8.25 (heading and lines differ between the layer and the PDF's own text around the amended passage).
-- Amendment markers such as "[1 ... ]1" are kept as printed. 8.39 is the last article and ends with a quote mark.
+- Amendment markers "[1 ... ]1" appear in 8.25 only (excluded); its footnote "(1)<L 2024-03-28/60 ...>" confirms it is the one amended article of this rendering. No included article carries markers or footnotes (checked on the text; the five continuation pages and the 8.25 page were inspected as rendered pixels, the other pages only through the text layer). 8.39 is the last article and ends with a quote mark.
 - No applicability, version or validity claim: this is the consolidated rendering dated 2025-06-05 (updates to
   2024-03-29) and the lawyer decides temporal applicability. NL still has art. 8.5 only.
 Exports store identical originals and text layers once (`shared_originals`, format shared-originals-v1), used only

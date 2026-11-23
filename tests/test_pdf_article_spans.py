@@ -32,3 +32,18 @@ def test_truncated_article_and_unknown_footer_shapes_are_refused():
     assert odd.endswith("Debut de l'article")
     with pytest.raises(CorpusError):
         check_derived_binding("official_text_capture", ODD.encode(), odd, "8.8", layer=True)
+
+
+def test_corpus_pack_transport_roundtrips_a_publisher_pdf_corpus_with_its_text_layer(tmp_path):
+    from application.litigation.legal_references import load_corpus_config
+    from application.litigation.local_corpus_library import (
+        LocalCorpusLibrary,
+        decode_corpus_pack,
+        encode_corpus_pack,
+    )
+    from tests.test_legal_reference_adversarial import pdf_corpus
+    config = load_corpus_config(pdf_corpus(tmp_path))
+    assert any(r.original_text_layer_sha256 for r in config.records)
+    raw = encode_corpus_pack(config)
+    assert decode_corpus_pack(raw).pack_sha256 == config.pack_sha256
+    assert LocalCorpusLibrary(tmp_path / "lib").install(raw) == config.pack_sha256
