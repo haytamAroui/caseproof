@@ -280,10 +280,6 @@
         "Source version, digest or representation changed. Refresh the inventory before viewing or downloading." :
         statusFor(error);}
   }
-  const SIGNED_UNSUPPORTED={
-    original:"Original download is not available in the signed workbench yet: no signed route returns original bytes. Nothing was requested.",
-    page:"Page rendering is not available in the signed workbench yet: no signed route renders pages. The locator above is the only page evidence shown.",
-    search:"Evidence search is not available in the signed workbench yet: no signed search route exists. Nothing was searched."};
   async function downloadOriginal(row) {
     const generation=state.generation;
     try {
@@ -681,13 +677,12 @@
     const generation=state.generation;
     const query=$("query").value.trim(),node=$("search-results");node.replaceChildren();
     if(query.length<2){node.append(el("p","Enter at least two characters.","small"));return;}
-    if(signedWorkbench){node.append(el("p",SIGNED_UNSUPPORTED.search,"small"));return;}
     try{
-      const d=await api(path()+"/evidence/search",{method:"POST",json:{query}});
+      const d=await api((signedWorkbench?reviewPath():path())+"/evidence/search",{method:"POST",json:{query}});
       if(generation!==state.generation||!state.session)return;
       if(d.schema!=="caseproof-evidence-search-v1"||d.case_id!==state.caseId ||
          d.brief_version_id!==state.briefId||!Array.isArray(d.hits))throw Error("invalid_schema");
-      node.append(el("p",d.coverage+" coverage · "+d.hits.length+" matches","small"));
+      node.append(el("p",d.coverage+" coverage · "+d.hits.length+" matches · literal text matches only: a match shows where the words occur, not that the passage supports any assertion","small"));
       for(const h of d.hits){
         const item=el("div","","result-item");
         item.append(el("strong",h.source_id+" · "+(h.locator||"unmapped")));

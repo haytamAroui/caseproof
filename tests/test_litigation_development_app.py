@@ -3805,6 +3805,12 @@ def test_signed_composed_workflow_on_disposable_postgres():
         assert client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/pages/99", headers=auth).status_code == 404
         assert client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/original").status_code == 401
         assert client.get(f"{base2}/sources/{src_id}/versions/{uuid4()}/original", headers=auth).status_code in {403, 404}
+        # Literal search over the declared, verified versions (never a support claim).
+        assert client.post(base2 + "/evidence/search", json={"query": "ab"}).status_code == 401
+        assert client.post(base2 + "/evidence/search", json={"query": "a"}, headers=auth).status_code == 422
+        found = client.post(base2 + "/evidence/search", json={"query": "zzqx-absent-term"}, headers=auth)
+        assert found.status_code == 200 and found.json()["hits"] == []
+        assert found.json()["schema"] == "caseproof-evidence-search-v1"
         # Review over HTTP on the current version; replay is idempotent.
         assert client.get(base2 + "/review", headers=auth).json()["revision"] == 0
         abst2 = next(f for f in run2.factual_observations

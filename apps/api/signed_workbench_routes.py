@@ -129,6 +129,11 @@ def _corpus_for(wb: Any, case_id: str) -> Any:
     return provider(case_id) if callable(provider) else None
 
 
+class SearchBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    query: str = Field(min_length=2, max_length=120)
+
+
 def create_signed_workbench_router(
     factory: Callable[[str], _Workbench] | None,
 ) -> APIRouter:
@@ -292,6 +297,23 @@ def create_signed_workbench_router(
         return SignedBriefSources(wb.checker).preview(
             bearer=bearer, case_id=case_id, brief_version_id=brief_version_id,
             source_id=source_id)
+
+    @router.post(base + "/evidence/search")
+    def signed_search(
+        case_id: str, brief_version_id: str, body: SearchBody,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Literal text search over the brief's declared, verified source versions.
+        A hit is where the words occur. It is never support for an assertion."""
+        from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
+        bearer, wb = bench(authorization)
+        try:
+            result = AuthorizedEvidenceSearch(wb.checker).search(
+                bearer=bearer, case_id=case_id, brief_version_id=brief_version_id,
+                query=body.query)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid search query") from None
+        return {"schema": "caseproof-evidence-search-v1", **asdict(result)}
 
     def _original(wb: Any, bearer: str, case_id: str, brief_version_id: str,
                   source_id: str, version_id: str) -> Any:
