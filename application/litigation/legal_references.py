@@ -44,12 +44,23 @@ from domains.disputes.statute_parser import (
 
 ENGINE = "caseproof-legal-reference-check-v1"
 ENGINE_STRICT = "caseproof-legal-reference-check-v2"
+# v3: wording that appeals to a legal authority. Cue words only: it flags for a human, it never judges.
+_AUTHORITY_WINDOW = 150
+_AUTHORITY_CUE = re.compile(
+    r"(?i)\b(?:en vertu (?:de|du|des)|conform[ée]ment (?:à|au|aux)|jurisprudence|arr[êe]t(?:s)? de la cour|"
+    r"cour de cassation|conseil d['’]\s?[ée]tat|la loi (?:dispose|impose|pr[ée]voit|exige)|"
+    r"krachtens|overeenkomstig|rechtspraak|hof van cassatie|raad van state|de wet (?:bepaalt|bepaalt|schrijft|eist))\b")
 ENGINE_STRICT3 = "caseproof-legal-reference-check-v3"
+ENGINE_STRICT4 = "caseproof-legal-reference-check-v4"  # v3 + authority cues
 
 
 def engine_mode(marker: object) -> tuple[bool, bool]:
     """(strict, v3) for a review's check_engine marker. Unmarked reviews replay with the original engine."""
-    return marker in (ENGINE_STRICT, ENGINE_STRICT3), marker == ENGINE_STRICT3
+    return marker in (ENGINE_STRICT, ENGINE_STRICT3, ENGINE_STRICT4), marker in (ENGINE_STRICT3, ENGINE_STRICT4)
+
+
+def engine_authority(marker: object) -> bool:
+    return marker == ENGINE_STRICT4
 _WS = re.compile(r"\s+")
 _QUOTE = re.compile(r"«\s*(.+?)\s*»", re.DOTALL)
 # A mention that looks like an article citation, whatever its exact form.
@@ -168,6 +179,7 @@ def check_legal_references(
     chosen_versions: Mapping[str, str] | None = None,
     strict: bool = False,
     v3: bool = False,
+    authority: bool = False,
 ) -> tuple[LegalReferenceObservation, ...]:
     """Check every cited article of ``text`` against the chosen corpus.
 
@@ -306,15 +318,36 @@ def check_legal_references(
                 reference_id=f"legal-ref-{n:02d}", raw_text=text[om.start():om.start() + 60], start=om.start(),
                 end=min(len(text), om.start() + 60), act_code=None, article=None, language=None,
                 status=RuleStatus.UNDETERMINED, reason="quotation_delimiter_not_recognised_text_not_checked"))
+    mention_spans: list[tuple[int, int]] = []
     for m in (_MENTION_STRICT if strict else _MENTION).finditer(text):
         if any(s <= m.start() < e for s, e in covered):
             continue
+        mention_spans.append(m.span())
         n += 1
         out.append(LegalReferenceObservation(
             reference_id=f"legal-ref-{n:02d}", raw_text=text[m.start():m.start() + 60],
             start=m.start(), end=min(len(text), m.start() + 60), act_code=None,
             article=None, language=None, status=RuleStatus.UNDETERMINED,
             reason="article_mention_not_readable_by_level1_parser"))
+    if authority:
+        # Authority asserted with no identifiable reference nearby: never silently skipped.
+        known = covered + mention_spans
+        last_end = -1
+        for am in _AUTHORITY_CUE.finditer(text):
+            if am.start() < last_end:
+                continue
+            line_start = text.rfind("\n", 0, am.start()) + 1
+            line_end = text.find("\n", am.end())
+            line_end = len(text) if line_end < 0 else line_end
+            if any(line_start <= a and b <= line_end and abs(a - am.start()) <= _AUTHORITY_WINDOW for a, b in known):
+                continue
+            last_end = min(line_end, am.start() + _AUTHORITY_WINDOW)
+            n += 1
+            out.append(LegalReferenceObservation(
+                reference_id=f"legal-ref-{n:02d}", raw_text=text[am.start():am.start() + 60],
+                start=am.start(), end=min(len(text), am.start() + 60), act_code=None,
+                article=None, language=None, status=RuleStatus.UNDETERMINED,
+                reason="legal_authority_asserted_without_identifiable_reference_not_checked"))
     return tuple(sorted(out, key=lambda o: o.start))
 
 

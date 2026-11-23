@@ -186,7 +186,7 @@ def test_report_accounts_for_every_quotation_and_labels_scope(tmp_path):
         [DERIVED, "La preuve est toujours inutile.", "Citation orpheline."])
     html = ZipFile(io.BytesIO(raw)).read("report.html").decode()
     assert "Citations entre guillemets dans le Word : 3. Citations avec un constat visible ci-dessous : 3" in html
-    assert "Contexte, réserves, portée et applicabilité non évalués" in html and "Moteur de contrôle strict (v3)" in html
+    assert "Contexte, réserves, portée et applicabilité non évalués" in html and "Moteur de contrôle strict (v4)" in html
 
 
 def test_moving_body_start_alone_never_turns_an_omitted_reserve_into_pass(tmp_path):
@@ -242,7 +242,7 @@ def test_signed_service_and_offline_check_give_identical_findings_for_the_same_w
     checker.store = SimpleNamespace(load_bundle=lambda **_: bundle)
     with pytest.raises(Exception):  # noqa: B017, PT011 - the spy aborts after the legal step on purpose
         checker.check(bearer="t", case_id="c", brief_version_id="v")
-    assert seen["strict"] is True and seen["v3"] is True
+    assert seen["strict"] is True and seen["v3"] is True and seen["authority"] is True
     assert seen["obs"] == offline
 
 
@@ -408,3 +408,30 @@ def test_signed_http_pack_route_replays_with_same_findings_as_offline_check(tmp_
               verify_legal_pack(r.content, expected_sha256=r.headers["X-CaseProof-Legal-Review-SHA256"])["references"]]
     assert routed == offline
     assert zipfile.ZipFile(io.BytesIO(r.content)).namelist()
+
+
+def test_authority_asserted_without_reference_is_surfaced_not_skipped(tmp_path):
+    p = tmp_path / "a.docx"
+    p.write_bytes(docx_without_custom_xml([
+        "En vertu de la loi, le demandeur doit prouver ses allégations.",
+        "Selon la jurisprudence constante de la Cour de cassation, la charge est inversée.",
+        f"Conformément à l'article 8.5 du Code civil : « {ARTICLE} »."]))
+    raw, cp = check_offline_docx(docx=p, corpus=pdf_corpus(tmp_path))
+    refs = verify_legal_pack(raw, expected_sha256=cp)["references"]
+    reasons = [r["reason"] for r in refs]
+    assert reasons.count("legal_authority_asserted_without_identifiable_reference_not_checked") == 2
+    assert not any(r["status"] == "PASS" and r["reason"].startswith("legal_authority") for r in refs)
+    assert any(r["status"] == "PASS" for r in refs)  # the cited, correctly quoted article is not buried
+
+
+def test_old_v3_export_replays_unchanged_without_authority_cues(tmp_path):
+    from application.litigation.legal_references import (
+        ENGINE_STRICT3,
+        check_legal_references,
+        engine_authority,
+        load_corpus_config,
+    )
+    cfg = load_corpus_config(corpus(tmp_path))
+    text = "En vertu de la loi, tout est dit."
+    v3 = check_legal_references(text, cfg.records, cfg.act_aliases, chosen_versions=cfg.chosen_versions, strict=True, v3=True)
+    assert v3 == () and engine_authority(ENGINE_STRICT3) is False

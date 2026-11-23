@@ -28,6 +28,7 @@ from application.litigation.legal_references import (
     _QUOTE_V3,
     LegalCorpusConfig,
     check_legal_references,
+    engine_authority,
     engine_mode,
 )
 from application.litigation.legal_review_decisions import body_fingerprints, validate_review
@@ -114,7 +115,7 @@ def _report(body: dict[str, Any]) -> bytes:
         quotes = [m for m in (_QUOTE_V3 if v3 else _QUOTE_STRICT).finditer(body["brief_text"])]
         accounted = sum(any(o.get("quote") and " ".join(o["quote"].split()) == " ".join(next(g for g in m.groups() if g is not None).split())
                             for o in body["references"]) for m in quotes)
-        parts += ["<p class='note'>Moteur de contrôle strict (", "v3" if v3 else "v2", "). Les exports plus anciens, sans cette mention, utilisent un moteur plus large. ",
+        parts += ["<p class='note'>Moteur de contrôle strict (", "v4" if engine_authority(body["review"].get("check_engine")) else "v3" if v3 else "v2", "). Les exports plus anciens, sans cette mention, utilisent un moteur plus large. ",
                   "Un PASS signifie seulement : extrait littéralement présent dans le texte conservé. Le contexte, les réserves, la portée et ",
                   "l'applicabilité restent à l'avocat.</p><h2>Couverture</h2><p>Citations entre guillemets dans le Word : ", str(len(quotes)),
                   ". Citations avec un constat visible ci-dessous : ", str(accounted), ". Références d'article : ",
@@ -241,7 +242,8 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
         observed = check_legal_references(body["brief_text"], config.records, config.act_aliases,
                                          chosen_versions=config.chosen_versions,
                                          strict=engine_mode(body["review"].get("check_engine"))[0],
-                                         v3=engine_mode(body["review"].get("check_engine"))[1])
+                                         v3=engine_mode(body["review"].get("check_engine"))[1],
+                                         authority=engine_authority(body["review"].get("check_engine")))
         if _encode([asdict(x) for x in observed]) != _encode(body["references"]):
             raise CorpusError("legal checks do not replay")
         if body["article_index"] != [{"key": r.key, "index": i} for i, r in enumerate(config.records)]:
