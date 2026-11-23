@@ -29,12 +29,17 @@ from application.litigation.exhibit_passages import RULES as PASSAGE_RULES
 from application.litigation.exhibit_passages import SCOPE as PASSAGE_SCOPE
 from application.litigation.exhibit_passages import SCOPE_LEGACY as PASSAGE_SCOPE_LEGACY
 from application.litigation.exhibit_passages import validate_passages
+from application.litigation.lawyer_conditions import R_FOUND as COND_FOUND
+from application.litigation.lawyer_conditions import R_NONE as COND_NONE
+from application.litigation.lawyer_conditions import SCOPE as CONDITION_SCOPE
+from application.litigation.lawyer_conditions import condition_observations, validate_evidence, validate_spec
 from application.litigation.legal_references import (
     _QUOTE_STRICT,
     _QUOTE_V3,
     LegalCorpusConfig,
     check_legal_references,
     engine_authority,
+    engine_conditions,
     engine_exhibits,
     engine_mode,
 )
@@ -128,7 +133,7 @@ def _report(body: dict[str, Any]) -> bytes:
         quotes = [m for m in (_QUOTE_V3 if v3 else _QUOTE_STRICT).finditer(body["brief_text"])]
         accounted = sum(any(o.get("quote") and " ".join(o["quote"].split()) == " ".join(next(g for g in m.groups() if g is not None).split())
                             for o in body["references"]) for m in quotes)
-        parts += ["<p class='note'>Moteur de contrôle strict (", "v5" if engine_exhibits(body["review"].get("check_engine")) else "v4" if engine_authority(body["review"].get("check_engine")) else "v3" if v3 else "v2", "). Les exports plus anciens, sans cette mention, utilisent un moteur plus large. ",
+        parts += ["<p class='note'>Moteur de contrôle strict (", "v6" if engine_conditions(body["review"].get("check_engine")) else "v5" if engine_exhibits(body["review"].get("check_engine")) else "v4" if engine_authority(body["review"].get("check_engine")) else "v3" if v3 else "v2", "). Les exports plus anciens, sans cette mention, utilisent un moteur plus large. ",
                   "Un PASS signifie seulement : extrait littéralement présent dans le texte conservé. Le contexte, les réserves, la portée et ",
                   "l'applicabilité restent à l'avocat.</p><h2>Couverture</h2><p>Citations entre guillemets dans le Word : ", str(len(quotes)),
                   ". Citations avec un constat visible ci-dessous : ", str(accounted), ". Références d'article : ",
@@ -148,6 +153,8 @@ def _report(body: dict[str, Any]) -> bytes:
     prints = body_fingerprints(body)
     layered = body["review"].get("decision_layer") == 1
     decided = {d["fingerprint"]: d for d in body["review"].get("decisions", [])}
+    cond_rows = iter(body.get("condition_evidence", []))
+    cond_labels = {c["id"]: c for c in body.get("conditions", {}).get("conditions", [])}
     for obs, fp in zip(body["references"], prints, strict=True):
         parts += ["<article><h3>", esc(obs["raw_text"]), "</h3><strong>", esc(obs["status"]),
                   "</strong> · ", esc(obs["reason"]), "<pre>", esc(obs["quote"] or "Aucune citation liée"), "</pre>"]
@@ -156,6 +163,18 @@ def _report(body: dict[str, Any]) -> bytes:
         row = by_key.get(obs["corpus_key"])
         if row is not None:
             parts += [f"<a href='#article-{row['index']}'>Rouvrir le passage exact du pack figé</a>"]
+        elif obs["reason"] in (COND_FOUND, COND_NONE):
+            ev = next(cond_rows, None)
+            cond = cond_labels.get(ev["condition"]) if ev else None
+            parts += ["<p class='note'>", esc(CONDITION_SCOPE), "</p>"]
+            if ev is not None and cond is not None:
+                parts += ["<p><strong>Condition :</strong> ", esc(cond["label"]), "</p>"]
+                if cond["question"]:
+                    parts += ["<p><strong>Question de l'avocat :</strong> ", esc(cond["question"]), "</p>"]
+                parts += ["<p><strong>Phrase du mémoire :</strong> ", esc(ev["sentence"]), "</p><p>Pièces lues : ",
+                          esc(", ".join(ev["pieces_read"]) or "aucune"), ". Mots à retrouver : ", esc(", ".join(cond["evidence"])), ". ",
+                          ("Passages trouvés :" if ev["found"] else "Aucun passage trouvé dans les pièces lues (cela ne prouve pas l'absence : texte non lisible, formulation différente).") , "</p>"]
+                parts += [f"<pre>{esc(f['piece'])} p. {f['page']} · « {esc(f['term'])} »\n{esc(f['excerpt'])}</pre>" for f in ev["found"]]
         elif obs["reason"].startswith("exhibit_"):
             parts += ["<p>Renvoi à une pièce : aucun article de corpus concerné.</p>"]
             entry = next((e for e in body.get("passages", []) if e["reference_id"] == obs["reference_id"]), None)
@@ -225,7 +244,8 @@ class LegalRun(Protocol):
     def legal_observations(self) -> tuple[LegalObservation, ...]: ...
 
 
-def observe(text: str, config: LegalCorpusConfig, marker: object, exhibits: dict[str, Any] | None) -> tuple[Any, ...]:
+def observe(text: str, config: LegalCorpusConfig, marker: object, exhibits: dict[str, Any] | None,
+            conditions: tuple[dict[str, Any], list[dict[str, Any]]] | None = None) -> tuple[Any, ...]:
     """The one place legal and exhibit observations are produced, for build and cold replay alike."""
     strict, v3 = engine_mode(marker)
     obs = list(check_legal_references(text, config.records, config.act_aliases, chosen_versions=config.chosen_versions,
@@ -234,13 +254,18 @@ def observe(text: str, config: LegalCorpusConfig, marker: object, exhibits: dict
         if exhibits is None:
             raise CorpusError("exhibit manifest required by this engine")
         obs += exhibit_observations(text, exhibits, len(obs) + 1)
+        if engine_conditions(marker):
+            if conditions is None:
+                raise CorpusError("conditions required by this engine")
+            obs += condition_observations(text, conditions[0], conditions[1], len(obs) + 1)
         obs.sort(key=lambda o: o.start)
     return tuple(obs)
 
 
 def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
                      brief_text: str, review: dict[str, Any], exhibits: dict[str, Any] | None = None,
-                     passages: list[dict[str, Any]] | None = None, passages_rules: str | None = PASSAGE_RULES) -> tuple[bytes, str]:
+                     passages: list[dict[str, Any]] | None = None, passages_rules: str | None = PASSAGE_RULES,
+                     conditions: dict[str, Any] | None = None, condition_evidence: list[dict[str, Any]] | None = None) -> tuple[bytes, str]:
     if config.failures or not config.records or run.corpus_pack_sha256 != config.pack_sha256:
         raise CorpusError("complete exact chosen corpus required for export")
     if _hash(brief_text.encode()) != run.representation_sha256 or review.get("snapshot_hash") != run.snapshot_hash:
@@ -267,6 +292,9 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
         body["passages"] = passages
         if passages_rules is not None:
             body["passages_rules"] = passages_rules
+    if conditions is not None:
+        body["conditions"] = conditions
+        body["condition_evidence"] = condition_evidence if condition_evidence is not None else []
     payload = _encode(body)
     checkpoint = _hash(payload)
     report = _report(body)
@@ -311,7 +339,14 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
             raise CorpusError("exhibit coverage section does not match the engine marker")
         if "passages" in body and not engine_exhibits(marker):
             raise CorpusError("passages without exhibit coverage")
-        observed = observe(body["brief_text"], config, marker, body.get("exhibits"))
+        if engine_conditions(marker) != ("conditions" in body) or ("condition_evidence" in body) != ("conditions" in body):
+            raise CorpusError("conditions section does not match the engine marker")
+        cond = None
+        if "conditions" in body:
+            spec = validate_spec(body["conditions"])
+            validate_evidence(body["brief_text"], spec, body["condition_evidence"])
+            cond = (spec, body["condition_evidence"])
+        observed = observe(body["brief_text"], config, marker, body.get("exhibits"), cond)
         if "passages" in body:
             validate_passages(body["brief_text"], [asdict(x) for x in observed], body["passages"], body.get("passages_rules"))
         if _encode([asdict(x) for x in observed]) != _encode(body["references"]):

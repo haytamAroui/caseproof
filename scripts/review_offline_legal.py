@@ -31,6 +31,7 @@ def main() -> None:
     again.add_argument("--corpus", type=Path, required=True)
     again.add_argument("--previous", type=Path, required=True)
     again.add_argument("--exhibits", type=Path, help="Same exhibit directory as the first check")
+    again.add_argument("--conditions", type=Path, help="Same conditions.toml as the first check")
     again.add_argument("--checkpoint", required=True)
     again.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -41,7 +42,8 @@ def main() -> None:
         _write(args.output, raw, cp, "local_decision_not_filing_approval")
     else:
         raw, cp = recheck(docx=args.docx, corpus=args.corpus, prior_pack=args.previous.read_bytes(),
-                          prior_checkpoint=args.checkpoint, exhibits=args.exhibits)
+                          prior_checkpoint=args.checkpoint, exhibits=args.exhibits,
+                          conditions=args.conditions)
         _write(args.output, raw, cp, "legal_reference_slice_only")
 
 

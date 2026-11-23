@@ -98,7 +98,7 @@ def exhibit_note(body: dict) -> str:
 
 
 def serve(corpus: Path, port: int, *, open_browser: bool = True, library: Path | None = None,
-          exhibits: Path | None = None) -> None:
+          exhibits: Path | None = None, conditions: Path | None = None) -> None:
     config = load_corpus_config(corpus)
     if config.failures or not config.records:
         raise CorpusError("complete chosen corpus required")
@@ -186,7 +186,7 @@ def serve(corpus: Path, port: int, *, open_browser: bool = True, library: Path |
                         source.write_bytes(base64.b64decode(req["docx_base64"], validate=True))
                         data, checkpoint = recheck(docx=source, corpus=selected,
                                                    prior_pack=base64.b64decode(req["archive_base64"], validate=True),
-                                                   prior_checkpoint=str(req["checkpoint"]), exhibits=exhibits)
+                                                   prior_checkpoint=str(req["checkpoint"]), exhibits=exhibits, conditions=conditions)
                     out = json.dumps(_payload(data, checkpoint), ensure_ascii=False).encode()
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -202,7 +202,7 @@ def serve(corpus: Path, port: int, *, open_browser: bool = True, library: Path |
                 with tempfile.TemporaryDirectory(prefix="caseproof-offline-") as temp:
                     source = Path(temp) / "brief.docx"
                     source.write_bytes(raw)
-                    data, checkpoint = check_offline_docx(docx=source, corpus=selected, chosen_versions=versions, exhibits=exhibits)
+                    data, checkpoint = check_offline_docx(docx=source, corpus=selected, chosen_versions=versions, exhibits=exhibits, conditions=conditions)
             except Exception as exc:
                 message = str(exc) if isinstance(exc, (CorpusError, ValueError)) else "Word input refused"
                 self.send_response(422)
@@ -244,10 +244,11 @@ def main() -> None:
     parser.add_argument("--corpus", type=Path, required=True)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--conditions", type=Path, help="conditions.toml defined by the lawyer (needs --exhibits)")
     parser.add_argument("--exhibits", type=Path, help="Directory with bordereau.toml and exhibit files (reference resolution and byte coverage only)")
     parser.add_argument("--library", type=Path, help="Append-only local corpus pack directory")
     args = parser.parse_args()
-    serve(args.corpus, args.port, open_browser=not args.no_browser, library=args.library, exhibits=args.exhibits)
+    serve(args.corpus, args.port, open_browser=not args.no_browser, library=args.library, exhibits=args.exhibits, conditions=args.conditions)
 
 
 if __name__ == "__main__":

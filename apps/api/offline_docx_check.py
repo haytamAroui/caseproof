@@ -13,9 +13,11 @@ from pathlib import Path
 from application.litigation.corpus import CorpusError
 from application.litigation.exhibit_coverage import load_exhibit_set
 from application.litigation.exhibit_passages import build_passages, read_piece_texts
+from application.litigation.lawyer_conditions import build_evidence, load_conditions
 from application.litigation.legal_references import (
     ENGINE_STRICT4,
     ENGINE_STRICT5,
+    ENGINE_STRICT6,
     LegalCorpusConfig,
     load_corpus_config,
 )
@@ -35,7 +37,8 @@ class OfflineLegalRun:
 
 def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
                        chosen_versions: dict[str, str] | None = None,
-                       prior: tuple[bytes, str] | None = None, exhibits: Path | None = None) -> tuple[bytes, str]:
+                       prior: tuple[bytes, str] | None = None, exhibits: Path | None = None,
+                       conditions: Path | None = None) -> tuple[bytes, str]:
     """Checks execute now from local bytes, never from saved/precomputed results.
 
     Corpus selection is explicit. Override only for an intentionally requested
@@ -57,11 +60,17 @@ def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
         config = replace(config, chosen_versions=chosen_versions)
     text = artifact["text"]
     exhibit_set = load_exhibit_set(exhibits, lambda raw: parse_docx(raw)["text"]) if exhibits is not None else None
-    engine = ENGINE_STRICT5 if exhibit_set is not None else ENGINE_STRICT4
-    observations = observe(text, config, engine, exhibit_set)
+    if conditions is not None and exhibit_set is None:
+        raise CorpusError("conditions need an exhibit directory")
+    engine = ENGINE_STRICT6 if conditions is not None else ENGINE_STRICT5 if exhibit_set is not None else ENGINE_STRICT4
+    piece_texts = (read_piece_texts(exhibits, exhibit_set, lambda raw: parse_docx(raw)["text"])
+                   if exhibit_set is not None and exhibits is not None else None)
+    spec = load_conditions(conditions) if conditions is not None else None
+    evidence = build_evidence(text, spec, piece_texts or {}) if spec is not None else None
+    observations = observe(text, config, engine, exhibit_set, (spec, evidence) if spec is not None and evidence is not None else None)
     passages = None
-    if exhibit_set is not None and exhibits is not None:
-        passages = build_passages(text, observations, read_piece_texts(exhibits, exhibit_set, lambda raw: parse_docx(raw)["text"]))
+    if piece_texts is not None:
+        passages = build_passages(text, observations, piece_texts)
     if not observations:
         raise CorpusError("no supported explicit legal reference detected; no success claim")
     representation_sha = hashlib.sha256(text.encode()).hexdigest()
@@ -83,4 +92,5 @@ def check_offline_docx(*, docx: Path, corpus: Path | LegalCorpusConfig,
         current = occurrence_fingerprints([asdict(o) for o in observations], by_key, config.pack_sha256, text)
         review.update(carry(before["review"], prior[1], current))
         review["revision"] = int(before["review"].get("revision", 0)) + 1
-    return build_legal_pack(config=config, run=run, brief_text=text, review=review, exhibits=exhibit_set, passages=passages)
+    return build_legal_pack(config=config, run=run, brief_text=text, review=review, exhibits=exhibit_set, passages=passages,
+                            conditions=spec, condition_evidence=evidence)
