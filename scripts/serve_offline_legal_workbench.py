@@ -92,7 +92,7 @@ def _payload(data: bytes, checkpoint: str) -> dict[str, object]:
 def exhibit_note(body: dict) -> str:
     from application.litigation.exhibit_coverage import coverage
     cov = coverage(body["brief_text"], body["exhibits"])
-    return ("Pièces : renvois résolus dans le bordereau local et fichiers lus (empreintes SHA-256). Le contenu des pièces n'est PAS lu pour son sens : seules les dates et montants identiques sont rapprochés, à titre de passages proposés. "
+    return ("Pièces : renvois résolus dans le bordereau local et fichiers lus (empreintes SHA-256). Le contenu des pièces n'est PAS lu pour son sens : seules les dates et montants identiques sont rapprochés, à titre de passages proposés, avec un drapeau partiel de mot d'état (liste fixe FR/NL, personne qui signe non identifiée). "
             f"Au bordereau : {cov['listed']} · jamais citées : {', '.join(cov['unreferenced']) or 'aucune'} · "
             f"fichiers absents : {', '.join(cov['missing_files']) or 'aucun'} · sans texte lisible : {', '.join(cov['unreadable']) or 'aucune'}.")
 

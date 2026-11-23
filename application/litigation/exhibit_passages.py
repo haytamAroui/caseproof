@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import re
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -25,7 +26,15 @@ _PENDING = ("pour signature", "à signer", "en attente de signature", "non sign�
             "ter ondertekening", "voor ondertekening", "nog niet ondertekend", "niet ondertekend", "nog niet getekend")
 MAX_EXCERPT = 400
 MAX_FOUND_PER_VALUE = 3
-SCOPE = ("Passages proposés par correspondance de dates et de montants identiques. Aucune lecture du sens : une même date peut figurer "
+SCOPE = ("Passages proposés par correspondance de dates et de montants identiques, plus un drapeau partiel de mot d'état (liste fixe FR/NL : « signé » contre « pour signature », « non signé »). "
+         "Le drapeau ne sait pas QUI signe (une autre partie peut avoir signé), ni si la phrase de la pièce porte sur la même chose. Aucune lecture du sens : une même date peut figurer "
+         "dans « envoyé pour signature » comme dans « signé ». Une valeur absente de la pièce est une différence candidate, pas une conclusion. "
+         "Extraits enregistrés au moment du contrôle. Sans les octets des pièces, la relecture ne vérifie que la cohérence interne et l'empreinte : "
+         "elle ne prouve pas la fidélité des extraits, et une modification suivie d'un nouveau calcul d'empreinte passerait.")
+
+
+# Frozen text of exports without a rules marker (delivered v5 pack). Never edit: the reading view is replayed byte for byte.
+SCOPE_LEGACY = ("Passages proposés par correspondance de dates et de montants identiques. Aucune lecture du sens : une même date peut figurer "
          "dans « envoyé pour signature » comme dans « signé ». Une valeur absente de la pièce est une différence candidate, pas une conclusion. "
          "Extraits enregistrés au moment du contrôle. Sans les octets des pièces, la relecture ne vérifie que la cohérence interne et l'empreinte : "
          "elle ne prouve pas la fidélité des extraits, et une modification suivie d'un nouveau calcul d'empreinte passerait.")
@@ -53,6 +62,9 @@ def read_piece_texts(directory: Path, exhibits: Mapping[str, Any],
     return out
 
 
+_NEGATION = re.compile(r"\b(?:pas|jamais|non|ne|n'|aucun|aucune|niet|nooit|geen|nog niet)\b|\bn['’]", re.IGNORECASE)
+
+
 def _cue(text: str, cues: tuple[str, ...]) -> str | None:
     low = text.casefold()
     return next((c for c in cues if c in low), None)
@@ -62,8 +74,8 @@ def status_mismatch(claim: str, excerpt: str) -> dict[str, str] | None:
     """Claim says signed while the passage with the same value only has a not-yet-signed wording (partial cue check)."""
     claim_cue = _cue(claim, _SIGNED)
     pending = _cue(excerpt, _PENDING)
-    if claim_cue is None or pending is None or _cue(claim, _PENDING) is not None:
-        return None
+    if claim_cue is None or pending is None or _cue(claim, _PENDING) is not None or _NEGATION.search(claim):
+        return None  # any negation in the claim sentence: abstain rather than guess its scope
     rest = excerpt.casefold()
     for cue in _PENDING:
         rest = rest.replace(cue, " ")

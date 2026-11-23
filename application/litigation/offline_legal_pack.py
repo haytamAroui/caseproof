@@ -25,8 +25,9 @@ from application.litigation.corpus import (
 )
 from application.litigation.exhibit_coverage import coverage as exhibit_coverage
 from application.litigation.exhibit_coverage import exhibit_observations
-from application.litigation.exhibit_passages import SCOPE as PASSAGE_SCOPE
 from application.litigation.exhibit_passages import RULES as PASSAGE_RULES
+from application.litigation.exhibit_passages import SCOPE as PASSAGE_SCOPE
+from application.litigation.exhibit_passages import SCOPE_LEGACY as PASSAGE_SCOPE_LEGACY
 from application.litigation.exhibit_passages import validate_passages
 from application.litigation.legal_references import (
     _QUOTE_STRICT,
@@ -159,7 +160,7 @@ def _report(body: dict[str, Any]) -> bytes:
             parts += ["<p>Renvoi à une pièce : aucun article de corpus concerné.</p>"]
             entry = next((e for e in body.get("passages", []) if e["reference_id"] == obs["reference_id"]), None)
             if entry is not None:
-                parts += ["<p><strong>Affirmation :</strong> ", esc(entry["claim"]), "</p><p class='note'>", esc(PASSAGE_SCOPE), "</p>"]
+                parts += ["<p><strong>Affirmation :</strong> ", esc(entry["claim"]), "</p><p class='note'>", esc(PASSAGE_SCOPE if body.get("passages_rules") else PASSAGE_SCOPE_LEGACY), "</p>"]
                 parts += ["<p>Passages de la pièce avec la même valeur : ", ("" if entry["found"] else "aucun"), "</p>"]
                 parts += [f"<pre>p. {f['page']} · {esc(f['key'])}\n{esc(f['excerpt'])}</pre>" for f in entry["found"]]
                 flagged: set[str] = set()

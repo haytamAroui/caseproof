@@ -302,3 +302,32 @@ def test_export_without_status_cue_rules_still_replays_and_decisions_keep_it(tmp
     bad, bad_sha = reseal(doc, _report(doc))
     with pytest.raises(CorpusError, match="rejected"):
         verify_legal_pack(bad, expected_sha256=bad_sha)
+
+
+@pytest.mark.parametrize(("claim", "excerpt", "flagged", "why"), [
+    ("Le contrat n'a pas été signé le 15/03/2024.", "Contrat envoyé pour signature le 15/03/2024.", False, "claim itself negated"),
+    ("Le contrat a été signé le 15/03/2024.", "Contrat signé le 15/03/2024 par les deux parties.", False, "completed signature"),
+    ("Het contract is ondertekend op 15/03/2024.", "Contract getekend op 15/03/2024.", False, "completed signature (NL)"),
+    ("Le contrat a été signé le 15/03/2024.", "Le contrat signé le 15/03/2024 reste à signer par le garant.", False, "also says signed: no mismatch claimed"),
+    ("Le contrat a été signé le 15/03/2024.", "Le bailleur a envoyé pour signature au garant le 15/03/2024.", True, "KNOWN LIMIT: other party/other act is still flagged"),
+    ("Le locataire a signé le 15/03/2024.", "Contrat non signé par le bailleur le 15/03/2024.", True, "KNOWN LIMIT: the flag does not know WHO signs"),
+])
+def test_status_cue_contrast_cases_do_not_become_a_verdict(claim, excerpt, flagged, why):
+    from application.litigation.exhibit_passages import status_mismatch
+    assert (status_mismatch(claim, excerpt) is not None) is flagged, why
+
+
+def test_legacy_passage_scope_text_is_frozen():
+    """Exports without a rules marker replay their reading view byte for byte: this text must never change."""
+    from application.litigation.exhibit_passages import SCOPE_LEGACY
+    assert hashlib.sha256(SCOPE_LEGACY.encode()).hexdigest() == "a26681ee9128291599cac01a4304387c84d71a5a7a56145d36f40f4a6aa8e1a0"
+
+
+def test_delivered_v5_exports_replay_unchanged():
+    """Real exports from the delivered v5 pack (commit 2321e3dd) must keep replaying under every later code version."""
+    fixtures = Path(__file__).parent / "fixtures" / "offline_legal_v5"
+    checkpoints = json.loads((fixtures / "checkpoints.json").read_text())
+    assert len(checkpoints) == 2
+    for case, checkpoint in checkpoints.items():
+        body = verify_legal_pack((fixtures / f"{case}.zip").read_bytes(), expected_sha256=checkpoint)
+        assert "passages_rules" not in body and "exhibits" in body
