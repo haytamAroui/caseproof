@@ -1047,8 +1047,9 @@ def test_live_workbench_assembly_refuses_mixed_backends():
 
     assert isinstance(ports.publisher, LiveSignedBriefPublisher)
     assert isinstance(ports.review_record, LiveSignedReviewRecord)
-    assert "SignedReviewWorkspace" in ports.missing
-    assert "AuthorizedLitigationChecker" in ports.missing
+    # Every workbench port now has a live adapter; the bearer-bound ones
+    # assemble per request via assemble_request_workbench.
+    assert ports.missing == ()
 
 
 def test_live_workbench_entry_point_fails_closed():
@@ -1065,8 +1066,8 @@ def test_live_workbench_entry_point_fails_closed():
         [sys.executable, str(script)], capture_output=True, text=True,
         env={"PYTHONPATH": str(root), "PATH": "/usr/bin:/bin",
              "CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_" + "D" * 24}, check=False)
-    assert configured.returncode == 3
-    assert "fail-closed" in configured.stderr
+    assert configured.returncode == 0
+    assert "assembl" in configured.stdout
 
 
 def test_signed_review_record_rpc_access_and_contract():
@@ -2584,3 +2585,22 @@ def test_live_review_ledger_record_flow():
                       request_id=UUID(str(request_id)), expected_revision=0,
                       decision=impostor)
     assert calls == []
+
+
+def test_live_request_workbench_assembly():
+    from apps.api.signed_live_composition import _MISSING_PORTS, assemble_request_workbench
+    env = {"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_" + "D" * 24}
+    workbench = assemble_request_workbench(env, "signed-jwt")
+    # The checker must publish to the exact ledger the workspace records into.
+    assert workbench.checker.publisher is workbench.ledger
+    assert workbench.workspace.ledger is workbench.ledger
+    assert workbench.store._bearer == "signed-jwt"
+    assert workbench.originals.checker is workbench.checker
+    assert _MISSING_PORTS == ()
+    with pytest.raises(ValueError):
+        assemble_request_workbench({}, "signed-jwt")
+    with pytest.raises(ValueError):
+        assemble_request_workbench(env, "")
+    with pytest.raises(ValueError):
+        assemble_request_workbench(
+            {"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "service_key"}, "signed-jwt")
