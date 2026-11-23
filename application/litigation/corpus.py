@@ -47,7 +47,7 @@ def _ws(text: str) -> str:
 _HEADING = r"(?:Art\.|Section|Chapitre|Afdeling|Hoofdstuk|Boek|Livre|Titre|Titel)"
 
 
-def check_derived_binding(artifact_kind: str, original_bytes: bytes, derived_text: str, article: str = "") -> None:
+def check_derived_binding(artifact_kind: str, original_bytes: bytes, derived_text: str, article: str = "", layer: bool = False) -> None:
     """A text capture's derived article must be the declared article's own span in its original.
 
     Hashing both files proves nothing about their relation. Occurring somewhere in a large
@@ -73,13 +73,32 @@ def check_derived_binding(artifact_kind: str, original_bytes: bytes, derived_tex
     at = hay.find(needle)
     while at != -1:
         tail = hay[at + len(needle):]
-        if not tail.strip() or re.match(rf"\s*{_HEADING}(?=[\s\d])", tail):
+        if not tail.strip() or re.match(rf"\s*{_HEADING}(?=[\s\d])", tail) or (layer and _ends_article(tail)):
             return
         at = hay.find(needle, at + 1)
     raise CorpusError("derived article text does not occur as that article's own span in its preserved original capture")
 
 
+_FOOTER = re.compile(r"\s*Page\s+\d+\s+de\s+\d+\s+Copyright Moniteur belge\s+\d{2}-\d{2}-\d{4}\s*")
+
+
+def _ends_article(tail: str) -> bool:
+    """True when what follows the derived text is a structural title, or a page footer that is itself followed by one.
+
+    A footer followed by more running text means the article continues on the next page: the derived text
+    would be a truncated article, so it is refused rather than accepted as complete.
+    """
+    footer = _FOOTER.match(tail)
+    if footer is not None:
+        rest = tail[footer.end():]
+        return not rest.strip() or bool(re.match(rf"\s*{_HEADING}(?=[\s\d])", rest) or _STRUCTURAL.match(rest))
+    return bool(_STRUCTURAL.match(tail)) and not re.match(r"\s*Page\s", tail)
+
+
 PDF_KIND = "official_consolidated_pdf"
+# Lines that end an article's span without being part of it: a page footer or a structural title.
+# A footer INSIDE an article is never trimmed: that article then fails to load (fail closed).
+_STRUCTURAL = re.compile(r"^\s*(?:Page\s+\d+\s+de\s+\d+|(?:Livre|Titre|Sous-titre|Chapitre|Section|Sous-section)\s+\d+(?:re|er|e|ère)?[\s.:])")
 BASIS_PDF = "publisher_pdf_layout"
 _NEXT_HEADING = re.compile(rf"^\s*{_HEADING}(?=[\s\d])")
 
@@ -93,7 +112,7 @@ def _pdf_span(layer: str, derived_text: str, article: str) -> list[str]:
         if not re.match(rf"\s*Art\.\s*{re.escape(article)}\.", line):
             continue
         j = i + 1
-        while j < len(lines) and not _NEXT_HEADING.match(lines[j]):
+        while j < len(lines) and not _NEXT_HEADING.match(lines[j]) and not _STRUCTURAL.match(lines[j]):
             j += 1
         if _ws(" ".join(lines[i:j])) == want:
             found.append([_ws(ln) for ln in lines[i:j] if ln.strip()])
@@ -131,7 +150,7 @@ def derive_pdf_body_start(layer: str, derived_text: str, article: str, pdf: byte
             raise CorpusError("the PDF does not open this article exactly once")
         k = starts[0]
         after = extracted[k + len(mine)] if k + len(mine) < len(extracted) else ""
-        if real[k:k + len(mine)] != mine or (after and not _NEXT_HEADING.match(after) and not after.startswith("Page ")):
+        if real[k:k + len(mine)] != mine or (after and not _NEXT_HEADING.match(after) and not _STRUCTURAL.match(after)):
             raise CorpusError("text layer lines do not match the preserved PDF's own text")
     want, first = _ws(derived_text), span[1]
     # Shortest word-aligned prefix of that line that identifies the position: a quote that
@@ -272,7 +291,7 @@ def _load_entry(directory: Path, entry: Any, index: int) -> ArticleRecord:
         if not original_bytes.startswith(b"%PDF-"):
             raise CorpusError("publisher PDF original expected")
         layer_text = layer_bytes.decode("utf-8")
-        check_derived_binding("official_text_capture", layer_text.encode(), derived_text, article)
+        check_derived_binding("official_text_capture", layer_text.encode(), derived_text, article, layer=True)
         entry = {**entry, "body_start": derive_pdf_body_start(layer_text, derived_text, article, original_bytes)}
         basis = BASIS_PDF
     else:

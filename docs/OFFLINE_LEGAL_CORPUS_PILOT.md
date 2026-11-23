@@ -78,3 +78,13 @@ une tranche juridique et non la validation du parcours complet du dossier.
 L'écran local (`scripts/serve_offline_legal_workbench.py`) propose, pour chaque finding sans décision, Confirmer, Confirmer avec réserve, Rejeter ou Écarter, avec un motif (obligatoire sauf pour Confirmer) et une étiquette locale. Chaque décision produit une nouvelle revue figée ; l'ancienne n'est jamais modifiée. L'étiquette n'est pas authentifiée : ce n'est pas une décision d'avocat et elle n'autorise aucun dépôt.
 
 « Revérifier un Word corrigé » relance le contrôle. Une décision n'est reprise que pour un finding strictement identique ; sinon elle reste visible sous « Décisions remplacées » et le nouveau finding attend une nouvelle décision. Points d'accès : `POST /decide` et `POST /recheck`, loopback seulement, même jeton local que `/check`.
+
+## Extending the FR corpus from the PDF already held (no new request)
+
+`uv run python -m scripts.build_book8_fr_corpus --corpus <corpus dir> --output <new dir>` cuts one derived
+text per explicit "Art. N." heading from the preserved publisher PDF and its text layer, and loads each
+entry back through the fail-closed loader. An article that does not load is left out and listed (never
+repaired). An article followed by a page footer is accepted only when the footer is itself followed by a
+structural title, so an article that continues on the next page is refused instead of truncated.
+Only the FR text of that one PDF is added: no NL text, no other act, no other version. Known cost: every
+export embeds the preserved PDF once per article (about 5.7 MB per check with 33 articles).

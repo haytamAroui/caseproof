@@ -79,7 +79,7 @@ def _config(data: dict[str, Any]) -> LegalCorpusConfig:
             layer = record.original_text_layer
             if not raw.startswith(b"%PDF-") or _hash(layer.encode()) != record.original_text_layer_sha256:
                 raise CorpusError("PDF text layer changed")
-            check_derived_binding("official_text_capture", layer.encode(), text, record.article)
+            check_derived_binding("official_text_capture", layer.encode(), text, record.article, layer=True)
             if (derive_pdf_body_start(layer, text, record.article, raw) != record.body_start
                     or record.body_start_basis != BASIS_PDF):
                 raise CorpusError("body start no longer follows the publisher PDF layout")
