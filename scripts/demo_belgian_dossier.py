@@ -205,6 +205,10 @@ class M2Source:
     text: str
     label: str
     synthetic: bool
+    # Physical parse inventory for text-native PDF imports (zero-warning
+    # bounded parse); empty for every other media — never inferred.
+    media_type: str = "text/plain"
+    blocks: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

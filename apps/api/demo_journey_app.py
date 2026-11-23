@@ -30,6 +30,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from application.extraction.contracts import ExtractionError
 from application.litigation.brief_checks import DraftReference, VersionedBrief
 from application.litigation.corpus import ArticleRecord, load_corpus
 from application.litigation.lawyer_decisions import (
@@ -53,6 +54,7 @@ from application.litigation.unified_review import (
     ReviewDisposition,
     VerificationError,
 )
+from apps.api.signed_document_parse import parse_verified_original, resolve_quote_page
 from domains.disputes.exhibits import ExhibitEntry, ExhibitPage
 from infrastructure.parsers.citation_markers import CitationExtraction, extract_citations
 from infrastructure.parsers.docx_text_regions import extract_docx_text_regions
@@ -184,6 +186,14 @@ class DemoState:
                 "display_label": entry.display_label,
                 "confirmed": entry.confirmed,
                 "imported": entry.exhibit_id in self.imported_exhibit_ids,
+                "pages": [
+                    {
+                        "pdf_page": page.pdf_page,
+                        "printed_page": page.printed_page,
+                        "bundle_page": page.bundle_page,
+                    }
+                    for page in entry.pages
+                ],
             }
             for entry in self.register.entries
         ]
@@ -349,7 +359,7 @@ def _excerpt(text: str, start: int | None, end: int | None, radius: int = 140) -
 
 
 def _finding_payloads(state: DemoState, run: Any) -> dict[str, Any]:
-    previews = {s.source_id: s for s in state.m2.sources}
+    previews = {s.source_id: s for s in (*state.m2.sources, *state.extra_sources)}
     citations = []
     for obs in run.citation_observations:
         source = previews.get(obs.source_id or "")
@@ -357,6 +367,18 @@ def _finding_payloads(state: DemoState, run: Any) -> dict[str, Any]:
             (r.exact_quote for r in state.active_references() if r.reference_id == obs.reference_id),
             None,
         )
+        # Page physique affichée : résolue du span réellement vérifié quand la
+        # source est un PDF texte-natif paginé, jamais déclarée ni devinée.
+        source_pdf_page = None
+        if (
+            source is not None
+            and source.blocks
+            and obs.text_start is not None
+            and obs.text_end is not None
+        ):
+            source_pdf_page = resolve_quote_page(
+                source.text, source.blocks, source.text[obs.text_start:obs.text_end]
+            )
         citations.append(
             {
                 "observation_id": f"citation:{obs.reference_id}",
@@ -366,6 +388,7 @@ def _finding_payloads(state: DemoState, run: Any) -> dict[str, Any]:
                 "quote": quote,
                 "source_id": obs.source_id,
                 "source_label": source.label if source else None,
+                "source_pdf_page": source_pdf_page,
                 "source_excerpt": _excerpt(source.text, obs.text_start, obs.text_end) if source else None,
             }
         )
@@ -663,7 +686,44 @@ def create_demo_app(dossier: Path) -> FastAPI:
         version = param("version", 120) or "import-session"
         name = param("filename", 128) or "source-importee"
 
-        if payload.startswith(b"PK\x03\x04"):
+        media_type = "text/plain"
+        blocks: tuple[dict[str, Any], ...] = ()
+        if payload.startswith(b"%PDF-"):
+            # PDF texte-natif uniquement, via le même parseur borné que le
+            # chemin signé : extraction complète sans avertissement ou refus
+            # visible (page scannée, image, annotation = écart ouvert).
+            try:
+                text, manifest = parse_verified_original(
+                    document_id="doc-import-session",
+                    version_id=version,
+                    data=payload,
+                    media_type="application/pdf",
+                )
+            except ExtractionError:
+                return JSONResponse(
+                    {
+                        "error": "source_unreadable",
+                        "message": "Le parseur borné refuse ce PDF (fail-closed).",
+                    },
+                    status_code=422,
+                )
+            warnings = manifest.get("warnings") or []
+            if warnings:
+                return JSONResponse(
+                    {
+                        "error": "source_coverage_gap",
+                        "message": (
+                            "PDF refusé : couverture incomplète (page scannée, image ou "
+                            "annotation). Seul un PDF texte-natif complet est accepté ; "
+                            "aucun OCR n'est simulé."
+                        ),
+                        "warnings": warnings[:16],
+                    },
+                    status_code=422,
+                )
+            media_type = "application/pdf"
+            blocks = tuple(manifest.get("blocks") or ())
+        elif payload.startswith(b"PK\x03\x04"):
             extraction = extract_docx_text_regions(payload)
             if not any(region.part == "word/document.xml" for region in extraction.regions):
                 return JSONResponse(
@@ -674,6 +734,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
                     status_code=422,
                 )
             text = "\n".join(region.text for region in extraction.regions)
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         else:
             try:
                 text = payload.decode("utf-8")
@@ -692,7 +753,8 @@ def create_demo_app(dossier: Path) -> FastAPI:
 
         label = f"{act} art. {article} — importé ({name}), provenance déclarée non vérifiée"
         state.extra_sources.append(
-            M2Source(source_id, f"doc-{source_id}", version, text, label[:200], False)
+            M2Source(source_id, f"doc-{source_id}", version, text, label[:200], False,
+                     media_type=media_type, blocks=blocks)
         )
         state.extra_articles.append(
             ArticleRecord(
@@ -709,6 +771,16 @@ def create_demo_app(dossier: Path) -> FastAPI:
             )
         )
         exhibit_id = f"ex-{source_id}"
+        if media_type == "application/pdf":
+            # Inventaire physique réel issu du parse vérifié, jamais inventé.
+            page_rows = tuple(
+                ExhibitPage(source_id, version, index + 1)
+                for index in range(
+                    len({block.get("page_index") for block in blocks})
+                )
+            )
+        else:
+            page_rows = (ExhibitPage(source_id, version, 1),)
         state.register = state.register.revise(
             expected_revision=state.register.revision,
             entries=state.register.entries
@@ -716,7 +788,7 @@ def create_demo_app(dossier: Path) -> FastAPI:
                 ExhibitEntry(
                     exhibit_id,
                     f"{act} art. {article} (importé)",
-                    (ExhibitPage(source_id, version, 1),),
+                    page_rows,
                     (alias,),
                     False,
                     True,

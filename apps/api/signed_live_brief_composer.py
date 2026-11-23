@@ -37,7 +37,7 @@ from uuid import uuid4
 
 from application.extraction.contracts import ExtractionError
 from application.litigation.fact_extraction import extract_fact_assertions
-from apps.api.signed_document_parse import parse_verified_original
+from apps.api.signed_document_parse import parse_verified_original, resolve_quote_page
 from apps.api.signed_supabase_brief_publisher import (
     LiveSignedBriefPublisher,
     SignedPublishOutcome,
@@ -227,28 +227,7 @@ class ComposedSignedBriefPublisher:
         blocks = manifest.get("blocks")
         if not isinstance(blocks, list) or not blocks:
             return None
-        pages: set[int] = set()
-        start = text.find(quote)
-        if start < 0:
-            return None
-        while start >= 0:
-            end = start + len(quote)
-            for block in blocks:
-                if (
-                    isinstance(block, dict)
-                    and type(block.get("page_index")) is int
-                    and type(block.get("start")) is int
-                    and type(block.get("end")) is int
-                    and block["start"] < end
-                    and start < block["end"]
-                ):
-                    pages.add(block["page_index"])
-            if len(pages) > 1:
-                return None
-            start = text.find(quote, start + 1)
-        if len(pages) != 1:
-            return None
-        return pages.pop() + 1
+        return resolve_quote_page(text, blocks, quote)
 
     @staticmethod
     def _parse_verified_text(

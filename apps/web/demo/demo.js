@@ -262,6 +262,9 @@ function citationCard(obs, afterCorrection) {
     ${obs.quote ? `<div class="sidebyside"><div><strong>Citation dans les conclusions</strong><p>${esc(obs.quote)}</p></div>
     <div><strong>Passage source</strong>${excerptHtml(obs.source_excerpt)}</div></div>` : ""}
     ${obs.source_label ? `<p class="meta">Source : ${esc(obs.source_label)}</p>` : ""}
+    ${obs.source_excerpt ? `<p class="meta">${obs.source_pdf_page != null
+      ? `Page physique ${obs.source_pdf_page} du PDF — résolue du passage vérifié, jamais déclarée`
+      : "Page non mappée — la navigation se fait par la citation exacte ci-dessus"}</p>` : ""}
     ${["exact_match"].includes(obs.state) ? "" : decisionButtons(obs.observation_id)}
   </div>`;
 }

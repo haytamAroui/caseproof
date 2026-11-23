@@ -244,3 +244,43 @@ def parse_verified_original(
     if len(json.dumps(manifest, ensure_ascii=False).encode("utf-8")) > MAX_MANIFEST_BYTES:
         raise ExtractionError("parser_manifest_limit")
     return text, manifest
+
+
+def resolve_quote_page(
+    text: str,
+    blocks: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    quote: str,
+) -> int | None:
+    """Physical page (1-based) of an exact quote, only when unambiguous.
+
+    Every occurrence of the quote must lie entirely inside blocks of
+    exactly one physical page; a quote on several pages, an unknown
+    position or empty input abstains to None ("not mapped"). Display
+    only: this never changes the verified text or the register.
+    """
+    if not quote or not text or not isinstance(blocks, (list, tuple)):
+        return None
+    spans = [
+        (block.get("start"), block.get("end"), block.get("page_index"))
+        for block in blocks
+        if isinstance(block, dict)
+    ]
+    pages: set[int] = set()
+    start = text.find(quote)
+    if start < 0:
+        return None
+    while start >= 0:
+        end = start + len(quote)
+        for span_start, span_end, page in spans:
+            if (
+                type(span_start) is int
+                and type(span_end) is int
+                and type(page) is int
+                and span_start < end
+                and start < span_end
+            ):
+                pages.add(page)
+        if len(pages) > 1:
+            return None
+        start = text.find(quote, start + 1)
+    return pages.pop() + 1 if len(pages) == 1 else None

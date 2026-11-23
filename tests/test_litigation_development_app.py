@@ -3372,3 +3372,80 @@ def test_live_request_workbench_assembly():
     with pytest.raises(ValueError):
         assemble_request_workbench(
             {"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "service_key"}, "signed-jwt")
+
+
+def test_demo_journey_pdf_source_real_pages_and_visible_refusals(tmp_path):
+    import json
+
+    from docx import Document
+    from fastapi.testclient import TestClient
+
+    from application.litigation.corpus import CORPUS_FORMAT_VERSION
+    from apps.api.demo_journey_app import create_demo_app
+    from tests.test_demo_belgian_dossier import RULE, SOURCE_TEXT, _corpus_entry
+
+    quote = "paiement sous 30 jours"
+    brief = f"Le juge retient « {quote} » (Contrat, art. 5)."
+    dossier = tmp_path / "dossier"
+    (dossier / "corpus").mkdir(parents=True)
+    (dossier / "rules").mkdir()
+    (dossier / "corpus" / "corpus-manifest.toml").write_text(
+        f'format = "{CORPUS_FORMAT_VERSION}"\n' + _corpus_entry(), encoding="utf-8")
+    (dossier / "corpus" / "synthetic-original.html").write_bytes(b"<html>synthetic</html>")
+    (dossier / "corpus" / "synthetic-derived.txt").write_text(SOURCE_TEXT, encoding="utf-8")
+    (dossier / "rules" / "regle.toml").write_text(RULE, encoding="utf-8")
+    (dossier / "facts.json").write_text(json.dumps({"facts": [
+        {"name": "fait_confirme", "value": True, "confirmed": True}]}), encoding="utf-8")
+    (dossier / "decisions.json").write_text(json.dumps(
+        {"decided_at": "2026-11-23T10:00:00+01:00", "decisions": []}), encoding="utf-8")
+    doc = Document()
+    doc.add_paragraph(brief)
+    doc.save(str(dossier / "brief.docx"))
+    (dossier / "meta.json").write_text(
+        json.dumps({"title": "fixture-pdf", "brief": "brief.docx"}), encoding="utf-8")
+    (dossier / "m2.json").write_text(json.dumps({
+        "case_id": "fixture-pdf", "brief_version_id": "brief-v1", "brief_text": brief,
+        "references": [{"reference_id": "ref-pdf", "exhibit_label": "Contrat, art. 5",
+                        "exact_quote": quote, "pdf_page": 2}],
+        "claims": [], "passages": [], "register_revision": 1,
+        "exhibits": [{"exhibit_id": "ex-corpus", "display_label": "Corpus",
+                      "aliases": [], "confirmed": True,
+                      "pages": [{"source_id": "src-corpus", "version_id": "v1"}]}],
+        "sources": [{"source_id": "src-corpus", "document_id": "doc-corpus",
+                     "version_id": "v1", "label": "corpus synthétique",
+                     "synthetic": True, "text": SOURCE_TEXT}],
+        "review": {"decisions": []},
+    }), encoding="utf-8")
+    client = TestClient(create_demo_app(dossier))
+    session = client.get("/demo/api/state").json()["session"]
+    headers = {"x-demo-session": session, "origin": "http://testserver"}
+
+    pdf = _pdf_fixture_bytes([["Contrat-cadre synthétique."], ["Clause prix:", quote]])
+    params = ("act=Contrat&article=5&alias=Contrat%2C%20art.%205"
+              "&source_uri=https%3A%2F%2Fexample.test%2Fcontrat.pdf&filename=contrat.pdf")
+    imported = client.post(f"/demo/api/source?{params}", content=pdf,
+                           headers={**headers, "content-type": "application/octet-stream"})
+    assert imported.status_code == 200, imported.text
+    exhibit_id = imported.json()["exhibit_id"]
+    # Inventaire physique réel (2 pages), jamais une page 1 inventée.
+    entry = next(e for e in imported.json()["exhibits"] if e["exhibit_id"] == exhibit_id)
+    assert [page["pdf_page"] for page in entry["pages"]] == [1, 2]
+
+    # PDF avec page scannée/image : refus visible, avertissements typés.
+    gap = _pdf_fixture_bytes([["Page texte."], []], image_page=1)
+    refused = client.post(f"/demo/api/source?{params}", content=gap,
+                          headers={**headers, "content-type": "application/octet-stream"})
+    assert refused.status_code == 422
+    assert refused.json()["error"] == "source_coverage_gap"
+    assert any("pdf_page_needs_ocr_or_review" in w for w in refused.json()["warnings"])
+
+    confirmed = client.post("/demo/api/exhibits/confirm",
+                            json={"exhibit_id": exhibit_id}, headers=headers)
+    assert confirmed.status_code == 200, confirmed.text
+    run = client.post("/demo/api/run", json={}, headers=headers)
+    assert run.status_code == 200, run.text
+    citation = next(c for c in run.json()["findings"]["citations"]
+                    if c["state"] == "exact_match")
+    assert citation["quote"] == quote
+    # La citation est sur la page physique 2 du PDF : résolue, pas déclarée.
+    assert citation["source_pdf_page"] == 2
