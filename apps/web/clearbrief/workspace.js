@@ -303,6 +303,18 @@
         const passage=el("p","","matched-passage");
         passage.append(el("span",chars.slice(0,start).join("")),el("mark",chars.slice(start,end).join(""),"matched"),el("span",chars.slice(end).join("")));
         preview.append(passage);
+        // Page provenance: each numbering space stays distinct; anything not
+        // recorded is "not mapped", never inferred from another space.
+        const spans=Array.isArray(d.spans)?d.spans:[];
+        const pages=new Set(spans.filter(s=>Array.isArray(s)&&s.length===4&&
+          Number.isInteger(s[0])&&Number.isInteger(s[1])&&s[0]<end&&start<s[1]&&
+          Number.isInteger(s[3])).map(s=>s[3]));
+        const physical=pages.size===1?[...pages][0]:null;
+        const maps=Array.isArray(d.page_mappings)?d.page_mappings:[];
+        const reg=physical===null?null:(maps.find(m=>m&&m.pdf_page===physical)||null);
+        preview.append(el("p","Page provenance · physical PDF page: "+(physical===null?"not mapped":physical)+
+          " · printed label: "+(reg&&Number.isInteger(reg.printed_page)?reg.printed_page:"not mapped")+
+          " · bundle position: "+(reg&&Number.isInteger(reg.bundle_page)?reg.bundle_page:"not mapped"),"small"));
       }else{
         if(String(state.selected?.id||"").startsWith("citation:"))
           preview.append(el("p","No aligned passage offsets are recorded for this observation; the source text is shown without highlight.","small"));

@@ -87,12 +87,23 @@ class SignedBriefSources:
         preview = matches[0]
         if len(preview.text) > 120_000 or len(preview.spans) > 4096:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        # Distinct page-numbering spaces from the confirmed register; each None
+        # stays None (NOT MAPPED), never collapsed into another space.
+        page_mappings = [
+            {"pdf_page": pg.pdf_page, "printed_page": pg.printed_page,
+             "bundle_page": pg.bundle_page}
+            for entry in bundle.register.entries if entry.confirmed
+            for pg in entry.pages
+            if pg.source_id == preview.row.source_id
+            and pg.version_id == preview.row.version_id
+        ][:512]
         return {
             "schema": "caseproof-clearbrief-brief-source-preview-v1",
             "case_id": case_id, "brief_version_id": brief_version_id,
             "row": asdict(preview.row),
             "text": preview.text,
             "spans": preview.spans,
+            "page_mappings": page_mappings,
             "claim_support": "not_assessed",
         }
 

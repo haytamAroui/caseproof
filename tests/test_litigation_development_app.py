@@ -121,3 +121,13 @@ def test_stale_published_snapshot_is_typed_conflict_not_unavailable():
         store.still_current = still_current
     assert drifted.status_code == 409
     assert drifted.json()["error"] == "stale_snapshot"
+
+
+def test_preview_page_mappings_keep_numbering_spaces_distinct():
+    client, _, _, _ = client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    preview = client.get(f"/v2/matters/{CASE}/briefs/{DRAFT}/sources/s1", headers=headers)
+    assert preview.status_code == 200
+    assert preview.json()["page_mappings"] == [
+        {"pdf_page": 1, "printed_page": None, "bundle_page": None}
+    ]

@@ -54,7 +54,7 @@ test("source preview and download require matching provenance",async()=>{
   }
 });
 
-async function runObservationPreview(observation) {
+async function runObservationPreview(observation, previewExtra) {
   const nodes=new Map();
   const get=id=>{ if(!nodes.has(id)) nodes.set(id,new Element()); return nodes.get(id); };
   const caseId="11111111-1111-4111-8111-111111111111";
@@ -69,7 +69,8 @@ async function runObservationPreview(observation) {
     if(url.endsWith("/sources")) return response({schema:"caseproof-clearbrief-brief-sources-v1",
       case_id:caseId,brief_version_id:briefId,rows:[row]});
     if(url.endsWith("/sources/source")) return response({schema:"caseproof-clearbrief-brief-source-preview-v1",
-      case_id:caseId,brief_version_id:briefId,row,text:"sensitive version text"});
+      case_id:caseId,brief_version_id:briefId,row,text:"sensitive version text",
+      ...(typeof previewExtra!=="undefined"?previewExtra:{})});
     if(url.endsWith("/review")) return response({schema:"caseproof-clearbrief-review-v1",case_id:caseId,
       snapshot_hash:"b".repeat(64),revision:0});
     throw Error("unexpected request");
@@ -145,4 +146,22 @@ test("passage offsets are Unicode code points, not UTF-16 units",async()=>{
   const mark=passage.children.find(x=>x.className==="matched");
   assert.equal(mark.textContent,span);
   assert.equal(passage.children.map(x=>x.textContent).join(""),text);
+});
+
+test("page provenance keeps physical, printed and bundle spaces distinct",async()=>{
+  const preview=await runObservationPreview({reference_id:"ref-01",state:"exact_match",
+    source_id:"source",source_version_id:"version-a",source_sha256:"a".repeat(64),
+    representation_id:"representation-a",text_start:5,text_end:14},
+    {spans:[[0,22,"text",2]],page_mappings:[{pdf_page:2,printed_page:5,bundle_page:9}]});
+  assert(preview.children.some(x=>x.textContent===
+    "Page provenance · physical PDF page: 2 · printed label: 5 · bundle position: 9"));
+});
+
+test("page provenance abstains per space when nothing is recorded",async()=>{
+  const preview=await runObservationPreview({reference_id:"ref-01",state:"exact_match",
+    source_id:"source",source_version_id:"version-a",source_sha256:"a".repeat(64),
+    representation_id:"representation-a",text_start:5,text_end:14},
+    {spans:[[0,22,"text",null]],page_mappings:[]});
+  assert(preview.children.some(x=>x.textContent===
+    "Page provenance · physical PDF page: not mapped · printed label: not mapped · bundle position: not mapped"));
 });
