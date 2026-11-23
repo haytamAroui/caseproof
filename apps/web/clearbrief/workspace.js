@@ -358,6 +358,9 @@
     state.loading=false;$("review-form").removeAttribute("aria-busy");
     state.selected=null;
     renderSources();renderChecks();renderReview();renderSelected();
+    // The scope is settled: the preview pane shows its idle cue again, never
+    // the transient "cleared while the scope reloads" loading text.
+    $("source-preview").textContent="Select a source or a finding to inspect its verified representation.";
     if(state.justPublished){
       state.justPublished=false;
       $("publish-status").textContent="Scope current after publication at revision "+state.publishRevision+". Run the factual check.";

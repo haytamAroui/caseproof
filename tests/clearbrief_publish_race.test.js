@@ -29,12 +29,15 @@ function setup(){
   get("brief-id").value=BRIEF_1;
   get("upload-document").value=DOC;
   get("upload-version").value=VERSION;
-  let resolvePublish;
-  const pendingPublish=new Promise(resolve=>{resolvePublish=resolve;});
+  const publishCalls=[];
   const HASH="a".repeat(64);
-  const fetch=async(url)=>{
+  const fetch=async(url,options)=>{
     const u=String(url);
-    if(u.endsWith("/briefs/publish"))return pendingPublish;
+    if(u.endsWith("/briefs/publish")){
+      let resolve;const pending=new Promise(r=>{resolve=r;});
+      publishCalls.push({options,resolve});
+      return pending;
+    }
     if(u.endsWith("/check"))return {ok:true,status:200,json:async()=>({
       schema:"caseproof-m2-check-headless-v1",case_id:CASE_A,brief_version_id:BRIEF_2,
       snapshot_hash:HASH,declared:[],processed:[],excluded:[],incomplete:[],
@@ -52,7 +55,7 @@ function setup(){
     document:{getElementById:get,createElement:()=>new Element()},window,fetch,
     console,setTimeout,
   });
-  return {get,window,resolvePublish};
+  return {get,window,publishCalls};
 }
 
 function publishResponse(){
@@ -61,28 +64,28 @@ function publishResponse(){
 }
 
 test("confirmed publish survives a legitimate same-context refresh",async()=>{
-  const {get,resolvePublish}=setup();
+  const {get,publishCalls}=setup();
   const evt={preventDefault(){}};
   await get("connection-form").listeners.submit(evt);
   const running=get("publish-form").listeners.submit(evt);
   await flush();
   get("refresh").listeners.click();
   await flush();
-  resolvePublish(publishResponse());
+  publishCalls[0].resolve(publishResponse());
   await running;await flush();
   assert.match(get("publish-status").textContent,/Scope current after publication at revision 2/);
   assert.equal(get("brief-id").value,BRIEF_2);
 });
 
 test("late confirmed publish does not replace a switched document/version selection",async()=>{
-  const {get,resolvePublish}=setup();
+  const {get,publishCalls}=setup();
   const evt={preventDefault(){}};
   await get("connection-form").listeners.submit(evt);
   const running=get("publish-form").listeners.submit(evt);
   await flush();
   get("upload-document").value="77777777-7777-4777-8777-777777777777";
   get("upload-version").value="88888888-8888-4888-8888-888888888888";
-  resolvePublish(publishResponse());
+  publishCalls[0].resolve(publishResponse());
   await running;await flush();
   assert.equal(get("publish-status").textContent,"");
   assert.equal(get("brief-id").value,BRIEF_1);
@@ -90,8 +93,49 @@ test("late confirmed publish does not replace a switched document/version select
   assert.equal(get("upload-version").value,"88888888-8888-4888-8888-888888888888");
 });
 
+test("late confirmed publish cannot advance server truth after a matter switch",async()=>{
+  const {get,window,publishCalls}=setup();
+  const evt={preventDefault(){}};
+  await get("connection-form").listeners.submit(evt);
+  const running=get("publish-form").listeners.submit(evt);
+  await flush();
+  get("signout").listeners.click();
+  await flush();
+  window.caseproofSession={caseId:CASE_B,briefVersionId:BRIEF_1,getBearer:async()=>"other-token"};
+  get("case-id").value=CASE_B;
+  await get("connection-form").listeners.submit(evt);
+  publishCalls[0].resolve(publishResponse());
+  await running;await flush();
+  const second=get("publish-form").listeners.submit(evt);
+  await flush();
+  assert.equal(publishCalls.length,2);
+  assert.equal(JSON.parse(publishCalls[1].options.body).expected_revision,0);
+  publishCalls[1].resolve(publishResponse());
+  await second;await flush();
+});
+
+test("late confirmed publish cannot advance server truth after a session switch",async()=>{
+  const {get,window,publishCalls}=setup();
+  const evt={preventDefault(){}};
+  await get("connection-form").listeners.submit(evt);
+  const running=get("publish-form").listeners.submit(evt);
+  await flush();
+  get("signout").listeners.click();
+  await flush();
+  window.caseproofSession={caseId:CASE_A,briefVersionId:BRIEF_1,getBearer:async()=>"fresh-token"};
+  await get("connection-form").listeners.submit(evt);
+  publishCalls[0].resolve(publishResponse());
+  await running;await flush();
+  const second=get("publish-form").listeners.submit(evt);
+  await flush();
+  assert.equal(publishCalls.length,2);
+  assert.equal(JSON.parse(publishCalls[1].options.body).expected_revision,0);
+  publishCalls[1].resolve(publishResponse());
+  await second;await flush();
+});
+
 test("late confirmed publish is discarded after a matter switch",async()=>{
-  const {get,window,resolvePublish}=setup();
+  const {get,window,publishCalls}=setup();
   const evt={preventDefault(){}};
   await get("connection-form").listeners.submit(evt);
   const running=get("publish-form").listeners.submit(evt);
@@ -102,21 +146,21 @@ test("late confirmed publish is discarded after a matter switch",async()=>{
   get("case-id").value=CASE_B;
   void get("connection-form").listeners.submit(evt);
   await flush();
-  resolvePublish(publishResponse());
+  publishCalls[0].resolve(publishResponse());
   await running;await flush();
   assert.equal(get("publish-status").textContent,"");
   assert.equal(get("brief-id").value,BRIEF_1);
 });
 
 test("late confirmed publish is discarded after signout",async()=>{
-  const {get,resolvePublish}=setup();
+  const {get,publishCalls}=setup();
   const evt={preventDefault(){}};
   await get("connection-form").listeners.submit(evt);
   const running=get("publish-form").listeners.submit(evt);
   await flush();
   get("signout").listeners.click();
   await flush();
-  resolvePublish(publishResponse());
+  publishCalls[0].resolve(publishResponse());
   await running;await flush();
   assert.equal(get("publish-status").textContent,"");
   assert.equal(get("brief-id").value,BRIEF_1);
