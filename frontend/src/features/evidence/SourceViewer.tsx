@@ -586,7 +586,7 @@ function SourceInspection({
           )}
           <div className="viewer-status-bar">
             <span>
-              {historical ? 'Historical original · read-only · ' : ''}
+              {historical ? `${t('historicalOriginalPrefix')} ` : ''}
               {t('refPageMappingLabel')} {stateLabel(mapping)}.
               {mapping !== 'mapped'
                 ? ' Page 1 is an exploration starting point, not a mapped reference.'

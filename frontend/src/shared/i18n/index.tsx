@@ -254,6 +254,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     sourceOpenTimeout: 'PDF opening exceeded its time budget.',
     sourceOpenFailed:
       'This source could not be opened. It may be unavailable, unsupported or outside the inspection budget.',
+    historicalOriginalPrefix: 'Historical original version · read-only.',
   },
   fr: {
     skip: 'Aller au contenu',
@@ -493,6 +494,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     sourceOpenTimeout: 'L’ouverture du PDF a dépassé le délai autorisé.',
     sourceOpenFailed:
       'Impossible d’ouvrir cette pièce source. Elle est peut-être indisponible, non prise en charge ou hors budget d’inspection.',
+    historicalOriginalPrefix: 'Version originale historique · lecture seule.',
   },
   nl: {
     skip: 'Naar inhoud',
@@ -732,6 +734,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     sourceOpenTimeout: 'Het openen van de PDF overschreed het tijdsbudget.',
     sourceOpenFailed:
       'Deze bron kon niet worden geopend. Zij is mogelijk niet beschikbaar, niet ondersteund of buiten het inspectiebudget.',
+    historicalOriginalPrefix: 'Historische originele versie · alleen-lezen.',
   },
 };
 
