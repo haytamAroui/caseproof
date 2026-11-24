@@ -6,6 +6,7 @@ import {
 } from '../../shared/pdf/lifecycle';
 import { pageSpaceLabel } from './pageSpaces';
 import { ApiClient, parseViewer } from '../../shared/api';
+import { useLocale } from '../../shared/i18n';
 import { Button, Notice } from '../../shared/ui';
 import type { DocumentInspection } from '../../shared/pdf/geometry';
 import type { PdfPageResult, RasterRegion } from '../../shared/pdf/geometry';
@@ -169,8 +170,8 @@ function SourceInspection({
         if (!controller.signal.aborted)
           setError(
             reason instanceof InspectionTimeout
-              ? 'PDF opening exceeded its time budget.'
-              : 'This source could not be opened. It may be unavailable, unsupported or outside the inspection budget.',
+              ? 'sourceOpenTimeout'
+              : 'sourceOpenFailed',
           );
         void inspection?.close();
       }
@@ -311,26 +312,46 @@ function SourceInspection({
       ? result.textBoxes.filter((item) => item.text.includes(search)).length
       : 0;
   const ocrWords = positionedOcr(rasterRegions, result, page, hash);
+  const { t, stateLabel } = useLocale();
+  const formatPageSpace = (raw: string) =>
+    raw === 'Not supplied' ? t('notSupplied') : raw;
   return (
     <section className="source-viewer" aria-label="Preserved PDF inspection">
-      <h3>Preserved source pixels</h3>
-      <Notice>
-        Source inspection does not change identity, page mapping, fidelity or
-        human support. Extracted text and search boxes below are derived
-        navigation aids.
-      </Notice>
+      <div className="source-viewer-header">
+        <h3>{t('sourcePixelsHeading')}</h3>
+        <details className="source-scope-note">
+          <summary>{t('scopeLimits')}</summary>
+          <Notice>{t('sourceScopeBody')}</Notice>
+        </details>
+      </div>
       {error && (
         <>
-          <Notice error>{error}</Notice>
-          <Button onClick={onRetry}>Reopen source</Button>
+          <Notice error>
+            {error === 'sourceOpenTimeout' || error === 'sourceOpenFailed'
+              ? t(error)
+              : error}
+          </Notice>
+          <Button onClick={onRetry}>{t('reopenSourceBtn')}</Button>
         </>
       )}
       {!ready && !error && <Notice>Opening the authorized source…</Notice>}
       {ready && (
         <>
-          <dl className="dimensions" aria-label="Reference page spaces">
-            <div className="dimension">
-              <dt>Reference PDF page</dt>
+          <dl
+            className="dimensions dimensions-compact"
+            aria-label="Reference page spaces"
+          >
+            <div
+              className="dimension"
+              data-tone={
+                mapping === 'mapped'
+                  ? 'success'
+                  : mapping === 'conflicting'
+                    ? 'error'
+                    : 'impossible'
+              }
+            >
+              <dt>{t('refPdfPage')}</dt>
               <dd>
                 {mappedPage ??
                   (mapping === 'conflicting'
@@ -338,16 +359,20 @@ function SourceInspection({
                     : 'Unmapped')}
               </dd>
             </div>
-            <div className="dimension">
-              <dt>Printed page</dt>
+            <div className="dimension" data-tone="neutral">
+              <dt>{t('printedPage')}</dt>
               <dd>
-                {pageSpaceLabel(finding.page_spaces, 'printed', mappedPage)}
+                {formatPageSpace(
+                  pageSpaceLabel(finding.page_spaces, 'printed', mappedPage),
+                )}
               </dd>
             </div>
-            <div className="dimension">
-              <dt>Bundle page</dt>
+            <div className="dimension" data-tone="neutral">
+              <dt>{t('bundlePage')}</dt>
               <dd>
-                {pageSpaceLabel(finding.page_spaces, 'bundle', mappedPage)}
+                {formatPageSpace(
+                  pageSpaceLabel(finding.page_spaces, 'bundle', mappedPage),
+                )}
               </dd>
             </div>
           </dl>
@@ -366,23 +391,6 @@ function SourceInspection({
               reference target.
             </Notice>
           )}
-          {mappedPage !== null && (
-            <Button
-              disabled={page === mappedPage}
-              onClick={() => {
-                clearPage();
-                setPage(mappedPage);
-              }}
-            >
-              Return to reference page
-            </Button>
-          )}
-          <p>
-            {historical ? 'Historical original version · read-only. ' : ''}
-            Reference page mapping: {mapping}.{' '}
-            {mapping !== 'mapped' &&
-              'Page 1 is an exploration starting point, not a mapped reference.'}
-          </p>
           {(legacy > 0 || unassessed > 0) && (
             <Notice>
               Legacy and unsupported raster regions are not guessed.{' '}
@@ -393,7 +401,7 @@ function SourceInspection({
             </Notice>
           )}
           {rasterRegions.length > 0 && (
-            <p role="status">
+            <p role="status" className="viewer-meta-line">
               {
                 rasterRegions.filter(
                   (region) =>
@@ -456,88 +464,142 @@ function SourceInspection({
                 not displayed.
               </Notice>
             )}
-          <div className="viewer-controls" aria-label="Source page controls">
-            <Button
-              disabled={page <= 1}
-              onClick={() => {
-                clearPage();
-                setPage((p) => p - 1);
-              }}
-            >
-              Previous source page
-            </Button>
-            <span>
-              PDF page {page} of {pages}
-            </span>
-            <Button
-              disabled={page >= pages}
-              onClick={() => {
-                clearPage();
-                setPage((p) => p + 1);
-              }}
-            >
-              Next source page
-            </Button>
-            <Button
-              disabled={zoom <= 0.5}
-              onClick={() => {
-                clearPage();
-                setZoom((z) => z - 0.25);
-              }}
-            >
-              Zoom out
-            </Button>
-            <span>Zoom {Math.round(zoom * 100)}%</span>
-            <Button
-              disabled={zoom >= 2}
-              onClick={() => {
-                clearPage();
-                setZoom((z) => z + 0.25);
-              }}
-            >
-              Zoom in
-            </Button>
-            <Button
-              onClick={() => {
-                clearPage();
-                setRotation((r) => (r + 90) % 360);
-              }}
-            >
-              Rotate page
-            </Button>
-          </div>
-          <label>
-            Find text on this page
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              autoComplete="off"
-              maxLength={4096}
-              spellCheck={false}
-            />
-          </label>
-          {search && (
-            <Button onClick={() => setSearch('')}>Clear page search</Button>
-          )}
-          <Button
-            aria-pressed={showBoxes}
-            onClick={() => setShowBoxes((v) => !v)}
+          <div
+            className="viewer-controls viewer-controls-compact"
+            aria-label="Source page controls"
           >
-            {showBoxes ? 'Hide navigation boxes' : 'Show navigation boxes'}
-          </Button>
+            <div className="viewer-control-group">
+              <Button
+                className="viewer-btn-compact"
+                aria-label={t('viewerPrevPage')}
+                title={t('viewerPrevPage')}
+                disabled={page <= 1}
+                onClick={() => {
+                  clearPage();
+                  setPage((p) => p - 1);
+                }}
+              >
+                ‹
+              </Button>
+              <span className="viewer-readout">
+                {t('pdfPageLabel')} {page} {t('ofWord')} {pages}
+              </span>
+              <Button
+                className="viewer-btn-compact"
+                aria-label={t('viewerNextPage')}
+                title={t('viewerNextPage')}
+                disabled={page >= pages}
+                onClick={() => {
+                  clearPage();
+                  setPage((p) => p + 1);
+                }}
+              >
+                ›
+              </Button>
+            </div>
+            <div className="viewer-control-group">
+              <Button
+                className="viewer-btn-compact"
+                aria-label={t('viewerZoomOut')}
+                title={t('viewerZoomOut')}
+                disabled={zoom <= 0.5}
+                onClick={() => {
+                  clearPage();
+                  setZoom((z) => z - 0.25);
+                }}
+              >
+                −
+              </Button>
+              <span className="viewer-readout">
+                {t('zoomWord')} {Math.round(zoom * 100)}%
+              </span>
+              <Button
+                className="viewer-btn-compact"
+                aria-label={t('viewerZoomIn')}
+                title={t('viewerZoomIn')}
+                disabled={zoom >= 2}
+                onClick={() => {
+                  clearPage();
+                  setZoom((z) => z + 0.25);
+                }}
+              >
+                +
+              </Button>
+              <Button
+                className="viewer-btn-compact"
+                aria-label={t('viewerRotatePage')}
+                title={t('viewerRotatePage')}
+                onClick={() => {
+                  clearPage();
+                  setRotation((r) => (r + 90) % 360);
+                }}
+              >
+                ↻
+              </Button>
+            </div>
+          </div>
+          <div className="viewer-utility-row">
+            <label className="viewer-search-field">
+              <span className="viewer-search-label">{t('findOnPage')}</span>
+              <input
+                value={search}
+                placeholder={t('findOnPagePlaceholder')}
+                onChange={(event) => setSearch(event.target.value)}
+                autoComplete="off"
+                maxLength={4096}
+                spellCheck={false}
+              />
+            </label>
+            {search && (
+              <Button
+                className="viewer-btn-compact"
+                onClick={() => setSearch('')}
+              >
+                {t('clearPageSearch')}
+              </Button>
+            )}
+            <Button
+              className="viewer-btn-compact"
+              aria-pressed={showBoxes}
+              onClick={() => setShowBoxes((v) => !v)}
+            >
+              {showBoxes ? t('hideBoxes') : t('showBoxes')}
+            </Button>
+            {mappedPage !== null && (
+              <Button
+                className="viewer-btn-compact"
+                disabled={page === mappedPage}
+                onClick={() => {
+                  clearPage();
+                  setPage(mappedPage);
+                }}
+              >
+                {t('returnToRefPage')}
+              </Button>
+            )}
+          </div>
           {search && (
-            <p role="status">
+            <p role="status" className="viewer-meta-line">
               {matches} derived text locations in this page. All occurrences are
               retained; none is a verified match.
             </p>
           )}
-          <p role="status">
-            {rendering
-              ? 'Rendering source page…'
-              : result
-                ? 'Source page rendered.'
+          <div className="viewer-status-bar">
+            <span>
+              {historical ? `${t('historicalOriginalPrefix')} ` : ''}
+              {t('refPageMappingLabel')} {stateLabel(mapping)}.
+              {mapping !== 'mapped'
+                ? ' Page 1 is an exploration starting point, not a mapped reference.'
                 : ''}
-          </p>
+            </span>
+            <p role="status">
+              {rendering
+                ? t('renderingSourcePage')
+                : result
+                  ? t('sourcePageRendered')
+                  : ''}
+            </p>
+          </div>
         </>
       )}
       <div

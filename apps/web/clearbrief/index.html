@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>ClearBrief · CaseProof development workbench</title>
+  <title>CaseProof · development workbench</title>
   <link rel="stylesheet" href="/dev/clearbrief/workspace.css">
   <script src="/dev/clearbrief/fidelity-panel.js" defer></script>
   <script src="/dev/clearbrief/workspace.js" defer></script>
@@ -12,13 +12,13 @@
 <body>
 <a class="skip" href="#main">Skip to workbench</a>
 <header class="site-header">
-  <div class="identity"><div class="mark" aria-hidden="true">C<span>·</span></div><div><strong>ClearBrief</strong><span class="subbrand">by CaseProof</span></div></div>
+  <div class="identity"><div class="mark" aria-hidden="true">C<span>·</span></div><div><strong>CaseProof</strong><span class="subbrand">review workbench</span></div></div>
   <span class="environment">DEVELOPMENT · SYNTHETIC / RIGHTS-CLEARED ONLY</span>
   <button id="signout" class="ghost" hidden>End session</button>
 </header>
 <main id="main">
   <div class="intro">
-    <div><p class="kicker">BELGIAN LITIGATION WORKSPACE</p><h1>Every assertion, connected to its source.</h1>
+    <div><p class="kicker">BELGIAN LITIGATION WORKSPACE</p><h1>Inspect assertions beside their sources.</h1>
       <p class="lede">Inspect a private dossier, verify cited statements and record a version-bound review. Nothing here approves a legal conclusion or filing.</p></div>
     <div class="intro-aside"><span class="tiny">CURRENT SCOPE</span><strong>Development workbench</strong><span>Not a production client portal</span></div>
   </div>
@@ -95,7 +95,7 @@
     <pre id="journey-state" class="journey-state" aria-live="polite"></pre>
   </section>
   <div id="notice" class="notice" role="status" aria-live="polite">Connect to an existing authorized development matter to begin.</div>
-  <section id="workspace" hidden aria-label="ClearBrief workspace">
+  <section id="workspace" hidden aria-label="CaseProof workspace">
     <div class="workspace-head"><div><p class="kicker">PRIVATE MATTER</p><h2 id="matter-name">Evidence and brief review</h2>
       <p id="matter-meta" class="small mono"></p></div><div class="workspace-buttons"><button id="refresh" class="secondary">Refresh scope</button><button id="recheck">Run factual check</button></div></div>
     <div class="statrow"><div><span>Source inventory</span><strong id="source-count">—</strong></div><div><span>Citation observations</span><strong id="citation-count">—</strong></div><div><span>Factual observations</span><strong id="fact-count">—</strong></div><div><span>Review revision</span><strong id="review-count">—</strong></div></div>
@@ -105,19 +105,43 @@
         <p class="small">Only sources the current signed actor can see. Processing gaps remain visible.</p>
         <div id="sources" class="source-list"><p class="empty">Load the authorized source inventory.</p></div>
         <div class="searchbox"><label for="query">Search within this brief's evidence</label><div class="inline"><input id="query" minlength="2" maxlength="120" placeholder="e.g. betaling, montant, date"><button id="search" type="button" class="secondary">Find</button></div></div>
+        <details id="missed-passage"><summary>Flag a missed passage (human report)</summary><div id="passage-flag-form"></div></details>
         <div id="search-results" class="results" aria-live="polite"></div>
-        <details class="upload"><summary>Upload a pre-registered original (development)</summary>
-          <p class="small">Only if the server has already created this document/version and granted upload permission. This is not case creation.</p>
-          <form id="upload-form"><label>Document UUID<input id="document-id" required spellcheck="false"></label>
-          <label>Version UUID<input id="version-id" required spellcheck="false"></label>
+        <details class="upload"><summary>Add a source or upload a pre-registered original (development)</summary>
+          <p class="small">Declare a new source: its digest is registered first and the uploaded bytes must match that declaration. This is not case creation.</p>
+          <form id="register-form"><label>Source label<input id="register-label" maxlength="120" required placeholder="e.g. Bail signé (annexe)"></label>
+          <label>Original file<input id="register-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
+          <button id="register" type="submit" class="secondary">Declare and upload new source</button></form>
+          <p id="register-status" class="small mono" aria-live="polite"></p>
+          <p class="small">Declare an exhibit for this matter's corpus: digest registered first, bytes must match, then it is confirmed into the check scope at the current revision. Adding an exhibit stales published snapshots; publish a new brief version and re-run the check afterwards.</p>
+          <form id="exhibit-form"><label>Exhibit label<input id="exhibit-label" maxlength="200" required placeholder="e.g. Code civil, art. 1735"></label>
+          <label>Exhibit file<input id="exhibit-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
+          <fieldset id="mapping-rows"><legend>Page mappings (optional, numeric only)</legend>
+          <p class="small">Each row maps one physical PDF page. Printed label accepts numbers only under the current domain: Roman or prefixed labels stay unmapped, never normalized. Empty rows are ignored; an exhibit without mappings displays "not mapped".</p>
+          <div class="mapping-row"><input class="map-pdf" type="number" min="1" max="100000" step="1" placeholder="physical page">
+          <input class="map-printed" type="number" min="1" max="100000" step="1" placeholder="printed label">
+          <input class="map-bundle" type="number" min="1" max="100000" step="1" placeholder="bundle position"></div>
+          <button id="mapping-add" type="button" class="ghost">Add page mapping</button></fieldset>
+          <button id="exhibit" type="submit" class="secondary">Declare, upload and confirm exhibit</button></form>
+          <p id="exhibit-status" class="small mono" aria-live="polite"></p>
+          <p class="small">Or upload bytes to a source the server already registered for this matter.</p>
+          <form id="upload-form"><label>Registered document<select id="upload-document" required></select></label>
+          <label>Registered version<select id="upload-version" required></select></label>
           <label>Original file<input id="original-file" type="file" accept=".txt,.pdf,.docx,.png,.jpg,.jpeg" required></label>
           <button id="upload" type="submit" class="secondary">Upload immutable original</button></form>
+          <p id="upload-current" class="small mono" aria-live="polite"></p>
+          <form id="publish-form"><p class="small">Publish the uploaded original as the next version of this matter's working brief. The server resolves the brief; optimistic concurrency is tracked automatically.</p>
+          <button id="publish" type="submit" class="secondary" disabled>Publish uploaded original as brief version</button></form>
+          <p id="publish-status" class="small mono" aria-live="polite"></p>
         </details>
       </section>
       <section class="card checks-panel" aria-labelledby="check-title">
         <div class="section-head"><div><p class="kicker">02 / VERIFY</p><h3 id="check-title">Brief check</h3></div><span class="pill neutral">Deterministic</span></div>
         <p class="small">Citation, quotation and same-role date/value checks are observations, not legal determinations.</p>
         <div id="check-scope" class="check-scope" role="status" aria-live="polite">Check source scope not assessed.</div>
+        <button id="observations-filter" class="secondary" type="button" hidden></button>
+        <section id="legal-refs" class="legal-refs" aria-label="Legal references" hidden></section>
+        <div id="blocker-inventory" class="check-scope partial"></div>
         <div id="observations" class="observation-list"><div class="empty">Run a factual check to inspect this versioned brief.</div></div>
       </section>
       <section class="card review-panel" aria-labelledby="review-title">
@@ -131,13 +155,28 @@
           <textarea id="rationale" maxlength="2000" rows="4" placeholder="State what this source does and does not establish." required></textarea>
           <button id="save-review" type="submit" disabled>Save version-bound review</button>
         </form>
+        <form id="correction-form" hidden>
+          <p class="small">Correction preview (signed workbench). Compares nothing and writes nothing: upload the corrected file, publish it as a new brief version, then re-run the check. A candidate difference is not a legal conclusion.</p>
+          <label for="correction-before">Exact text to replace (must occur once)</label>
+          <input id="correction-before" maxlength="4000" required>
+          <label for="correction-after">Replacement text</label>
+          <input id="correction-after" maxlength="4000" required>
+          <button id="correction-preview" type="submit" class="secondary">Preview correction</button>
+          <p id="correction-result" class="small mono" aria-live="polite"></p>
+        </form>
         <div id="review-history" class="history"></div>
       </section>
     </div>
     <div class="handoff card"><div><p class="kicker">04 / DELIVER</p><h3>From checked draft to linked Word document</h3>
       <p class="small">Citation insertion, reversible Word edits, approved DOCX/PDF, dynamic exhibit bundle and recipient sharing require separate host and release acceptance.</p></div>
-      <div class="handoff-actions"><button disabled>Insert into Word · pending host acceptance</button><button disabled>Release package · not enabled</button></div></div>
+      <div class="handoff-actions"><button disabled>Insert into Word · pending host acceptance</button><button disabled>Release package · not enabled</button>
+        <button id="record" type="button" class="secondary" disabled>Download review record (development)</button></div>
+      <button id="offline-legal-pack" type="button" class="secondary" disabled>Download offline legal review</button>
+      <p id="offline-pack-status" class="small mono" aria-live="polite"></p>
+      <p id="record-status" class="small mono" aria-live="polite"></p>
+      <div id="record-qr-wrap" hidden><img id="record-qr" alt="QR de vérification hors ligne du record" width="132" height="132">
+        <p class="small">QR = digest + clé de signature uniquement. Vérification hors ligne documentée ; sans clé de confiance épinglée par un canal indépendant, la clé est un émetteur d'installation/de test auto-déclaré. Aucune vérification publique hébergée n'existe.</p></div></div>
   </section>
 </main>
-<footer><span>ClearBrief / CaseProof</span><span>Review ≠ approval · Export ≠ filing · Source hash ≠ authenticity</span></footer>
+<footer><span>CaseProof</span><span>Review ≠ approval · Export ≠ filing · Source hash ≠ authenticity</span></footer>
 </body></html>

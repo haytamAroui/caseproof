@@ -8,8 +8,17 @@ from application.capacity_envelope import CAPACITY_POLICY
 from application.litigation.frontend_contract import DossierView
 from application.litigation.viewer_contract import ViewerContext
 from application.litigation.workspace_contract import (
+    ClearbriefReviewReceipt,
+    ClearbriefReviewState,
+    ConditionMatchesView,
+    ConditionsSaveBody,
+    ConditionsStateView,
     DraftExcerptView,
+    ExhibitReferencesView,
+    LegalPassageView,
+    LegalReferencesView,
     MatterCatalogView,
+    OfflinePackManifest,
     ReportCatalogView,
     ReviewLedgerView,
 )
@@ -20,6 +29,7 @@ from apps.api.dossier_journey import (
     InventoryConfirmation,
     VisualDecisionBody,
 )
+from apps.api.litigation_review_app import ReviewBody
 from apps.api.workspace_auth import SessionView
 from apps.api.workspace_intake import CreatedMatter, IntakeView, OrganizationView
 
@@ -49,6 +59,16 @@ def main() -> None:
         (ViewerContext, TARGET.with_name("viewer.schema.json")),
         (ReviewLedgerView, TARGET.with_name("review-ledger.schema.json")),
         (DraftExcerptView, TARGET.with_name("draft-excerpt.schema.json")),
+        (LegalReferencesView, TARGET.with_name("legal-references.schema.json")),
+        (ExhibitReferencesView, TARGET.with_name("exhibit-references.schema.json")),
+        (ConditionsStateView, TARGET.with_name("conditions-state.schema.json")),
+        (ConditionsSaveBody, TARGET.with_name("conditions-save.schema.json")),
+        (ConditionMatchesView, TARGET.with_name("condition-matches.schema.json")),
+        (ClearbriefReviewState, TARGET.with_name("clearbrief-review.schema.json")),
+        (ClearbriefReviewReceipt, TARGET.with_name("clearbrief-receipt.schema.json")),
+        (ReviewBody, TARGET.with_name("clearbrief-command.schema.json")),
+        (OfflinePackManifest, TARGET.with_name("offline-pack.schema.json")),
+        (LegalPassageView, TARGET.with_name("legal-passage.schema.json")),
         (VisualDecisionBody, TARGET.with_name("review-command.schema.json")),
         (DocxLocatorIdentity, TARGET.with_name("docx-locator-v1.schema.json")),
         (CorrectionPreviewBody, TARGET.with_name("correction-preview-v1.schema.json")),

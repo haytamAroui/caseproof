@@ -1,3 +1,4 @@
+import { LegalScreen } from '../features/legal';
 import { CorrectionPanel, CorrectionRecovery } from '../features/corrections';
 import { ScopedDocxEditor } from '../features/docx-editor';
 import { ExportsScreen } from '../features/exports';
@@ -31,6 +32,7 @@ import {
   useSessionController,
 } from '../shared/session';
 import type { SessionHost } from '../shared/session';
+import { LanguageSwitcher, LocaleProvider, useLocale } from '../shared/i18n';
 import { Button, Notice } from '../shared/ui';
 import { createQueryClient } from './query';
 import { MatterJourney } from './MatterJourney';
@@ -207,14 +209,15 @@ function Workspace({ api }: { api: ApiClient }) {
       location.search,
     ],
   );
+  const { t } = useLocale();
   return (
     <>
       <a className="skip" href="#main">
-        Skip to content
+        {t('skip')}
       </a>
       <header className="app-header">
         <Link to="/" className="brand">
-          CaseProof <span>Evidence workspace</span>
+          CaseProof <span>{t('brandSubtitle')}</span>
         </Link>
         {session.connected && (
           <PrimaryNavigation
@@ -222,9 +225,14 @@ function Workspace({ api }: { api: ApiClient }) {
             search={location.search}
           />
         )}
-        {session.connected && (
-          <Button onClick={() => controller.clear()}>End session</Button>
-        )}
+        <div className="header-actions">
+          <LanguageSwitcher />
+          {session.connected && (
+            <Button onClick={() => controller.clear()}>
+              {t('endSession')}
+            </Button>
+          )}
+        </div>
       </header>
       <main id="main" tabIndex={-1}>
         {session.connected && (
@@ -278,6 +286,10 @@ function Workspace({ api }: { api: ApiClient }) {
               element={<ScopedDocxEditor api={api} />}
             />
             <Route
+              path="/matters/:caseId/briefs/:briefId/legal"
+              element={<LegalScreen api={api} />}
+            />
+            <Route
               path="/matters/:caseId/briefs/:briefId"
               element={<ReviewWorkspace api={api} />}
             />
@@ -293,12 +305,9 @@ function Workspace({ api }: { api: ApiClient }) {
           </Routes>
         ) : (
           <section className="open-report">
-            <p className="eyebrow">Private evidence review</p>
-            <h1>Connect your workspace session</h1>
-            <p>
-              Sign in to your workspace. Your account must have access to each
-              matter.
-            </p>
+            <p className="eyebrow">{t('signInEyebrow')}</p>
+            <h1>{t('signInTitle')}</h1>
+            <p>{t('signInLead')}</p>
             <details>
               <summary>Processing and access limits</summary>
               <p>
@@ -323,7 +332,7 @@ function Workspace({ api }: { api: ApiClient }) {
           </section>
         )}
       </main>
-      <footer>Development foundation · Synthetic acceptance only</footer>
+      <footer>{t('footer')}</footer>
     </>
   );
 }
@@ -361,12 +370,14 @@ export function App() {
   });
   useEffect(() => () => composition.session.clear(), [composition]);
   return (
-    <SessionContext.Provider value={composition.session}>
-      <QueryClientProvider client={composition.query}>
-        <BrowserRouter basename="/workspace">
-          <Workspace api={composition.api} />
-        </BrowserRouter>
-      </QueryClientProvider>
-    </SessionContext.Provider>
+    <LocaleProvider>
+      <SessionContext.Provider value={composition.session}>
+        <QueryClientProvider client={composition.query}>
+          <BrowserRouter basename="/workspace">
+            <Workspace api={composition.api} />
+          </BrowserRouter>
+        </QueryClientProvider>
+      </SessionContext.Provider>
+    </LocaleProvider>
   );
 }

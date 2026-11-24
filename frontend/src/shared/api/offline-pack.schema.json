@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Exact digest and size of the offline review pack for one frozen check.",
+  "properties": {
+    "brief_version_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Brief Version Id",
+      "type": "string"
+    },
+    "byte_length": {
+      "maximum": 20000000,
+      "minimum": 1,
+      "title": "Byte Length",
+      "type": "integer"
+    },
+    "checkpoint_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Checkpoint Sha256",
+      "type": "string"
+    },
+    "media": {
+      "const": "application/zip",
+      "title": "Media",
+      "type": "string"
+    },
+    "note": {
+      "maxLength": 1000,
+      "title": "Note",
+      "type": "string"
+    },
+    "schema": {
+      "const": "caseproof-offline-pack-manifest-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "brief_version_id",
+    "snapshot_hash",
+    "sha256",
+    "byte_length",
+    "checkpoint_sha256",
+    "media",
+    "note"
+  ],
+  "title": "OfflinePackManifest",
+  "type": "object"
+}

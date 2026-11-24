@@ -72,7 +72,7 @@ _ACT_IN_ARTICLE = (
 
 _ARTICLE_CITATION_PATTERN = re.compile(
     r"(?<![\w.])"
-    r"(?P<prefix>Art\.|Artikel|Article)"
+    r"(?P<prefix>Art\.|Artikel|Article|art\.|artikel|article)"
     r"\s+"
     rf"(?P<article>{_ARTICLE_TOKEN})"
     r"(?:\s*,?\s*§\s*(?P<paragraph>[1-9][0-9]{0,2}(?:bis|ter|quater)?))?"
@@ -148,7 +148,7 @@ def _validate_act_date(date_str: str) -> str:
 
 
 def _build_from_article_match(match: re.Match[str]) -> StatuteCitation:
-    prefix = match.group("prefix")
+    prefix = match.group("prefix").capitalize()
     article = match.group("article")
     para_num = match.group("paragraph")
     paragraph = f"§ {para_num}" if para_num is not None else None

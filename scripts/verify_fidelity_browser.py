@@ -95,7 +95,7 @@ def main() -> None:
         page.get_by_role('button',name='Inspect dossier').click()
         page.wait_for_function("typeof window.releaseCrop==='function'")
         page.evaluate("window.panel.clear();window.releaseCrop()")
-        expect(page.get_by_text('Session cleared.',exact=False)).to_be_visible()
+        expect(page.get_by_text('Dossier comparison cleared for this scope.',exact=False)).to_be_visible()
         expect(page.locator('.fidelity-finding')).to_have_count(0)
         expect(page.get_by_role('button',name='Inspect dossier')).to_be_enabled()
         page.evaluate("window.delayCrop=false;window.testReport.findings.pop()")

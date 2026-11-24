@@ -11,6 +11,10 @@ import struct
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 from pypdf import PdfReader
 
@@ -38,8 +42,8 @@ class CropBox:
             raise OCRUnavailable("crop_pixel_budget")
 
 
-def crop_scanned_pdf(original: bytes, *, page_number: int, box: CropBox) -> bytes:
-    """Return bounded PNG crop; no network, shell, OCR inference or guessed page mapping."""
+def _rasterize_page(original: bytes, *, page_number: int) -> tuple[bytes, int, int]:
+    """Bounded 150-DPI PNG raster of one physical page of a verified original."""
     if not original.startswith(b"%PDF-") or not 0 < len(original) <= MAX_SOURCE_BYTES:
         raise OCRUnavailable("crop_pdf_input_budget")
     if type(page_number) is not int or not 1 <= page_number <= 64:
@@ -53,10 +57,6 @@ def crop_scanned_pdf(original: bytes, *, page_number: int, box: CropBox) -> byte
     rasterizer = shutil.which("pdftoppm")
     if rasterizer is None:
         raise OCRUnavailable("crop_rasterizer_unavailable")
-    try:
-        from PIL import Image, UnidentifiedImageError
-    except ImportError as exc:
-        raise OCRUnavailable("crop_pillow_unavailable") from exc
     with tempfile.TemporaryDirectory(prefix="caseproof-crop-") as directory:
         root = Path(directory)
         (root / "original.pdf").write_bytes(original)
@@ -67,24 +67,60 @@ def crop_scanned_pdf(original: bytes, *, page_number: int, box: CropBox) -> byte
             str(root / "original.pdf"), str(prefix),
         ], timeout=12)
         png = (root / "page.png").read_bytes()
-        if not 24 <= len(png) <= 12 * 1024 * 1024 or png[:8] != bytes((137, 80, 78, 71, 13, 10, 26, 10)):
-            raise OCRUnavailable("crop_invalid_raster")
-        width, height = struct.unpack(">II", png[16:24])
-        if not (0 < width <= 5000 and 0 < height <= 6500):
-            raise OCRUnavailable("crop_raster_dimensions")
-        box.validate(width, height)
-        try:
-            with Image.open(io.BytesIO(png)) as image:
-                if image.format != "PNG" or image.size != (width, height):
-                    raise OCRUnavailable("crop_image_mismatch")
-                region = image.crop((
-                    box.left, box.top, box.left + box.width, box.top + box.height,
-                ))
-                out = io.BytesIO()
-                region.save(out, format="PNG")
-        except (OSError, UnidentifiedImageError) as exc:
-            raise OCRUnavailable("crop_decode_failed") from exc
-        result = out.getvalue()
-        if len(result) > 8 * 1024 * 1024:
-            raise OCRUnavailable("crop_output_budget")
-        return result
+    if not 24 <= len(png) <= 12 * 1024 * 1024 or png[:8] != bytes((137, 80, 78, 71, 13, 10, 26, 10)):
+        raise OCRUnavailable("crop_invalid_raster")
+    width, height = struct.unpack(">II", png[16:24])
+    if not (0 < width <= 5000 and 0 < height <= 6500):
+        raise OCRUnavailable("crop_raster_dimensions")
+    return png, width, height
+
+
+def _decode(png: bytes, width: int, height: int) -> tuple[Image.Image, int, int]:
+    try:
+        from PIL import Image, UnidentifiedImageError
+    except ImportError as exc:
+        raise OCRUnavailable("crop_pillow_unavailable") from exc
+    try:
+        return Image.open(io.BytesIO(png)), width, height
+    except (OSError, UnidentifiedImageError) as exc:
+        raise OCRUnavailable("crop_decode_failed") from exc
+
+
+def crop_scanned_pdf(original: bytes, *, page_number: int, box: CropBox) -> bytes:
+    """Return bounded PNG crop; no network, shell, OCR inference or guessed page mapping."""
+    png, width, height = _rasterize_page(original, page_number=page_number)
+    box.validate(width, height)
+    image, _, _ = _decode(png, width, height)
+    with image:
+        if image.format != "PNG" or image.size != (width, height):
+            raise OCRUnavailable("crop_image_mismatch")
+        region = image.crop((
+            box.left, box.top, box.left + box.width, box.top + box.height,
+        ))
+        out = io.BytesIO()
+        region.save(out, format="PNG")
+    result = out.getvalue()
+    if len(result) > 8 * 1024 * 1024:
+        raise OCRUnavailable("crop_output_budget")
+    return result
+
+
+def render_pdf_page(original: bytes, *, page_number: int) -> bytes:
+    """Bounded full-page PNG rendering of a verified original.
+
+    A display rendering only: it is never a visual-verification verdict and
+    carries no page mapping beyond the caller's verified physical page.
+    """
+    png, width, height = _rasterize_page(original, page_number=page_number)
+    if width * height > MAX_CROP_PIXELS:
+        raise OCRUnavailable("crop_pixel_budget")
+    image, _, _ = _decode(png, width, height)
+    with image:
+        if image.format != "PNG" or image.size != (width, height):
+            raise OCRUnavailable("crop_image_mismatch")
+        out = io.BytesIO()
+        image.save(out, format="PNG")
+    result = out.getvalue()
+    if len(result) > 8 * 1024 * 1024:
+        raise OCRUnavailable("crop_output_budget")
+    return result

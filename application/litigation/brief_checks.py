@@ -15,7 +15,7 @@ from application.litigation.representation_fidelity import (
     RepresentationComparison,
     RepresentationState,
 )
-from domains.disputes.exhibits import ExhibitRegister, MappingState
+from domains.disputes.exhibits import ExhibitRegister, ExhibitResolution, MappingState
 
 
 class DraftCheckError(ValueError):
@@ -207,8 +207,62 @@ def check_brief_references(
             observations.append(_note(reference, CitationCheckState.REFERENCE_UNRESOLVED))
             continue
         if resolved.state in {MappingState.AMBIGUOUS, MappingState.SUGGESTED}:
-            observations.append(_note(reference, CitationCheckState.REFERENCE_AMBIGUOUS))
-            continue
+            # Identity-confirmed multi-page exhibit, no declared pinpoint: resolve the
+            # physical page from verified page spans only when every occurrence of the
+            # quote lies inside exactly one physical page. Anything else abstains.
+            pinpoint = None
+            if (
+                resolved.state is MappingState.AMBIGUOUS
+                and resolved.identity_confirmed
+                and reference.pdf_page is None
+                and reference.exact_quote is not None
+            ):
+                entry = next(
+                    (e for e in register.entries if e.exhibit_id == resolved.exhibit_id), None
+                )
+                if entry is not None:
+                    pages_with_matches: set[int] = set()
+                    for page in entry.pages:
+                        if page.pdf_page is None:
+                            continue
+                        candidate = indexed.get((page.source_id, page.version_id))
+                        if candidate is None:
+                            continue
+                        from_pos = 0
+                        while True:
+                            begin = candidate.text.find(reference.exact_quote, from_pos)
+                            if begin < 0:
+                                break
+                            end = begin + len(reference.exact_quote)
+                            if any(
+                                start <= begin and end <= finish
+                                and page_index is not None
+                                and page_index + 1 == page.pdf_page
+                                for start, finish, _, page_index in candidate.spans
+                            ):
+                                pages_with_matches.add(page.pdf_page)
+                            from_pos = begin + 1
+                    if len(pages_with_matches) == 1:
+                        page_number = next(iter(pages_with_matches))
+                        pinpoint = next(
+                            p for p in entry.pages if p.pdf_page == page_number
+                        )
+                    elif not pages_with_matches:
+                        # The quote is nowhere in the verified text: not found,
+                        # whatever the page layout.
+                        observations.append(
+                            _note(reference, CitationCheckState.QUOTE_NOT_FOUND,
+                                  exhibit_id=resolved.exhibit_id)
+                        )
+                        continue
+            if pinpoint is not None:
+                resolved = ExhibitResolution(
+                    MappingState.CONFIRMED, resolved.exhibit_id, pinpoint, True
+                )
+            else:
+                observations.append(_note(reference, CitationCheckState.REFERENCE_AMBIGUOUS))
+            if pinpoint is None:
+                continue
         if resolved.state is MappingState.PAGE_UNMAPPED or resolved.page is None:
             observations.append(_note(reference, CitationCheckState.PAGE_UNMAPPED, exhibit_id=resolved.exhibit_id))
             continue

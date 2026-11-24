@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any
@@ -19,6 +20,7 @@ from application.litigation.brief_checks import (
     VersionedBrief,
     check_brief_references,
 )
+from application.litigation.event_review import EventObservation, review_events
 from application.litigation.factual_values import (
     FactAssertion,
     FactObservation,
@@ -82,6 +84,7 @@ class ReviewDisposition(StrEnum):
     CONFIRMED = "confirmed_candidate"
     DISMISSED = "dismissed"
     NEEDS_INFORMATION = "needs_information"
+    OMISSION = "omission"  # reviewer says a relevant passage or piece was not shown; a statement, never a waiver
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +102,55 @@ class ObservationReview:
 
 
 @dataclass(frozen=True, slots=True)
+class LegalObservation:
+    """One cited article checked against the matter's CHOSEN corpus.
+
+    status is one of PASS/FAIL/UNDETERMINED/UNVERIFIED (the shared contract).
+    It states corpus presence and quotation integrity only: never legal
+    adequacy, applicability, correct interpretation or claim support.
+    """
+
+    reference_id: str
+    raw_text: str
+    start: int
+    end: int
+    act_code: str | None
+    article: str | None
+    language: str | None
+    status: str
+    reason: str
+    corpus_key: str | None = None
+    corpus_version: str | None = None
+    corpus_text_sha256: str | None = None
+    corpus_source_uri: str | None = None
+    quote: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SuitabilityObservation:
+    """One typed rule evaluated on facts declared as confirmed.
+
+    The rule is the lawyer's, applied only to an article the brief cites that
+    is present in the chosen corpus. status is PASS/FAIL/UNDETERMINED/UNVERIFIED
+    (shared contract). It reports the lawyer's own condition; it is never a
+    machine legal conclusion. ``missing`` names every input that blocked a verdict.
+    """
+
+    rule_id: str
+    rule_version: str
+    reference: str
+    scope: str
+    status: str
+    reason: str
+    article_key: str
+    cited_by: tuple[str, ...]
+    missing: tuple[str, ...]
+    facts: tuple[tuple[str, str, bool, str], ...]  # name, value, confirmed, provenance
+    input_hashes: tuple[tuple[str, str], ...]
+    subresults: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class VerificationRun:
     case_id: str
     brief_version_id: str
@@ -113,11 +165,29 @@ class VerificationRun:
     citation_observations: tuple[CitationObservation, ...]
     factual_observations: tuple[FactObservation, ...]
     snapshot_hash: str
+    legal_observations: tuple[LegalObservation, ...] = ()
+    suitability_observations: tuple[SuitabilityObservation, ...] = ()
+    event_observations: tuple[EventObservation, ...] = ()
+    passage_flags: tuple[dict[str, Any], ...] = ()
+    corpus_pack_sha256: str | None = None
     # Separate kinds: a literal/value mismatch is not a legal conclusion.
 
 
 def _payload(run: VerificationRun, reviews: tuple[ObservationReview, ...] = ()) -> dict[str, Any]:
+    legal: dict[str, Any] = (
+        {"legal_references": [asdict(x) for x in run.legal_observations]}
+        if run.legal_observations else {}
+    )
+    if run.corpus_pack_sha256 is not None:
+        legal["corpus_pack_sha256"] = run.corpus_pack_sha256
+    if run.suitability_observations:
+        legal = {**legal, "suitability": [asdict(x) for x in run.suitability_observations]}
+    if run.event_observations:
+        legal = {**legal, "event_candidates": [asdict(x) for x in run.event_observations]}
+    if run.passage_flags:
+        legal = {**legal, "human_passage_flags": list(run.passage_flags)}
     return {
+        **legal,
         "schema": REPORT_SCHEMA,
         "engine": ENGINE,
         "case_id": run.case_id,
@@ -154,6 +224,10 @@ def run_unified_check(
     source_scope: SourceScope,
     authorized_case_id: str,
     authorized_register_revision: int,
+    legal_observations: tuple[LegalObservation, ...] = (),
+    suitability_observations: tuple[SuitabilityObservation, ...] = (),
+    passage_flags: tuple[dict[str, Any], ...] = (),
+    corpus_pack_sha256: str | None = None,
 ) -> VerificationRun:
     """No implicit trust from request parameters; authorized_* are server-owned."""
     if not isinstance(representation, BriefRepresentation) or not isinstance(source_scope, SourceScope):
@@ -199,6 +273,7 @@ def run_unified_check(
             assertion, verified_brief_text=representation.text,
             preview=verified_preview, pdf_page=physical_page,
         ))
+    event_rows = review_events(representation.text, brief.references, citations.observations, previews)
     processed = tuple(sorted(
         (x.row.source_id, x.row.version_id) for x in previews
         if x.row.status == "ready" and not x.row.warnings and x.row.representation_id
@@ -233,11 +308,30 @@ def run_unified_check(
         "factual": [asdict(x) for x in facts],
         "rule_version": ENGINE,
     }
+    if corpus_pack_sha256 is not None:
+        if re.fullmatch(r"[0-9a-f]{64}", corpus_pack_sha256) is None:
+            raise VerificationError("invalid corpus pack identity")
+        identity["corpus_pack_sha256"] = corpus_pack_sha256
+    if passage_flags:
+        if len(passage_flags) > 512:
+            raise VerificationError("too many human passage flags")
+        identity["human_passage_flags"] = passage_flags
+    if event_rows:
+        identity["events"] = [asdict(x) for x in event_rows]
+    if legal_observations:
+        # Present only when a corpus was chosen: a run without one keeps its
+        # historical snapshot hash. The corpus identity (key, version, text
+        # hash) is inside each observation, so a changed corpus changes the hash.
+        identity["legal"] = [asdict(x) for x in legal_observations]
+    if suitability_observations:
+        identity["suitability"] = [asdict(x) for x in suitability_observations]
     return VerificationRun(
         brief.case_id, brief.version_id, brief.sha256_hex, representation.text_sha256,
         register.revision, ENGINE, source_scope.declared_source_versions,
         source_scope.excluded_source_versions, processed, incomplete,
         citations.observations, tuple(facts), _hash(identity),
+        tuple(legal_observations), tuple(suitability_observations), event_rows, passage_flags,
+        corpus_pack_sha256,
     )
 
 
@@ -251,6 +345,10 @@ def verification_record(
         raise VerificationError("bounded verification report required")
     valid_ids = {f"citation:{x.reference_id}" for x in run.citation_observations}
     valid_ids |= {f"fact:{x.claim_id}" for x in run.factual_observations}
+    valid_ids |= {f"flag:{x['id']}" for x in run.passage_flags}
+    valid_ids |= {f"event:{x.observation_id}" for x in run.event_observations}
+    valid_ids |= {f"legal:{x.reference_id}" for x in run.legal_observations}
+    valid_ids |= {f"suitability:{x.rule_id}" for x in run.suitability_observations}
     if (len({x.observation_id for x in reviews}) != len(reviews)
             or any(not isinstance(x, ObservationReview) or x.observation_id not in valid_ids
                    for x in reviews)):

@@ -128,6 +128,7 @@ def run_fresh_profile() -> dict[str, object]:
                 return report | {
                     "status": "LOCAL_STACK_FAILED",
                     "error_category": error_category(stack.stdout + stack.stderr),
+                    "cli_output_tail": output_tail(stack.stdout + "\n" + stack.stderr),
                 }
             by_alias = {alias: original.name for original, alias in aliases}
             digest = copy_exact_sources(

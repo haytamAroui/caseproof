@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from application.litigation.brief_checks import CitationCheckState, DraftReference
 from application.litigation.exhibit_confirmation import serialized_entries
-from apps.api.access_control import AccessRejected
+from apps.api.access_control import AccessFailure, AccessRejected
 from apps.api.disposable_litigation_brief_graph import DisposableBriefGraphStore
 from apps.api.disposable_litigation_original_store import DisposableOriginalStore
 from apps.api.disposable_litigation_review_ledger import DisposableM2ReviewLedger
@@ -222,7 +222,10 @@ class M2CheckCompositionTests(unittest.TestCase):
         self.store.still_current = changed  # type: ignore[method-assign]
         with self.assertRaises(AccessRejected) as error:
             self.check()
-        self.assertEqual(error.exception.http_status, 503)
+        # Post-load exhibit drift is a typed stale conflict (409), never a
+        # silently published run and never an opaque 503.
+        self.assertEqual(error.exception.http_status, 409)
+        self.assertEqual(error.exception.code, AccessFailure.STALE_SNAPSHOT)
         with connect() as conn:
             self.assertEqual(conn.execute(
                 "select count(*) from caseproof._m2_check_runs where case_id=%s",

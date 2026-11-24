@@ -34,6 +34,7 @@ class AccessFailure(StrEnum):
     RESOURCE_MASKED = "not_found"
     PERMISSION_DENIED = "permission_denied"
     SERVICE_UNAVAILABLE = "service_unavailable"
+    STALE_SNAPSHOT = "stale_snapshot"
 
 
 _STATUS = {
@@ -41,6 +42,7 @@ _STATUS = {
     AccessFailure.RESOURCE_MASKED: 404,
     AccessFailure.PERMISSION_DENIED: 403,
     AccessFailure.SERVICE_UNAVAILABLE: 503,
+    AccessFailure.STALE_SNAPSHOT: 409,
 }
 
 

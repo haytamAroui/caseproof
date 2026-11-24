@@ -5,10 +5,21 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
 import { SplitHandle } from '../../shared/ui/SplitHandle';
 import { useSession } from '../../shared/session';
+import { useLocale, type ResultCategory } from '../../shared/i18n';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
 import { coveragePages, coverageRegions } from './coverageRegions';
 import { quoteMatches } from './quoteComparison';
+import {
+  collectReportFailureBanners,
+  countByTriageCategory,
+  matchesFailureBanner,
+  TRIAGE_ICON,
+  TRIAGE_PRIORITY,
+  TRIAGE_TONE,
+  triageCategoryOf,
+  type FilterableFailureBannerKind,
+} from './triageCategory';
 import { CoverageSource } from './CoverageSource';
 import { OriginalDraftDownload } from './OriginalDraftDownload';
 import type { ReactNode } from 'react';
@@ -38,6 +49,7 @@ export function ReportScreen({
   const [params, setParams] = useSearchParams();
   const snapshot = params.get('snapshot') ?? '';
   const session = useSession();
+  const { t, stateLabel, categoryLabel } = useLocale();
   const valid =
     uuid.test(caseId) && uuid.test(briefId) && /^[0-9a-f]{64}$/.test(snapshot);
   const queueRef = useRef<HTMLElement>(null);
@@ -51,7 +63,9 @@ export function ReportScreen({
     'split',
   );
   const focusReference = useRef<string | null>(null);
-  const [filter, setFilter] = useState<'attention' | 'all'>('attention');
+  const [filter, setFilter] = useState<
+    'attention' | 'all' | ResultCategory | FilterableFailureBannerKind
+  >('attention');
   const [search, setSearch] = useState('');
   const query = useQuery({
     queryKey: ['report', session.epoch, caseId, briefId, snapshot],
@@ -87,12 +101,29 @@ export function ReportScreen({
     f.page_mapping !== 'mapped' ||
     f.fidelity !== 'exact_match' ||
     f.support !== 'supported';
+  const triageCounts = countByTriageCategory(report.findings);
+  const failureBanners = collectReportFailureBanners(report);
   const filtered = report.findings
-    .filter((f) => filter === 'all' || needsAttention(f))
+    .filter((f) => {
+      if (filter === 'all') return true;
+      if (filter === 'attention') return needsAttention(f);
+      if (
+        filter === 'inventory_unconfirmed' ||
+        filter === 'pagination_unmapped' ||
+        filter === 'ocr_unreliable'
+      ) {
+        return matchesFailureBanner(f, filter);
+      }
+      return triageCategoryOf(f) === filter;
+    })
     .filter((f) =>
       f.literal.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
     )
-    .sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
+    .sort(
+      (a, b) =>
+        TRIAGE_PRIORITY[triageCategoryOf(a)] -
+        TRIAGE_PRIORITY[triageCategoryOf(b)],
+    );
   function selectReference(referenceId: string) {
     // Coverage links may target a reference hidden by the current filters.
     // Reveal it in the queue rather than displaying a selection the queue omits.
@@ -154,37 +185,140 @@ export function ReportScreen({
       <header className="page-heading page-heading-review">
         <p className="eyebrow">
           {historical
-            ? 'Historical report · read-only'
-            : 'Current preserved report'}
+            ? t('reportEyebrowHistorical')
+            : t('reportEyebrowCurrent')}
         </p>
-        <h1>Review the evidence</h1>
+        <h1>{t('reviewHeading')}</h1>
         <Link
           to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}
         >
-          Reviewed exports and historical downloads
+          {t('linkExports')}
         </Link>
         {!historical && (
           <Link
             to={`/matters/${caseId}/briefs/${briefId}/edit?snapshot=${snapshot}`}
           >
-            Edit current DOCX candidate (not committed)
+            {t('linkEditDocx')}
           </Link>
         )}
         {!historical && (
           <Link to={`/matters/${caseId}/inventory`}>
-            Reconfirm inventory and page mappings
+            {t('linkReconfirmInv')}
           </Link>
         )}
-        <p>
-          Each result describes a separate check. Human judgment remains
-          separate.
-        </p>
+        <p>{t('reviewSubtitle')}</p>
       </header>
       <Notice>
         {historical
-          ? 'Historical snapshot. Current permissions were checked again, but this report cannot be reviewed, corrected, rechecked or exported as current. Source availability is checked separately.'
-          : 'Current snapshot inspection. Human decisions remain separate from source rendering.'}
+          ? t('snapshotHistoricalNotice')
+          : t('snapshotCurrentNotice')}
       </Notice>
+      {report.findings.length > 0 && (
+        <div
+          className="legal-kpi-strip report-triage-strip"
+          role="group"
+          aria-label={t('triageSummaryLabel')}
+        >
+          {(
+            [
+              ['ecart', triageCounts.ecart],
+              ['impossible', triageCounts.impossible],
+              ['appreciation', triageCounts.appreciation],
+              ['correspondance', triageCounts.correspondance],
+            ] as const
+          ).map(([category, count]) => (
+            <button
+              key={category}
+              type="button"
+              className="legal-kpi"
+              data-tone={TRIAGE_TONE[category]}
+              aria-pressed={filter === category}
+              onClick={() => {
+                setFilter((current) =>
+                  current === category ? 'attention' : category,
+                );
+                resetPage();
+              }}
+            >
+              <span className="legal-kpi-count">
+                <span aria-hidden="true">{TRIAGE_ICON[category]}</span> {count}
+              </span>
+              <span className="legal-kpi-label">{categoryLabel(category)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {failureBanners.length > 0 && (
+        <div
+          className="report-failure-banners"
+          role="region"
+          aria-label={t('scopeLimits')}
+        >
+          {failureBanners.map((banner) => {
+            const textKey =
+              banner.kind === 'inventory_unconfirmed'
+                ? 'bannerInventoryUnconfirmed'
+                : banner.kind === 'pagination_unmapped'
+                  ? 'bannerPaginationUnmapped'
+                  : banner.kind === 'ocr_unreliable'
+                    ? 'bannerOcrUnreliable'
+                    : banner.kind === 'failed_source_pages'
+                      ? 'bannerFailedSourcePages'
+                      : 'bannerPartialCoverage';
+            const bannerFilterKind = banner.filterable
+              ? (banner.kind as FilterableFailureBannerKind)
+              : null;
+            return (
+              <div
+                key={banner.kind}
+                className="report-failure-banner"
+                data-tone={banner.tone}
+              >
+                <span>
+                  <strong>
+                    <span aria-hidden="true">
+                      {banner.tone === 'error'
+                        ? '✕'
+                        : banner.tone === 'impossible'
+                          ? '⊘'
+                          : '!'}
+                    </span>{' '}
+                    ({banner.count})
+                  </strong>{' '}
+                  {t(textKey)}
+                </span>
+                <span className="report-failure-actions">
+                  {banner.kind === 'inventory_unconfirmed' && !historical && (
+                    <Link
+                      className="button"
+                      to={`/matters/${caseId}/inventory`}
+                    >
+                      {t('bannerInventoryAction')}
+                    </Link>
+                  )}
+                  {bannerFilterKind && (
+                    <button
+                      type="button"
+                      className="button"
+                      aria-pressed={filter === bannerFilterKind}
+                      onClick={() => {
+                        setFilter((current) =>
+                          current === bannerFilterKind
+                            ? 'attention'
+                            : bannerFilterKind,
+                        );
+                        resetPage();
+                      }}
+                    >
+                      {t('bannerFilterAction')}
+                    </button>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div
         className="review-layout"
         ref={layoutRef}
@@ -243,15 +377,15 @@ export function ReportScreen({
           }}
         >
           <h2>
-            Findings <span>{report.findings.length}</span>
+            {t('findingsHeading')} <span>{report.findings.length}</span>
           </h2>
           <p role="status">
-            {report.findings.filter(needsAttention).length} need attention out
-            of {report.findings.length} detected references. Review coverage
-            separately.
+            {report.findings.filter(needsAttention).length}{' '}
+            {t('queueAttentionCount')} {report.findings.length}{' '}
+            {t('queueDetectedSuffix')}
           </p>
           <p role="status">
-            {filtered.length} references match the current filter and search.
+            {filtered.length} {t('queueFilteredSuffix')}
             {selected &&
             !filtered.some((f) => f.reference_id === selected.reference_id)
               ? ' The selected reference is outside this queue; it remains open for inspection.'
@@ -266,7 +400,7 @@ export function ReportScreen({
                 resetPage();
               }}
             >
-              Needs attention
+              {t('filterAttention')}
             </button>
             <button
               className="button"
@@ -276,18 +410,18 @@ export function ReportScreen({
                 resetPage();
               }}
             >
-              Show all
+              {t('filterAll')}
             </button>
           </div>
           <label>
-            Search reference text (this session only)
+            {t('searchLabel')}
             <input
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
                 resetPage();
               }}
-              placeholder="Reference text"
+              placeholder={t('searchPlaceholder')}
               maxLength={200}
             />
           </label>
@@ -299,23 +433,14 @@ export function ReportScreen({
                 resetPage();
               }}
             >
-              Clear reference search
+              {t('clearReferenceSearch')}
             </button>
           )}
-          <p className="small">
-            When a reference button is focused, press J/K for next/previous or
-            Space to inspect it. No decision is saved by a shortcut.
-          </p>
+          <p className="small">{t('queueShortcutHint')}</p>
           {report.findings.length === 0 ? (
-            <p>
-              No explicit references were detected. Inspect processing coverage
-              before drawing conclusions.
-            </p>
+            <p>{t('noRefsDetected')}</p>
           ) : visible.length === 0 ? (
-            <p>
-              No references in this filter. Choose Show all to inspect the full
-              scope.
-            </p>
+            <p>{t('noRefsInFilter')}</p>
           ) : (
             <ul>
               {visible.map((f) => (
@@ -349,10 +474,16 @@ export function ReportScreen({
                     )}
                     {f.literal}
                     <small>
-                      {needsAttention(f)
-                        ? 'Needs attention'
-                        : 'No machine discrepancy flagged'}{' '}
-                      · {f.identity.replaceAll('_', ' ')}
+                      <span
+                        className="finding-category-pill"
+                        data-tone={TRIAGE_TONE[triageCategoryOf(f)]}
+                      >
+                        <span aria-hidden="true">
+                          {TRIAGE_ICON[triageCategoryOf(f)]}
+                        </span>{' '}
+                        {categoryLabel(triageCategoryOf(f))}
+                      </span>{' '}
+                      · {stateLabel(f.identity)}
                     </small>
                   </button>
                 </li>
@@ -462,14 +593,10 @@ export function ReportScreen({
  * is never a verified PDF crop, NLI result or legal support classification.
  */
 function ParaphraseGuardPanel({ finding }: { finding: FindingView }) {
+  const { t } = useLocale();
   const raw = finding.paraphrase_guard;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return (
-      <Notice>
-        This frozen report has no guarded-term review. Inspect the preserved
-        source and surrounding context prior to making a semantic decision.
-      </Notice>
-    );
+    return <Notice>{t('noGuardedTermNotice')}</Notice>;
   }
   const guard = raw as Record<string, unknown>;
   if (
@@ -596,6 +723,7 @@ function QuoteContext({ finding }: { finding: FindingView }) {
     typeof quote === 'string' && quote.length > 0 && quote.length <= 1000;
   const validSource =
     typeof source === 'string' && source.length > 0 && source.length <= 4000;
+  const { t } = useLocale();
   const comparison =
     validQuote && validSource ? quoteMatches(source, quote) : null;
   return (
@@ -603,19 +731,12 @@ function QuoteContext({ finding }: { finding: FindingView }) {
       className="draft-context"
       aria-label="Quotation and derived source text"
     >
-      <h3>Quotation and derived source text</h3>
+      <h3>{t('quoteCardTitle')}</h3>
       <ParaphraseGuardPanel finding={finding} />
-      <p>
-        Compare this text with the preserved source pixels. A text match is not
-        a finding of legal support.
-      </p>
-      <h4>Quotation in draft</h4>
-      <p>
-        {validQuote
-          ? quote
-          : 'No supported quotation is available in this report.'}
-      </p>
-      <h4>Extracted source text</h4>
+      <p>{t('quoteCompareHint')}</p>
+      <h4>{t('quoteInDraftHeading')}</h4>
+      <p className="quote-text">{validQuote ? quote : t('quoteUnavailable')}</p>
+      <h4>{t('extractedSourceHeading')}</h4>
       {validSource ? (
         <>
           {comparison && (
@@ -657,16 +778,10 @@ function QuoteContext({ finding }: { finding: FindingView }) {
           </p>
         </>
       ) : (
-        <p>
-          Extracted source text is unavailable or unsupported. Inspect the
-          preserved pixels.
-        </p>
+        <p>{t('extractedSourceUnavailable')}</p>
       )}
       {finding.translation_review_required === true && (
-        <Notice>
-          Translation requires human review; the texts may be in different
-          languages.
-        </Notice>
+        <Notice>{t('translationNotice')}</Notice>
       )}
     </section>
   );
@@ -713,6 +828,7 @@ function FindingInspection({
   const readerRef = useRef<HTMLDivElement>(null);
   const widthControlId = useId();
   const reduceMotion = useReducedMotion();
+  const { t } = useLocale();
   return (
     <div className="cockpit-reader">
       <div
@@ -726,7 +842,7 @@ function FindingInspection({
           aria-pressed={readingMode === 'split'}
           onClick={() => onReadingModeChange('split')}
         >
-          Split view
+          {t('splitView')}
         </button>
         <button
           type="button"
@@ -734,7 +850,7 @@ function FindingInspection({
           aria-pressed={readingMode === 'draft'}
           onClick={() => onReadingModeChange('draft')}
         >
-          Draft focus
+          {t('draftFocus')}
         </button>
         <button
           type="button"
@@ -742,7 +858,7 @@ function FindingInspection({
           aria-pressed={readingMode === 'source'}
           onClick={() => onReadingModeChange('source')}
         >
-          Source focus
+          {t('sourceFocus')}
         </button>
       </div>
       <motion.p
@@ -754,14 +870,14 @@ function FindingInspection({
         aria-live="polite"
       >
         {readingMode === 'split'
-          ? 'Three-panel review: the preserved draft and original source remain separate. Drag the divider or use arrow keys.'
+          ? t('readingSplitNote')
           : readingMode === 'draft'
-            ? 'Draft focus. Source evidence is hidden, not verified or discarded.'
-            : 'Source focus. Preserved original pixels remain the inspection authority.'}
+            ? t('readingDraftNote')
+            : t('readingSourceNote')}
       </motion.p>
       <div className="cockpit-resize-controls" hidden={readingMode !== 'split'}>
         <label htmlFor={widthControlId}>
-          Source panel width: {sourceWidth}px
+          {t('sourceWidthLabel')} {sourceWidth}px
         </label>
         <input
           id={widthControlId}
@@ -778,7 +894,7 @@ function FindingInspection({
           className="button"
           onClick={() => onSourceWidthChange(400)}
         >
-          Restore 400px source
+          {t('restoreSourceWidth')}
         </button>
       </div>
       <div
@@ -787,7 +903,7 @@ function FindingInspection({
         data-source-width={sourceWidth}
       >
         <div className="cockpit-draft">
-          <p className="eyebrow">Selected reference</p>
+          <p className="eyebrow">{t('selectedReference')}</p>
           <h2 id="finding-title">{finding.literal}</h2>
           <dl className="dimensions cockpit-reference-dimensions">
             <StateValue label="Identity" value={finding.identity} />
@@ -796,8 +912,8 @@ function FindingInspection({
             <StateValue label="Human support" value={finding.support} />
           </dl>
           <header className="cockpit-pane-heading">
-            <h3>Draft</h3>
-            <span>Preserved DOCX · extracted context</span>
+            <h3>{t('draftHeading')}</h3>
+            <span>{t('draftPaneSubtitle')}</span>
           </header>
           {renderDraft?.(finding, historical)}
           <QuoteContext finding={finding} />
@@ -819,8 +935,10 @@ function FindingInspection({
         )}
         <div className="cockpit-evidence">
           <header className="cockpit-pane-heading">
-            <h3>Source evidence</h3>
-            <span>{finding.literal} · original PDF</span>
+            <h3>{t('sourceEvidenceHeading')}</h3>
+            <span>
+              {finding.literal} · {t('originalPdfTag')}
+            </span>
           </header>
           {renderSource ? (
             renderSource(finding, historical, () => setInspected(true))

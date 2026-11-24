@@ -3,7 +3,8 @@
 (() => {
   const $ = id => document.getElementById(id);
   const state = {session:null, external:false, caseId:"", briefId:"", inventory:null, check:null,
-    review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null};
+    review:null, selected:null, previewReady:false, pending:null, busy:false, loading:false, generation:0, previewSeq:0, publishable:null, justPublished:false,
+    catalog:null, publishRevision:0, pageImageUrl:null, pageImageNode:null, pageZoomNode:null, pageZoomReturn:null, pageZoomKey:null};
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const sha = /^[0-9a-f]{64}$/;
   const el = (tag, content, className) => {
@@ -12,12 +13,75 @@
     if (className) node.className = className;
     return node;
   };
+  function resultLabel(item){
+    if(item.kind==="Event language review"||item.kind==="Human-reported passage"||item.kind==="Suitability rule")return "Appréciation requise";
+    if(item.kind==="Legal reference")return item.state==="PASS"?"Correspondance constatée (corpus/citation seulement)":item.state==="FAIL"?"Écart constaté (citation seulement)":"Contrôle impossible";
+    if(item.kind==="Citation")return item.state==="exact_match"?"Correspondance constatée (texte seulement)":item.state==="quote_not_found"?"Écart constaté (représentation contrôlée)":item.state==="reference_checked_no_quotation"?"Appréciation requise (aucune citation littérale)":"Contrôle impossible";
+    if(item.kind==="Factual value")return item.state==="value_match"?"Correspondance constatée (valeur seulement)":item.state==="candidate_difference"?"Écart constaté (valeur seulement)":item.state==="needs_context"?"Appréciation requise":"Contrôle impossible";
+    return "Appréciation requise";
+  }
   const label = value => String(value || "").replaceAll("_"," ");
   function notice(message, tone="") {
     $("notice").textContent = message; $("notice").className = "notice " + tone;
   }
   const path = () => "/v2/matters/" + encodeURIComponent(state.caseId) +
     "/briefs/" + encodeURIComponent(state.briefId);
+  // Signed workbench (check/review on the signed adapters) when the host exposes it;
+  // otherwise the legacy v2 routes. Chosen from /dev/clearbrief/config, never guessed.
+  let signedWorkbench = false;
+  const reviewPath = () => signedWorkbench
+    ? "/dev/signed/matters/" + encodeURIComponent(state.caseId) + "/briefs/" + encodeURIComponent(state.briefId)
+    : path();
+  const LEGAL_LABEL={PASS:"in corpus",FAIL:"quotation not in article text",UNVERIFIED:"article absent from chosen corpus",UNDETERMINED:"cannot be decided"};
+  async function loadLegalReferences(generation){
+    const box=$("legal-refs");if(!box)return;box.replaceChildren();box.hidden=false;
+    try{
+      const d=await api(reviewPath()+"/legal-references");
+      if(generation!==state.generation)return;
+      if(d.schema!=="caseproof-signed-legal-references-v1"||d.brief_version_id!==state.briefId||!Array.isArray(d.references))throw Error("invalid_schema");
+      box.append(el("h4","Cited legal articles"));
+      if(d.corpus!=="configured"){box.append(el("p","No legal corpus is chosen for this matter: cited articles are not checked. Nothing was looked up online.","empty"));return;}
+      box.append(el("p",d.references.length+" cited reference(s) checked against "+d.corpus_articles+" corpus article(s). "+d.note,"small"));
+      if(d.coverage){const c=d.coverage,s=c.by_status;
+        box.append(el("p","Coverage: "+c.detected+" article mention(s) detected \u00b7 "+s.PASS+" in corpus \u00b7 "+s.FAIL+" quotation not found \u00b7 "+s.UNVERIFIED+" absent from corpus \u00b7 "+s.UNDETERMINED+" cannot be decided. Analysed: "+c.analysed+". NOT analysed: "+c.not_analysed.join("; ")+". Counts show reach, not that the brief is supported.","small"));}
+      for(const r of d.references){
+        const item=el("div","","result-item");
+        item.append(el("strong",r.status+" · "+(r.reason==="requested_version_absent_from_chosen_corpus"?"version absente du corpus":(LEGAL_LABEL[r.status]||r.status))));
+        item.append(el("p",r.raw_text,"small"));
+        item.append(el("p","Reason: "+r.reason+(r.corpus_version?" · corpus version "+r.corpus_version:""),"small mono"));
+        if(r.corpus_text_sha256)item.append(el("p","Corpus text SHA-256 "+r.corpus_text_sha256.slice(0,16)+"\u2026 · "+(r.corpus_source_uri||""),"small mono"));
+        box.append(item);
+      }
+    }catch(error){if(generation===state.generation){box.replaceChildren();box.append(el("p","Legal references unavailable: "+statusFor(error),"error"));}}
+  }
+  const evidencePath = (row) => signedWorkbench
+    ? reviewPath() + "/sources/" + encodeURIComponent(row.source_id) + "/versions/" + encodeURIComponent(row.version_id)
+    : path() + "/evidence/" + encodeURIComponent(row.source_id) + "/versions/" + encodeURIComponent(row.version_id);
+  const labelOf = (id) => (id && state.inventory?.labels?.[id]) || id;
+  async function previewCorrection(evt) {
+    evt.preventDefault();
+    const generation = state.generation, out = $("correction-result");
+    const selected = state.selected?.id, snapshot = state.check?.snapshot_hash;
+    const before = $("correction-before").value, after = $("correction-after").value;
+    if (!signedWorkbench || !selected || !sha.test(snapshot || "") || !before || !after) return;
+    out.textContent = "Checking against the current verified representation…";
+    try {
+      const d = await api(reviewPath() + "/correction-preview", {method: "POST",
+        json: {snapshot_hash: snapshot, observation_id: selected, before, after,
+          rationale: $("rationale").value.trim() || "Correction proposed after review"}});
+      if (generation !== state.generation) return;
+      if (d.schema !== "caseproof-signed-correction-preview-v1" || d.persisted !== false ||
+          d.invalidates_check_hash !== snapshot || !sha.test(d.proposed_text_sha256))
+        throw Error("invalid_schema");
+      out.textContent = "Preview only, nothing saved. Proposed text digest " +
+        d.proposed_text_sha256.slice(0, 16) + "\u2026 It requires a new brief version and a new check.";
+    } catch (error) {
+      if (generation === state.generation)
+        out.textContent = error && error.code === 409
+          ? "The text is not found exactly once in the current checked version, or the check is out of date."
+          : statusFor(error);
+    }
+  }
   async function bearer() {
     if (!state.session) throw Error("no_session");
     const token = await state.session.getBearer();
@@ -44,12 +108,59 @@
   const fidelityPanel=window.CaseProofFidelity?.mount({root:$("fidelity-panel"),
     api:async(url,options)=>{await authenticate();return api(url,options);},
     context:()=>({caseId:$("case-id").value.trim(),briefId:$("brief-id").value.trim()})});
+  function closePageZoom() {
+    const dialog = state.pageZoomNode;
+    state.pageZoomNode = null;
+    if (state.pageZoomKey) {
+      document.removeEventListener("keydown", state.pageZoomKey);
+      state.pageZoomKey = null;
+    }
+    const returnTo = state.pageZoomReturn;
+    state.pageZoomReturn = null;
+    if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
+    if (returnTo && returnTo.parentNode && typeof returnTo.focus === "function") returnTo.focus();
+  }
+  function openPageZoom(url, physical, returnTo) {
+    closePageZoom();
+    const dialog = el("div", "", "page-zoom");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-label", "Physical page " + physical + " rendering at full size");
+    const bar = el("div", "", "page-zoom-bar");
+    bar.append(el("p", "Physical page rendering of the verified original bytes · a rendering, not a verification. · page " + physical, "small"));
+    const close = el("button", "Close", "secondary");
+    close.type = "button";
+    close.addEventListener("click", closePageZoom);
+    bar.append(close);
+    const scroller = el("div", "", "page-zoom-scroll");
+    const img = new Image();
+    img.alt = "Physical PDF page " + physical + " rendering of the verified original, full size";
+    img.src = url;
+    scroller.append(img);
+    dialog.append(bar, scroller);
+    dialog.addEventListener("click", event => { if (event.target === dialog) closePageZoom(); });
+    state.pageZoomReturn = returnTo || null;
+    state.pageZoomKey = event => { if (event && event.key === "Escape") closePageZoom(); };
+    document.addEventListener("keydown", state.pageZoomKey);
+    document.body.append(dialog);
+    state.pageZoomNode = dialog;
+    close.focus();
+  }
+  function revokePageImage() {
+    closePageZoom();
+    if (state.pageImageUrl) { URL.revokeObjectURL(state.pageImageUrl); state.pageImageUrl = null; }
+    const node = state.pageImageNode;
+    state.pageImageNode = null;
+    if (node && node.parentNode) node.parentNode.removeChild(node);
+  }
   function clearView() {
+    revokePageImage();
     fidelityPanel?.clear();
-    state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null;
+    state.inventory=null; state.check=null; state.review=null; state.selected=null; state.previewReady=false; state.pending=null; state.showAll=false;
     state.previewSeq+=1;state.loading=false;
     $("check-scope").textContent="Check source scope not assessed.";
-    $("workspace").hidden=true; $("sources").replaceChildren(); $("observations").replaceChildren();
+    $("workspace").hidden=true; $("connection").hidden=false; $("record").disabled=true;$("offline-legal-pack").disabled=true;
+    $("record-status").textContent="";
+    $("sources").replaceChildren(); $("observations").replaceChildren();
     $("search-results").replaceChildren(); $("source-preview").textContent="";
     $("review-history").replaceChildren(); $("selected").textContent="Select an observation.";
     $("save-review").disabled=true;
@@ -98,7 +209,8 @@
       if(state.external && (session.caseId!==caseId || session.briefVersionId!==briefId))
         throw Error("provider_mismatch");
       state.caseId=caseId;state.briefId=briefId;
-      clearView(); await load();
+      state.catalog=null;state.publishRevision=0;
+      clearView(); await load(); void loadCatalog();
     } catch(err) {
       if(err.message==="provider_mismatch")notice("The connected Word session belongs to a different matter/brief.","danger");
       else if(err.message==="credentials_required")notice("Enter your development Auth email and password.","danger");
@@ -137,7 +249,7 @@
     if(!rows.length)node.append(el("p","No authorized sources are indexed in this matter.","empty"));
     for(const row of rows) {
       const button=el("button","","source-item");button.type="button";
-      button.append(el("div",row.source_id||"Unnamed source"));
+      button.append(el("div",labelOf(row.source_id)||"Unnamed source"));
       button.firstChild.append(el("span",(row.media_type||"unknown format")+" · "+(row.pages?.length??0)+" page states"));
       button.append(el("span",row.status||"unknown","state"));
       button.addEventListener("click",()=>selectSource(row));
@@ -152,7 +264,7 @@
     $("source-preview").textContent="Loading source preview…";
     state.selected=null;state.previewReady=false;$("save-review").disabled=true;
     try {
-      const data=await api(path()+"/sources/"+encodeURIComponent(row.source_id));
+      const data=await api(reviewPath()+"/sources/"+encodeURIComponent(row.source_id));
       if(generation!==state.generation||seq!==state.previewSeq||state.selected!==null)return;
       if(data.schema!=="caseproof-clearbrief-brief-source-preview-v1" || data.row?.source_id!==row.source_id ||
         data.case_id!==state.caseId || data.brief_version_id!==state.briefId)
@@ -162,7 +274,7 @@
         data.row.representation_id!==row.representation_id)
         throw Error("source_version_mismatch");
       const preview=$("source-preview");preview.replaceChildren();
-      preview.append(el("strong",row.source_id));
+      preview.append(el("strong",labelOf(row.source_id)));
       preview.append(el("p","SHA-256: "+row.original_sha256,"small mono"));
       preview.append(el("p",(row.warnings||[]).join(" · ")||"No recorded parser warnings","small"));
       preview.append(el("p",data.text||"No available represented text."));
@@ -178,8 +290,7 @@
   async function downloadOriginal(row) {
     const generation=state.generation;
     try {
-      const response=await api(path()+"/evidence/"+encodeURIComponent(row.source_id)+
-        "/versions/"+encodeURIComponent(row.version_id)+"/original",{raw:true});
+      const response=await api(evidencePath(row)+"/original",{raw:true});
       const blob=await response.blob();
       if(generation!==state.generation||!state.session)return;
       if(blob.size>20*1024*1024||blob.size===0)throw Error("invalid_original");
@@ -189,19 +300,53 @@
       notice("Original downloaded. Its source identity must still be independently validated.","ok");
     }catch(error){if(generation===state.generation)notice(statusFor(error),"danger");}
   }
+  function citationLocation(a){
+    const loc=state.inventory?.reference_locations?.[a.reference_id];
+    const matched=loc?.identity_confirmed===true && loc.source_id===a.source_id &&
+      loc.version_id===a.source_version_id;
+    return matched?loc:null;
+  }
+  function citationAnchorLabel(a){
+    if(Number.isInteger(a.text_start)&&Number.isInteger(a.text_end))return "Offsets "+a.text_start+"–"+a.text_end;
+    if(!a.source_id)return "Exhibit/source unresolved; no quotation anchor";
+    const loc=citationLocation(a);
+    const where=loc&&Number.isInteger(loc.pdf_page)?" · physical PDF page "+loc.pdf_page:" · physical page not mapped";
+    if(a.state==="reference_checked_no_quotation")return "Source resolved"+where+" · no quotation to anchor; support not assessed";
+    if(a.state==="quote_not_found")return "Source resolved"+where+" · quotation not found; no matched offsets";
+    return "Source resolved"+where+" · no aligned quotation offsets";
+  }
   function allObservations() {
     if(!state.check)return [];
     return [
       ...(state.check.citation_observations||[]).map(a=>({
         id:"citation:"+a.reference_id,kind:"Citation",state:a.state,source:a.source_id,
         version:a.source_version_id, sourceSha:a.source_sha256, representation:a.representation_id,
-        span:a.text_start===null?"Unresolved anchor":"Offsets "+a.text_start+"–"+a.text_end,
+        span:citationAnchorLabel(a),
         raw:a,
       })),
       ...(state.check.factual_observations||[]).map(a=>({
         id:"fact:"+a.claim_id,kind:"Factual value",state:a.state||a.status||"unknown",
         source:a.source_id,version:a.source_version_id,sourceSha:a.source_sha256,
         representation:a.representation_id,span:"Version-bound candidate",raw:a,
+      })),
+      ...(state.check.passage_flags||[]).map(a=>({
+        id:"flag:"+a.id,kind:"Human-reported passage",state:"needs_context",
+        source:a.binding_current?(state.inventory?.rows||[]).find(r=>r.document_id===a.source_document_id&&r.version_id===a.source_version_id)?.source_id:null,version:a.source_version_id,
+        sourceSha:a.source_sha256,representation:(state.inventory?.rows||[]).find(r=>r.document_id===a.source_document_id&&r.version_id===a.source_version_id)?.representation_id,
+        span:a.binding_current?"Human-selected text, not automatic detection":"Binding changed: inspect again",raw:{...a,text_start:a.source_start,text_end:a.source_start+[...a.source_passage].length},
+      })),
+      ...(state.check.event_observations||[]).map(a=>({
+        id:"event:"+a.observation_id,kind:"Event language review",state:a.state,
+        source:a.source_id,version:a.source_version_id,sourceSha:a.source_sha256,
+        representation:a.representation_id,span:a.reason,raw:a,
+      })),
+      ...(state.check.legal_observations||[]).map(a=>({
+        id:"legal:"+a.reference_id,kind:"Legal reference",state:a.status,source:null,
+        span:"Offsets "+a.start+"\u2013"+a.end+" \u00b7 "+a.raw_text,raw:a,
+      })),
+      ...(state.check.suitability_observations||[]).map(a=>({
+        id:"suitability:"+a.rule_id,kind:"Suitability rule",state:a.status,source:null,
+        span:a.reference+" \u00b7 "+(a.missing.length?a.missing.length+" input(s) missing":"inputs confirmed"),raw:a,
       })),
     ];
   }
@@ -228,33 +373,198 @@
       scope.className="check-scope partial";
       scope.textContent="Check not available. Declared sources and exclusions have not been assessed.";
     }
+    if(state.check)scope.append(el("small","Event-language coverage: "+(state.check.event_observations||[]).length+" paragraph candidate(s). Explicit signature and dispatch-for-signature phrases only (FR/NL/EN), outside quoted text. Source comparison requires one unique existing exact quotation in the same paragraph. Other wording, general paraphrases, event identity and truth are NOT assessed. Uncited candidates receive no automatic source."));
     $("citation-count").textContent=String(state.check?.citation_observations?.length??0);
     $("fact-count").textContent=String(state.check?.factual_observations?.length??0);
-    if(!state.check){node.append(el("p","Check is unavailable. No success or correctness is implied.","empty"));return;}
-    if(!values.length){node.append(el("p","No observations in this declared scope. This is not a certification.","empty"));return;}
-    for(const item of values){
+    if(!state.check){$("observations-filter").hidden=true;node.append(el("p","Check is unavailable. No success or correctness is implied.","empty"));return;}
+    if(!values.length){$("observations-filter").hidden=true;node.append(el("p","No observations in this declared scope. This is not a certification.","empty"));return;}
+    const cleanStates=new Set(["exact_match","ready","PASS"]);
+    const attention=values.filter(v=>!cleanStates.has(v.state));
+    const clean=values.filter(v=>cleanStates.has(v.state));
+    state.showAll=state.showAll===true;
+    const ordered=state.showAll?values:[...attention,...clean];
+    const toggle=$("observations-filter");
+    toggle.hidden=false;
+    toggle.textContent=state.showAll?
+      "Exceptions first ("+attention.length+" to review · "+clean.length+" clean)":
+      "Show all "+values.length+" ("+attention.length+" to review first · "+clean.length+" clean)";
+    toggle.onclick=()=>{state.showAll=!state.showAll;renderChecks();};
+    for(const item of ordered){
       const button=el("button","","observation");button.type="button";
       button.setAttribute("aria-pressed",String(state.selected?.id===item.id));
-      button.append(el("span",item.kind+" / "+label(item.state),"tag"));
-      button.append(el("strong",item.id.replace("citation:","Reference ").replace("fact:","Fact ")));
-      button.append(el("small",(item.source||"No confirmed source")+" · "+item.span));
+      button.append(el("span",item.kind+" / "+resultLabel(item)+" · "+label(item.state),"tag"));
+      button.append(el("strong",item.id.replace("citation:","Reference ").replace("fact:","Fact ").replace("legal:","Legal reference ").replace("suitability:","Suitability rule ")));
+      button.append(el("small",(labelOf(item.source)||"No confirmed source")+" · "+item.span));
       button.addEventListener("click",()=>{if(state.loading||state.busy||state.pending)return;
         state.selected=item;renderChecks();renderSelected();});
       node.append(button);
     }
   }
+  function renderPassageFlagForm(){
+    const box=$("passage-flag-form");if(!box)return;box.replaceChildren();
+    if(!signedWorkbench||!state.check)return;
+    const rows=(state.inventory?.rows||[]).filter(r=>r.document_id&&r.version_id);
+    const draft=el("textarea");draft.placeholder="Paste the exact missed assertion from the current conclusions";draft.maxLength=1200;draft.id="flag-draft";
+    const src=el("select");src.id="flag-source";
+    for(const r of rows){const o=el("option",labelOf(r.source_id)||r.source_id);o.value=r.document_id+"|"+r.version_id;src.append(o);}
+    const view=el("p","","passage-view");view.id="flag-text";view.tabIndex=0;
+    const rationale=el("textarea");rationale.id="flag-rationale";rationale.placeholder="Why does this passage need review? Human judgment only.";rationale.maxLength=2000;
+    const status=el("p","No passage selected.","small");let chosen=null;const requestId=crypto.randomUUID();
+    const generation=state.generation;let seq=0;
+    const loadText=async()=>{const n=++seq;chosen=null;const r=rows.find(r=>r.document_id+"|"+r.version_id===src.value);if(!r)return;
+      try{const d=await api(reviewPath()+"/sources/"+encodeURIComponent(r.source_id));if(n===seq&&generation===state.generation)view.textContent=d.text||"";}
+      catch(error){view.textContent="Source unavailable: "+statusFor(error);}};
+    src.onchange=loadText;
+    const pick=el("button","Use selected missed passage","secondary");pick.type="button";
+    pick.onclick=()=>{const s=getSelection();if(!s||s.isCollapsed||s.anchorNode!==view.firstChild||s.focusNode!==view.firstChild){status.textContent="Select words inside the source text.";return;}
+      const a=Math.min(s.anchorOffset,s.focusOffset),b=Math.max(s.anchorOffset,s.focusOffset),text=view.firstChild.data.slice(a,b);
+      if(!text.trim()||text.length>1200){status.textContent="Select 1 to 1200 characters.";return;}
+      chosen={text,start:[...view.firstChild.data.slice(0,a)].length};status.textContent="Selected: "+text;};
+    const save=el("button","Record missed passage","secondary");save.type="button";
+    save.onclick=async()=>{if(!chosen||!draft.value.trim()||!rationale.value.trim()){status.textContent="Provide the exact assertion, selected source passage and reason.";return;}
+      save.disabled=true;const [doc,ver]=src.value.split("|");
+      try{await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/passage-flags",{method:"POST",json:{request_id:requestId,brief_version_id:state.briefId,source_document_id:doc,source_version_id:ver,draft_passage:draft.value,source_passage:chosen.text,source_start:chosen.start,rationale:rationale.value}});await load();}
+      catch(error){status.textContent="Not recorded: "+statusFor(error);save.disabled=false;}};
+    box.append(el("p","Human report, not automated detection. Exact text is checked against this brief and source version; semantic support remains your judgment.","small"),draft,src,view,pick,status,rationale,save);
+    $("missed-passage").ontoggle=()=>{if($("missed-passage").open)void loadText();};
+    if($("missed-passage").open)void loadText();
+  }
+  function renderBlockers(){
+    const box=$("blocker-inventory");if(!box)return;box.replaceChildren();
+    const d=state.review?.blocker_inventory;
+    if(!d||d.snapshot_hash!==state.check?.snapshot_hash){box.append(el("p","Blocker inventory unavailable. No readiness verdict.","small"));return;}
+    box.append(el("strong","Blocker inventory · no final verdict"));
+    box.append(el("p",d.note,"small"));
+    box.append(el("p",d.items.length+" item(s) requiring review or policy; zero items would not mean ready.","small"));
+    for(const r of d.items)box.append(el("p",r.observation_id+" · "+r.reason+" · "+r.review_disposition,"small"));
+  }
+  function renderFactForm(box,a){
+    const rows=(state.inventory?.rows||[]).filter(r=>r.document_id&&r.version_id);
+    const form=el("div","","fact-form");
+    form.append(el("strong","Record a fact against a source (signed session)"));
+    const name=el("select");name.setAttribute("aria-label","Fact name");
+    const names=[...new Set([...(a.missing||[]),...a.facts.map(f=>f[0])])];
+    for(const n of names){const o=el("option",n);o.value=n;name.append(o);}
+    const value=el("select");value.setAttribute("aria-label","Fact value");
+    for(const [v,l] of [["true","true"],["false","false"]]){const o=el("option",l);o.value=v;value.append(o);}
+    const src=el("select");src.setAttribute("aria-label","Source");
+    for(const r of rows){const o=el("option",(labelOf(r.source_id)||r.source_id)+" \u00b7 sha "+r.original_sha256.slice(0,8));o.value=r.document_id+"|"+r.version_id;src.append(o);}
+    const view=el("div","","passage-view");view.tabIndex=0;view.setAttribute("aria-label","Source text: select the supporting passage");
+    const picked=el("p","No passage selected. Select the supporting words in the source text above.","small");
+    let chosen=null;
+    const loadSource=async()=>{
+      chosen=null;picked.textContent="No passage selected. Select the supporting words in the source text above.";
+      view.textContent="Loading source text\u2026";
+      const row=rows.find(r=>r.document_id+"|"+r.version_id===src.value);if(!row)return;
+      try{const d=await api(reviewPath()+"/sources/"+encodeURIComponent(row.source_id));view.textContent=d.text||"No represented text.";}
+      catch(error){view.textContent="Source text unavailable: "+statusFor(error);}
+    };
+    src.addEventListener("change",loadSource);
+    const pick=el("button","Use selected passage","secondary");pick.type="button";
+    pick.addEventListener("click",()=>{
+      const sel=window.getSelection();
+      if(!sel||sel.rangeCount===0||sel.isCollapsed||!view.contains(sel.anchorNode)||sel.anchorNode!==sel.focusNode||!view.firstChild||view.firstChild.nodeType!==3){picked.textContent="Select a passage inside the source text (one block).";return;}
+      const s=Math.min(sel.anchorOffset,sel.focusOffset),e=Math.max(sel.anchorOffset,sel.focusOffset);
+      const text=view.firstChild.data.slice(s,e);
+      if(!text.trim()||text.length>120){picked.textContent="Select between 1 and 120 characters.";return;}
+      chosen={text,start:s};picked.textContent="Selected: \u00ab"+text+"\u00bb (offset "+s+")";
+    });
+    const conf=el("input");conf.type="checkbox";conf.checked=true;conf.setAttribute("aria-label","I confirm this value against the source");
+    const lab=el("label","I confirm this value against the source");lab.prepend(conf);
+    const go=el("button","Record confirmation","secondary");go.type="button";
+    const out=el("p","","small");
+    go.addEventListener("click",async()=>{
+      if(!names.length||!rows.length||!chosen){out.textContent="Choose a fact and a source, then select the supporting passage.";return;}
+      const [doc,ver]=src.value.split("|");
+      go.disabled=true;
+      try{
+        const d=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/facts",{method:"POST",
+          json:{request_id:crypto.randomUUID(),
+          name:name.value,value:value.value==="true",confirmed:conf.checked,source_document_id:doc,source_version_id:ver,brief_version_id:state.briefId,passage:chosen.text,passage_start:chosen.start}});
+        if(d.schema!=="caseproof-signed-fact-recorded-v1")throw Error("invalid_schema");
+        out.textContent="Recorded. "+d.note+" Re-running the check on a new snapshot\u2026";
+        await load();
+      }catch(error){out.textContent="Not recorded: "+statusFor(error);go.disabled=false;}
+    });
+    form.append(name,value,src,view,pick,picked,lab,go,out);box.append(form);
+    loadSource();
+  }
+  function renderSuitability(selected){
+    const a=selected.raw,box=$("source-preview");box.replaceChildren();
+    box.append(el("strong","Suitability rule "+a.rule_id+" v"+a.rule_version));
+    box.append(el("p",a.scope,"small"));
+    box.append(el("p","Assessed reference: "+a.reference+" \u00b7 cited at "+a.cited_by.join(", ")+" \u00b7 article "+a.article_key,"small mono"));
+    box.append(el("p","Result: "+a.status+" \u00b7 "+a.reason,"small"));
+    for(const [k,v] of a.subresults)box.append(el("p",k+" \u2192 "+v,"small mono"));
+    if(a.missing.length)box.append(el("p","Inputs blocking a verdict: "+a.missing.join(", ")+". A fact must be present and lawyer-confirmed.","small"));
+    for(const [name,value,confirmed,prov] of a.facts)box.append(el("p","Fact "+name+" = "+value+" \u00b7 "+(confirmed?"confirmed":"NOT confirmed")+" \u00b7 "+prov,"small mono"));
+    renderFactForm(box,a);
+    box.append(el("p","Facts marked \"authenticated signed session\" were entered by the signed user against a named source version and hash. Facts from the matter's files are only declared: they are shown but never count as confirmed. The server checks that the selected passage exists verbatim in the named source version, not that it supports the fact: that judgement is the actor's. Neither proves a fact is true. This is the rule's declared condition applied to those facts. It is not a machine legal conclusion and does not assess the brief's argument.","small"));
+    state.previewReady=true;$("save-review").disabled=!state.review||state.loading||state.busy;
+  }
+  async function renderLegalPassage(selected){
+    const generation=state.generation,box=$("source-preview");
+    box.replaceChildren(el("p","Loading the cited article from the chosen corpus\u2026","small"));
+    try{
+      const d=await api(reviewPath()+"/legal-references/"+encodeURIComponent(selected.raw.reference_id)+"/passage");
+      if(generation!==state.generation||state.selected!==selected)return;
+      if(d.schema!=="caseproof-signed-legal-passage-v1"||d.observation_id!==selected.id||d.snapshot_hash!==state.check?.snapshot_hash)
+        throw Error("invalid_schema");
+      box.replaceChildren();
+      const grid=el("div","","side-by-side");
+      const left=el("div"),right=el("div");
+      left.append(el("strong","Your brief"));
+      const [s,e]=d.citation_span,ex=d.brief_excerpt;
+      const p=el("p","","brief-excerpt");
+      p.append(document.createTextNode(ex.slice(0,s)));
+      const mark=el("mark",ex.slice(s,e));p.append(mark);
+      p.append(document.createTextNode(ex.slice(e)));left.append(p);
+      right.append(el("strong","Chosen corpus article"));
+      if(d.article_text===null)right.append(el("p","The article is not in the corpus chosen for this matter. Nothing was looked up elsewhere.","small"));
+      else{right.append(el("p",d.article_text,"article-text"));
+        right.append(el("p",(d.corpus_key||"")+" \u00b7 version "+(d.corpus_version||"")+" \u00b7 SHA-256 "+(d.corpus_text_sha256||"").slice(0,16)+"\u2026","small mono"));
+        right.append(el("p",d.corpus_source_uri||"","small mono"));}
+      grid.append(left,right);box.append(grid);
+      box.append(el("p","Result: "+d.status+" \u00b7 "+d.reason+". "+d.note,"small"));
+      state.previewReady=true;$("save-review").disabled=!state.review||state.loading||state.busy;
+    }catch(error){if(generation===state.generation&&state.selected===selected)box.textContent="Article passage unavailable: "+statusFor(error);}
+  }
   function renderSelected(){
     const selected=state.selected;
+    revokePageImage();
     $("selected").replaceChildren();
     state.previewReady=false;
     $("save-review").disabled=true;
     if(!selected){$("selected").textContent="Select a finding to inspect and review.";return;}
     $("selected").append(el("strong",selected.kind+" · "+selected.id));
-    $("selected").append(el("p","Check state: "+label(selected.state)));
-    $("selected").append(el("p","Source: "+(selected.source||"not resolved"),"small"));
+    $("selected").append(el("p",resultLabel(selected)+" · Check state: "+label(selected.state)));
+    $("selected").append(el("p","Source: "+(labelOf(selected.source)||"not resolved"),"small"));
     $("selected").append(el("p","This result is a candidate observation, not a legal finding.","small"));
+    if(selected.kind==="Citation")$("selected").append(el("p",citationAnchorLabel(selected.raw),"small"));
+    if(selected.kind==="Human-reported passage"){
+      const a=selected.raw;
+      $("selected").append(el("strong","Appréciation requise · human reported"));
+      $("selected").append(el("p","Conclusions: "+a.draft_passage));
+      $("selected").append(el("p","Selected source: "+a.source_passage));
+      $("selected").append(el("p","Human reason: "+a.rationale));
+      $("selected").append(el("p","Recorded by signed actor "+a.actor_id+" at "+a.recorded_at+". Text existence checked, not support. Binding current: "+a.binding_current,"small"));
+    }
+    if(selected.kind==="Event language review"){
+      const a=selected.raw;
+      $("selected").append(el("strong","Appréciation requise"));
+      $("selected").append(el("p","Conclusions: "+a.draft_text));
+      $("selected").append(el("p","Automated lexical detection: "+a.draft_events.join(", ")+". Source wording: "+(a.source_events.join(", ")||"unresolved")+". Reason: "+a.reason));
+      const explanation=a.reason==="same_event_wording_support_not_assessed"
+        ? "The detected event wording agrees. This is not proof that this source supports the assertion: identity, truth and context still need human review."
+        : a.reason==="different_event_wording_requires_human_review"
+          ? "The detected event wording differs: signature and dispatch for signature are different events, even if the date matches. This is a lexical review warning, not an established contradiction."
+          : "The event wording or its source could not be compared reliably. Inspect the named reason; no source support is inferred.";
+      $("selected").append(el("p",explanation+" The signed reviewer inspects the original and records their own judgment. Uncited claims are detected only for these phrases; no source is inferred.","small"));
+    }
     // A claim may be reviewed only against the exact checked source version,
     // digest and representation, never a newer catalog entry sharing its source_id.
+    if(selected.kind==="Suitability rule"){renderSuitability(selected);return;}
+    if(selected.kind==="Legal reference"){void renderLegalPassage(selected);return;}
     if(!selected.source){
       $("source-preview").textContent="No source resolved for this observation. Evidence support is unknown.";
       state.previewReady=true;$("save-review").disabled=!state.review||state.loading||state.busy;return;
@@ -275,7 +585,7 @@
     const current=()=>generation===state.generation && seq===state.previewSeq &&
       state.selected?.id===selectedId && !state.loading && state.session;
     try{
-      const d=await api(path()+"/sources/"+encodeURIComponent(row.source_id));
+      const d=await api(reviewPath()+"/sources/"+encodeURIComponent(row.source_id));
       if(!current())return;
       if(d.schema!=="caseproof-clearbrief-brief-source-preview-v1"||d.row?.source_id!==row.source_id||
         d.case_id!==state.caseId||d.brief_version_id!==state.briefId||
@@ -286,7 +596,68 @@
         d.row.original_sha256!==state.selected.sourceSha ||
         d.row.representation_id!==state.selected.representation)
         throw Error("source_version_mismatch");
-      $("source-preview").textContent=d.text||"Source has no available text representation.";
+      const preview=$("source-preview");preview.replaceChildren();
+      const text=d.text||"";
+      // Backend offsets are Unicode code points (Python semantics), never
+      // UTF-16 code units: slice over code points so astral characters
+      // before or inside the match cannot shift the highlight.
+      const chars=[...text];
+      const obs=state.selected?.raw||{};
+      const start=obs.text_start,end=obs.text_end;
+      if(Number.isInteger(start)&&Number.isInteger(end)&&start>=0&&end>start&&end<=chars.length){
+        preview.append(el("p","Matched passage · offsets "+start+"–"+end+" in this verified source representation:","small"));
+        const passage=el("p","","matched-passage");
+        passage.append(el("span",chars.slice(0,start).join("")),el("mark",chars.slice(start,end).join(""),"matched"),el("span",chars.slice(end).join("")));
+        preview.append(passage);
+        // Page provenance: each numbering space stays distinct; anything not
+        // recorded is "not mapped", never inferred from another space.
+        const spans=Array.isArray(d.spans)?d.spans:[];
+        const pages=new Set(spans.filter(s=>Array.isArray(s)&&s.length===4&&
+          Number.isInteger(s[0])&&Number.isInteger(s[1])&&s[0]<end&&start<s[1]&&
+          Number.isInteger(s[3])).map(s=>s[3]));
+        const physical=pages.size===1?[...pages][0]:null;
+        const maps=Array.isArray(d.page_mappings)?d.page_mappings:[];
+        const reg=physical===null?null:(maps.find(m=>m&&m.pdf_page===physical)||null);
+        preview.append(el("p","Page provenance · physical PDF page: "+(physical===null?"not mapped":physical)+
+          " · printed label: "+(reg&&Number.isInteger(reg.printed_page)?reg.printed_page:"not mapped")+
+          " · bundle position: "+(reg&&Number.isInteger(reg.bundle_page)?reg.bundle_page:"not mapped"),"small"));
+        // Physical page image: an authenticated, digest-checked rendering of
+        // the verified original bytes. Availability depends only on the
+        // resolved physical page, never on printed/bundle labels. The image
+        // is a rendering, never a visual-verification verdict. Late responses
+        // are dropped and revoked so they cannot land on another finding.
+        if(physical!==null&&row.media_type==="application/pdf"){
+          const imgBox=el("div","","page-image");
+          imgBox.append(el("p","Physical page rendering of the verified original bytes · a rendering, not a verification.","small"));
+          imgBox.append(el("p","Loading physical page "+physical+"…","small"));
+          preview.parentNode.insertBefore(imgBox,preview.nextSibling);
+          state.pageImageNode=imgBox;
+          try{
+            const resp=await api(evidencePath(row)+"/pages/"+physical,{raw:true});
+            if(resp.headers.get("x-caseproof-original-sha256")!==row.original_sha256)
+              throw Error("source_version_mismatch");
+            const blob=await resp.blob();
+            if(!current())return;
+            const url=URL.createObjectURL(blob);
+            if(state.pageImageUrl)URL.revokeObjectURL(state.pageImageUrl);
+            state.pageImageUrl=url;
+            const img=new Image();
+            img.alt="Physical PDF page "+physical+" rendering of the verified original";
+            img.src=url;
+            const zoomHint=el("button","Open readable full-size page view","ghost page-zoom-open");
+            zoomHint.type="button";
+            zoomHint.addEventListener("click",()=>openPageZoom(url,physical,zoomHint));
+            imgBox.replaceChildren(
+              el("p","Physical page rendering of the verified original bytes · a rendering, not a verification.","small"),
+              img,zoomHint);
+          }catch(error){if(current())
+            imgBox.replaceChildren(el("p","Physical page image unavailable for this source; the text representation above stands on its own.","small"));}
+        }
+      }else{
+        if(String(state.selected?.id||"").startsWith("citation:"))
+          preview.append(el("p",citationAnchorLabel(obs)+". The source text is shown without highlight; no assertion support is inferred.","small"));
+        preview.append(el("p",text||"Source has no available text representation."));
+      }
       state.previewReady=true;$("save-review").disabled=!state.review||state.busy||state.loading;
     }catch(error){if(current()){
       state.previewReady=false;$("save-review").disabled=true;
@@ -313,35 +684,41 @@
     if(state.busy||state.pending){notice("Resolve the pending review save before refreshing this snapshot.","danger");return;}
     const generation=++state.generation;
     state.previewSeq+=1;state.loading=true;state.check=null;state.review=null;state.previewReady=false;
-    state.inventory=null;state.selected=null;
+    state.inventory=null;state.selected=null;revokePageImage();
+    if(state.justPublished)$("publish-status").textContent="Reloading current scope after publication\u2026";
     $("save-review").disabled=true;
     $("review-form").setAttribute("aria-busy","true");
     $("selected").textContent="Checking current brief and permissions…";
     $("source-preview").textContent="Source preview cleared while the current scope reloads.";
     $("observations").replaceChildren();$("review-history").replaceChildren();
     $("check-scope").textContent="Checking current source denominator…";
+    $("connection").hidden=true;
     $("workspace").hidden=false;
+    $("record").disabled=false;$("offline-legal-pack").disabled=!state.briefId;
     $("matter-meta").textContent="Matter "+state.caseId+" · brief "+state.briefId;
     notice("Checking private access and current evidence scope…");
     try{
-      const checked=await api(path()+"/check",{method:"POST"});
+      const checked=await api(reviewPath()+"/check",{method:"POST"});
       if(generation!==state.generation)return;
-      if(checked.schema!=="caseproof-m2-check-headless-v1" || checked.case_id!==state.caseId ||
+      if((checked.schema!=="caseproof-m2-check-headless-v1"&&checked.schema!=="caseproof-signed-check-v1") || checked.case_id!==state.caseId ||
         checked.brief_version_id!==state.briefId || !sha.test(checked.snapshot_hash))
         throw Error("invalid_schema");
       state.check=checked;
       notice("Authorized check completed. Findings remain unreviewed until saved.","ok");
     }catch(error){if(generation!==state.generation)return;
-      state.check=null;notice(statusFor(error),"danger");}
+      state.check=null;
+      notice(error&&error.code===409 ? "This published snapshot is out of date after a source or exhibit change. Publish a new brief version, then re-run the check." : statusFor(error),"danger");}
     if(generation!==state.generation)return;
     try {
-      const inv=await api(path()+"/sources");
+      const inv=await api(reviewPath()+"/sources");
       if(generation===state.generation)
         state.inventory=(inv.schema==="caseproof-clearbrief-brief-sources-v1" &&
           inv.case_id===state.caseId && inv.brief_version_id===state.briefId)?inv:null;
     }catch{if(generation!==state.generation)return;state.inventory=null;}
+    if(signedWorkbench)await loadLegalReferences(generation);
+    if(generation!==state.generation)return;
     try {
-      const review=await api(path()+"/review");
+      const review=await api(reviewPath()+"/review");
       if(generation===state.generation && review.schema==="caseproof-clearbrief-review-v1" &&
         review.case_id===state.caseId && review.snapshot_hash===state.check?.snapshot_hash)
         state.review=review;
@@ -350,7 +727,14 @@
     if(generation!==state.generation)return;
     state.loading=false;$("review-form").removeAttribute("aria-busy");
     state.selected=null;
-    renderSources();renderChecks();renderReview();renderSelected();
+    renderSources();renderChecks();renderReview();renderSelected();renderBlockers();renderPassageFlagForm();
+    // The scope is settled: the preview pane shows its idle cue again, never
+    // the transient "cleared while the scope reloads" loading text.
+    $("source-preview").textContent="Select a source or a finding to inspect its verified representation.";
+    if(state.justPublished){
+      state.justPublished=false;
+      $("publish-status").textContent="Scope current after publication at revision "+state.publishRevision+". Run the factual check.";
+    }
   }
   async function submitReview(evt){
     evt.preventDefault();
@@ -365,16 +749,16 @@
     };
     const submit=$("save-review");submit.disabled=true;state.busy=true;
     try{
-      const receipt=await api(path()+"/review",{method:"POST",json:state.pending});
+      const receipt=await api(reviewPath()+"/review",{method:"POST",json:state.pending});
       if(generation!==state.generation)return;
       if(receipt.schema!=="caseproof-clearbrief-review-receipt-v1" ||
         receipt.snapshot_hash!==state.check.snapshot_hash)throw Error("invalid_receipt");
       state.pending=null;$("rationale").value="";
-      const review=await api(path()+"/review");
+      const review=await api(reviewPath()+"/review");
       if(generation!==state.generation)return;
       if(review.schema!=="caseproof-clearbrief-review-v1"||review.revision!==receipt.revision)
         throw Error("reload_required");
-      state.review=review;renderReview();
+      state.review=review;renderReview();renderBlockers();
       notice("Review saved at revision "+receipt.revision+". This does not approve publication.","ok");
     }catch(error){
       if(generation!==state.generation)return;
@@ -387,11 +771,11 @@
     const query=$("query").value.trim(),node=$("search-results");node.replaceChildren();
     if(query.length<2){node.append(el("p","Enter at least two characters.","small"));return;}
     try{
-      const d=await api(path()+"/evidence/search",{method:"POST",json:{query}});
+      const d=await api((signedWorkbench?reviewPath():path())+"/evidence/search",{method:"POST",json:{query}});
       if(generation!==state.generation||!state.session)return;
       if(d.schema!=="caseproof-evidence-search-v1"||d.case_id!==state.caseId ||
          d.brief_version_id!==state.briefId||!Array.isArray(d.hits))throw Error("invalid_schema");
-      node.append(el("p",d.coverage+" coverage · "+d.hits.length+" matches","small"));
+      node.append(el("p",d.coverage+" coverage · "+d.hits.length+" matches · literal text matches only: a match shows where the words occur, not that the passage supports any assertion","small"));
       for(const h of d.hits){
         const item=el("div","","result-item");
         item.append(el("strong",h.source_id+" · "+(h.locator||"unmapped")));
@@ -404,29 +788,221 @@
       if(!d.hits.length)node.append(el("p","No match in the searched scope; review exclusions and incomplete sources.","small"));
     }catch(error){if(generation===state.generation)node.append(el("p",statusFor(error),"error"));}
   }
+  function populateVersions(preferredVersion) {
+    const select=$("upload-version");select.replaceChildren();
+    const document=(state.catalog||[]).find(d=>d.document_id===$("upload-document").value);
+    const versions=document?document.versions:[];
+    for(const version of versions){
+      const option=el("option","v"+version.version_number+" · "+version.media_type+" · "+version.byte_length+" bytes");
+      option.value=version.version_id;select.append(option);
+    }
+    if(preferredVersion&&versions.some(v=>v.version_id===preferredVersion))
+      select.value=preferredVersion;
+    $("publish").disabled=versions.length===0;
+  }
+  async function registerSource(evt){
+    evt.preventDefault();
+    // Declare-then-upload in one flow: the server registers the digest first
+    // and the byte upload fails closed unless it matches the declaration.
+    const session=state.session,caseId=state.caseId;
+    const label=$("register-label").value.trim();
+    const file=$("register-file").files?.[0];
+    const mime=file?{txt:"text/plain",pdf:"application/pdf",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg"}[file.name.split(".").pop()?.toLowerCase()]:null;
+    if(!label||!file||file.size<=0||file.size>20*1024*1024||!mime){
+      notice("Enter a label and choose a supported original under 20 MiB.","danger");return;
+    }
+    $("register").disabled=true;
+    try{
+      const digestBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
+      const digestHex=Array.from(digestBytes,(b)=>b.toString(16).padStart(2,"0")).join("");
+      const d=await api("/dev/signed/matters/"+encodeURIComponent(caseId)+"/documents",{
+        method:"POST",json:{label,media_type:mime,byte_length:file.size,sha256_hex:digestHex}});
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(d.schema!=="caseproof-signed-document-register-v1"||!UUID.test(d.document_id)||!UUID.test(d.version_id))
+        throw Error("invalid_schema");
+      const token=await bearer();
+      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(caseId)+
+        "/documents/"+encodeURIComponent(d.document_id)+"/versions/"+encodeURIComponent(d.version_id)+"/original",{
+          method:"PUT",credentials:"omit",redirect:"error",cache:"no-store",
+          headers:{"Authorization":"Bearer "+token,"Content-Type":mime},body:file,
+        });
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(response.status!==201)throw Error("unavailable");
+      $("register-label").value="";$("register-file").value="";
+      $("register-status").textContent="Source declared and uploaded: "+file.name+" \u00b7 "+file.size+" bytes \u00b7 SHA-256 "+digestHex.slice(0,16)+"\u2026";
+      notice("New source declared, registered and uploaded; its bytes matched the declaration.","ok");
+      await loadCatalog();
+      if(state.catalog.some(doc=>doc.document_id===d.document_id)){
+        $("upload-document").value=d.document_id;
+        populateVersions(d.version_id);
+        $("publish").disabled=false;$("publish-status").textContent="";
+      }
+    }catch(error){if(state.session===session&&state.caseId===caseId)
+      notice("Source declaration failed: "+(error&&error.message?error.message:"unavailable"),"danger");}
+    finally{$("register").disabled=false;}
+  }
+  function mappingRows(){
+    // Optional user-declared page mappings: physical page required per filled
+    // row, each numbering space independent, numeric domain only. Empty rows
+    // are ignored; duplicates fail before sending, never silently overwrite.
+    const rows=[...document.querySelectorAll("#mapping-rows .mapping-row")];
+    const mappings=[],seen=new Set();
+    for(const row of rows){
+      const pdf=row.querySelector(".map-pdf").value.trim();
+      const printed=row.querySelector(".map-printed").value.trim();
+      const bundle=row.querySelector(".map-bundle").value.trim();
+      if(!pdf&&!printed&&!bundle)continue;
+      const num=(v)=>/^[0-9]+$/.test(v)&&Number(v)>=1&&Number(v)<=100000?Number(v):null;
+      const pdfN=num(pdf);
+      if(pdfN===null||seen.has(pdfN))return null;
+      if((printed&&num(printed)===null)||(bundle&&num(bundle)===null))return null;
+      seen.add(pdfN);
+      const m={pdf_page:pdfN};
+      if(printed)m.printed_page=num(printed);
+      if(bundle)m.bundle_page=num(bundle);
+      mappings.push(m);
+    }
+    return mappings;
+  }
+  function resetMappingRows(){
+    const box=$("mapping-rows");
+    box.querySelectorAll(".mapping-row").forEach((row,i)=>{if(i>0)row.remove();});
+    box.querySelectorAll("input").forEach((input)=>{input.value="";});
+  }
+  async function declareExhibit(evt){
+    evt.preventDefault();
+    // Register digest, upload matching bytes, then confirm the exhibit into
+    // the check denominator at the current register revision.
+    const session=state.session,caseId=state.caseId;
+    const label=$("exhibit-label").value.trim();
+    const file=$("exhibit-file").files?.[0];
+    const mappings=mappingRows();
+    if(mappings===null){
+      notice("Page mappings: each filled row needs a unique numeric physical page; printed label and bundle position are numeric or empty.","danger");return;
+    }
+    const mime=file?{txt:"text/plain",pdf:"application/pdf",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg"}[file.name.split(".").pop()?.toLowerCase()]:null;
+    if(!label||!file||file.size<=0||file.size>20*1024*1024||!mime){
+      notice("Enter an exhibit label and choose a supported file under 20 MiB.","danger");return;
+    }
+    $("exhibit").disabled=true;
+    try{
+      const digestBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
+      const digestHex=Array.from(digestBytes,(b)=>b.toString(16).padStart(2,"0")).join("");
+      const d=await api("/dev/signed/matters/"+encodeURIComponent(caseId)+"/documents",{
+        method:"POST",json:{label,media_type:mime,byte_length:file.size,sha256_hex:digestHex}});
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(d.schema!=="caseproof-signed-document-register-v1"||!UUID.test(d.document_id)||!UUID.test(d.version_id))
+        throw Error("invalid_schema");
+      const token=await bearer();
+      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(caseId)+
+        "/documents/"+encodeURIComponent(d.document_id)+"/versions/"+encodeURIComponent(d.version_id)+"/original",{
+          method:"PUT",credentials:"omit",redirect:"error",cache:"no-store",
+          headers:{"Authorization":"Bearer "+token,"Content-Type":mime},body:file,
+        });
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(response.status!==201)throw Error("unavailable");
+      const confirmBody={document_id:d.document_id,version_id:d.version_id,display_label:label};
+      if(mappings.length)confirmBody.page_mappings=mappings;
+      const c=await api("/dev/signed/matters/"+encodeURIComponent(caseId)+"/exhibits/confirm",{
+        method:"POST",json:confirmBody});
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(c.schema!=="caseproof-signed-exhibit-confirm-v1"||typeof c.exhibit_id!=="string"||
+         !Number.isInteger(c.exhibit_revision))
+        throw Error("invalid_schema");
+      $("exhibit-label").value="";$("exhibit-file").value="";
+      resetMappingRows();
+      $("exhibit-status").textContent="Exhibit declared, uploaded and confirmed at register revision "+
+        c.exhibit_revision+": "+file.name+" \u00b7 "+file.size+" bytes \u00b7 SHA-256 "+digestHex.slice(0,16)+"\u2026";
+      notice("Exhibit confirmed into the check scope. Published snapshots are stale: publish a new brief version and re-run the check.","ok");
+      await load();
+    }catch(error){if(state.session===session&&state.caseId===caseId)
+      notice("Exhibit declaration failed: "+(error&&error.message?error.message:"unavailable"),"danger");}
+    finally{$("exhibit").disabled=false;}
+  }
+  async function loadCatalog() {
+    const generation=state.generation;
+    // Recharging the catalog must never silently move the publish target:
+    // keep the user's current document/version selection when still present.
+    const keepDocument=$("upload-document").value,keepVersion=$("upload-version").value;
+    try{
+      const data=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/documents");
+      if(generation!==state.generation||!state.session)return;
+      state.catalog=(data.schema==="caseproof-signed-documents-v1"&&Array.isArray(data.documents))?data.documents:[];
+      if(Number.isInteger(data.own_draft_revision)&&data.own_draft_revision>=0)state.publishRevision=data.own_draft_revision;
+    }catch{if(generation!==state.generation)return;state.catalog=[];}
+    const select=$("upload-document");select.replaceChildren();
+    for(const document of state.catalog){
+      const option=el("option",document.label+" · "+document.document_id.slice(0,8)+"\u2026");
+      option.value=document.document_id;select.append(option);
+    }
+    if(keepDocument&&state.catalog.some(d=>d.document_id===keepDocument))
+      select.value=keepDocument;
+    populateVersions(keepVersion);
+  }
+  async function publishVersion(evt){
+    evt.preventDefault();
+    // Capture the exact context the publication is made in; a late success is
+    // applied only to that same session and matter, never to a switched one.
+    const session=state.session,caseId=state.caseId;
+    const documentId=$("upload-document").value.trim(),versionId=$("upload-version").value.trim();
+    if(!UUID.test(documentId)||!UUID.test(versionId)){
+      notice("Select the registered document/version whose uploaded original to publish.","danger");return;
+    }
+    $("publish").disabled=true;
+    try{
+      const d=await api("/dev/signed/matters/"+encodeURIComponent(caseId)+"/briefs/publish",{
+        method:"POST",json:{document_id:documentId,version_id:versionId,
+          document_role:"own_draft",expected_revision:state.publishRevision}});
+      if(state.session!==session||state.caseId!==caseId)return;
+      if(d.schema!=="caseproof-signed-brief-publish-v1"||!Number.isInteger(d.published_revision)||
+         !UUID.test(d.brief_version_id))
+        throw Error("invalid_schema");
+      // Server truth always advances; the success UI is applied only when the
+      // user still works on the same document/version selection, so a late
+      // success never silently replaces newly selected work.
+      state.publishRevision=d.published_revision;
+      state.briefId=d.brief_version_id;
+      if($("upload-document").value.trim()===documentId&&$("upload-version").value.trim()===versionId){
+        $("brief-id").value=d.brief_version_id;
+        state.justPublished=true;
+        notice("Brief version published from the verified uploaded original.","ok");
+      }else{
+        notice("Publication of the previously selected version completed at revision "+
+          d.published_revision+"; current selection unchanged.","ok");
+      }
+      await load();
+    }catch(error){if(state.session===session&&state.caseId===caseId)
+      notice(statusFor(error),"danger");}
+    finally{$("publish").disabled=false;}
+  }
   async function upload(evt){
     evt.preventDefault();
-    const generation=state.generation;
-    const documentId=$("document-id").value.trim(),versionId=$("version-id").value.trim();
+    const session=state.session,caseId=state.caseId;
+    const documentId=$("upload-document").value.trim(),versionId=$("upload-version").value.trim();
     const file=$("original-file").files?.[0];
     if(!UUID.test(documentId)||!UUID.test(versionId)||!file||file.size<=0||file.size>20*1024*1024){
-      notice("Select an existing exact document/version UUID and an original under 20 MiB.","danger");return;
+      notice("Select a registered document/version and an original under 20 MiB.","danger");return;
     }
     const mime={txt:"text/plain",pdf:"application/pdf",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg"}[file.name.split(".").pop()?.toLowerCase()];
     if(!mime){notice("This original format is unsupported.","danger");return;}
     $("upload").disabled=true;
     try{
       const token=await bearer();
-      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(state.caseId)+
+      const response=await fetch("/dev/signed/matters/"+encodeURIComponent(caseId)+
         "/documents/"+encodeURIComponent(documentId)+"/versions/"+encodeURIComponent(versionId)+"/original",{
           method:"PUT",credentials:"omit",redirect:"error",cache:"no-store",
           headers:{"Authorization":"Bearer "+token,"Content-Type":mime},body:file,
         });
-      if(generation!==state.generation||!state.session)return;
+      if(state.session!==session||state.caseId!==caseId)return;
       if(response.status!==201)throw Error("unavailable");
+      $("publish").disabled=false;
+      $("publish-status").textContent="";
       notice("Original uploaded to its pre-registered version. Reopen the verified source after indexing.","ok");
+      const digestBytes=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
+      const digestHex=Array.from(digestBytes,(b)=>b.toString(16).padStart(2,"0")).join("");
+      const uploadCurrent=$("upload-current");if(uploadCurrent)uploadCurrent.textContent="Current original: "+file.name+" · "+file.size+" bytes · SHA-256 "+digestHex.slice(0,16)+"\u2026 · version "+versionId;
       await load();
-    }catch(error){if(generation===state.generation)
+    }catch(error){if(state.session===session&&state.caseId===caseId)
       notice("Upload was denied or its outcome is unknown. Verify the exact version before retrying.","danger");}
     finally{$("upload").disabled=false;}
   }
@@ -695,15 +1271,81 @@
     finally{if(generation===state.generation)journey.busy=false;}
   }
   function signout(){
-    state.generation+=1;state.previewSeq+=1;
+    state.generation+=1;state.previewSeq+=1;revokePageImage();
     if(!state.external)state.session?.clear?.();
     state.session=null;state.external=false;state.caseId="";state.briefId="";
+    state.catalog=null;state.publishRevision=0;
     Object.assign(journey,{caseId:"",source:null,brief:null,snapshot:null,observation:null,revision:0,pending:null,createRequest:null,briefRequest:null,uploadIdentity:null,registerRequest:null,ingestRequest:null,correctionRequest:null,correctionPreview:null,busy:false});
     $("journey-state").textContent="";
     $("matter-options").replaceChildren();
     $("password").value="";$("signout").hidden=true;clearView();notice("Session ended. No credentials were saved.");
   }
+  function disableRemoteJourney(){
+    // The /dev/live/* journey targets a configured remote Supabase project.
+    // In a loopback composition without a publishable key those controls are
+    // dead steps; disable them honestly instead of offering actions that
+    // can only fail. The signed workbench below stays fully usable.
+    const card=document.querySelector?.(".journey-card");
+    if(card)card.replaceChildren(el("p","Remote Supabase journey unavailable in this composition. "+
+      "The signed workbench below is the functional path here.","small"));
+    const fidelity=$("fidelity-panel");
+    if(fidelity)fidelity.hidden=true;
+  }
+  async function downloadOfflineLegalPack(){
+    if(!state.session||!state.briefId)return;
+    const button=$("offline-legal-pack");button.disabled=true;
+    try{
+      const token=await bearer();
+      const response=await fetch(reviewPath()+"/offline-legal-pack",{
+        headers:{Authorization:"Bearer "+token},credentials:"omit",redirect:"error",cache:"no-store"});
+      if(!response.ok)throw Error("Offline export unavailable. The chosen corpus must retain verified original bytes.");
+      const checkpoint=response.headers.get("X-CaseProof-Legal-Review-SHA256");
+      if(!sha.test(checkpoint||""))throw Error("Missing integrity checkpoint");
+      const link=document.createElement("a"),blob=await response.blob();
+      link.href=URL.createObjectURL(blob);link.download="caseproof-offline-legal-review.zip";link.click();
+      setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+      $("offline-pack-status").textContent="Legal-reference slice exported, not the full dossier. Keep this checkpoint separately: "+checkpoint+
+        ". Extract and open report.html offline. The old pack is frozen; applicability stays with the lawyer.";
+    }catch(error){$("offline-pack-status").textContent=error.message;}
+    finally{button.disabled=!state.session||!state.briefId;}
+  }
+  async function downloadRecord(){
+    if(!state.session)return;
+    $("record").disabled=true;$("offline-legal-pack").disabled=true;
+    try{
+      const data=await api("/dev/signed/matters/"+encodeURIComponent(state.caseId)+"/review-record");
+      if(data.schema!=="caseproof-review-record-v1"||!sha.test(data.record_sha256)||
+         data.case_id!==state.caseId)
+        throw Error("invalid_schema");
+      const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+      const link=document.createElement("a");
+      link.href=URL.createObjectURL(blob);
+      link.download="caseproof-review-record.json";link.rel="noopener";link.click();
+      URL.revokeObjectURL(link.href);
+      $("record-status").textContent="Record SHA-256 "+data.record_sha256.slice(0,16)+
+        "\u2026 · revision "+data.brief.head_revision+" · "+data.checks.length+" recorded check(s) · "+
+        data.reviews.reduce((n,r)=>n+r.decisions.length,0)+" review decision(s). Transcript of recorded state, not an approval.";
+      const qr=$("record-qr"),wrap=$("record-qr-wrap");
+      wrap.hidden=true;
+      try{
+        const token=await bearer();
+        const qrResponse=await fetch("/dev/signed/matters/"+encodeURIComponent(state.caseId)+
+          "/review-record/verification-qr",
+          {headers:{Authorization:"Bearer "+token},credentials:"omit",redirect:"error",cache:"no-store"});
+        if(qrResponse.ok){
+          const qrBlob=await qrResponse.blob();
+          if(qrBlob.type==="image/png"&&qrBlob.size>0&&qrBlob.size<=65536){
+            qr.onload=()=>{wrap.hidden=false;};
+            qr.onerror=()=>{wrap.hidden=true;};
+            qr.src=URL.createObjectURL(qrBlob);
+          }
+        }
+      }catch{wrap.hidden=true;}
+    }catch(error){if(error?.message!=="no_session")notice(statusFor(error),"danger");}
+    finally{$("record").disabled=!state.session;$("offline-legal-pack").disabled=!state.session||!state.briefId;}
+  }
   async function init(){
+    $("offline-legal-pack").addEventListener("click",downloadOfflineLegalPack);
     $("connection-form").addEventListener("submit",startSession);
     $("journey-find-orgs").addEventListener("click",journeyOrganizations);
     $("journey-create-form").addEventListener("submit",journeyCreate);
@@ -717,14 +1359,30 @@
     $("find-matters").addEventListener("click",findMatters);
     $("review-form").addEventListener("submit",submitReview);
     $("search").addEventListener("click",search);
+    $("register-form").addEventListener("submit",registerSource);
+    $("exhibit-form").addEventListener("submit",declareExhibit);
+    $("mapping-add").addEventListener("click",()=>{
+      const box=$("mapping-rows"),rows=box.querySelectorAll(".mapping-row");
+      if(rows.length>=8)return;
+      const row=rows[0].cloneNode(true);
+      row.querySelectorAll("input").forEach((input)=>{input.value="";});
+      box.insertBefore(row,$("mapping-add"));
+    });
     $("upload-form").addEventListener("submit",upload);
+    $("upload-document").addEventListener("change",populateVersions);
+    const publishForm=$("publish-form");if(publishForm)publishForm.addEventListener("submit",publishVersion);
     $("signout").addEventListener("click",signout);
+    $("record").addEventListener("click",downloadRecord);
     $("refresh").addEventListener("click",()=>{void load();});
     $("recheck").addEventListener("click",()=>{void load();});
     if(window.caseproofSession?.getBearer){
+      // A trusted host session declares the signed workbench itself; no extra request.
+      signedWorkbench=window.caseproofSession.signedWorkbench===true;
+      {const cf=$("correction-form");if(cf)cf.hidden=!signedWorkbench;}
       $("credentials").hidden=true;$("auth-mode").textContent="Connected host session";
       $("case-id").value=window.caseproofSession.caseId||"";
       $("brief-id").value=window.caseproofSession.briefVersionId||"";
+      disableRemoteJourney();
       return;
     }
     try {
@@ -732,14 +1390,16 @@
       const config=await response.json();
       if(response.ok&&config.schema==="caseproof-clearbrief-dev-config-v1"&&
          typeof config.publishable_key==="string"&&config.publishable_key.startsWith("sb_publishable_")){
-        state.publishable=config.publishable_key;$("auth-mode").textContent="Supabase dev authentication";
+        state.publishable=config.publishable_key;signedWorkbench=config.signed_workbench===true;{const cf=$("correction-form");if(cf)cf.hidden=!signedWorkbench;}$("auth-mode").textContent="Supabase dev authentication";
       }else{
         $("auth-mode").textContent="Backend session required";$("credentials").hidden=true;
-        $("connect").disabled=true;notice("No signed identity provider is configured. Connect a trusted host session.","danger");
+        $("connect").disabled=true;disableRemoteJourney();
+        notice("No signed identity provider is configured. Connect a trusted host session.","danger");
       }
     }catch{ $("auth-mode").textContent="Backend session required";$("credentials").hidden=true;
       $("connect").disabled=true;notice("The signed identity provider is unavailable.","danger");}
   }
+  $("correction-form")?.addEventListener("submit", previewCorrection);
   void init();
 })();
 

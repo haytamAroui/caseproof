@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "ConditionInput": {
+      "additionalProperties": false,
+      "description": "One lawyer condition: literal trigger words in the brief, literal words to find in the pieces.",
+      "properties": {
+        "evidence": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,40}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "pieces": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Pieces",
+          "type": "array"
+        },
+        "question": {
+          "maxLength": 300,
+          "title": "Question",
+          "type": "string"
+        },
+        "trigger": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Trigger",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "question",
+        "trigger",
+        "evidence",
+        "pieces"
+      ],
+      "title": "ConditionInput",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "conditions": {
+      "items": {
+        "$ref": "#/$defs/ConditionInput"
+      },
+      "maxItems": 50,
+      "title": "Conditions",
+      "type": "array"
+    },
+    "expected_revision": {
+      "maximum": 100000,
+      "minimum": 0,
+      "title": "Expected Revision",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "expected_revision",
+    "conditions"
+  ],
+  "title": "ConditionsSaveBody",
+  "type": "object"
+}

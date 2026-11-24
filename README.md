@@ -1,5 +1,7 @@
 # CaseProof — evidence verification, starting with Belgian litigation
 
+[Authoritative 24 November 2026 product strategy & competitive blueprint](docs/PRODUCT_STRATEGY_2026-11-24.md) ([ADR 0038](docs/adr/0038-pre-filing-truth-layer-and-competitive-strategy.md)): independent pre-filing truth audit (for human- and AI-drafted Belgian FR/NL conclusions), 7 core pillars, reconciled Pilot Core + bounded offline legal corpus / subtle-trap / lawyer-conditions target extensions, explicit non-goals, and Single Official UI Lock (`frontend/`).
+
 [Authoritative 31 October product/vision update](docs/ROADMAP.md#vision-and-first-market-31-october-2026-owner-refinement) and [delivery plan](docs/PRODUCT_DEFINITION_2026-10-31.md): independent post-assembly exhibit verification, full browser journey first; local/hybrid/Word/signatures remain gated options.
 
 **Frozen first commercial hypothesis (28 October 2026):** upload conclusions DOCX, a separately confirmed Stuk/Pièce inventory and preserved PDF/scanned exhibits; inspect reference identity, physical/printed/bundle pages, literal/typed fidelity and OCR uncertainty; get an authorized human-reviewed source-linked DOCX/report export. **Web workspace first; Word and deployed MCP are optional channels, not pilot blockers.** No legal research, argument generation, deadline checks or automated Book 8 sufficiency.

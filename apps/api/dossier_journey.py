@@ -116,6 +116,7 @@ class VerificationOptions(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     draft_language: Literal["nl", "fr", "en", "de"] | None = None
     source_languages: dict[str, Literal["nl", "fr", "en", "de"]] = Field(default_factory=dict, max_length=32)
+    require_confirmed_inventory: bool = False
 
 
 class DocxLocatorIdentity(BaseModel):
@@ -654,9 +655,17 @@ class DossierStore:
         return sources, originals
 
     def load(
-        self, bearer: str, case: str, brief: str, *, language_context: dict[str, Any] | None = None
+        self,
+        bearer: str,
+        case: str,
+        brief: str,
+        *,
+        language_context: dict[str, Any] | None = None,
+        require_confirmed_inventory: bool = False,
     ) -> tuple[dict[str, Any], bytes]:
         context = self.rpc(bearer, case, "context")
+        if require_confirmed_inventory and not context.get("confirmation"):
+            raise HTTPException(409, "inventory_confirmation_required")
         rights_gate = getattr(self, "rights_gate", None)
         if rights_gate is not None:
             signed_manifest = self.client.bundle_manifest(bearer, case)["sources"]
@@ -832,6 +841,13 @@ class DossierStore:
         )
         found["coverage"]["visual_pages_attempted"] = len(visual_pages)
         found["coverage"]["visual_pages_completed"] = sum(not p.get("error") for p in visual_pages.values())
+        found["coverage"]["inventory_confirmation_mode"] = (
+            "confirmed"
+            if confirmation
+            else "progressive_unconfirmed"
+            if inventory_status == InventoryStatus.UNCONFIRMED
+            else "unconfirmed"
+        )
         found["coverage"]["visual_findings_not_assessed"] = sum(
             f["visual_assessment"]["state"] == "not_assessed" for f in found["findings"]
         )
@@ -1074,7 +1090,16 @@ def create_dossier_router(store: DossierStore | None) -> APIRouter:
         authorization: str | None = Header(default=None),
     ) -> dict[str, Any]:
         s, bearer = active(authorization)
-        return s.load(bearer, case_id, brief_id, language_context=body.model_dump())[0]
+        return s.load(
+            bearer,
+            case_id,
+            brief_id,
+            language_context={
+                "draft_language": body.draft_language,
+                "source_languages": body.source_languages,
+            },
+            require_confirmed_inventory=body.require_confirmed_inventory,
+        )[0]
 
     @router.get(base + "/snapshots/{snapshot_hash}/references/{reference_id}/correction-anchor")
     def correction_anchor_route(

@@ -1,0 +1,33 @@
+body { font-family: -apple-system, 'Segoe UI', sans-serif; margin: 0; color: #1a1a2e; background: #f4f4f8; }
+.page { max-width: 920px; margin: 0 auto; padding: 24px 20px 64px; }
+.banner { background: #fff3cd; border: 1px solid #e0a800; border-radius: 8px; padding: 14px 18px; margin: 16px 0 24px; }
+.banner strong { color: #8a5a00; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 32px 0 12px; border-bottom: 2px solid #d5d5e0; padding-bottom: 6px; }
+h3 { font-size: 1rem; margin: 0 0 8px; }
+h3 small { color: #777; font-weight: normal; }
+.meta { color: #555; font-size: .9rem; }
+.card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 14px 18px; margin: 12px 0; }
+.card.diff { background: #fdf6ec; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 600; color: #fff; }
+.chip.pass { background: #2e7d32; } .chip.fail { background: #c62828; }
+.chip.undetermined { background: #ef6c00; } .chip.unverified { background: #616161; }
+table { border-collapse: collapse; width: 100%; background: #fff; font-size: .88rem; }
+th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: #ececf4; }
+code { background: #eee; padding: 1px 5px; border-radius: 4px; font-size: .85em; word-break: break-word; }
+a { color: #2a5db0; word-break: break-all; }
+button { font: inherit; padding: 6px 14px; border: 1px solid #bbb; border-radius: 6px; background: #fff; cursor: pointer; margin: 2px 4px 2px 0; }
+button.primary { background: #2a5db0; color: #fff; border-color: #2a5db0; }
+button:disabled { opacity: .45; cursor: default; }
+button.decision { font-size: .82rem; padding: 3px 10px; }
+textarea, input[type=text] { width: 100%; box-sizing: border-box; font: inherit; padding: 6px 8px; border: 1px solid #bbb; border-radius: 6px; margin: 4px 0; }
+textarea { min-height: 56px; }
+.errors { background: #fdecea; border: 1px solid #c62828; color: #8c1c1c; border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+.sidebyside { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+.sidebyside > div { background: #f8f8fc; border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; font-size: .86rem; }
+.sidebyside .match { background: #fff8d6; padding: 0 2px; border-radius: 3px; }
+.decisions-row { margin-top: 8px; }
+.ok-note { color: #2e7d32; font-size: .88rem; }
+.warn-note { color: #b26a00; font-size: .88rem; }
+.footnote { color: #555; font-size: .85rem; margin-top: 40px; border-top: 1px solid #ccc; padding-top: 12px; }

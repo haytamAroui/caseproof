@@ -9,8 +9,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol
 
+from application.litigation.legal_references import check_legal_references
 from application.litigation.library import EvidencePreview
 from application.litigation.matter_policy import (
     CurrentMatterGrant,
@@ -18,6 +19,7 @@ from application.litigation.matter_policy import (
     MatterPermission,
     authorize_matter,
 )
+from application.litigation.suitability_review import evaluate_suitability, merge_authenticated_facts
 from application.litigation.unified_review import (
     BriefRepresentation,
     SourceScope,
@@ -85,12 +87,21 @@ class AuthorizedLitigationChecker:
         self, *, verifier: BearerIdentityVerifier, store: PrivateMatterCheckStore,
         issuer: str, audience: str, clock: Callable[[], datetime] | None = None,
         publisher: CheckedRunPublisher | None = None,
+        legal_corpus_for: Callable[[str], Any] | None = None,
+        fact_ledger_for: Callable[[str], Any] | None = None,
+        passage_flags_for: Callable[[str], Any] | None = None,
     ) -> None:
         if not issuer or not audience:
             raise ValueError("trusted Supabase issuer and audience required")
         self.verifier = verifier
         self.store = store
         self.publisher = publisher
+        # Per-matter chosen corpus: case_id -> LegalCorpusConfig | None. No
+        # default corpus; a matter without one has its articles unchecked.
+        self.legal_corpus_for = legal_corpus_for
+        # bearer -> ledger with list()/confirm(): lawyer fact confirmations.
+        self.fact_ledger_for = fact_ledger_for
+        self.passage_flags_for = passage_flags_for
         self.issuer = issuer
         self.audience = audience
         self.clock = clock or (lambda: datetime.now(UTC))
@@ -148,11 +159,47 @@ class AuthorizedLitigationChecker:
             )
             if not isinstance(bundle, CheckBundle) or bundle.representation.brief.version_id != brief_version_id:
                 raise MatterCheckUnavailable()
+            legal: tuple[Any, ...] = ()
+            suitability: tuple[Any, ...] = ()
+            config = self.legal_corpus_for(scope.case_id) if self.legal_corpus_for else None
+            if config is not None:
+                legal = check_legal_references(
+                    bundle.representation.text, config.records, config.act_aliases,
+                    chosen_versions=config.chosen_versions, strict=True, v3=True, authority=True)
+                if config.suitability is not None:
+                    rules_config = config.suitability
+                    if self.fact_ledger_for is not None:
+                        rules_config = merge_authenticated_facts(
+                            rules_config,
+                            self.fact_ledger_for(bearer).list(case_id=scope.case_id))
+                    suitability = evaluate_suitability(
+                        legal, rules_config,
+                        frozenset(r.key for r in config.records))
+            flags: list[dict[str, Any]] = []
+            if self.passage_flags_for is not None:
+                for flag in self.passage_flags_for(bearer).list(case_id=case_id):
+                    if flag["brief_version_id"] != brief_version_id:
+                        continue
+                    p = next((p for p in bundle.previews
+                              if p.row.document_id == flag["source_document_id"]
+                              and p.row.version_id == flag["source_version_id"]
+                              and p.row.original_sha256 == flag["source_sha256"]), None)
+                    a = flag["source_start"]
+                    current = (p is not None and p.row.status == "ready" and not p.row.warnings
+                               and type(a) is int and a >= 0
+                               and p.text[a:a + len(flag["source_passage"])] == flag["source_passage"]
+                               and flag["draft_passage"] in bundle.representation.text)
+                    flags.append({**flag, "binding_current": current,
+                                  "origin": "human_reported_not_automatically_detected",
+                                  "semantic_support": "not_assessed"})
             report = run_unified_check(
                 representation=bundle.representation, register=bundle.register,
                 previews=bundle.previews, source_scope=bundle.source_scope,
                 authorized_case_id=scope.case_id,
                 authorized_register_revision=bundle.register.revision,
+                legal_observations=legal, suitability_observations=suitability,
+                corpus_pack_sha256=config.pack_sha256 if config is not None else None,
+                passage_flags=tuple(flags),
             )
             # Prevent accidental use of a revoked/grant-changed or source-stale result.
             current = self._scope(self._verified(bearer), case_id)
@@ -167,5 +214,9 @@ class AuthorizedLitigationChecker:
             return report
         except AccessRejected:
             raise
+        except MatterCheckUnavailable:
+            # Snapshot changed under the caller (source/exhibit/revision drift):
+            # an expected typed conflict, never an opaque service failure.
+            raise AccessRejected(AccessFailure.STALE_SNAPSHOT) from None
         except Exception:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None

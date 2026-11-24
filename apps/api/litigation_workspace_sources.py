@@ -17,6 +17,21 @@ from apps.api.litigation_evidence_app import _token
 from apps.api.litigation_evidence_search import AuthorizedEvidenceSearch
 
 
+def _labels(bundle: CheckBundle) -> dict[str, str]:
+    """Human exhibit labels from the CONFIRMED register, keyed by source id.
+
+    A label is the user's own confirmed display label, never inferred from
+    bytes. A source that is in no confirmed exhibit keeps no label.
+    """
+    out: dict[str, str] = {}
+    for entry in bundle.register.entries:
+        if not entry.confirmed:
+            continue
+        for page in entry.pages:
+            out.setdefault(page.source_id, entry.display_label)
+    return out
+
+
 class SignedBriefSources:
     def __init__(self, checker: AuthorizedLitigationChecker) -> None:
         self.checker = checker
@@ -68,6 +83,21 @@ class SignedBriefSources:
             "case_id": case_id,
             "brief_version_id": brief_version_id,
             "rows": [asdict(x) for x in rows],
+            "labels": _labels(bundle),
+            # Explicit reference location from THIS authorized frozen register.
+            # Not a quote anchor and never evidence of assertion support.
+            "reference_locations": {
+                ref.reference_id: {
+                    "exhibit_label": ref.exhibit_label,
+                    "identity_confirmed": resolved.identity_confirmed,
+                    "mapping_state": resolved.state.value,
+                    "source_id": resolved.page.source_id if resolved.page else None,
+                    "version_id": resolved.page.version_id if resolved.page else None,
+                    "pdf_page": resolved.page.pdf_page if resolved.page else None,
+                }
+                for ref in bundle.representation.brief.references
+                for resolved in (bundle.register.resolve(ref.exhibit_label, pdf_page=ref.pdf_page),)
+            },
             "complete": not missing and not excluded and len(rows)==len(expected),
             "failed_count": sum(x.status=="failed" for x in rows),
             "partial_count": incomplete+len(expected-{(x.source_id,x.version_id) for x in rows}),
@@ -87,12 +117,31 @@ class SignedBriefSources:
         preview = matches[0]
         if len(preview.text) > 120_000 or len(preview.spans) > 4096:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        # Parser spans carry zero-based block page indices; the wire speaks
+        # 1-based physical PDF pages, matching PageState/ExhibitPage and the
+        # preserved-page routes. None stays NOT MAPPED.
+        spans = tuple(
+            (s[0], s[1], s[2], None if s[3] is None else s[3] + 1)
+            for s in preview.spans
+        )
+        # Distinct page-numbering spaces from the confirmed register; each None
+        # stays None (NOT MAPPED), never collapsed into another space.
+        page_mappings = [
+            {"pdf_page": pg.pdf_page, "printed_page": pg.printed_page,
+             "bundle_page": pg.bundle_page}
+            for entry in bundle.register.entries if entry.confirmed
+            for pg in entry.pages
+            if pg.source_id == preview.row.source_id
+            and pg.version_id == preview.row.version_id
+        ][:512]
         return {
             "schema": "caseproof-clearbrief-brief-source-preview-v1",
             "case_id": case_id, "brief_version_id": brief_version_id,
             "row": asdict(preview.row),
+            "label": _labels(bundle).get(preview.row.source_id),
             "text": preview.text,
-            "spans": preview.spans,
+            "spans": spans,
+            "page_mappings": page_mappings,
             "claim_support": "not_assessed",
         }
 

@@ -26,7 +26,12 @@ def _page(value: object, field: str) -> None:
 
 @dataclass(frozen=True, slots=True)
 class ExhibitPage:
-    """Independent numbering spaces; none means NOT MAPPED, not page 1."""
+    """Independent numbering spaces; none means NOT MAPPED, not page 1.
+
+    A row with every space None is an explicit UNPAGINATED marker: the
+    exhibit is one source version without physical pages. It is valid only
+    as the sole row of its entry (enforced by ExhibitEntry).
+    """
 
     source_id: str
     version_id: str
@@ -39,8 +44,12 @@ class ExhibitPage:
         _name(self.version_id, "version_id")
         for key in ("pdf_page", "printed_page", "bundle_page"):
             _page(getattr(self, key), key)
-        if all(getattr(self, key) is None for key in ("pdf_page", "printed_page", "bundle_page")):
-            raise ExhibitError("explicit page mapping required")
+
+    @property
+    def unpaginated(self) -> bool:
+        return all(
+            getattr(self, key) is None for key in ("pdf_page", "printed_page", "bundle_page")
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +68,10 @@ class ExhibitEntry:
             raise ExhibitError("bounded exhibit page inventory required")
         if not all(isinstance(page, ExhibitPage) for page in self.pages):
             raise ExhibitError("typed exhibit pages required")
+        if any(page.unpaginated for page in self.pages) and (
+            len(self.pages) != 1 or not self.pages[0].unpaginated
+        ):
+            raise ExhibitError("unpaginated marker must be the sole page row")
         if type(self.aliases) is not tuple or len(self.aliases) > 64:
             raise ExhibitError("bounded aliases required")
         labels = [self.display_label.casefold().strip()]

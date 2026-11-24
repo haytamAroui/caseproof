@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CaseProof — Démonstration</title>
+<link rel="stylesheet" href="/demo/assets/demo.css">
+</head>
+<body>
+<div class="page">
+  <h1>CaseProof — Démonstration</h1>
+  <p class="meta" id="subtitle"></p>
+  <div class="banner">
+    <strong>Démonstration, pas une validation juridique.</strong>
+    Chaque vérification est exécutée réellement par le moteur CaseProof quand vous cliquez.
+    Le dossier est un exemple : faits et relecture simulés, aucun avocat n'a validé ce contenu.
+    Ni conseil juridique, ni pilote, ni couverture du droit belge.
+    <span id="audience-note"></span>
+  </div>
+  <div id="errors" class="errors" hidden></div>
+
+  <h2>1. Le document Word</h2>
+  <div class="card" id="document"></div>
+
+  <h2>2. Le corpus de référence (provenance déclarée pour chaque source)</h2>
+  <div id="corpus"></div>
+
+  <h2>3. Les pièces du dossier</h2>
+  <div id="sources"></div>
+
+  <h2>4. Les faits (extraction simulée)</h2>
+  <div id="facts"></div>
+
+  <h2>5. Les vérifications</h2>
+  <div class="card">
+    <button id="run" class="primary">Lancer les vérifications</button>
+    <span class="meta" id="run-status"></span>
+  </div>
+  <div id="findings"></div>
+  <div id="rules"></div>
+
+  <h2>6. Correction et revérification</h2>
+  <div class="card" id="correction"></div>
+
+  <h2>7. Exporter le résultat borné</h2>
+  <div class="card">
+    <button id="export-json">Télécharger le JSON</button>
+    <button id="export-html">Télécharger le rapport HTML</button>
+    <p class="meta">L'export liste explicitement ses limites. La transmission reste verrouillée à ce stade du produit.</p>
+  </div>
+
+  <p class="footnote">Session locale éphémère : aucune donnée n'est persistée ni envoyée.</p>
+</div>
+<script src="/demo/assets/demo.js"></script>
+</body>
+</html>

@@ -281,3 +281,61 @@ def test_word_development_sideload_is_local_read_only_and_public_key_only() -> N
     no_key = TestClient(create_litigation_development_app(), client=("127.0.0.1", 3000))
     assert no_key.get("/index.html").status_code == 404
     assert no_key.get("/caseproof-public-config.json").status_code == 503
+
+
+def _pdf_with_content_stream(operations: bytes) -> bytes:
+    from io import BytesIO
+
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, NameObject
+
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=300, height=300)
+    stream = DecodedStreamObject()
+    stream.set_data(operations)
+    page[NameObject("/Contents")] = stream
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
+def test_hidden_text_scan_detects_invisible_rendering_mode() -> None:
+    from infrastructure.parsers.pdf_hidden_text_scan import scan_pdf_hidden_text
+
+    data = _pdf_with_content_stream(b"BT 3 Tr (injected hidden run) Tj ET")
+    findings = scan_pdf_hidden_text(data, max_pages=4)
+    assert [f.page_index for f in findings] == [0]
+    assert findings[0].runs == 1
+
+
+def test_hidden_text_scan_detects_white_on_white_fill() -> None:
+    from infrastructure.parsers.pdf_hidden_text_scan import scan_pdf_hidden_text
+
+    rgb = _pdf_with_content_stream(b"BT 1 1 1 rg (white run) Tj ET")
+    gray = _pdf_with_content_stream(b"BT 1 g (white run) Tj ET")
+    assert [f.page_index for f in scan_pdf_hidden_text(rgb, max_pages=4)] == [0]
+    assert [f.page_index for f in scan_pdf_hidden_text(gray, max_pages=4)] == [0]
+
+
+def test_hidden_text_scan_clean_on_visible_text_and_black_fill() -> None:
+    from infrastructure.parsers.pdf_hidden_text_scan import scan_pdf_hidden_text
+
+    visible = _pdf_with_content_stream(b"BT (visible run) Tj ET")
+    black = _pdf_with_content_stream(b"BT 0 0 0 rg 3 Tr (still hidden) Tj ET")
+    assert scan_pdf_hidden_text(visible, max_pages=4) == ()
+    # Tr 3 alone already flags the run regardless of fill colour.
+    assert [f.page_index for f in scan_pdf_hidden_text(black, max_pages=4)] == [0]
+    assert scan_pdf_hidden_text(synthetic_pdf(), max_pages=4) == ()
+
+
+def test_parse_manifest_records_bounded_hidden_text_scan() -> None:
+    content, manifest = parse_verified_original(
+        document_id=str(uuid4()), version_id=str(uuid4()), data=synthetic_pdf(),
+        media_type="application/pdf",
+    )
+    scan = manifest["hidden_text_scan"]
+    assert scan["status"] == "clean"
+    assert scan["findings"] == []
+    assert scan["not_a_certification"] is True
+    assert "raster_images" in scan["not_covered"]
+    assert "javascript" in scan["not_covered"]

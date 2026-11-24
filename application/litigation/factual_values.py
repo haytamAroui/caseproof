@@ -63,8 +63,12 @@ _SIGNED_MONEY = re.compile(
     r"(?:[-+−–—]\s*(?:€|EUR\b)|(?:€|EUR\b)\s*[-+−–—]|\(\s*(?:€|EUR\b))",
     re.IGNORECASE,
 )
+_MONEY_AMOUNT = r"(?:\d{1,3}(?:[ .,]\d{3})+(?:[,.]\d{2})?|\d+(?:[,.]\d{2})?)"
 _MONEY = re.compile(
-    r"(?<![\w])(?:€\s*|EUR\s*)(?:\d{1,3}(?:[ .,]\d{3})+(?:[,.]\d{2})?|\d+(?:[,.]\d{2})?)(?![\w,.])",
+    r"(?<![\w.,])(?:"
+    r"(?:€\s*|EUR\s*)" + _MONEY_AMOUNT + r"(?![\w,.])"
+    r"|" + _MONEY_AMOUNT + r"\s*(?:€|EUR\b)(?![\w])"
+    r")",
     re.IGNORECASE,
 )
 _DATE = re.compile(
@@ -148,7 +152,8 @@ def _extract(text: str, kind: FactKind, language: str) -> list[tuple[str, int, i
 
 
 def _money_value(token: str, language: str) -> Decimal | None:
-    raw = re.sub(r"^(?:€|EUR)\s*", "", token, flags=re.IGNORECASE).replace(" ", "")
+    raw = re.sub(r"^(?:€|EUR)\s*", "", token, flags=re.IGNORECASE)
+    raw = re.sub(r"\s*(?:€|EUR)$", "", raw, flags=re.IGNORECASE).replace(" ", "")
     # The three-digit grouping separator requires an explicit locale;
     # unsupported mixed forms never silently guess 14,500 == 14.5.
     if re.fullmatch(r"\d{1,3}(?:[.,]\d{3})+", raw):
@@ -299,3 +304,12 @@ def compare_fact(
         "same_role_typed_tokens_equal" if claim_value == source_value else "same_role_candidate_difference",
         brief=claim_token, source=token, anchor=(start, end),
     )
+
+
+def typed_values(text: str) -> list[tuple[str, str, int, int, str | None]]:
+    """(kind, token, start, end, normalised key or None when the token is ambiguous) for money and dates."""
+    out: list[tuple[str, str, int, int, str | None]] = []
+    for kind in (FactKind.MONEY, FactKind.DATE):
+        for token, start, end, value in _extract(text, kind, "fr"):
+            out.append((kind.value, token, start, end, None if value is None else f"{kind.value}:{value}"))
+    return sorted(out, key=lambda row: row[2])

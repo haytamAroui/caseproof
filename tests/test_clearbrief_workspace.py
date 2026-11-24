@@ -10,6 +10,7 @@ from datetime import timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from application.litigation.matter_policy import (
@@ -116,7 +117,7 @@ def test_workbench_serves_real_assets_only_from_loopback():
     client, _ = make_client()
     page = client.get("/dev/clearbrief")
     assert page.status_code == 200
-    assert "ClearBrief" in page.text
+    assert "CaseProof" in page.text and "ClearBrief" not in page.text
     assert "stale" not in page.headers.get("content-security-policy", "")
     assert "script-src 'self'" in page.headers["content-security-policy"]
     assert page.headers["cache-control"] == "no-store"
@@ -246,3 +247,33 @@ def test_browser_never_reuses_review_context_or_stale_source_previews():
     assert "state.previewReady=true" in script
     assert "Source version/representation mismatch." in script
     assert "state.session" in script
+
+
+def test_publish_race_node_suite_is_executed():
+    """Bridge the committed node race suite into this CI-listed pytest file."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node runtime unavailable in this environment")
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [node, "--test", "tests/clearbrief_publish_race.test.js"],
+        cwd=root, capture_output=True, text=True, timeout=120, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_page_image_node_suite_is_executed():
+    """Bridge the committed node page-image/zoom suite into this CI-listed pytest file."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node runtime unavailable in this environment")
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [node, "--test", "tests/clearbrief_page_image.test.js"],
+        cwd=root, capture_output=True, text=True, timeout=120, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

@@ -217,6 +217,30 @@ def _docx_paragraph_text(paragraph: Any) -> str:
     return "".join(parts)
 
 
+def _docx_story_warnings(tree: Any, builder: Builder) -> None:
+    """Same fail-closed coverage policy for body, footnotes and endnotes."""
+    from infrastructure.parsers.docx_region_inventory import word_on_off_enabled
+
+    if any(el.tag in {_W + "ins", _W + "del", _W + "moveFrom", _W + "moveTo"}
+           for el in tree.iter()):
+        builder.warnings.add("docx_tracked_changes_require_review")
+    if any(el.tag in {_W + "drawing", _W + "pict", _W + "object"} for el in tree.iter()):
+        builder.warnings.add("docx_visual_objects_require_review")
+    if any(el.tag in {_W + "instrText", _W + "fldChar", _W + "fldSimple"}
+           for el in tree.iter()):
+        builder.warnings.add("docx_fields_require_review")
+    if any(el.tag in {_W + "vanish", _W + "webHidden"} and word_on_off_enabled(el)
+           for el in tree.iter()):
+        builder.warnings.add("docx_hidden_text_requires_review")
+    if any(el.tag == _W + "altChunk" for el in tree.iter()):
+        raise ExtractionError("docx_altchunk_unsupported")
+    if any(el.tag == _W + "txbxContent" for el in tree.iter()):
+        raise ExtractionError("docx_textboxes_unsupported")
+    if any(el.tag == "{http://schemas.openxmlformats.org/markup-compatibility/2006}AlternateContent"
+           for el in tree.iter()):
+        builder.warnings.add("docx_alternate_content_requires_review")
+
+
 def parse_docx(raw: bytes) -> dict[str, Any]:
     """Resource-bounded DOCX text, NOT Word layout or trustworthy printed page mapping."""
     if not raw.startswith(b"PK\x03\x04"):
@@ -261,19 +285,7 @@ def parse_docx(raw: bytes) -> dict[str, Any]:
             body = document.find(_W + "body")
             if body is None:
                 raise ExtractionError("docx_body_required")
-            if any(
-                el.tag in {_W + "ins", _W + "del", _W + "moveFrom", _W + "moveTo"}
-                for el in body.iter()
-            ):
-                builder.warnings.add("docx_tracked_changes_require_review")
-            if any(el.tag in {_W + "drawing", _W + "pict", _W + "object"} for el in body.iter()):
-                builder.warnings.add("docx_visual_objects_require_review")
-            if any(el.tag == _W + "altChunk" for el in body.iter()):
-                raise ExtractionError("docx_altchunk_unsupported")
-            # Text boxes have their own reading order. Flattening nested w:p
-            # would fabricate contiguous evidence and duplicate text spans.
-            if any(el.tag == _W + "txbxContent" for el in body.iter()):
-                raise ExtractionError("docx_textboxes_unsupported")
+            _docx_story_warnings(body, builder)
             for i, paragraph in enumerate(body.iter(_W + "p")):
                 builder.add(
                     _docx_paragraph_text(paragraph),
@@ -285,8 +297,7 @@ def parse_docx(raw: bytes) -> dict[str, Any]:
                 if part_name not in names:
                     continue
                 tree = parse_docx_xml(archive.read(part_name))
-                if any(el.tag == _W + "txbxContent" for el in tree.iter()):
-                    raise ExtractionError("docx_textboxes_unsupported")
+                _docx_story_warnings(tree, builder)
                 for i, para in enumerate(tree.iter(_W + "p")):
                     builder.add(
                         _docx_paragraph_text(para),
@@ -299,8 +310,16 @@ def parse_docx(raw: bytes) -> dict[str, Any]:
                 builder.warnings.add("docx_headers_footers_comments_unprocessed")
             if any(name.startswith("customXml/") for name in names):
                 builder.warnings.add("docx_custom_xml_unprocessed")
-            if any(el.tag in {_W + "instrText", _W + "fldChar"} for el in body.iter()):
-                builder.warnings.add("docx_fields_require_review")
+            known_word_xml = {
+                "word/document.xml", "word/footnotes.xml", "word/endnotes.xml",
+                "word/styles.xml", "word/stylesWithEffects.xml", "word/settings.xml",
+                "word/webSettings.xml", "word/fontTable.xml", "word/numbering.xml",
+            }
+            if any(name.startswith("word/") and name.endswith(".xml")
+                   and name not in known_word_xml
+                   and not name.startswith(("word/theme/", "word/header", "word/footer", "word/comments"))
+                   for name in names):
+                builder.warnings.add("docx_unknown_story_unprocessed")
     except (zipfile.BadZipFile, EOFError, OSError):
         raise ExtractionError("docx_archive_rejected") from None
     builder.warnings.add("docx_layout_page_numbers_unverified")

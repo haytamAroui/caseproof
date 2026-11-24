@@ -10,6 +10,8 @@ dependencies = [
     "Pillow>=11,<13",
     "uvicorn>=0.30,<1",
     "opentelemetry-api>=1.38,<2",
+    "cryptography>=43,<47",
+    "segno>=1.6,<2",
 ]
 
 [dependency-groups]

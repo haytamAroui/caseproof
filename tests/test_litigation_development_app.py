@@ -1,12 +1,19 @@
 """Combined API tests use synthetic identity and source bytes only."""
+import shutil
 from hashlib import sha256
+from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
 
+from application.litigation.brief_checks import DraftReference, VersionedBrief
+from application.litigation.library import EvidencePreview, EvidenceRow
+from application.litigation.unified_review import BriefRepresentation, SourceScope
 from apps.api.access_control import AccessRejected
+from apps.api.litigation_check_service import CheckBundle
 from apps.api.litigation_development_app import create_litigation_development_app
 from apps.api.litigation_original_reader import AuthorizedOriginalReader, Original
+from domains.disputes.exhibits import ExhibitEntry, ExhibitPage, ExhibitRegister
 from tests.test_litigation_evidence_search import ACTOR, CASE, DRAFT, search_rig
 
 
@@ -93,3 +100,4606 @@ def test_original_reader_requires_explicit_evidence_grant():
         AuthorizedOriginalReader(search.checker, originals).read(
             bearer="signed-dev-fixture", case_id=CASE, brief_version_id=DRAFT, source_id="s1", version_id="v1")
     assert originals.calls == 0
+
+
+def test_stale_published_snapshot_is_typed_conflict_not_unavailable():
+    from apps.api.litigation_check_service import MatterCheckUnavailable
+    client, _, store, _ = client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    root = f"/v2/matters/{CASE}/briefs/{DRAFT}"
+    assert client.post(f"{root}/check", headers=headers).status_code == 200
+    load_bundle = store.load_bundle
+
+    def stale_bundle(**kwargs):
+        raise MatterCheckUnavailable()
+
+    store.load_bundle = stale_bundle
+    try:
+        stale = client.post(f"{root}/check", headers=headers)
+    finally:
+        store.load_bundle = load_bundle
+    assert stale.status_code == 409
+    assert stale.json()["error"] == "stale_snapshot"
+    still_current = store.still_current
+    store.still_current = lambda **kwargs: False
+    try:
+        drifted = client.post(f"{root}/check", headers=headers)
+    finally:
+        store.still_current = still_current
+    assert drifted.status_code == 409
+    assert drifted.json()["error"] == "stale_snapshot"
+
+
+def test_preview_page_mappings_keep_numbering_spaces_distinct():
+    client, _, _, _ = client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    preview = client.get(f"/v2/matters/{CASE}/briefs/{DRAFT}/sources/s1", headers=headers)
+    assert preview.status_code == 200
+    assert preview.json()["page_mappings"] == [
+        {"pdf_page": 1, "printed_page": None, "bundle_page": None}
+    ]
+    # Wire spans are 1-based physical PDF pages (store blocks are zero-based).
+    assert preview.json()["spans"] == [[0, 27, "pdf", 1]]
+
+
+def _pdf_bytes() -> bytes:
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+PDF_BYTES = _pdf_bytes()
+PNG_MAGIC = bytes((137, 80, 78, 71, 13, 10, 26, 10))
+
+
+def _pdf_bundle(*, case_id: str, brief_version_id: str, previews=None) -> CheckBundle:
+    text = "Page PDF synthetique de test."
+    brief = VersionedBrief(case_id, brief_version_id, sha256(text.encode()).hexdigest(),
+                           (DraftReference("r1", "Stuk 1", None, 1),))
+    representation = BriefRepresentation(
+        brief, text, sha256(text.encode()).hexdigest(), "fixture-parser", (),
+    )
+    registered = ExhibitRegister(1, (
+        ExhibitEntry("e1", "Stuk 1", (ExhibitPage("s1", "v1", 1),), confirmed=True),
+    ))
+    row = EvidenceRow("s1", "d1", "v1", sha256(PDF_BYTES).hexdigest(),
+                      "application/pdf", "ready", "fixture-parser", "rep1", (), ())
+    return CheckBundle(representation, registered,
+                       previews if previews is not None else (EvidencePreview(row, "", ()),),
+                       SourceScope((("s1", "v1"),)))
+
+
+class PdfOriginals:
+    calls = 0
+    tamper = False
+
+    def read(self, *, access, source_id, version_id):
+        self.calls += 1
+        return Original(b"tampered" if self.tamper else PDF_BYTES,
+                        sha256(PDF_BYTES).hexdigest(), "application/pdf")
+
+
+def pdf_client_rig(*, previews=None):
+    search, store = search_rig()
+    originals = PdfOriginals()
+
+    def load_bundle(*, case_id, brief_version_id, access):
+        store.load_calls += 1
+        return _pdf_bundle(case_id=case_id, brief_version_id=brief_version_id, previews=previews)
+
+    store.load_bundle = load_bundle
+    reader = AuthorizedOriginalReader(search.checker, originals)
+    client = TestClient(create_litigation_development_app(checker=search.checker, originals=reader),
+                        client=("127.0.0.1", 50000))
+    return client, originals
+
+
+PAGE_PATH = f"/v2/matters/{CASE}/briefs/{DRAFT}/evidence/s1/versions/v1/pages"
+
+
+@pytest.mark.skipif(shutil.which("pdftoppm") is None, reason="pdftoppm rasterizer not installed")
+def test_physical_page_render_is_authorized_and_digest_bound():
+    client, _ = pdf_client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    page = client.get(f"{PAGE_PATH}/1", headers=headers)
+    assert page.status_code == 200
+    assert page.headers["content-type"] == "image/png"
+    assert page.content[:8] == PNG_MAGIC
+    assert page.headers["x-caseproof-original-sha256"] == sha256(PDF_BYTES).hexdigest()
+    assert page.headers["x-caseproof-physical-page"] == "1"
+    assert page.headers["cache-control"] == "no-store"
+    assert page.headers["x-content-type-options"] == "nosniff"
+
+
+def test_physical_page_rejects_non_pdf_and_out_of_range():
+    client, _ = pdf_client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    assert client.get(f"{PAGE_PATH}/0", headers=headers).status_code == 404
+    assert client.get(f"{PAGE_PATH}/99", headers=headers).status_code == 404
+    # Non-PDF original: no physical page rendering, fail closed.
+    plain, _, _, _ = client_rig()
+    response = plain.get(
+        f"/v2/matters/{CASE}/briefs/{DRAFT}/evidence/s1/versions/v1/pages/1", headers=headers)
+    assert response.status_code == 404
+
+
+def test_physical_page_masks_unknown_source_and_requires_bearer():
+    client, originals = pdf_client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    assert client.get(f"/v2/matters/{CASE}/briefs/{DRAFT}/evidence/foreign/versions/v1/pages/1",
+                      headers=headers).status_code == 404
+    assert originals.calls == 0
+    assert client.get(f"{PAGE_PATH}/1").status_code == 401
+    assert originals.calls == 0
+
+
+def test_physical_page_fail_closed_on_tamper_and_ambiguous_binding():
+    client, originals = pdf_client_rig()
+    headers = {"Authorization": "Bearer signed-dev-fixture"}
+    originals.tamper = True
+    assert client.get(f"{PAGE_PATH}/1", headers=headers).status_code == 503
+    # Ambiguous source binding (two preview rows for one source version):
+    # masked before any byte read or rasterization.
+    row = EvidenceRow("s1", "d1", "v1", sha256(PDF_BYTES).hexdigest(),
+                      "application/pdf", "ready", "fixture-parser", "rep1", (), ())
+    dup, dup_originals = pdf_client_rig(previews=(EvidencePreview(row, "", ()),
+                                                  EvidencePreview(row, "", ())))
+    assert dup.get(f"{PAGE_PATH}/1", headers=headers).status_code == 404
+    assert dup_originals.calls == 0
+
+
+# Offline review-record replay (scripts/verify_review_record_file.py): synthetic
+# records only, no server involved. Lives in this CI-listed file because
+# clearbrief-workspace.yml runs explicit file lists, not pytest discovery.
+def _record_canonical(value):
+    import json
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def _record_digest(text):
+    return sha256(text.encode("utf-8")).hexdigest()
+
+
+def valid_offline_record():
+    run = {"schema": "check-run", "snapshot": "x", "observations": []}
+    snapshot = _record_digest("snapshot-a")
+    decision = {"actor_id": "11111111-1111-4111-8111-111111111111",
+                "disposition": "verified", "rationale": "synthetique"}
+    event = {
+        "run": snapshot,
+        "revision": 1,
+        "request": "22222222-2222-4222-8222-222222222222",
+        "actor": decision["actor_id"],
+        "previous_sha": "0" * 64,
+        "decision": decision,
+    }
+    event_sha = _record_digest(_record_canonical(event))
+    body = {
+        "schema": "caseproof-review-record-v1",
+        "case_id": "case-a",
+        "document_role": "own_draft",
+        "brief": {
+            "brief_id": "b", "head_revision": 1, "head_version_id": "v",
+            "graph_sha256": _record_digest("g"), "original_sha256": _record_digest("o"),
+            "document_id": "d", "document_version_id": "dv",
+            "case_revision": 1, "exhibit_revision": 1,
+        },
+        "checks": [{
+            "snapshot_sha256": snapshot, "payload_sha256": _record_digest(_record_canonical(run)),
+            "payload_sha256_verified": True, "case_revision": 1, "exhibit_revision": 1,
+            "run": run,
+        }],
+        "reviews": [{
+            "snapshot_sha256": snapshot, "head_sha256": event_sha, "chain_verified": True,
+            "decisions": [{
+                "revision": 1, "request_id": event["request"],
+                "actor_id": decision["actor_id"], "event_sha256": event_sha,
+                "decision": decision,
+            }],
+        }],
+        "note": "synthetique",
+    }
+    body["record_sha256"] = _record_digest(_record_canonical(body))
+    return body
+
+
+def _recompute_body_digest(body):
+    return _record_digest(_record_canonical(
+        {k: v for k, v in body.items() if k != "record_sha256"}))
+
+
+def test_valid_offline_record_replays():
+    from scripts.verify_review_record_file import verify_record_document
+    steps = verify_record_document(valid_offline_record())
+    assert any("payload digest replayed" in s for s in steps)
+    assert any("replayed from genesis" in s for s in steps)
+    assert any("record body digest" in s for s in steps)
+
+
+def test_offline_record_tampered_decision_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body = valid_offline_record()
+    body["reviews"][0]["decisions"][0]["decision"]["disposition"] = "approved"
+    body["record_sha256"] = _recompute_body_digest(body)
+    with pytest.raises(RecordVerificationError, match="tampered recorded review event"):
+        verify_record_document(body)
+
+
+def test_offline_record_tampered_run_payload_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body = valid_offline_record()
+    body["checks"][0]["run"]["observations"] = ["forged"]
+    body["record_sha256"] = _recompute_body_digest(body)
+    with pytest.raises(RecordVerificationError, match="payload digest mismatch"):
+        verify_record_document(body)
+
+
+def test_offline_record_tampered_body_digest_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body = valid_offline_record()
+    body["brief"]["head_revision"] = 2
+    with pytest.raises(RecordVerificationError, match="record body digest mismatch"):
+        verify_record_document(body)
+
+
+def test_offline_record_wrong_schema_rejected():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    with pytest.raises(RecordVerificationError, match="not a caseproof-review-record-v1"):
+        verify_record_document({"schema": "other"})
+
+
+def test_offline_record_broken_chain_head_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body = valid_offline_record()
+    body["reviews"][0]["head_sha256"] = _record_digest("other-head")
+    body["record_sha256"] = _recompute_body_digest(body)
+    with pytest.raises(RecordVerificationError, match="review head mismatch"):
+        verify_record_document(body)
+
+
+# Ed25519 receipt on the exported record: installation signature, never a
+# personal/legal/eIDAS signature. Three outcomes, no silent downgrade.
+def _signed_offline_record():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        PublicFormat,
+    )
+
+    from apps.api.disposable_review_record import sign_record_body
+    private = Ed25519PrivateKey.generate()
+    seed = private.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+    body = valid_offline_record()
+    body["receipt"] = sign_record_body(body, seed)
+    public = private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    return body, seed, public
+
+
+def test_sign_record_body_strict_key():
+    from apps.api.disposable_review_record import RecordConflict, sign_record_body
+    with pytest.raises(RecordConflict):
+        sign_record_body(valid_offline_record(), b"short")
+    with pytest.raises(RecordConflict):
+        sign_record_body({"schema": "caseproof-review-record-v1"}, b"k" * 32)
+
+
+def test_signed_record_verifies_against_trusted_key():
+    from scripts.verify_review_record_file import verify_record_document
+    body, _seed, public = _signed_offline_record()
+    steps = verify_record_document(body, trusted_public_key=public)
+    assert any("VERIFIED against the trusted installation key" in s for s in steps)
+
+
+def test_signed_record_without_trusted_key_is_self_asserted():
+    from scripts.verify_review_record_file import verify_record_document
+    body, _seed, _public = _signed_offline_record()
+    steps = verify_record_document(body)
+    assert any("SELF-ASSERTED" in s for s in steps)
+
+
+def test_tampered_signed_record_fails_signature():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body, _seed, public = _signed_offline_record()
+    body["brief"]["head_revision"] = 7
+    body["record_sha256"] = _recompute_body_digest(
+        {k: v for k, v in body.items() if k != "receipt"})
+    with pytest.raises(RecordVerificationError, match="invalid receipt signature"):
+        verify_record_document(body, trusted_public_key=public)
+
+
+def test_key_substitution_fails_against_trusted_key():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        PublicFormat,
+    )
+
+    from apps.api.disposable_review_record import sign_record_body
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    body, _seed, trusted = _signed_offline_record()
+    body["brief"]["head_revision"] = 7
+    body["record_sha256"] = _recompute_body_digest(
+        {k: v for k, v in body.items() if k != "receipt"})
+    forger = Ed25519PrivateKey.generate()
+    forged_seed = forger.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+    signed_record = {k: v for k, v in body.items() if k != "receipt"}
+    body["receipt"] = sign_record_body(signed_record, forged_seed)
+    assert body["receipt"]["public_key"] == forger.public_key().public_bytes(
+        Encoding.Raw, PublicFormat.Raw).hex()
+    # Internally valid signature, substituted key: embedded-only check reports
+    # self-asserted; trusted-key verification must fail closed.
+    steps = verify_record_document(body)
+    assert any("SELF-ASSERTED" in s for s in steps)
+    with pytest.raises(RecordVerificationError, match="untrusted issuer"):
+        verify_record_document(body, trusted_public_key=trusted)
+
+
+def test_unsigned_record_with_trusted_key_fails_closed():
+    from scripts.verify_review_record_file import (
+        RecordVerificationError,
+        verify_record_document,
+    )
+    _body, _seed, public = _signed_offline_record()
+    with pytest.raises(RecordVerificationError, match="no receipt"):
+        verify_record_document(valid_offline_record(), trusted_public_key=public)
+    steps = verify_record_document(valid_offline_record())
+    assert any("integrity-only record" in s for s in steps)
+
+
+# User-declared exhibit page mappings: independent numbering spaces, no
+# inference, duplicate physical pages fail closed, hardcoded printed page
+# removed.
+def test_confirmed_pages_absent_mappings_pdf_inventory_is_complete():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    pages = _confirmed_pages("doc", "ver", None, page_count=3)
+    assert [p.pdf_page for p in pages] == [1, 2, 3]
+    assert all(p.printed_page is None and p.bundle_page is None for p in pages)
+
+
+def test_confirmed_pages_absent_mappings_non_pdf_is_explicit_unpaginated():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    pages = _confirmed_pages("doc", "ver", None, page_count=None)
+    assert len(pages) == 1
+    assert pages[0].unpaginated
+    assert pages[0].pdf_page is None and pages[0].printed_page is None
+    assert pages[0].bundle_page is None
+
+
+def test_confirmed_pages_user_declared_labels_merge_onto_real_pages():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    pages = _confirmed_pages("doc", "ver", [
+        {"pdf_page": 1, "printed_page": 3, "bundle_page": 7},
+        {"pdf_page": 2},
+    ], page_count=4)
+    assert [p.pdf_page for p in pages] == [1, 2, 3, 4]
+    assert (pages[0].printed_page, pages[0].bundle_page) == (3, 7)
+    assert (pages[1].printed_page, pages[1].bundle_page) == (None, None)
+    assert (pages[3].printed_page, pages[3].bundle_page) == (None, None)
+
+
+def test_confirmed_pages_reject_invalid_input():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    bad = [
+        [{"pdf_page": 1}, {"pdf_page": 1}],              # duplicate physical page
+        [{"pdf_page": 0}],                                # out of range
+        [{"pdf_page": "1"}],                              # wrong type
+        [{"printed_page": 3}],                            # physical page required
+        [{"pdf_page": 1, "printed_page": 0}],             # invalid printed space
+        [{"pdf_page": 1, "bundle_page": -2}],             # invalid bundle space
+        [{"pdf_page": 1, "other": 2}],                    # unknown key
+        [],                                               # empty list
+        [{"pdf_page": 1}] * 513,                          # over bound
+        "not-a-list",
+    ]
+    for payload in bad:
+        with pytest.raises(ValueError):
+            _confirmed_pages("doc", "ver", payload, page_count=3)
+
+
+def test_confirmed_pages_reject_out_of_inventory_physical_page():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    with pytest.raises(ValueError):
+        _confirmed_pages("doc", "ver", [{"pdf_page": 5}], page_count=3)
+
+
+def test_confirmed_pages_reject_mappings_on_unpaginated_source():
+    from apps.api.disposable_signed_brief_publisher import _confirmed_pages
+    with pytest.raises(ValueError):
+        _confirmed_pages("doc", "ver", [{"pdf_page": 1}], page_count=None)
+
+
+def test_unpaginated_marker_must_be_sole_row():
+    from domains.disputes.exhibits import ExhibitEntry, ExhibitError, ExhibitPage
+    single = ExhibitEntry("e1", "Stuk 1", (ExhibitPage("s1", "v1"),), confirmed=True)
+    assert single.pages[0].unpaginated
+    with pytest.raises(ExhibitError):
+        ExhibitEntry(
+            "e2", "Stuk 2",
+            (ExhibitPage("s1", "v1"), ExhibitPage("s1", "v1", pdf_page=1)),
+            confirmed=True,
+        )
+
+
+# --- Live RPC transport + adapter contracts (no live calls) -----------------
+
+class _StubResponse:
+    def __init__(self, status, body=b""):
+        self.status = status
+        self._body = body
+
+    def read(self, _limit=-1):
+        return self._body
+
+
+class _StubConn:
+    def __init__(self, status=200, body=b"{}", error=None):
+        self._response = _StubResponse(status, body)
+        self._error = error
+        self.requests = []
+        self.closed = False
+
+    def request(self, method, path, body=None, headers=None):
+        if self._error is not None:
+            raise self._error
+        self.requests.append((method, path, body, headers))
+
+    def getresponse(self):
+        return self._response
+
+    def close(self):
+        self.closed = True
+
+
+def _rpc_with(conn):
+    from apps.api.signed_supabase_rpc import call_rpc
+    return call_rpc(publishable_key="sb_publishable_testkey", bearer="jwt",
+                    name="caseproof_signed_test", args={"p_case": "x"},
+                    _conn_factory=lambda: conn)
+
+
+def test_live_rpc_transport_contract():
+    import json as jsonlib
+
+    from apps.api.signed_supabase_originals import (
+        PrivateStorageDenied,
+        PrivateStorageFailure,
+        PrivateStorageOutcomeUnknown,
+    )
+    conn = _StubResponse is None or _StubConn(200, jsonlib.dumps({"ok": True}).encode())
+    assert _rpc_with(conn) == {"ok": True}
+    method, path, body, headers = conn.requests[0]
+    assert (method, path) == ("POST", "/rest/v1/rpc/caseproof_signed_test")
+    assert headers["apikey"] == "sb_publishable_testkey"
+    assert headers["Authorization"] == "Bearer jwt"
+    assert jsonlib.loads(body.decode()) == {"p_case": "x"}
+    assert conn.closed
+    with pytest.raises(PrivateStorageDenied):
+        _rpc_with(_StubConn(403, b"{}"))
+    with pytest.raises(PrivateStorageDenied):
+        _rpc_with(_StubConn(400, jsonlib.dumps({"code": "PGRST202"}).encode()))
+    with pytest.raises(PrivateStorageOutcomeUnknown):
+        _rpc_with(_StubConn(error=OSError("down")))
+    with pytest.raises(PrivateStorageFailure):
+        _rpc_with(_StubConn(200, b"not-json"))
+    with pytest.raises(PrivateStorageFailure):
+        _rpc_with(_StubConn(500, b"{}"))
+
+
+def test_live_rpc_transport_rejects_bad_input():
+    from apps.api.signed_supabase_rpc import call_rpc
+    for kwargs in (
+        {"publishable_key": "sb_secret_nope"},
+        {"bearer": ""},
+        {"bearer": "a\r\nb"},
+        {"name": "drop table"},
+        {"args": ["not-a-dict"]},
+        {"args": {"p_case": "x" * 16384}},
+    ):
+        merged = {"publishable_key": "sb_publishable_testkey", "bearer": "jwt",
+                  "name": "caseproof_signed_test", "args": {}, **kwargs}
+        with pytest.raises(ValueError):
+            call_rpc(**merged)
+
+
+def _publisher_stub(result):
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    calls = []
+
+    def fake_rpc(*, publishable_key, bearer, name, args):
+        calls.append((name, args))
+        return result(calls) if callable(result) else result
+
+    return LiveSignedBriefPublisher(call_rpc=fake_rpc, publishable_key="sb_publishable_k"), calls
+
+
+_UUID_A = "0" * 8 + "-0000-4000-8000-" + "0" * 12
+_UUID_B = "1" * 8 + "-0000-4000-8000-" + "1" * 12
+_UUID_C = "2" * 8 + "-0000-4000-8000-" + "2" * 12
+_SHA = "a" * 64
+
+
+def _live_publish_kwargs():
+    import hashlib
+    rep = "Mémoire synthétique."
+    graph = "graphe synthétique v1"
+    return {
+        "bearer": "jwt", "case_id": _UUID_A, "document_id": _UUID_B, "version_id": _UUID_C,
+        "document_role": "own_draft", "expected_revision": 1,
+        "brief_version_id": "4" * 8 + "-0000-4000-8000-" + "4" * 12,
+        "request_id": "5" * 8 + "-0000-4000-8000-" + "5" * 12,
+        "representation": rep,
+        "representation_sha256": hashlib.sha256(rep.encode("utf-8")).hexdigest(),
+        "parser_id": "parser-synthétique-v1",
+        "references": [{"reference_id": "ref-1", "exhibit_label": "Contrat",
+                        "exact_quote": "paiement", "pdf_page": 2}],
+        "assertions": [{"claim_id": "c1", "reference_id": "ref-1", "text_start": 0,
+                        "text_end": 7, "assertion_text": rep[0:7], "kind": "money",
+                        "fact_role": "payment", "language": "fr", "source_language": "nl"}],
+        "graph_text": graph,
+        "graph_sha256": hashlib.sha256(graph.encode("utf-8")).hexdigest(),
+    }
+
+
+def test_live_publisher_publish_contract():
+    import hashlib
+    import uuid
+    publisher, calls = _publisher_stub({"ok": True, "replay": False, "revision": 2})
+    kwargs = _live_publish_kwargs()
+    outcome = publisher.publish_uploaded(**kwargs)
+    assert outcome.published_revision == 2
+    assert outcome.brief_version_id == kwargs["brief_version_id"]
+    name, args = calls[0]
+    assert name == "caseproof_signed_publish_uploaded"
+    raw = bytearray(
+        hashlib.sha256(f"caseproof-working-brief:own_draft:{_UUID_A}".encode()).digest()[:16])
+    raw[6] = (raw[6] & 0x0F) | 0x40
+    raw[8] = (raw[8] & 0x3F) | 0x80
+    assert args["p_brief"] == str(uuid.UUID(bytes=bytes(raw)))
+    assert outcome.brief_id == args["p_brief"]
+    assert args["p_expected"] == 1
+    assert args["p_references"] == kwargs["references"]
+    assert args["p_assertions"] == kwargs["assertions"]
+    assert args["p_representation"] == kwargs["representation"]
+    assert args["p_representation_sha"] == kwargs["representation_sha256"]
+    assert args["p_graph_sha"] == kwargs["graph_sha256"]
+
+
+def test_live_publisher_confirm_exhibit_mappings_contract():
+    import hashlib
+    import json
+    existing = {"exhibit_id": "piece-aaa111bbb222", "display_label": "Contrat", "aliases": [],
+                "confirmed": True, "manual_inclusion": False,
+                "pages": [{"source_id": _UUID_B, "version_id": _UUID_C, "pdf_page": 1,
+                           "printed_page": None, "bundle_page": None}]}
+
+    def stub(calls):
+        if calls[-1][0] == "caseproof_signed_exhibit_register":
+            return {"ok": True, "register_revision": 3,
+                    "payload": {"schema": "caseproof-exhibit-register-v1", "entries": [existing]},
+                    "media_type": "application/pdf", "page_count": 3}
+        return {"ok": True, "exhibit_revision": 4, "replay": False}
+
+    publisher, calls = _publisher_stub(stub)
+    confirmed = publisher.confirm_exhibit(
+        bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
+        display_label="Pièce 4",
+        page_mappings=[{"pdf_page": 1, "printed_page": 3, "bundle_page": 7}])
+    assert confirmed.exhibit_revision == 4
+    assert confirmed.exhibit_id.startswith("piece-")
+    assert calls[0][0] == "caseproof_signed_exhibit_register"
+    name, args = calls[1]
+    assert name == "caseproof_signed_confirm_exhibit"
+    assert args["p_expected"] == 3
+    assert args["p_sha"] == hashlib.sha256(args["p_payload"].encode("utf-8")).hexdigest()
+    register = json.loads(args["p_payload"])
+    assert register["schema"] == "caseproof-exhibit-register-v1"
+    assert register["entries"][0] == existing
+    new = register["entries"][1]
+    assert new["exhibit_id"] == confirmed.exhibit_id
+    assert new["display_label"] == "Pièce 4" and new["confirmed"] is True
+    assert new["manual_inclusion"] is False and new["aliases"] == []
+    assert new["pages"] == [
+        {"source_id": _UUID_B, "version_id": _UUID_C, "pdf_page": 1,
+         "printed_page": 3, "bundle_page": 7},
+        {"source_id": _UUID_B, "version_id": _UUID_C, "pdf_page": 2,
+         "printed_page": None, "bundle_page": None},
+        {"source_id": _UUID_B, "version_id": _UUID_C, "pdf_page": 3,
+         "printed_page": None, "bundle_page": None}]
+
+
+def test_live_publisher_error_mapping():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied
+    for error, expected in (
+        ("denied", PrivateStorageDenied),
+        ("forbidden", PrivateStorageDenied),
+        ("stale_revision", ValueError),
+        ("duplicate_version", ValueError),
+        ("conflict", ValueError),
+        ("invalid", ValueError),
+    ):
+        publisher, _ = _publisher_stub({"ok": False, "error": error})
+        with pytest.raises(expected):
+            publisher.publish_uploaded(**_live_publish_kwargs())
+
+
+def test_live_publisher_strict_response_and_input():
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+    bad_results = [
+        {"ok": True, "replay": False, "revision": "1"},
+        {"ok": True, "revision": 1},
+        {"ok": True, "replay": False},
+        ["not-a-dict"],
+    ]
+    for result in bad_results:
+        publisher, _ = _publisher_stub(result)
+        with pytest.raises(PrivateStorageFailure):
+            publisher.publish_uploaded(**_live_publish_kwargs())
+    publisher, _ = _publisher_stub({"ok": True, "replay": False, "revision": 2})
+    bad_inputs = []
+    wrong_sha = _live_publish_kwargs()
+    wrong_sha["representation_sha256"] = "0" * 64
+    bad_inputs.append(wrong_sha)
+    dup_refs = _live_publish_kwargs()
+    dup_refs["references"] = dup_refs["references"] * 2
+    bad_inputs.append(dup_refs)
+    ghost_ref = _live_publish_kwargs()
+    ghost_ref["assertions"] = [dict(ghost_ref["assertions"][0], reference_id="fantôme")]
+    bad_inputs.append(ghost_ref)
+    bad_role = _live_publish_kwargs()
+    bad_role["document_role"] = "judge"
+    bad_inputs.append(bad_role)
+    for kwargs in bad_inputs:
+        with pytest.raises(ValueError):
+            publisher.publish_uploaded(**kwargs)
+    publisher, _ = _publisher_stub({"ok": True, "exhibit_id": _UUID_A, "exhibit_revision": 1})
+    for bad_mappings in (
+        [{"pdf_page": 1}, {"pdf_page": 1}],
+        [{"pdf_page": "1"}],
+        [{"printed_page": 3}],
+        [{"pdf_page": 1, "unknown": 2}],
+        [{"pdf_page": 0}],
+        "not-a-list",
+    ):
+        with pytest.raises(ValueError):
+            publisher.confirm_exhibit(
+                bearer="jwt", case_id=_UUID_A, document_id=_UUID_B, version_id=_UUID_C,
+                display_label="Pièce 4", page_mappings=bad_mappings)
+    with pytest.raises(ValueError):
+        publisher.register_source_version(
+            bearer="jwt", case_id=_UUID_A, label="x", media_type="application/x-msdownload",
+            byte_length=1, sha256_hex=_SHA)
+
+
+def test_live_publisher_register_and_list_contract():
+    publisher, calls = _publisher_stub(lambda calls: (
+        {"ok": True, "document_id": _UUID_B, "version_id": _UUID_C}
+        if calls[-1][0] == "caseproof_signed_register_source"
+        else {"ok": True, "documents": [
+            {"document_id": _UUID_B, "label": "conclusions",
+             "versions": [{"version_id": _UUID_C, "version_number": 1,
+                           "media_type": "application/pdf", "byte_length": 100,
+                           "sha256_hex": _SHA}]}]}
+    ))
+    registration = publisher.register_source_version(
+        bearer="jwt", case_id=_UUID_A, label="conclusions", media_type="application/pdf",
+        byte_length=100, sha256_hex=_SHA)
+    assert registration.document_id == _UUID_B
+    documents = publisher.list_documents(bearer="jwt", case_id=_UUID_A)
+    assert len(documents) == 1
+    assert documents[0].versions[0].sha256_hex == _SHA
+
+
+def _raw_record_fixture(actor=None):
+    import json as _json
+
+    actor = actor or _UUID_A
+    version = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
+    snapshot = "f" * 64
+    payload = _json.dumps({"schema": "caseproof-m2-check-headless-v1"})
+    request_id = "cccccccc-3333-4333-8333-cccccccccccc"
+    decision = {"actor_id": actor, "disposition": "verified",
+                "observation_id": "citation:ref-01", "rationale": "contrôle synthétique"}
+    # Known-answer vector, frozen out of the implementation under test: if
+    # the canonicalization or digest ever drifts, the assembly replay rejects
+    # this fixture instead of self-validating the same bug.
+    event_sha = "a9a3aa5c9c6ecfe5244696091622e64deafb0220d55cfef9923bde6d47e65ab9"
+    payload_sha = "a7254fa5a8ceedb1db20175b94f7b062f77c0c737728adb1fbe0798875ab506c"
+    brief = {"brief_id": "dddddddd-4444-4444-8444-dddddddddddd", "head_revision": 1,
+             "version_id": version, "graph_sha256": "1" * 64, "original_sha256": "2" * 64,
+             "document_id": "eeeeeeee-5555-4555-8555-eeeeeeeeeeee",
+             "document_version_id": "ffffffff-6666-4666-8666-ffffffffffff",
+             "case_revision": 1, "exhibit_revision": 1}
+    checks = [{"snapshot_sha256": snapshot, "payload_sha256": payload_sha,
+               "case_revision": 1, "exhibit_revision": 1, "payload": payload}]
+    heads = [{"snapshot_sha256": snapshot, "event_sha256": event_sha}]
+    events = [{"snapshot_sha256": snapshot, "revision": 1, "request_id": request_id,
+               "actor_id": actor, "event_sha256": event_sha,
+               "decision": _json.dumps(decision, ensure_ascii=False, sort_keys=True,
+                                       separators=(",", ":"))}]
+    return {"ok": True, "brief": brief, "checks": checks,
+            "review_heads": heads, "review_events": events}
+
+
+def test_live_review_record_contract_and_signature():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+        Ed25519PrivateKey,
+        Ed25519PublicKey,
+    )
+
+    from apps.api.disposable_review_record import SIGNATURE_DOMAIN, _canonical
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+    key = Ed25519PrivateKey.generate()
+    seed = key.private_bytes_raw()
+    calls = []
+    raw = _raw_record_fixture()
+
+    def fake_rpc(*, publishable_key, bearer, name, args):
+        calls.append((name, args))
+        return dict(raw)
+
+    record_port = LiveSignedReviewRecord(
+        call_rpc=fake_rpc, publishable_key="sb_publishable_k", signing_key=seed)
+    signed = record_port.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+    assert calls == [("caseproof_signed_review_record",
+                      {"p_case": _UUID_A, "p_role": "own_draft"})]
+    assert signed["schema"] == "caseproof-review-record-v1"
+    assert signed["checks"][0]["payload_sha256_verified"] is True
+    assert signed["reviews"][0]["chain_verified"] is True
+    receipt = signed.pop("receipt")
+    assert receipt["scheme"] == "ed25519" and receipt["domain"] == SIGNATURE_DOMAIN
+    public = Ed25519PublicKey.from_public_bytes(bytes.fromhex(receipt["public_key"]))
+    public.verify(bytes.fromhex(receipt["signature"]),
+                  _canonical({"domain": SIGNATURE_DOMAIN, "record": signed}).encode())
+    unsigned = LiveSignedReviewRecord(call_rpc=fake_rpc, publishable_key="sb_publishable_k")
+    assert "receipt" not in unsigned.record(
+        bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+
+
+def test_live_review_record_denial_and_shape():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied, PrivateStorageFailure
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+    denied = LiveSignedReviewRecord(
+        call_rpc=lambda **kwargs: {"ok": False, "error": "denied"},
+        publishable_key="sb_publishable_k")
+    with pytest.raises(PrivateStorageDenied):
+        denied.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+    for bad in (
+        {"ok": True, "brief": "not-a-dict"},
+        {"ok": True, "brief": {}, "checks": "not-a-list"},
+        {"ok": False, "error": "weird"},
+        "not-a-dict",
+    ):
+        port = LiveSignedReviewRecord(call_rpc=lambda **kwargs: bad,  # noqa: B023
+                                      publishable_key="sb_publishable_k")
+        with pytest.raises(PrivateStorageFailure):
+            port.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+
+
+def test_live_review_record_replay_rejects_tamper():
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+    raw = _raw_record_fixture()
+
+    def variant(**mutate):
+        import copy
+
+        body = copy.deepcopy(raw)
+        for key_path, value in mutate.items():
+            target = body
+            parts = key_path.split(".")
+            for part in parts[:-1]:
+                target = target[int(part)] if isinstance(target, list) else target[part]
+            last = parts[-1]
+            if isinstance(target, list):
+                target[int(last)] = value
+            else:
+                target[last] = value
+        return body
+
+    tampered_event = variant(**{"review_events.0.decision": '{"actor_id":"' + _UUID_A
+                                + '","disposition":"verified","observation_id":'
+                                  '"citation:ref-01","rationale":"ALTÉRÉ"}'})
+    wrong_head = variant(**{"review_heads.0.event_sha256": "9" * 64})
+    bad_payload = variant(**{"checks.0.payload_sha256": "9" * 64})
+    for body in (tampered_event, wrong_head, bad_payload):
+        port = LiveSignedReviewRecord(call_rpc=lambda **kwargs: body,  # noqa: B023
+                                      publishable_key="sb_publishable_k")
+        with pytest.raises(PrivateStorageFailure):
+            port.record(bearer="jwt", case_id=_UUID_A, document_role="own_draft")
+
+
+def test_qr_payload_is_bounded_and_text_free():
+    from apps.api.review_record_qr import build_qr_payload
+
+    digest = "a" * 64
+    pubkey = "b" * 64
+    signed = {"record_sha256": digest, "receipt": {"public_key": pubkey}}
+    payload = build_qr_payload(signed)
+    assert payload == f"caseproof-review-record-v1|sha256:{digest}|key:{pubkey}"
+    assert len(payload) <= 256
+    assert "http" not in payload
+    unsigned = build_qr_payload({"record_sha256": digest})
+    assert unsigned == f"caseproof-review-record-v1|sha256:{digest}|key:unsigned"
+    with pytest.raises(ValueError):
+        build_qr_payload({"record_sha256": "not-a-digest"})
+    with pytest.raises(ValueError):
+        build_qr_payload({"record_sha256": digest, "receipt": {"public_key": "not-hex!"}})
+    with pytest.raises(ValueError):
+        build_qr_payload({"record_sha256": digest, "receipt": "tampered"})
+
+
+def test_qr_png_renders_and_is_deterministic():
+    from apps.api.review_record_qr import build_qr_payload, render_qr_png
+
+    payload = build_qr_payload({"record_sha256": "c" * 64,
+                                "receipt": {"public_key": "d" * 64}})
+    png = render_qr_png(payload)
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    assert png == render_qr_png(payload)
+    assert render_qr_png(payload + "x") != png
+    assert len(png) < 16384
+
+
+def test_live_ports_absent_without_configuration():
+    from apps.api.signed_live_composition import live_signed_ports
+
+    assert live_signed_ports({}) is None
+    assert live_signed_ports({"CASEPROOF_REVIEW_RECORD_SIGNING_KEY_HEX": "ab" * 32}) is None
+
+
+def test_live_ports_composition_validation():
+    from apps.api.signed_live_composition import live_signed_ports
+
+    key = "sb_publishable_" + "A" * 24
+    publisher, record = live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": key})
+    assert publisher is not None and record is not None
+    with pytest.raises(ValueError):
+        live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "sb_secret_" + "A" * 24})
+    with pytest.raises(ValueError):
+        live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "not-a-key"})
+    with pytest.raises(ValueError):
+        live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": key,
+                           "CASEPROOF_REVIEW_RECORD_SIGNING_KEY_HEX": "not-hex"})
+    with pytest.raises(ValueError):
+        live_signed_ports({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": key,
+                           "CASEPROOF_REVIEW_RECORD_SIGNING_KEY_HEX": "ab"})
+
+
+def test_workbench_documents_route_uses_wired_live_publisher():
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+
+    case_id = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+    calls = []
+
+    def stub_rpc(*, publishable_key, bearer, name, args):
+        calls.append((publishable_key, bearer, name, args))
+        return {"ok": True, "documents": [{"document_id": case_id, "label": "synthétique",
+                                           "versions": []}]}
+
+    key = "sb_publishable_" + "B" * 24
+    publisher = LiveSignedBriefPublisher(call_rpc=stub_rpc, publishable_key=key)
+    search, _ = search_rig()
+    reader = AuthorizedOriginalReader(search.checker, Originals())
+    client = TestClient(
+        create_litigation_development_app(checker=search.checker, originals=reader,
+                                          signed_brief_publisher=publisher),
+        client=("127.0.0.1", 50000),
+    )
+    response = client.get(f"/dev/signed/matters/{case_id}/documents",
+                          headers={"Authorization": "Bearer signed-user-token"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["schema"] == "caseproof-signed-documents-v1"
+    assert body["documents"][0]["document_id"] == case_id
+    assert calls == [(key, "signed-user-token", "caseproof_signed_list_documents",
+                      {"p_case": case_id})]
+
+
+def test_workbench_without_wired_publisher_stays_503():
+    search, _ = search_rig()
+    reader = AuthorizedOriginalReader(search.checker, Originals())
+    client = TestClient(create_litigation_development_app(checker=search.checker, originals=reader),
+                        client=("127.0.0.1", 50000))
+    response = client.get(f"/dev/signed/matters/{CASE}/documents",
+                          headers={"Authorization": "Bearer signed-user-token"})
+    assert response.status_code == 503
+
+
+_PUBLISH_CASE = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+_PUBLISH_DOC = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
+_PUBLISH_VER = "cccccccc-3333-4333-8333-cccccccccccc"
+
+
+def _publish_route_client(publisher):
+    search, _ = search_rig()
+    reader = AuthorizedOriginalReader(search.checker, Originals())
+    return TestClient(
+        create_litigation_development_app(checker=search.checker, originals=reader,
+                                          signed_brief_publisher=publisher),
+        client=("127.0.0.1", 50000),
+    )
+
+
+def _publish_post(client, **overrides):
+    body = {"document_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+            "document_role": "own_draft", "expected_revision": 0}
+    body.update(overrides)
+    return client.post(
+        f"/dev/signed/matters/{_PUBLISH_CASE}/briefs/publish",
+        json=body, headers={"Authorization": "Bearer signed-user-token"})
+
+
+def test_workbench_publish_route_delegates_six_argument_contract():
+    from apps.api.signed_supabase_brief_publisher import SignedPublishOutcome
+    calls = []
+
+    class _Composer:
+        def publish_uploaded(self, **kwargs):
+            calls.append(kwargs)
+            return SignedPublishOutcome(
+                brief_id="dddddddd-4444-4444-8444-dddddddddddd",
+                brief_version_id="eeeeeeee-5555-4555-8555-eeeeeeeeeeee",
+                published_revision=1)
+
+    client = _publish_route_client(_Composer())
+    response = _publish_post(client)
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["schema"] == "caseproof-signed-brief-publish-v1"
+    assert body["published_revision"] == 1
+    assert calls == [{"bearer": "signed-user-token", "case_id": _PUBLISH_CASE,
+                      "document_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+                      "document_role": "own_draft", "expected_revision": 0}]
+    # The route never accepts service-computed artifacts from the client.
+    forged = _publish_post(client, representation="texte forgé jamais vérifié")
+    assert forged.status_code == 422
+    assert len(calls) == 1
+    # No wired publisher: the route stays unavailable, never a silent fallback.
+    search, _ = search_rig()
+    bare = TestClient(
+        create_litigation_development_app(
+            checker=search.checker,
+            originals=AuthorizedOriginalReader(search.checker, Originals())),
+        client=("127.0.0.1", 50000))
+    assert _publish_post(bare).status_code == 503
+
+
+def test_workbench_publish_route_error_mapping():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied, PrivateStorageFailure
+
+    class _Denied:
+        def publish_uploaded(self, **kwargs):
+            raise PrivateStorageDenied("masked")
+
+    class _Failure:
+        def publish_uploaded(self, **kwargs):
+            raise PrivateStorageFailure("boom")
+
+    class _Conflict:
+        def publish_uploaded(self, **kwargs):
+            raise ValueError("immutable publication conflict")
+
+    assert _publish_post(_publish_route_client(_Denied())).status_code == 404
+    assert _publish_post(_publish_route_client(_Failure())).status_code == 503
+    assert _publish_post(_publish_route_client(_Conflict())).status_code == 409
+
+
+def _composer_rig(data, register_payload, *, media="text/plain", head_mismatch=False,
+                  sources=None):
+    import hashlib
+    from uuid import UUID
+
+    from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    from apps.api.signed_supabase_originals import OriginalRef
+
+    key = "sb_publishable_" + "D" * 24
+    captured = {}
+
+    def stub_rpc(*, publishable_key, bearer, name, args):
+        if name == "caseproof_signed_exhibit_register":
+            return {"ok": True, "register_revision": 1 if register_payload else 0,
+                    "media_type": media, "page_count": None, "payload": register_payload}
+        if name == "caseproof_signed_publish_uploaded":
+            captured.update(args)
+            return {"ok": True, "replay": False, "revision": 1}
+        if name == "caseproof_signed_brief_head":
+            return {"ok": True,
+                    "brief_id": captured.get("p_brief"),
+                    "version_id": None if head_mismatch else captured.get("p_version"),
+                    "revision": 1}
+        raise AssertionError(name)
+
+    org = UUID("99999999-1111-4111-8111-999999999999")
+
+    class _Library:
+        def source(self, *, bearer, case_id, document_id, version_id):
+            blob, blob_media = (sources or {}).get(
+                (str(document_id), str(version_id)), (data, media))
+            ref = OriginalRef(org, UUID(case_id), UUID(document_id), UUID(version_id),
+                              hashlib.sha256(blob).hexdigest(), blob_media)
+            return ref, len(blob)
+
+        def read(self, *, bearer, case_id, document_id, version_id):
+            return (sources or {}).get(
+                (str(document_id), str(version_id)), (data, media))[0]
+
+    composer = ComposedSignedBriefPublisher(
+        library=_Library(),
+        publisher=LiveSignedBriefPublisher(call_rpc=stub_rpc, publishable_key=key),
+        publishable_key=key,
+    )
+    return composer, captured
+
+
+_REGISTER = {
+    "schema": "caseproof-exhibit-register-v1",
+    "entries": [
+        {"exhibit_id": "piece-aaa111bbb222", "display_label": "Contrat",
+         "aliases": ["le contrat"], "confirmed": True, "manual_inclusion": False,
+         "pages": [{"source_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+                    "pdf_page": 1, "printed_page": None, "bundle_page": None}]},
+        {"exhibit_id": "piece-bbb222ccc333", "display_label": "Brouillon",
+         "aliases": [], "confirmed": False, "manual_inclusion": False,
+         "pages": [{"source_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+                    "pdf_page": 2, "printed_page": None, "bundle_page": None}]},
+    ],
+}
+_BRIEF_TEXT = ("Le juge constate que «paiement sous 30 jours» (Contrat) et que "
+               "«livraison incluse» (Le Contrat) mais ignore «citation orpheline» (Inconnu) "
+               "et «passage non confirmé» (Brouillon).")
+
+
+def test_composed_publisher_derives_every_artifact_from_verified_reads():
+    import hashlib
+    import json
+    composer, captured = _composer_rig(_BRIEF_TEXT.encode("utf-8"), _REGISTER)
+    outcome = composer.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert outcome.published_revision == 1
+    expected_refs = [
+        {"reference_id": "ref-01", "exhibit_label": "Contrat",
+         "exact_quote": "paiement sous 30 jours", "pdf_page": None},
+        {"reference_id": "ref-02", "exhibit_label": "Contrat",
+         "exact_quote": "livraison incluse", "pdf_page": None},
+        {"reference_id": "ref-03", "exhibit_label": "Inconnu",
+         "exact_quote": "citation orpheline", "pdf_page": None},
+        {"reference_id": "ref-04", "exhibit_label": "Brouillon",
+         "exact_quote": "passage non confirmé", "pdf_page": None},
+    ]
+    assert captured["p_representation"] == _BRIEF_TEXT
+    assert captured["p_representation_sha"] == hashlib.sha256(
+        _BRIEF_TEXT.encode("utf-8")).hexdigest()
+    assert captured["p_parser_id"] == "strict-utf8-txt-v1"
+    assert captured["p_references"] == expected_refs
+    assert captured["p_assertions"] == []
+    assert "p_intent" not in captured
+    preimage = json.loads(captured["p_graph_text"])
+    assert set(preimage) == {"brief_id", "case", "version_id", "original_sha256",
+                             "representation_sha256", "parser_id", "document_id",
+                             "source_version", "role", "references", "assertions"}
+    assert preimage["references"] == expected_refs and preimage["assertions"] == []
+    assert preimage["role"] == "own_draft" and preimage["case"] == _PUBLISH_CASE
+    assert captured["p_graph_sha"] == hashlib.sha256(
+        captured["p_graph_text"].encode("utf-8")).hexdigest()
+
+
+def test_composed_publisher_fails_closed_outside_the_trusted_parser():
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+    composer, _ = _composer_rig(_BRIEF_TEXT.encode("utf-8"), _REGISTER, media="application/pdf")
+    with pytest.raises(PrivateStorageFailure):
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    composer, _ = _composer_rig(b"\xff\xfe binaire non utf-8", _REGISTER)
+    with pytest.raises(PrivateStorageFailure):
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+
+
+def test_composed_publisher_reports_unverifiable_outcome():
+    from apps.api.signed_supabase_originals import PrivateStorageOutcomeUnknown
+    composer, _ = _composer_rig(_BRIEF_TEXT.encode("utf-8"), _REGISTER, head_mismatch=True)
+    with pytest.raises(PrivateStorageOutcomeUnknown):
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+
+
+def test_composed_publisher_propagates_masked_denials():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied
+
+    def denying_rpc(*, publishable_key, bearer, name, args):
+        return {"ok": False, "error": "denied"}
+
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    key = "sb_publishable_" + "E" * 24
+    composer, _ = _composer_rig(_BRIEF_TEXT.encode("utf-8"), _REGISTER)
+    object.__setattr__(composer, "publisher",
+                       LiveSignedBriefPublisher(call_rpc=denying_rpc, publishable_key=key))
+    with pytest.raises(PrivateStorageDenied):
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+
+
+def test_fact_extraction_deterministic_with_explicit_abstention():
+    from application.litigation.fact_extraction import extract_fact_assertions
+    from application.litigation.factual_values import FactKind, FactRole
+
+    text = (
+        "Le juge relève «paiement convenu» (Contrat). "
+        "Le paiement de € 1 250,50 est intervenu. "
+        "«clause deux» (Contrat). L'échéance était le 12 mai 2026. "
+        "Le montant de € 300 est peut-être dû. "
+        "La livraison de € 400 n'a pas eu lieu. "
+        "Facture € 100 et € 200 réglées. "
+        "€ 999 sans citation préalable."
+    )
+    citations = (("ref-01", text.index("(Contrat).") + len("(Contrat).")),
+                 ("ref-02", text.index("(Contrat). L'") + len("(Contrat).")))
+    first = extract_fact_assertions(text, citations)
+    assert first == extract_fact_assertions(text, citations)  # replay stable
+    by_kind = {(a.kind, a.role): a for a in first}
+    assert len(first) == 2
+    money = by_kind[(FactKind.MONEY, FactRole.PAYMENT)]
+    assert money.text == "Le paiement de € 1 250,50 est intervenu"
+    assert text[money.text_start:money.text_end] == money.text
+    assert money.reference_id == "ref-01" and money.language == "fr"
+    date = by_kind[(FactKind.DATE, FactRole.DUE)]
+    assert date.text == "L'échéance était le 12 mai 2026"
+    assert date.reference_id == "ref-02" and date.language == "fr"
+    # Abstentions explicites : incertitude, négation, double montant dans la
+    # même phrase, fait sans citation qui précède.
+    assert all("300" not in a.text and "400" not in a.text
+               and "100" not in a.text and "999" not in a.text for a in first)
+    # Rôle mixte : aucune assertion.
+    mixed = "Le paiement de € 10 concerne la livraison."
+    assert extract_fact_assertions(mixed, (("ref-01", 0),)) == ()
+    # Aucune citation du tout : aucune assertion.
+    assert extract_fact_assertions("Le paiement de € 10 est intervenu.", ()) == ()
+
+
+def test_fact_extraction_trailing_currency_belgian_form():
+    from application.litigation.fact_extraction import extract_fact_assertions
+    from application.litigation.factual_values import FactKind, FactRole, _extract, _money_value
+
+    # Forme belge/française usuelle : la devise suit le montant.
+    text = ("«clause prix» (Contrat). Le demandeur réclame le paiement de 12.500,00 EUR. "
+            "Le paiement de 12 500,00 € est dû.")
+    citations = (("ref-01", text.index("(Contrat).") + len("(Contrat).")),)
+    first = extract_fact_assertions(text, citations)
+    assert first == extract_fact_assertions(text, citations)  # replay stable
+    money = [a for a in first if a.kind is FactKind.MONEY]
+    assert len(money) == 2
+    assert all(a.role is FactRole.PAYMENT for a in money)
+    assert {a.text for a in money} == {
+        "Le demandeur réclame le paiement de 12.500,00 EUR",
+        "Le paiement de 12 500,00 € est dû",
+    }
+    for assertion in money:
+        assert text[assertion.text_start:assertion.text_end] == assertion.text
+    # Les formes menant restent acceptées, la valeur est identique.
+    assert _money_value("12.500,00 EUR", "fr") == _money_value("EUR 12.500,00", "fr")
+    # Ambiguïté de groupement : abstention, jamais de valeur devinée.
+    assert _money_value("14,500 EUR", "fr") is None
+    assert _money_value("1,234 EUR", "fr") is None
+    # Pas de devise, pas de montant ; préfixe collé refusé.
+    assert _extract("2026-041", FactKind.MONEY, "fr") == []
+    assert _extract("12.500,00 EUROS", FactKind.MONEY, "fr") == []
+
+
+def test_fact_extraction_attachments_and_span_integrity():
+    from application.litigation.fact_extraction import extract_fact_assertions
+
+    text = ("«première clause» (A). Le paiement de € 10 est intervenu. "
+            "«seconde clause» (B). Le paiement de € 20 est intervenu.")
+    cut_a = text.index("(A).") + 4
+    cut_b = text.index("(B).") + 4
+    assertions = extract_fact_assertions(text, (("ref-b", cut_b), ("ref-a", cut_a)))
+    assert len(assertions) == 2
+    assert assertions[0].reference_id == "ref-a" and "€ 10" in assertions[0].text
+    assert assertions[1].reference_id == "ref-b" and "€ 20" in assertions[1].text
+    for assertion in assertions:
+        assert text[assertion.text_start:assertion.text_end] == assertion.text
+    # Citation hors limites : refus, jamais de rattachement inventé.
+    with pytest.raises(ValueError):
+        extract_fact_assertions(text, (("ref-x", len(text) + 1),))
+
+
+def _docx_fixture_bytes(lines, *, keep_custom_xml=False):
+    import os
+    import zipfile
+
+    from docx import Document
+
+    document = Document()
+    for line in lines:
+        document.add_paragraph(line)
+    target = "/tmp/caseproof-docx-fixture.docx"
+    document.save(target)
+    # The default python-docx template embeds a customXml part unrelated to
+    # the body text; a clean authored document has none. Strip it unless the
+    # fixture exercises the coverage-gap refusal.
+    with zipfile.ZipFile(target) as archive:
+        kept = {name: archive.read(name) for name in archive.namelist()
+                if keep_custom_xml or not name.startswith("customXml/")}
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, blob in kept.items():
+            archive.writestr(name, blob)
+    with open(target, "rb") as handle:
+        data = handle.read()
+    os.unlink(target)
+    return data
+
+
+def _pdf_fixture_bytes(pages, *, image_page=None):
+    import io
+    import os
+
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    target = "/tmp/caseproof-pdf-fixture.pdf"
+    writer = canvas.Canvas(target, pagesize=A4)
+    for index, lines in enumerate(pages):
+        if image_page == index:
+            from PIL import Image
+            from reportlab.lib.utils import ImageReader
+
+            image = Image.new("RGB", (400, 200), "white")
+            buffer = io.BytesIO()
+            image.save(buffer, "PNG")
+            buffer.seek(0)
+            writer.drawImage(ImageReader(buffer), 72, 500, width=400, height=200)
+        else:
+            height = 780
+            for line in lines:
+                writer.drawString(72, height, line)
+                height -= 18
+        writer.showPage()
+    writer.save()
+    with open(target, "rb") as handle:
+        data = handle.read()
+    os.unlink(target)
+    return data
+
+
+def test_composed_publisher_docx_path_derives_from_trusted_parser():
+    data = _docx_fixture_bytes(_BRIEF_TEXT.split(". "))
+    composer, captured = _composer_rig(
+        data, _REGISTER,
+        media="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    outcome = composer.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert outcome.published_revision == 1
+    assert captured["p_parser_id"].startswith("caseproof-parser-v1;")
+    assert "«paiement sous 30 jours» (Contrat)" in captured["p_representation"]
+    assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02", "ref-03", "ref-04"]
+
+
+def test_composed_publisher_pdf_text_native_complete_only():
+    import copy
+
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+
+    data = _pdf_fixture_bytes([_BRIEF_TEXT.split(". ")])
+    # Pièce sans inventaire physique vérifié (corpus TXT) : non mappée.
+    unpaginated = copy.deepcopy(_REGISTER)
+    for entry in unpaginated["entries"]:
+        entry["pages"] = [{"source_id": _PUBLISH_DOC, "version_id": _PUBLISH_VER,
+                           "pdf_page": None, "printed_page": None, "bundle_page": None}]
+    composer, captured = _composer_rig(data, unpaginated, media="application/pdf")
+    outcome = composer.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert outcome.published_revision == 1
+    assert "pypdf" in captured["p_parser_id"]
+    assert "«paiement sous 30 jours» (Contrat)" in captured["p_representation"]
+    assert [r["reference_id"] for r in captured["p_references"]] == ["ref-01", "ref-02", "ref-03", "ref-04"]
+    # Page de citation : jamais inférée côté démo, toujours « non mappée ».
+    assert [r["pdf_page"] for r in captured["p_references"]] == [None, None, None, None]
+    # Page image (scannée) ou visuelle : refus visible, jamais de partiel.
+    gap = _pdf_fixture_bytes([["Page texte native."], []], image_page=1)
+    refusing, _captured = _composer_rig(gap, unpaginated, media="application/pdf")
+    with pytest.raises(PrivateStorageFailure):
+        refusing.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+
+
+def test_composed_publisher_resolves_unambiguous_pdf_page_only():
+    exhibit_doc = "dddddddd-1111-4111-8111-dddddddddddd"
+    exhibit_ver = "eeeeeeee-2222-4222-8222-eeeeeeeeeeee"
+    exhibit_pdf = _pdf_fixture_bytes([
+        ["Contrat-cadre synthétique.", "Clause introductive."],
+        ["Clause prix:", "paiement sous 30 jours", "et livraison incluse"],
+    ])
+    register = {
+        "schema": "caseproof-exhibit-register-v1",
+        "entries": [
+            {"exhibit_id": "piece-pdf", "display_label": "Contrat",
+             "aliases": ["le contrat"], "confirmed": True, "manual_inclusion": False,
+             "pages": [
+                 {"source_id": exhibit_doc, "version_id": exhibit_ver, "pdf_page": 1,
+                  "printed_page": None, "bundle_page": None},
+                 {"source_id": exhibit_doc, "version_id": exhibit_ver, "pdf_page": 2,
+                  "printed_page": None, "bundle_page": None}]},
+        ],
+    }
+    brief = ("Le juge constate que «paiement sous 30 jours» (Contrat), que "
+             "«livraison incluse» (Le Contrat) et que «Clause» (Contrat).")
+    composer, captured = _composer_rig(
+        brief.encode("utf-8"), register,
+        sources={(exhibit_doc, exhibit_ver): (exhibit_pdf, "application/pdf")})
+    outcome = composer.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert outcome.published_revision == 1
+    pages = {r["exact_quote"]: r["pdf_page"] for r in captured["p_references"]}
+    # Occurrence unique sur la page physique 2 : page réelle résolue.
+    assert pages["paiement sous 30 jours"] == 2
+    assert pages["livraison incluse"] == 2
+    # « Clause » apparaît sur les deux pages : abstention, jamais de page devinée.
+    assert pages["Clause"] is None
+    # Rejeu déterministe : même publication, mêmes pages.
+    composer2, captured2 = _composer_rig(
+        brief.encode("utf-8"), register,
+        sources={(exhibit_doc, exhibit_ver): (exhibit_pdf, "application/pdf")})
+    composer2.publish_uploaded(
+        bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+        version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+    assert captured2["p_references"] == captured["p_references"]
+
+
+def test_registry_ingest_service_transport_contract():
+    import json as jsonlib
+
+    from apps.api.signed_registry_ingest import call_service_rpc, secret_key_from_env
+    from apps.api.signed_supabase_originals import (
+        PrivateStorageDenied,
+        PrivateStorageFailure,
+        PrivateStorageOutcomeUnknown,
+    )
+
+    key = "sb_secret_" + "F" * 24
+    conn = _StubConn(200, jsonlib.dumps({"ok": True}).encode())
+    result = call_service_rpc(
+        secret_key=key, name="caseproof_registry_ingest_parsed",
+        args={"p_case": "x"}, _conn_factory=lambda: conn)
+    assert result == {"ok": True}
+    method, path, _body, headers = conn.requests[0]
+    assert (method, path) == ("POST", "/rest/v1/rpc/caseproof_registry_ingest_parsed")
+    assert headers["apikey"] == key and headers["Authorization"] == "Bearer " + key
+    assert conn.closed
+    with pytest.raises(ValueError):
+        call_service_rpc(secret_key="sb_publishable_" + "F" * 24,
+                         name="caseproof_registry_ingest_parsed", args={})
+    with pytest.raises(ValueError):
+        call_service_rpc(secret_key=key, name="other_function", args={})
+    for status, body, expected in (
+        (403, b"", PrivateStorageDenied),
+        (400, jsonlib.dumps({"code": "42501"}).encode(), PrivateStorageDenied),
+        (400, jsonlib.dumps({"code": "PGRST202"}).encode(), PrivateStorageDenied),
+        (400, jsonlib.dumps({"code": "22023"}).encode(), ValueError),
+        (409, jsonlib.dumps({"code": "23505"}).encode(), ValueError),
+        (500, b"", PrivateStorageFailure),
+        (200, b"<html>", PrivateStorageFailure),
+    ):
+        with pytest.raises(expected):
+            call_service_rpc(secret_key=key, name="caseproof_registry_ingest_parsed",
+                             args={},
+                             _conn_factory=lambda s=status, b=body: _StubConn(s, b))
+    with pytest.raises(PrivateStorageOutcomeUnknown):
+        call_service_rpc(secret_key=key, name="caseproof_registry_ingest_parsed",
+                         args={}, _conn_factory=lambda: _StubConn(error=OSError("down")))
+    assert secret_key_from_env({"CASEPROOF_SUPABASE_SECRET_KEY": key}) == key
+    with pytest.raises(ValueError):
+        secret_key_from_env({})
+    with pytest.raises(ValueError):
+        secret_key_from_env({"CASEPROOF_SUPABASE_SECRET_KEY": "sb_publishable_" + "F" * 24})
+
+
+def test_registry_ingest_derive_gate_fail_closed():
+    from application.extraction.contracts import ExtractionError
+    from apps.api.signed_registry_ingest import derive_registry_ingest
+
+    docx_media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    data = _docx_fixture_bytes(["Texte propre et complet."])
+    derived = derive_registry_ingest(document_id="d", version_id="v",
+                                     data=data, media_type=docx_media)
+    assert derived["parser_id"].startswith("caseproof-parser-v1;")
+    assert "Texte propre et complet." in derived["representation"]
+    # Des octets DOCX sous media PDF : le parseur borné refuse la signature.
+    with pytest.raises(ExtractionError):
+        derive_registry_ingest(document_id="d", version_id="v", data=data,
+                               media_type="application/pdf")
+    # PDF texte-natif complet : accepté ; avec page image : refus visible.
+    pdf_data = _pdf_fixture_bytes([["Texte PDF natif complet."]])
+    derived_pdf = derive_registry_ingest(document_id="d", version_id="v",
+                                         data=pdf_data, media_type="application/pdf")
+    assert "Texte PDF natif complet." in derived_pdf["representation"]
+    assert "pypdf" in derived_pdf["parser_id"]
+    with pytest.raises(ExtractionError):
+        derive_registry_ingest(
+            document_id="d", version_id="v",
+            data=_pdf_fixture_bytes([["Page texte."], []], image_page=1),
+            media_type="application/pdf")
+    with pytest.raises(ExtractionError):
+        derive_registry_ingest(
+            document_id="d", version_id="v",
+            data=_docx_fixture_bytes(["Texte avec partie non traitée."],
+                                   keep_custom_xml=True),
+            media_type=docx_media)
+    with pytest.raises(ExtractionError):
+        derive_registry_ingest(document_id="d", version_id="v", data=b"",
+                               media_type=docx_media)
+
+
+def test_registry_ingest_binds_response_to_verified_bytes():
+    import hashlib
+    import json as jsonlib
+
+    from apps.api.signed_registry_ingest import derive_registry_ingest, ingest_parsed_original
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+
+    docx_media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    data = _docx_fixture_bytes(["Contrat synthétique lié."])
+    case_id = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
+    document_id = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
+    version_id = "cccccccc-3333-4333-8333-cccccccccccc"
+    request_id = "dddddddd-4444-4444-8444-dddddddddddd"
+    key = "sb_secret_" + "G" * 24
+    derived = derive_registry_ingest(document_id=document_id, version_id=version_id,
+                                     data=data, media_type=docx_media)
+    good = {
+        "case_id": case_id, "document_id": document_id, "version_id": version_id,
+        "original_sha": hashlib.sha256(data).hexdigest(),
+        "representation_sha": hashlib.sha256(
+            derived["representation"].encode("utf-8")).hexdigest(),
+        "snapshot_sha": "e" * 64,
+    }
+    outcome = ingest_parsed_original(
+        secret_key=key, case_id=case_id, document_id=document_id,
+        version_id=version_id, request_id=request_id, data=data, media_type=docx_media,
+        _conn_factory=lambda: _StubConn(200, jsonlib.dumps(good).encode()))
+    assert outcome["original_sha"] == good["original_sha"]
+    # A custody mismatch between the verified bytes and the registry row is
+    # a failure, never a success.
+    tampered = dict(good, original_sha="f" * 64)
+    with pytest.raises(PrivateStorageFailure):
+        ingest_parsed_original(
+            secret_key=key, case_id=case_id, document_id=document_id,
+            version_id=version_id, request_id=request_id, data=data,
+            media_type=docx_media,
+            _conn_factory=lambda: _StubConn(200, jsonlib.dumps(tampered).encode()))
+
+
+def test_registry_ingest_parsed_proposal_rpc_access_and_contract():
+    import hashlib
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals"
+        / "SIGNED_registry_ingest_parsed.sql"
+    ).read_text(encoding="utf-8")
+    docx_media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    org, case, user = uuid4(), uuid4(), uuid4()
+    doc, ver, ver_no_storage, ver_pending, ver_pdf = (uuid4() for _ in range(5))
+    sha, sha2, sha3, sha4 = "a" * 64, "b" * 64, "c" * 64, "d" * 64
+
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
+        conn.execute(proposal)
+        conn.execute("create schema if not exists storage")
+        conn.execute(
+            "create table if not exists storage.objects(bucket_id text, name text)")
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s)"
+                     " on conflict (id) do nothing", (user, org))
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','evidence:read','finding:write',"
+            "'review:request']::text[])", (org, user))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', array['case:read','evidence:read',"
+            "'evidence:upload','draft:check','review:request']::text[])", (org, case, user))
+        conn.execute(
+            "insert into caseproof.documents(id, org_id, case_id, source_label)"
+            " values(%s, %s, %s, 'mémoire word synthétique')", (doc, org, case))
+        conn.execute(
+            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
+            " original_sha256_hex, byte_length, media_type)"
+            " values(%s, %s, %s, 1, %s, 4, %s),(%s, %s, %s, 2, %s, 4, %s),"
+            " (%s, %s, %s, 3, %s, 4, %s),(%s, %s, %s, 4, %s, 4, %s)",
+            (ver, org, doc, sha, docx_media, ver_no_storage, org, doc, sha2, docx_media,
+             ver_pending, org, doc, sha3, docx_media,
+             ver_pdf, org, doc, sha4, "application/pdf"))
+        audits = [uuid4() for _ in range(6)]
+        for audit in audits:
+            conn.execute(
+                "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+                " actor_user_id, action, event_schema_version, correlation_id,"
+                " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
+                (audit, org, case, user, uuid4(), "a" * 64))
+        for version, version_sha, state in (
+            (ver, sha, "verified"), (ver_no_storage, sha2, "verified"),
+            (ver_pending, sha3, "pending"), (ver_pdf, sha4, "verified"),
+        ):
+            conn.execute(
+                "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
+                " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
+                " byte_length, media_type, state, created_audit_id, created_case_revision,"
+                " last_audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, 4, 'text/plain',"
+                " %s, %s, 1, %s)",
+                (org, case, uuid4(), user, doc, version,
+                 f"{org}/{case}/{doc}/{version}/{version_sha}", version_sha,
+                 state, audits[0], audits[1]))
+        conn.execute(
+            "insert into storage.objects(bucket_id, name) values"
+            " ('caseproof-originals-dev', %s),('caseproof-originals-dev', %s),"
+            " ('caseproof-originals-dev', %s)",
+            (f"{org}/{case}/{doc}/{ver}/{sha}", f"{org}/{case}/{doc}/{ver_pending}/{sha3}",
+             f"{org}/{case}/{doc}/{ver_pdf}/{sha4}"))
+
+        def as_role(role):
+            conn.execute(
+                "select set_config('request.jwt.claims', %s, true)",
+                (json.dumps({"role": role}),))
+
+        def ingest(role="service_role", representation="Texte parsé vérifié.",
+                   parser="caseproof-parser-v1;engine=test", request=None, version=ver):
+            as_role(role)
+            return conn.execute(
+                "select public.caseproof_registry_ingest_parsed(%s, %s, %s, %s, %s, %s)",
+                (str(case), str(doc), str(version), str(request or uuid4()),
+                 representation, parser)).fetchone()[0]
+
+        # Only service_role may call: every other role is the same denial.
+        for role in ("authenticated", "anon", ""):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    ingest(role=role)
+        # The SQL TXT parser identity stays reserved to the SQL ingest.
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(errors.InvalidParameterValue):
+                ingest(parser="strict-utf8-txt-v1")
+        # Missing Storage fidelity row: masked denial.
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(errors.InsufficientPrivilege):
+                ingest(version=ver_no_storage)
+        # A disposable pending intent is irrelevant to the real storage model.
+        with conn.transaction(force_rollback=True):
+            assert ingest(version=ver_pending)["original_sha"] == sha3
+
+        # Happy path: exact digests, immutable registry row, service audit.
+        outcome = ingest()
+        rep_sha = hashlib.sha256("Texte parsé vérifié.".encode()).hexdigest()
+        assert outcome["original_sha"] == sha
+        assert outcome["representation_sha"] == rep_sha
+        assert outcome["case_id"] == str(case) and outcome["version_id"] == str(ver)
+        expected_snapshot = hashlib.sha256(
+            f"{org}:{case}:{ver}:{sha}:{rep_sha}:caseproof-parser-v1;engine=test".encode()
+        ).hexdigest()
+        assert outcome["snapshot_sha"] == expected_snapshot
+        row = conn.execute(
+            "select representation, parser_id, original_sha, representation_sha"
+            " from caseproof._dev_journey_sources"
+            " where case_id=%s and version_id=%s",
+            (str(case), str(ver))).fetchone()
+        assert row == ("Texte parsé vérifié.", "caseproof-parser-v1;engine=test",
+                       sha, rep_sha)
+        assert conn.execute(
+            "select actor_type, actor_user_id, action from caseproof.audit_events"
+            " where case_id=%s and action='dev_parsed_ingested'",
+            (str(case),)).fetchone() == ("service", None, "dev_parsed_ingested")
+        # The same version can never be ingested twice, even with a new request.
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(errors.UniqueViolation):
+                ingest()
+        # Text-native PDF media needs a complete, zero-warning page manifest that
+        # SQL re-verifies against the registered original and the submitted text.
+        from psycopg.types.json import Jsonb
+
+        pdf_rep = "Page texte native complète."
+        pdf_parser = "caseproof-parser-v1;engine=pypdf:6.21.2:page-text-v1"
+        good = {
+            "schema": "dev-document-parse-v1", "media_type": "application/pdf",
+            "original_sha256": sha4,
+            "representation_sha256": hashlib.sha256(pdf_rep.encode()).hexdigest(),
+            "parser_id": pdf_parser, "complete": True, "warnings": [],
+            "pages": [{"pdf_page": 1, "status": "text_extracted"}],
+            "blocks": [{"kind": "pdf_page", "page_index": 0, "start": 0, "end": len(pdf_rep)}],
+        }
+
+        def ingest_pdf(manifest, representation=pdf_rep, version=ver_pdf):
+            as_role("service_role")
+            return conn.execute(
+                "select public.caseproof_registry_ingest_parsed(%s, %s, %s, %s, %s, %s, %s)",
+                (str(case), str(doc), str(version), str(uuid4()), representation,
+                 pdf_parser, None if manifest is None else Jsonb(manifest))).fetchone()[0]
+
+        for bad in (
+            None,
+            {**good, "original_sha256": "e" * 64},
+            {**good, "representation_sha256": "e" * 64},
+            {**good, "warnings": ["page_without_text"]},
+            {**good, "complete": False},
+            {**good, "pages": [{"pdf_page": 2, "status": "text_extracted"}]},
+            {**good, "blocks": [{"kind": "pdf_page", "page_index": 0, "start": 0, "end": 3}]},
+        ):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InvalidParameterValue):
+                    ingest_pdf(bad)
+        outcome_pdf = ingest_pdf(good)
+        assert outcome_pdf["original_sha"] == sha4
+        assert conn.execute(
+            "select parser_id from caseproof._dev_journey_sources"
+            " where case_id=%s and version_id=%s",
+            (str(case), str(ver_pdf))).fetchone()[0].endswith("page-text-v1")
+        assert conn.execute(
+            "select count(*) from caseproof._dev_journey_parse_manifests"
+            " where case_id=%s and version_id=%s", (str(case), str(ver_pdf))
+        ).fetchone()[0] == 1
+
+
+def test_live_workbench_assembly_refuses_mixed_backends():
+    from apps.api.signed_live_composition import assemble_live_workbench
+
+    with pytest.raises(ValueError):
+        assemble_live_workbench({})
+    key = "sb_publishable_" + "C" * 24
+    ports = assemble_live_workbench({"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": key})
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+
+    assert isinstance(ports.publisher, LiveSignedBriefPublisher)
+    assert isinstance(ports.review_record, LiveSignedReviewRecord)
+    # Every workbench port now has a live adapter; the bearer-bound ones
+    # assemble per request via assemble_request_workbench.
+    assert ports.missing == ()
+
+
+def test_live_workbench_entry_point_fails_closed():
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    script = root / "scripts" / "run_signed_workbench_live.py"
+    no_config = subprocess.run([sys.executable, str(script)], capture_output=True, text=True,
+                               env={"PYTHONPATH": str(root), "PATH": "/usr/bin:/bin"}, check=False)
+    assert no_config.returncode == 2
+    configured = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True,
+        env={"PYTHONPATH": str(root), "PATH": "/usr/bin:/bin",
+             "CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_" + "D" * 24}, check=False)
+    assert configured.returncode == 0
+    assert "assembl" in configured.stdout
+
+
+def _insert_storage_bound_brief(conn, *, org, case, user, doc, source_version, brief, version,
+                                representation="test", original_sha="b"*64):
+    """Isolated SQL fixture matching the existing trusted-ingestion model."""
+    import hashlib
+    from uuid import uuid4
+    audit=uuid4()
+    rep_sha=hashlib.sha256(representation.encode()).hexdigest()
+    conn.execute("insert into caseproof.audit_events(id,org_id,case_id,actor_type,actor_user_id,action,"
+                 "event_schema_version,correlation_id,input_sha256_hex) "
+                 "values(%s,%s,%s,'human',%s,'dev_txt_ingested','v1',%s,%s)",
+                 (audit,org,case,user,uuid4(),"e"*64))
+    conn.execute("insert into caseproof._dev_journey_sources(org_id,case_id,document_id,version_id,"
+                 "original_sha,representation_sha,snapshot_sha,representation,audit_id) "
+                 "values(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                 (org,case,doc,source_version,original_sha,rep_sha,"e"*64,representation,audit))
+    conn.execute("insert into storage.objects(bucket_id,name) values('caseproof-originals-dev',%s)",
+                 (f"{org}/{case}/{doc}/{source_version}/{original_sha}",))
+    conn.execute("insert into caseproof._m2_brief_versions(org_id,case_id,brief_id,version_id,revision,"
+                 "document_id,document_version_id,vault_intent_id,source_binding_kind,source_binding,"
+                 "original_sha256,representation_sha256,parser_id,representation,document_role,"
+                 "graph_sha256,case_revision,exhibit_revision,actor_id) "
+                 "values(%s,%s,%s,%s,1,%s,%s,null,'trusted_storage_source_v1',"
+                 "caseproof._signed_storage_source_binding(%s,%s,%s,%s),%s,%s,'synthetic-parser',%s,"
+                 "'own_draft',%s,1,1,%s)",
+                 (org,case,brief,version,doc,source_version,org,case,doc,source_version,
+                  original_sha,rep_sha,representation,"d"*64,user))
+
+
+def test_signed_review_record_rpc_access_and_contract():
+    """Proposed read RPC (db/proposals): real access denial + bounded contract.
+
+    Runs only on the disposable PostgreSQL cluster; never applied to live.
+    """
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, _canonical, _digest
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals" / "SIGNED_review_record_read.sql"
+    ).read_text(encoding="utf-8")
+    org, case, brief, version = uuid4(), uuid4(), uuid4(), uuid4()
+    doc, doc_version = uuid4(), uuid4()
+    user_a, user_b, user_c = uuid4(), uuid4(), uuid4()
+    snapshot = "a" * 64
+    payload = json.dumps({"schema": "caseproof-m2-check-headless-v1"})
+    payload_sha = _digest(payload)
+    decision = {"actor_id": str(user_a), "disposition": "verified",
+                "observation_id": "citation:ref-01", "rationale": "contrôle synthétique"}
+    request_id, audit_id = uuid4(), uuid4()
+    event_sha = _digest(_canonical({
+        "run": snapshot, "revision": 1, "request": str(request_id),
+        "actor": str(user_a), "previous_sha": ZERO_HASH, "decision": decision}))
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
+        conn.execute(proposal)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s),(%s, %s),(%s, %s) "
+                     "on conflict (id) do nothing",
+                     (user_a, org, user_b, org, user_c, org))
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','evidence:read']::text[]),"
+            " (%s, %s, array['case:read','evidence:read']::text[])",
+            (org, user_a, org, user_b))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', array['case:read','evidence:read']::text[])",
+            (org, case, user_a))
+        conn.execute(
+            "insert into caseproof.documents(id, org_id, case_id, source_label)"
+            " values(%s, %s, %s, 'synthétique')", (doc, org, case))
+        conn.execute(
+            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
+            " original_sha256_hex, byte_length, media_type)"
+            " values(%s, %s, %s, 1, %s, 4, 'text/plain')", (doc_version, org, doc, "b" * 64))
+        _insert_storage_bound_brief(conn,org=org,case=case,user=user_a,doc=doc,
+                                   source_version=doc_version,brief=brief,version=version,
+                                   representation="{}")
+        conn.execute(
+            "insert into caseproof._m2_brief_heads(org_id, case_id, brief_id, revision, version_id)"
+            " values(%s, %s, %s, 1, %s)", (org, case, brief, version))
+        conn.execute(
+            "insert into caseproof._m2_check_runs(org_id, case_id, snapshot_sha, payload_sha,"
+            " payload, brief_version_id, case_revision, exhibit_revision, actor_id)"
+            " values(%s, %s, %s, %s, %s, %s, 1, 1, %s)",
+            (org, case, snapshot, payload_sha, payload, str(version), user_a))
+        conn.execute(
+            "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+            " actor_user_id, action, event_schema_version, correlation_id, input_sha256_hex)"
+            " values(%s, %s, %s, 'human', %s, 'review', 'v1', %s, %s)",
+            (audit_id, org, case, user_a, uuid4(), "e" * 64))
+        conn.execute(
+            "insert into caseproof._m2_review_events(org_id, case_id, snapshot_sha, revision,"
+            " request_id, actor_id, previous_sha, event_sha, decision, audit_id)"
+            " values(%s, %s, %s, 1, %s, %s, %s, %s, %s, %s)",
+            (org, case, snapshot, request_id, user_a, ZERO_HASH, event_sha,
+             json.dumps(decision, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+             audit_id))
+        conn.execute(
+            "insert into caseproof._m2_review_heads(org_id, case_id, snapshot_sha, revision,"
+            " event_sha) values(%s, %s, %s, 1, %s)", (org, case, snapshot, event_sha))
+
+        def call(sub, role="authenticated", doc_role="own_draft"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+            return conn.execute(
+                "select public.caseproof_signed_review_record(%s, %s)",
+                (str(case), doc_role)).fetchone()[0]
+
+        result = call(user_a)
+        assert result["ok"] is True
+        assert result["brief"]["version_id"] == str(version)
+        assert result["brief"]["head_revision"] == 1
+        assert len(result["checks"]) == 1
+        assert result["checks"][0]["payload_sha256"] == payload_sha
+        assert result["review_heads"] == [
+            {"snapshot_sha256": snapshot, "event_sha256": event_sha}]
+        assert len(result["review_events"]) == 1
+        assert result["review_events"][0]["event_sha256"] == event_sha
+
+        for sub, role, doc_role in (
+            (user_b, "authenticated", "own_draft"),  # member without matter grant
+            (user_c, "authenticated", "own_draft"),  # not a member at all
+            (user_a, "anon", "own_draft"),           # not the authenticated role
+            (user_a, "authenticated", "judge"),      # unknown document role
+            (uuid4(), "authenticated", "own_draft"),  # unknown subject
+        ):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    call(sub, role, doc_role)
+        # Unknown case is masked the same way as a denied one.
+        with conn.transaction(force_rollback=True):
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(user_a),))
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute("select public.caseproof_signed_review_record(%s, 'own_draft')",
+                             (str(uuid4()),))
+
+
+def test_signed_document_inventory_proposal_rpc_access_and_contract():
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals" / "SIGNED_document_inventory.sql"
+    ).read_text(encoding="utf-8")
+    org, case = uuid4(), uuid4()
+    user_a, user_b, user_c, user_d = uuid4(), uuid4(), uuid4(), uuid4()
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
+        conn.execute(proposal)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s),(%s, %s),(%s, %s),"
+                     "(%s, %s) on conflict (id) do nothing",
+                     (user_a, org, user_b, org, user_c, org, user_d, org))
+        # user_a: full reviewer member; user_b: member without write actions;
+        # user_c: not a member; user_d: member with read actions but a viewer grant.
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','evidence:read','finding:write','review:request']::text[]),"
+            " (%s, %s, array['case:read','evidence:read']::text[]),"
+            " (%s, %s, array['case:read','evidence:read','finding:write','review:request']::text[])",
+            (org, user_a, org, user_b, org, user_d))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', array['case:read','evidence:read','evidence:upload']::text[]),"
+            " (%s, %s, %s, 'viewer', array['case:read','evidence:read']::text[])",
+            (org, case, user_a, org, case, user_d))
+
+        def as_user(sub, role="authenticated"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+
+        def register(sub, label="pièce synthétique", media="text/plain", size=4,
+                     sha="b" * 64, role="authenticated"):
+            as_user(sub, role)
+            return conn.execute(
+                "select public.caseproof_signed_register_source(%s, %s, %s, %s, %s)",
+                (str(case), label, media, size, sha)).fetchone()[0]
+
+        def listing(sub, role="authenticated"):
+            as_user(sub, role)
+            return conn.execute("select public.caseproof_signed_list_documents(%s)",
+                                (str(case),)).fetchone()[0]
+
+        # Happy path: register declares the document and its first version,
+        # the inventory lists them in the bounded contract shape.
+        created = register(user_a)
+        assert created["ok"] is True
+        document_id, version_id = created["document_id"], created["version_id"]
+        result = listing(user_a)
+        assert result["ok"] is True
+        assert len(result["documents"]) == 1
+        document = result["documents"][0]
+        assert document["document_id"] == document_id
+        assert document["label"] == "pièce synthétique"
+        assert document["versions"] == [{
+            "version_id": version_id, "version_number": 1, "media_type": "text/plain",
+            "byte_length": 4, "sha256_hex": "b" * 64}]
+
+        # Invalid declarations are contract errors, never silent inserts.
+        for label, media, size, sha in (
+            ("", "text/plain", 4, "b" * 64),
+            ("x" * 201, "text/plain", 4, "b" * 64),
+            ("saut\nde ligne", "text/plain", 4, "b" * 64),
+            ("pièce", "application/zip", 4, "b" * 64),
+            ("pièce", "text/plain", 0, "b" * 64),
+            ("pièce", "text/plain", 3145729, "b" * 64),
+            ("pièce", "text/plain", 4, "B" * 64),
+            ("pièce", "text/plain", 4, "b" * 63),
+        ):
+            with conn.transaction(force_rollback=True):
+                outcome = register(user_a, label=label, media=media, size=size, sha=sha)
+                assert outcome == {"ok": False, "error": "invalid"}
+        assert conn.execute("select count(*) from caseproof.documents where case_id=%s",
+                            (str(case),)).fetchone()[0] == 1
+
+        # Reads denied: member without grant, non-member, anonymous role, unknown case.
+        for sub, role in ((user_b, "authenticated"), (user_c, "authenticated"),
+                          (user_a, "anon"), (uuid4(), "authenticated")):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    listing(sub, role)
+        with conn.transaction(force_rollback=True):
+            as_user(user_a)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute("select public.caseproof_signed_list_documents(%s)",
+                             (str(uuid4()),))
+
+        # Writes denied: read-only member actions, viewer grant role, non-member,
+        # anonymous role; an unknown case is masked the same way.
+        for sub, role in ((user_b, "authenticated"), (user_d, "authenticated"),
+                          (user_c, "authenticated"), (user_a, "anon"),
+                          (uuid4(), "authenticated")):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    register(sub, role=role)
+        with conn.transaction(force_rollback=True):
+            as_user(user_a)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute(
+                    "select public.caseproof_signed_register_source(%s, 'pièce', 'text/plain',"
+                    " 4, %s)", (str(uuid4()), "b" * 64))
+        assert conn.execute("select count(*) from caseproof.documents where case_id=%s",
+                            (str(case),)).fetchone()[0] == 1
+
+
+def test_signed_exhibit_confirm_proposal_rpc_access_and_contract():
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals" / "SIGNED_exhibit_confirm.sql"
+    ).read_text(encoding="utf-8")
+    org, case = uuid4(), uuid4()
+    user_a, user_b, user_c, user_d, user_e = uuid4(), uuid4(), uuid4(), uuid4(), uuid4()
+    doc_pdf, ver_pdf = uuid4(), uuid4()
+    doc_txt, ver_txt = uuid4(), uuid4()
+
+    def entry(exhibit_id, label, pages, **overrides):
+        base = {"exhibit_id": exhibit_id, "display_label": label, "aliases": [],
+                "confirmed": True, "manual_inclusion": False, "pages": pages}
+        base.update(overrides)
+        return base
+
+    def pdf_pages(source=doc_pdf, version=ver_pdf, count=3, printed=None):
+        return [{"source_id": str(source), "version_id": str(version),
+                 "pdf_page": page,
+                 "printed_page": printed.get(page) if printed else None,
+                 "bundle_page": None}
+                for page in range(1, count + 1)]
+
+    first = entry("piece-aaa111bbb222", "Contrat synthétique", pdf_pages())
+    register = {"schema": "caseproof-exhibit-register-v1", "entries": [first]}
+    register_sha = "c" * 64
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute(
+            "drop function if exists public.caseproof_signed_confirm_exhibit"
+            "(uuid,uuid,uuid,uuid,bigint,jsonb,text,jsonb)")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
+        conn.execute(proposal)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s),(%s, %s),(%s, %s),"
+                     "(%s, %s),(%s, %s) on conflict (id) do nothing",
+                     (user_a, org, user_b, org, user_c, org, user_d, org, user_e, org))
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','evidence:read','review:request']::text[]),"
+            " (%s, %s, array['case:read','review:request']::text[]),"
+            " (%s, %s, array['case:read','review:request']::text[]),"
+            " (%s, %s, array['case:read','evidence:read','review:request']::text[])",
+            (org, user_a, org, user_b, org, user_d, org, user_e))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer',"
+            " array['case:read','evidence:read','exhibit:confirm']::text[]),"
+            " (%s, %s, %s, 'viewer', array['case:read','exhibit:confirm']::text[]),"
+            " (%s, %s, %s, 'reviewer', array['case:read','evidence:read']::text[])",
+            (org, case, user_a, org, case, user_d, org, case, user_e))
+        conn.execute(
+            "insert into caseproof.documents(id, org_id, case_id, source_label)"
+            " values(%s, %s, %s, 'pdf synthétique'),(%s, %s, %s, 'txt synthétique')",
+            (doc_pdf, org, case, doc_txt, org, case))
+        conn.execute(
+            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
+            " original_sha256_hex, byte_length, media_type)"
+            " values(%s, %s, %s, 1, %s, 4, 'application/pdf'),(%s, %s, %s, 1, %s, 4, 'text/plain')",
+            (ver_pdf, org, doc_pdf, "b" * 64, ver_txt, org, doc_txt, "d" * 64))
+        source_audit = uuid4()
+        conn.execute(
+            "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+            " actor_user_id, action, event_schema_version, correlation_id, input_sha256_hex)"
+            " values(%s, %s, %s, 'human', %s, 'ingest', 'v1', %s, %s)",
+            (source_audit, org, case, user_a, uuid4(), "a" * 64))
+        conn.execute(
+            "insert into caseproof._dev_journey_sources(org_id, case_id, document_id,"
+            " version_id, original_sha, representation_sha, snapshot_sha, representation,"
+            " audit_id) values(%s, %s, %s, %s, %s, %s, %s, 'représentation synthétique', %s)",
+            (org, case, doc_pdf, ver_pdf, "b" * 64, "e" * 64, "f" * 64, source_audit))
+        conn.execute(
+            "insert into caseproof._dev_journey_parse_manifests(org_id, case_id, version_id,"
+            " original_sha256, representation_sha256, manifest_sha256, manifest)"
+            " values(%s, %s, %s, %s, %s, %s, %s::jsonb)",
+            (org, case, ver_pdf, "b" * 64, "e" * 64, "f" * 64,
+             json.dumps({"schema": "dev-document-parse-v1", "complete": True,
+                         "blocks": [], "warnings": [],
+                         "pages": [{"index": 1}, {"index": 2}, {"index": 3}]})))
+
+        def as_user(sub, role="authenticated"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+
+        def canonical(payload, **dump_kwargs):
+            return json.dumps(payload, ensure_ascii=False, sort_keys=True,
+                              separators=(",", ":"), **dump_kwargs)
+
+        def digest_of(text_payload):
+            import hashlib
+            return hashlib.sha256(text_payload.encode("utf-8")).hexdigest()
+
+        def confirm(sub, *, request=None, expected=0, payload=register, sha=None,
+                    document=doc_pdf, version=ver_pdf, role="authenticated",
+                    text_payload=None):
+            as_user(sub, role)
+            body = text_payload if text_payload is not None else canonical(payload)
+            return conn.execute(
+                "select public.caseproof_signed_confirm_exhibit"
+                "(%s, %s, %s, %s, %s, %s, %s)",
+                (str(case), str(document), str(version), str(request or uuid4()),
+                 expected, body, sha if sha is not None else digest_of(body))).fetchone()[0]
+
+        appended_preview = {"schema": "caseproof-exhibit-register-v1",
+                            "entries": [first, entry("piece-zzz999yyy888",
+                                        "Autre", pdf_pages())]}
+        # Happy path: compare-and-swap commits revision 1 with audit and event.
+        request = uuid4()
+        outcome = confirm(user_a, request=request)
+        assert outcome == {"ok": True, "exhibit_revision": 1, "replay": False}
+        register_sha = digest_of(canonical(register))
+        head = conn.execute(
+            "select revision, payload_sha256 from caseproof._m1_exhibit_heads"
+            " where case_id=%s", (str(case),)).fetchone()
+        assert head == (1, register_sha)
+        assert conn.execute(
+            "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
+            (str(case),)).fetchone()[0] == 1
+
+        # Identical replay returns the committed revision without a new write;
+        # the same request with any different command is a conflict.
+        assert confirm(user_a, request=request) == {
+            "ok": True, "exhibit_revision": 1, "replay": True}
+        assert confirm(user_a, request=request, payload=appended_preview) == {
+            "ok": False, "error": "conflict"}
+        assert conn.execute(
+            "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
+            (str(case),)).fetchone()[0] == 1
+
+        # Stale expected revision fails closed without writing.
+        assert confirm(user_a, expected=0) == {"ok": False, "error": "stale_revision"}
+
+        # A valid second confirmation appends exactly one entry.
+        second = entry("piece-ccc333ddd444", "Annexe synthétique",
+                       pdf_pages(printed={1: 12, 2: 13, 3: 14}))
+        appended = {"schema": "caseproof-exhibit-register-v1",
+                    "entries": [first, second]}
+        outcome = confirm(user_a, expected=1, payload=appended)
+        assert outcome == {"ok": True, "exhibit_revision": 2, "replay": False}
+
+        # Adversarial direct calls, all refused without writing: a caller
+        # reaching the RPC with the authenticated role cannot smuggle content
+        # past the enforced contract.
+        adversarial = [
+            # rewriting history: prefix entries altered
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [entry("piece-aaa111bbb222", "Falsifié", pdf_pages()), second,
+                         entry("piece-eee555fff666", "Troisième", pdf_pages())]}},
+            # dropping a confirmed entry
+            {"expected": 2, "payload": register},
+            # confirming a foreign document as pages source
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(source=doc_txt, version=ver_txt))]}},
+            # shrinking the physical inventory (page 2 missing)
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(count=3)[:1] + pdf_pages(count=3)[2:])]}},
+            # page beyond the manifest inventory
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(count=4))]}},
+            # duplicate exhibit identity
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-aaa111bbb222", "Doublon", pdf_pages())]}},
+            # unconfirmed or manually included new entry
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(), confirmed=False)]}},
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(), manual_inclusion=True)]}},
+            # case-insensitive alias colliding with the label
+            {"expected": 2, "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         pdf_pages(), aliases=["TROISIÈME"])]}},
+            # mapping on an unpaginated source
+            {"expected": 2, "document": doc_txt, "version": ver_txt,
+             "payload": {"schema": "caseproof-exhibit-register-v1",
+             "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                         [{"source_id": str(doc_txt), "version_id": str(ver_txt),
+                           "pdf_page": 1, "printed_page": None, "bundle_page": None}])]}},
+            # wrong payload schema
+            {"expected": 2, "payload": {"schema": "autre", "entries": []}},
+        ]
+        for kwargs in adversarial:
+            assert confirm(user_a, **kwargs) == {"ok": False, "error": "invalid"}, kwargs
+        # A non-boolean confirmed flag must be an invalid contract error, not
+        # an unhandled cast exception.
+        assert confirm(user_a, expected=2, payload={
+            "schema": "caseproof-exhibit-register-v1",
+            "entries": [first, second, entry("piece-eee555fff666", "Troisième",
+                        pdf_pages(), confirmed="oui")]}) == {
+            "ok": False, "error": "invalid"}
+        # Digest gate: a syntactically valid but FALSE digest (64 hex) is
+        # refused at write, as is a malformed one — no poisoning is possible.
+        assert confirm(user_a, expected=2, payload=appended, sha="9" * 64) == {
+            "ok": False, "error": "invalid"}
+        assert confirm(user_a, expected=2, payload=appended, sha="E" * 64) == {
+            "ok": False, "error": "invalid"}
+        # A digest verified for the exact submitted bytes, however
+        # serialized, commits: the digest binds bytes, jsonb binds content.
+        third = {"schema": "caseproof-exhibit-register-v1",
+                 "entries": [first, second, entry("piece-eee555fff666",
+                             "Troisième", pdf_pages())]}
+        with conn.transaction(force_rollback=True):
+            outcome = confirm(user_a, expected=2, payload=third,
+                              text_payload=canonical(third) + " ")
+            assert outcome == {"ok": True, "exhibit_revision": 3, "replay": False}
+        assert conn.execute(
+            "select revision from caseproof._m1_exhibit_heads where case_id=%s",
+            (str(case),)).fetchone()[0] == 2
+        assert conn.execute(
+            "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
+            (str(case),)).fetchone()[0] == 2
+
+        # Denials: member without grant, viewer grant, non-member, anonymous
+        # role, unknown subject; an unknown case is masked the same way.
+        for sub, role in ((user_b, "authenticated"), (user_d, "authenticated"),
+                          (user_c, "authenticated"), (user_a, "anon"),
+                          (uuid4(), "authenticated")):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    confirm(sub, expected=2, payload=appended, sha="d" * 64, role=role)
+
+        # Same JSON content reserialized differently (key order, whitespace),
+        # with the verified digest of THOSE bytes: content equality makes it
+        # an exact replay, neither a new write nor a false conflict.
+        reorder = json.dumps({"entries": [first],
+                              "schema": "caseproof-exhibit-register-v1"},
+                             ensure_ascii=False, indent=2)
+        assert confirm(user_a, request=request, expected=0,
+                       text_payload=reorder) == {
+            "ok": True, "exhibit_revision": 1, "replay": True}
+        assert conn.execute(
+            "select count(*) from caseproof._m1_exhibit_events where case_id=%s",
+            (str(case),)).fetchone()[0] == 2
+        # The demanded real path: a hostile authorized caller tries to
+        # poison the SHARED register with a well-formed but FALSE digest
+        # (64 hex). The write is refused at the digest gate, the register
+        # stays at revision 2, and ANOTHER authorized user then reads it
+        # normally. No poisoning is possible at write; readers additionally
+        # derive the digest from content and never gate on the stored
+        # column (proven in the disposable publisher suite).
+        poison = uuid4()
+        assert confirm(user_a, request=poison, expected=2, payload=third,
+                       sha="9" * 64) == {"ok": False, "error": "invalid"}
+        assert conn.execute(
+            "select revision from caseproof._m1_exhibit_heads where case_id=%s",
+            (str(case),)).fetchone()[0] == 2
+        as_user(user_e)
+        clean_read = conn.execute(
+            "select public.caseproof_signed_exhibit_register(%s, %s)",
+            (str(case), str(ver_pdf))).fetchone()[0]
+        assert clean_read["ok"] is True
+        assert clean_read["register_revision"] == 2
+        assert len(clean_read["payload"]["entries"]) == 2
+        # Content validation still rejects an invalid payload even with a
+        # digest correctly computed over the invalid content:
+        assert confirm(user_a, expected=2, payload={
+            "schema": "caseproof-exhibit-register-v1",
+            "entries": [first, second, entry("piece-eee555fff666", "Falsifié",
+                        pdf_pages(count=4))]}) == {"ok": False, "error": "invalid"}
+        with conn.transaction(force_rollback=True):
+            as_user(user_a)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute(
+                    "select public.caseproof_signed_confirm_exhibit(%s, %s, %s, %s, 2,"
+                    " %s, %s)",
+                    (str(uuid4()), str(doc_pdf), str(ver_pdf), str(uuid4()),
+                     json.dumps(appended), "d" * 64))
+
+        # Preparation read RPC: raw head + media/page inventory for the
+        # confirm flow, same masking rules.
+        read_proposal = (
+            Path(__file__).resolve().parents[1] / "db" / "proposals"
+            / "SIGNED_exhibit_register_read.sql"
+        ).read_text(encoding="utf-8")
+        conn.execute(read_proposal)
+
+        def read_register(sub, version=ver_pdf, role="authenticated"):
+            as_user(sub, role)
+            return conn.execute(
+                "select public.caseproof_signed_exhibit_register(%s, %s)",
+                (str(case), str(version) if version else None)).fetchone()[0]
+
+        state = read_register(user_a)
+        assert state["ok"] is True
+        assert state["register_revision"] == 2
+        assert state["media_type"] == "application/pdf"
+        assert state["page_count"] == 3
+        assert state["payload"]["schema"] == "caseproof-exhibit-register-v1"
+        assert len(state["payload"]["entries"]) == 2
+        txt_state = read_register(user_a, version=ver_txt)
+        assert txt_state["media_type"] == "text/plain"
+        assert txt_state["page_count"] is None
+        for sub, role in ((user_b, "authenticated"), (user_c, "authenticated"),
+                          (user_a, "anon"), (uuid4(), "authenticated")):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(errors.InsufficientPrivilege):
+                    read_register(sub, role=role)
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(errors.InsufficientPrivilege):
+                read_register(user_a, version=uuid4())
+
+
+def test_signed_publish_uploaded_proposal_rpc_access_and_contract():
+    import hashlib
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from scripts.verify_vault_integration import connect
+
+    proposal = (
+        Path(__file__).resolve().parents[1] / "db" / "proposals" / "SIGNED_publish_uploaded.sql"
+    ).read_text(encoding="utf-8")
+    org, case = uuid4(), uuid4()
+    user_a, user_b, user_e = uuid4(), uuid4(), uuid4()
+    doc_up, ver_up, ver_up2 = uuid4(), uuid4(), uuid4()
+    doc_ex, ver_ex = uuid4(), uuid4()
+    intent = uuid4()
+    brief_v1, brief_v2, brief_v3 = uuid4(), uuid4(), uuid4()
+
+    rep_text = "Mémoire synthétique: le contrat exige le paiement."
+    rep_sha = hashlib.sha256(rep_text.encode("utf-8")).hexdigest()
+    graph_text = "graphe synthétique v1"
+    graph_sha = hashlib.sha256(graph_text.encode("utf-8")).hexdigest()
+    exhibit_rep = "Contrat synthétique: paiement sous 30 jours. Livraison incluse."
+    quote = "paiement sous 30 jours"
+
+    def working_brief(role):
+        raw = bytearray(hashlib.sha256(
+            ("caseproof-working-brief:" + role + ":" + str(case)).encode()).digest()[:16])
+        raw[6] = (raw[6] & 0x0F) | 0x40
+        raw[8] = (raw[8] & 0x3F) | 0x80
+        import uuid as _uuid
+        return str(_uuid.UUID(bytes=bytes(raw)))
+
+    def refs(quote_text=quote, label="contrat", pdf_page=2):
+        return json.dumps([{"reference_id": "ref-1", "exhibit_label": label,
+                            "exact_quote": quote_text, "pdf_page": pdf_page}])
+
+    def assertions(start=0, end=5, text=None, ref="ref-1"):
+        return json.dumps([{"claim_id": "c1", "reference_id": ref,
+                            "text_start": start, "text_end": end,
+                            "assertion_text": text if text is not None else rep_text[start:end],
+                            "kind": "money", "fact_role": "payment",
+                            "language": "fr", "source_language": "nl"}])
+
+    exhibit_entry = {"exhibit_id": "piece-aaa111bbb222", "display_label": "Contrat",
+                     "aliases": [], "confirmed": True, "manual_inclusion": False,
+                     "pages": [{"source_id": str(doc_ex), "version_id": str(ver_ex),
+                                "pdf_page": n, "printed_page": None, "bundle_page": None}
+                               for n in (1, 2, 3)]}
+
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "proposals" /
+                      "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
+        conn.execute(proposal)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s, %s)",
+                     (org, "synthétique"))
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s),(%s, %s),(%s, %s)"
+                     " on conflict (id) do nothing", (user_a, org, user_b, org, user_e, org))
+        full_actions = ("array['case:read','evidence:read','finding:write','review:request']"
+                        "::text[]")
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, " + full_actions + "),(%s, %s, "
+            " array['case:read','review:request']::text[]),(%s, %s, " + full_actions + ")",
+            (org, user_a, org, user_b, org, user_e))
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (case, org, user_a))
+        reviewer_perms = ("array['case:read','evidence:read','evidence:upload','draft:check',"
+                          "'review:request']::text[]")
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', " + reviewer_perms + "),"
+            " (%s, %s, %s, 'viewer', array['case:read']::text[]),"
+            " (%s, %s, %s, 'reviewer', " + reviewer_perms + ")",
+            (org, case, user_a, org, case, user_b, org, case, user_e))
+        conn.execute(
+            "insert into caseproof.documents(id, org_id, case_id, source_label)"
+            " values(%s, %s, %s, 'mémoire synthétique'),(%s, %s, %s, 'contrat synthétique')",
+            (doc_up, org, case, doc_ex, org, case))
+        conn.execute(
+            "insert into caseproof.document_versions(id, org_id, document_id, version_number,"
+            " original_sha256_hex, byte_length, media_type)"
+            " values(%s, %s, %s, 1, %s, 4, 'text/plain'),(%s, %s, %s, 2, %s, 4, 'text/plain'),"
+            " (%s, %s, %s, 1, %s, 4, 'application/pdf')",
+            (ver_up, org, doc_up, "d" * 64, ver_up2, org, doc_up, "1" * 64,
+             ver_ex, org, doc_ex, "b" * 64))
+        audits = [uuid4() for _ in range(4)]
+        for audit in audits:
+            conn.execute(
+                "insert into caseproof.audit_events(id, org_id, case_id, actor_type,"
+                " actor_user_id, action, event_schema_version, correlation_id,"
+                " input_sha256_hex) values(%s, %s, %s, 'human', %s, 'dev_txt_ingested', 'v1', %s, %s)",
+                (audit, org, case, user_a, uuid4(), "2" * 64))
+        conn.execute(
+            "insert into caseproof._s2_009b_vault_intents(org_id, case_id, intent_id,"
+            " actor_user_id, document_id, document_version_id, object_key, sha256_hex,"
+            " byte_length, media_type, state, created_audit_id, created_case_revision,"
+            " last_audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, 4, 'text/plain',"
+            " 'verified', %s, 1, %s)",
+            (org, case, intent, user_a, doc_up, ver_up,
+             str(org) + "/" + str(case) + "/" + str(doc_up) + "/" + str(ver_up) + "/" + "d" * 64,
+             "d" * 64, audits[0], audits[1]))
+        conn.execute(
+            "insert into caseproof._dev_journey_sources(org_id, case_id, document_id,"
+            " version_id, original_sha, representation_sha, snapshot_sha, representation,"
+            " audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (org, case, doc_up, ver_up, "d" * 64, rep_sha, "2" * 64, rep_text, audits[2]))
+        conn.execute(
+            "insert into caseproof._dev_journey_sources(org_id, case_id, document_id,"
+            " version_id, original_sha, representation_sha, snapshot_sha, representation,"
+            " audit_id) values(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (org, case, doc_ex, ver_ex, "b" * 64, "3" * 64, "4" * 64, exhibit_rep, audits[3]))
+        conn.execute(
+            "insert into caseproof._m1_exhibit_heads(org_id, case_id, revision, payload)"
+            " values(%s, %s, 1, %s::jsonb)",
+            (org, case, json.dumps({"schema": "caseproof-exhibit-register-v1",
+                                    "entries": [exhibit_entry]})))
+
+        conn.execute("insert into storage.objects(bucket_id,name) values('caseproof-originals-dev',%s)",
+                     (f"{org}/{case}/{doc_up}/{ver_up}/" + "d" * 64,))
+
+        def as_user(sub, role="authenticated"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+
+        def publish(sub, *, request=None, expected=0, brief=None, version=brief_v1,
+                    document=doc_up, doc_version=ver_up, role="own_draft",
+                    text=rep_text, text_sha=None, graph=graph_text, g_sha=None,
+                    references=None, asserts=None, jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute(
+                "select public.caseproof_signed_publish_uploaded"
+                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)",
+                (str(case), brief or working_brief(role), str(version),
+                 str(request or uuid4()), expected, str(document), str(doc_version),
+                 role, text,
+                 text_sha or hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                 "parser-synthétique-v1", references if references is not None else refs(),
+                 asserts if asserts is not None else assertions(), graph,
+                 g_sha or hashlib.sha256(graph.encode("utf-8")).hexdigest())).fetchone()[0]
+
+        # Unauthenticated and anonymous contexts are refused before any work.
+        assert publish(user_a, jwt_role="anon") == {"ok": False, "error": "invalid"}
+        # Wrong working brief identity (caller cannot steer another brief's head).
+        assert publish(user_a, brief=str(uuid4())) == {"ok": False, "error": "invalid"}
+        # Member without the reviewer grant.
+        assert publish(user_b) == {"ok": False, "error": "forbidden"}
+        # Falsified representation (never derived by the trusted path).
+        assert publish(user_a, text="Texte falsifié jamais vérifié") == {
+            "ok": False, "error": "invalid"}
+        # Correct representation but a digest over other bytes.
+        assert publish(user_a, text_sha="0" * 64) == {"ok": False, "error": "invalid"}
+        # Missing quote and unresolved label must reach the checker instead of
+        # disappearing at publish. No physical page is claimed for unresolved labels.
+        with conn.transaction(force_rollback=True):
+            assert publish(user_a, references=refs(quote_text="citation absente"))["ok"] is True
+        with conn.transaction(force_rollback=True):
+            assert publish(user_a, references=refs(label="Inconnu",pdf_page=None))["ok"] is True
+        with conn.transaction(force_rollback=True):
+            assert publish(user_a, references=refs(quote_text=None))["ok"] is True
+        # pdf_page outside the confirmed pages of the entry.
+        assert publish(user_a, references=refs(pdf_page=9)) == {"ok": False, "error": "invalid"}
+        # Assertion whose text does not match the claimed slice.
+        assert publish(user_a, asserts=assertions(text="autre")) == {
+            "ok": False, "error": "invalid"}
+        # Assertion citing a reference that was not passed.
+        assert publish(user_a, asserts=assertions(ref="fantôme")) == {
+            "ok": False, "error": "invalid"}
+
+        # Happy path: revision 1, all rows committed.
+        request = uuid4()
+        outcome = publish(user_a, request=request)
+        assert outcome == {"ok": True, "replay": False, "revision": 1}
+        head = conn.execute(
+            "select revision, version_id from caseproof._m2_brief_heads"
+            " where case_id=%s and brief_id=%s",
+            (str(case), working_brief("own_draft"))).fetchone()
+        assert head == (1, brief_v1)
+        assert conn.execute(
+            "select representation_sha256, graph_sha256, document_role"
+            " from caseproof._m2_brief_versions where case_id=%s and version_id=%s",
+            (str(case), str(brief_v1))).fetchone() == (rep_sha, graph_sha, "own_draft")
+        assert conn.execute(
+            "select count(*) from caseproof._m2_brief_references where case_id=%s"
+            " and version_id=%s", (str(case), str(brief_v1))).fetchone()[0] == 1
+        assert conn.execute(
+            "select count(*) from caseproof._m2_brief_assertions where case_id=%s"
+            " and version_id=%s", (str(case), str(brief_v1))).fetchone()[0] == 1
+        assert conn.execute(
+            "select count(*) from caseproof.audit_events where case_id=%s"
+            " and action='m2_brief_graph_publish'", (str(case),)).fetchone()[0] == 1
+
+        # Identical request replays; same request id with different content conflicts.
+        assert publish(user_a, request=request) == {"ok": True, "replay": True, "revision": 1}
+        assert publish(user_a, request=request, graph="graphe altéré") == {
+            "ok": False, "error": "conflict"}
+        # Stale expected revision conflicts.
+        assert publish(user_a, expected=0) == {"ok": False, "error": "conflict", "revision": 1}
+        # Reusing the head version id is invalid.
+        assert publish(user_a, expected=1, version=brief_v1) == {"ok": False, "error": "invalid"}
+        # Reusing the preserved source version is invalid.
+        assert publish(user_a, expected=1, version=brief_v2) == {"ok": False, "error": "invalid"}
+
+        # A version id can never migrate to another brief head: readers
+        # keyed by version id alone would become ambiguous.
+        assert publish(user_e, role="opponent_brief", version=brief_v1) == {
+            "ok": False, "error": "invalid"}
+        # Second authorized user operates the independent opponent brief head.
+        assert publish(user_e, role="opponent_brief", version=brief_v3) == {
+            "ok": True, "replay": False, "revision": 1}
+
+        # Brief-head read proposal: masked authorization, recomputed identity,
+        # revision 0 before first publication, head after publication.
+        head_proposal = (
+            Path(__file__).resolve().parents[1] / "db" / "proposals"
+            / "SIGNED_brief_head_read.sql"
+        ).read_text(encoding="utf-8")
+        conn.execute(head_proposal)
+
+        def head(sub, role="own_draft", jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute(
+                "select public.caseproof_signed_brief_head(%s, %s)",
+                (str(case), role)).fetchone()[0]
+
+        other_case_head = head(user_e, role="opponent_brief")
+        assert other_case_head["ok"] is True and other_case_head["revision"] == 1
+        assert other_case_head["brief_id"] == working_brief("opponent_brief")
+        own_head = head(user_a)
+        assert own_head == {"ok": True, "brief_id": working_brief("own_draft"),
+                            "revision": 1, "version_id": str(brief_v1)}
+        empty_case = uuid4()
+        conn.execute(
+            "insert into caseproof.cases(id, org_id, created_by_user, effective_policy_version)"
+            " values(%s, %s, %s, 'v1')", (empty_case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role, permissions)"
+            " values(%s, %s, %s, 'reviewer', "
+            "array['case:read','evidence:read','draft:check']::text[])",
+            (org, empty_case, user_a))
+        as_user(user_a)
+        empty_head = conn.execute(
+            "select public.caseproof_signed_brief_head(%s, 'own_draft')",
+            (str(empty_case),)).fetchone()[0]
+        assert empty_head == {"ok": True, "brief_id": empty_head["brief_id"],
+                              "revision": 0, "version_id": None}
+        for sub, role in ((user_b, "authenticated"), (user_a, "anon")):
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute("select public.caseproof_signed_brief_head(%s, 'own_draft')",
+                                 (str(case),))
+
+        # Check-bundle read proposal: one masked call returns access, register,
+        # pinned brief version with references/assertions and the declared
+        # confirmed source universe; every gap is the same masked denial.
+        bundle_proposal = (
+            Path(__file__).resolve().parents[1] / "db" / "proposals"
+            / "SIGNED_check_bundle_read.sql"
+        ).read_text(encoding="utf-8")
+        conn.execute(bundle_proposal)
+        as_user(user_a)
+        bundle = conn.execute(
+            "select public.caseproof_signed_check_bundle(%s, %s)",
+            (str(case), str(brief_v1))).fetchone()[0]
+        assert bundle["ok"] is True
+        assert bundle["case_revision"] == 1 and bundle["register_revision"] == 1
+        assert bundle["brief"]["brief_id"] == working_brief("own_draft")
+        assert bundle["brief"]["representation"] == rep_text
+        assert bundle["brief"]["representation_sha256"] == rep_sha
+        assert bundle["brief"]["graph_sha256"] == graph_sha
+        assert bundle["references"] == [{"reference_id": "ref-1", "reference_order": 0,
+                                         "exhibit_label": "contrat", "exact_quote": quote,
+                                         "pdf_page": 2}]
+        assert [a["claim_id"] for a in bundle["assertions"]] == ["c1"]
+        assert len(bundle["sources"]) == 1
+        source = bundle["sources"][0]
+        assert source["document_id"] == str(doc_ex) and source["version_id"] == str(ver_ex)
+        assert source["source_binding"] is None
+        assert source["representation"] == exhibit_rep
+        # A version id spanning two brief heads (only reachable by bypassing
+        # the write RPC) fails closed with the same masked denial.
+        with conn.transaction(force_rollback=True):
+            conn.execute(
+                "insert into caseproof._m2_brief_versions(org_id,case_id,brief_id,"
+                "version_id,revision,parent_version_id,document_id,document_version_id,"
+                "vault_intent_id,source_binding_kind,source_binding,original_sha256,representation_sha256,parser_id,"
+                "representation,document_role,graph_sha256,case_revision,exhibit_revision,"
+                "actor_id,created_at) "
+                "select org_id,case_id,%s,version_id,revision,parent_version_id,"
+                "document_id,document_version_id,vault_intent_id,source_binding_kind,source_binding,original_sha256,"
+                "representation_sha256,parser_id,representation,document_role,graph_sha256,"
+                "case_revision,exhibit_revision,actor_id,created_at "
+                "from caseproof._m2_brief_versions "
+                "where org_id=%s and case_id=%s and version_id=%s",
+                (str(uuid4()), str(org), str(case), str(brief_v1)))
+            as_user(user_a)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute("select public.caseproof_signed_check_bundle(%s, %s)",
+                             (str(case), str(brief_v1)))
+        for sub, role, version in (
+            (user_b, "authenticated", brief_v1),
+            (user_a, "anon", brief_v1),
+            (user_a, "authenticated", uuid4()),
+        ):
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute("select public.caseproof_signed_check_bundle(%s, %s)",
+                                 (str(case), str(version)))
+
+        # Matter-access read proposal: trusted permission snapshot, masked gaps.
+        access_proposal = (
+            Path(__file__).resolve().parents[1] / "db" / "proposals"
+            / "SIGNED_matter_access_read.sql"
+        ).read_text(encoding="utf-8")
+        conn.execute(access_proposal)
+        stranger = uuid4()
+        conn.execute("insert into auth.users(id, instance_id) values(%s, %s)"
+                     " on conflict (id) do nothing", (stranger, org))
+        as_user(user_a)
+        access = conn.execute(
+            "select public.caseproof_signed_matter_access(%s)", (str(case),)).fetchone()[0]
+        assert access["ok"] is True and access["org_id"] == str(org)
+        assert access["actor_id"] == str(user_a)
+        assert access["case_revision"] == 1 and access["membership_revision"] >= 1
+        assert "draft:check" in access["grant_permissions"]
+        assert access["grant_role"] == "reviewer" and access["grant_revision"] >= 1
+        as_user(user_b)
+        access_b = conn.execute(
+            "select public.caseproof_signed_matter_access(%s)", (str(case),)).fetchone()[0]
+        assert access_b["ok"] is True and access_b["grant_role"] == "viewer"
+        assert "draft:check" not in access_b["grant_permissions"]
+        for sub, role, target in (
+            (stranger, "authenticated", case),
+            (user_a, "anon", case),
+            (user_a, "authenticated", uuid4()),
+        ):
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute("select public.caseproof_signed_matter_access(%s)",
+                                 (str(target),))
+
+        # An original without an exact object and trusted audit never publishes.
+        rep_text2 = "Mémoire synthétique seconde version."
+        audit5 = uuid4()
+        conn.execute(
+            "insert into caseproof.audit_events(id,org_id,case_id,actor_type,actor_user_id,action,"
+            "event_schema_version,correlation_id,input_sha256_hex) "
+            "values(%s,%s,%s,'human',%s,'dev_txt_ingested','v1',%s,%s)",
+            (audit5,org,case,user_a,uuid4(),"5"*64))
+        conn.execute(
+            "insert into caseproof._dev_journey_sources(org_id,case_id,document_id,version_id,"
+            "original_sha,representation_sha,snapshot_sha,representation,audit_id) "
+            "values(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (org,case,doc_up,ver_up2,"1"*64,hashlib.sha256(rep_text2.encode()).hexdigest(),
+             "5"*64,rep_text2,audit5))
+        assert publish(user_a,doc_version=ver_up2,version=uuid4(),expected=1,text=rep_text2) == {
+            "ok":False,"error":"invalid"}
+        conn.execute("insert into storage.objects(bucket_id,name) values('caseproof-originals-dev',%s)",
+                     (f"{org}/{case}/{doc_up}/{ver_up2}/"+"1"*64,))
+        second_version=uuid4()
+        assert publish(user_a,doc_version=ver_up2,version=second_version,expected=1,text=rep_text2) == {
+            "ok":True,"replay":False,"revision":2}
+        assert conn.execute("select vault_intent_id,source_binding_kind,source_binding->>'audit_id' "
+            "from caseproof._m2_brief_versions where case_id=%s and version_id=%s",
+            (case,second_version)).fetchone() == (None,'trusted_storage_source_v1',str(audit5))
+
+def _live_check_store(result, library_bytes=None):
+    from apps.api.signed_supabase_check_store import LiveMatterCheckStore
+    calls = []
+    if library_bytes is None:
+        library_bytes = "contrat synthétique".encode()
+
+    def fake_rpc(*, publishable_key, bearer, name, args):
+        calls.append((name, args))
+        return result(calls) if callable(result) else result
+
+    class _Library:
+        def read(self, *, bearer, case_id, document_id, version_id):
+            return library_bytes
+
+    store = LiveMatterCheckStore(call_rpc=fake_rpc, publishable_key="sb_publishable_k",
+                                 bearer="jwt", library=_Library())
+    return store, calls
+
+
+_UUID_D = "3" * 8 + "-0000-4000-8000-" + "3" * 12
+_UUID_E = "4" * 8 + "-0000-4000-8000-" + "4" * 12
+
+
+def _access_payload(**overrides):
+    payload = {"ok": True, "actor_id": _UUID_B, "org_id": _UUID_A, "case_revision": 1,
+               "member_actions": ["case:read", "evidence:read", "finding:write"],
+               "membership_revision": 1, "grant_role": "reviewer",
+               "grant_permissions": ["case:read", "evidence:read", "draft:check"],
+               "grant_revision": 1}
+    payload.update(overrides)
+    return payload
+
+
+def test_live_check_store_current_access():
+    store, calls = _live_check_store(_access_payload())
+    access = store.current_access(_UUID_B, _UUID_C)
+    assert access is not None
+    assert access.org_id == _UUID_A and access.case_id == _UUID_C
+    assert access.case_revision == 1 and access.grant.active is True
+    assert calls[0] == ("caseproof_signed_matter_access", {"p_case": _UUID_C})
+
+
+def test_live_check_store_current_access_identity_and_denial():
+    from apps.api.postgres_litigation_check_store import PrivateCheckStoreError
+    # An RPC snapshot resolved for another actor is never accepted.
+    store, _ = _live_check_store(_access_payload(actor_id=_UUID_D))
+    with pytest.raises(PrivateCheckStoreError):
+        store.current_access(_UUID_B, _UUID_C)
+    # Masked denial (RPC failure) yields no access, like the disposable store.
+    store, _ = _live_check_store({"ok": False, "error": "denied"})
+    assert store.current_access(_UUID_B, _UUID_C) is None
+
+
+def _bundle_payload(rep_text, source_bytes):
+    import hashlib
+    rep_sha = hashlib.sha256(rep_text.encode("utf-8")).hexdigest()
+    src_sha = hashlib.sha256(source_bytes).hexdigest()
+    def binding(document, version, representation):
+        return {"kind":"trusted_storage_source_v1","audit_id":_UUID_E,"snapshot_sha256":"a"*64,
+                "bucket":"caseproof-originals-dev", "object_key":f"{_UUID_A}/{_UUID_C}/{document}/{version}/{src_sha}",
+                "original_sha256":src_sha,"representation_sha256":representation,
+                "byte_length":len(source_bytes),"media_type":"text/plain"}
+    return {
+        "ok": True, "case_revision": 1, "register_revision": 1,
+        "register": {"schema": "caseproof-exhibit-register-v1", "entries": [
+            {"exhibit_id": "piece-aaa111bbb222", "display_label": "Contrat", "aliases": [],
+             "confirmed": True, "manual_inclusion": False,
+             "pages": [{"source_id": _UUID_D, "version_id": _UUID_E, "pdf_page": None,
+                        "printed_page": None, "bundle_page": None}]}]},
+        "brief": {"brief_id": _UUID_A, "version_id": _UUID_B, "revision": 1,
+                  "parent_version_id": None, "document_id": _UUID_C,
+                  "document_version_id": _UUID_D, "vault_intent_id": None,
+                  "source_binding_kind":"trusted_storage_source_v1",
+                  "source_binding":binding(_UUID_C,_UUID_D,rep_sha),
+                  "original_sha256": src_sha, "representation_sha256": rep_sha,
+                  "parser_id": "identity-utf8-v1", "representation": rep_text,
+                  "document_role": "own_draft", "graph_sha256": "f" * 64,
+                  "case_revision": 1, "exhibit_revision": 1, "actor_id": _UUID_B,
+                  "created_at": "2026-11-23T00:00:00+00:00"},
+        "references": [{"reference_id": "ref-1", "reference_order": 0,
+                        "exhibit_label": "Contrat", "exact_quote": "contrat",
+                        "pdf_page": None}],
+        "assertions": [],
+        "sources": [{"document_id": _UUID_D, "version_id": _UUID_E,
+                     "original_sha256_hex": src_sha, "byte_length": len(source_bytes),
+                     "media_type": "text/plain", "source_binding":binding(_UUID_D,_UUID_E,rep_sha),
+                     "representation": rep_text, "representation_sha": rep_sha}],
+    }
+
+
+def test_live_check_store_load_bundle_and_still_current():
+    rep_text = "contrat synthétique"
+    source_bytes = "contrat synthétique".encode()
+    payload = _bundle_payload(rep_text, source_bytes)
+
+    def stub(calls):
+        if calls[-1][0] == "caseproof_signed_matter_access":
+            return _access_payload()
+        return payload
+
+    store, _ = _live_check_store(stub, library_bytes=source_bytes)
+    access = store.current_access(_UUID_B, _UUID_C)
+    assert access is not None
+    bundle = store.load_bundle(case_id=_UUID_C, brief_version_id=_UUID_B, access=access)
+    assert bundle.representation.brief.version_id == _UUID_B
+    assert bundle.representation.text == rep_text
+    assert len(bundle.register.entries) == 1
+    assert bundle.source_scope.declared_source_versions == ((_UUID_D, _UUID_E),)
+    assert len(bundle.previews) == 1 and bundle.previews[0].row.status == "ready"
+    assert store.still_current(access=access, bundle=bundle) is True
+
+
+def test_live_check_store_stale_and_tampered():
+    from apps.api.litigation_check_service import MatterCheckUnavailable
+    from apps.api.postgres_litigation_check_store import PrivateCheckStoreError
+    rep_text = "contrat synthétique"
+    source_bytes = "contrat synthétique".encode()
+    payload = _bundle_payload(rep_text, source_bytes)
+
+    def stub(calls):
+        if calls[-1][0] == "caseproof_signed_matter_access":
+            return _access_payload()
+        return payload
+
+    store, _ = _live_check_store(stub, library_bytes=source_bytes)
+    access = store.current_access(_UUID_B, _UUID_C)
+    assert access is not None
+    # Stale published snapshot (register moved on): typed stale signal.
+    stale = _bundle_payload(rep_text, source_bytes)
+    stale["brief"] = dict(stale["brief"], exhibit_revision=2)
+    stale_store, _ = _live_check_store(
+        lambda calls: _access_payload()
+        if calls[-1][0] == "caseproof_signed_matter_access" else stale,
+        library_bytes=source_bytes)
+    stale_access = stale_store.current_access(_UUID_B, _UUID_C)
+    assert stale_access is not None
+    with pytest.raises(MatterCheckUnavailable):
+        stale_store.load_bundle(case_id=_UUID_C, brief_version_id=_UUID_B, access=stale_access)
+    # Representation digest mismatch (tampered stored column): fail closed.
+    tampered = _bundle_payload(rep_text, source_bytes)
+    tampered["brief"] = dict(tampered["brief"], representation_sha256="0" * 64)
+    tampered_store, _ = _live_check_store(
+        lambda calls: _access_payload()
+        if calls[-1][0] == "caseproof_signed_matter_access" else tampered,
+        library_bytes=source_bytes)
+    tampered_access = tampered_store.current_access(_UUID_B, _UUID_C)
+    assert tampered_access is not None
+    with pytest.raises(PrivateCheckStoreError):
+        tampered_store.load_bundle(case_id=_UUID_C, brief_version_id=_UUID_B,
+                                   access=tampered_access)
+    # Verified bytes drift: the library's bytes no longer match the declared sha.
+    drift_store, _ = _live_check_store(stub, library_bytes="octets falsifiés".encode())
+    drift_access = drift_store.current_access(_UUID_B, _UUID_C)
+    assert drift_access is not None
+    with pytest.raises(PrivateCheckStoreError):
+        drift_store.load_bundle(case_id=_UUID_C, brief_version_id=_UUID_B, access=drift_access)
+
+
+def test_signed_review_ledger_proposal_rpcs():
+    """Proposed review-ledger RPCs (db/proposals): real access, contract and
+    chain behavior against the disposable PostgreSQL cluster; never applied
+    to live. Digests must match the Python canonical form exactly."""
+    import json
+    import os
+    from pathlib import Path
+    from uuid import uuid4
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from psycopg import errors
+
+    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, _canonical, _digest
+    from scripts.verify_vault_integration import connect
+
+    root = Path(__file__).resolve().parents[1] / "db" / "proposals"
+    org, case = uuid4(), uuid4()
+    doc, ver = uuid4(), uuid4()
+    user_a, viewer, stranger = uuid4(), uuid4(), uuid4()
+    sha = "b" * 64
+    snapshot = "a" * 64
+    brief_version = str(uuid4())
+    payload = json.dumps({
+        "schema": "caseproof-litigation-verification-run-v1",
+        "engine": "caseproof-disputes-unified-factual-v1",
+        "case_id": str(case), "brief_version_id": brief_version,
+        "snapshot_hash": snapshot, "exhibit_revision": 1,
+        "sources": {"declared": [[str(doc), str(ver)]],
+                    "processed": [[str(doc), str(ver)]],
+                    "incomplete": [], "excluded": []},
+        "citations": [{"reference_id": "ref-1", "source_id": str(doc),
+                       "source_version_id": str(ver), "source_sha256": sha}],
+        "factual_candidates": [], "reviewer_dispositions": [],
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    payload_sha = _digest(payload)
+    decision = {"actor_id": str(user_a), "disposition": "confirmed_candidate",
+                "observation_id": "citation:ref-1",
+                "rationale": "contrôle «synthétique» \\ ok"}
+    dec_text = json.dumps(decision, ensure_ascii=False, sort_keys=True,
+                          separators=(",", ":"))
+
+    with connect() as conn:
+        conn.execute(
+            "create or replace function auth.jwt() returns jsonb language sql stable as "
+            "$$ select nullif(current_setting('request.jwt.claims', true), '')::jsonb $$")
+        conn.execute((root / "SIGNED_storage_source_binding.sql").read_text(encoding="utf-8"))
+        for name in ("SIGNED_review_run_publish", "SIGNED_review_state_read",
+                     "SIGNED_review_decision_record"):
+            conn.execute((root / f"{name}.sql").read_text(encoding="utf-8"))
+        conn.execute("insert into caseproof.organizations(id, display_name)"
+                     " values(%s, 'synthétique')", (org,))
+        conn.execute("insert into auth.users(id, instance_id)"
+                     " values(%s, %s),(%s, %s),(%s, %s) on conflict (id) do nothing",
+                     (user_a, org, viewer, org, stranger, org))
+        conn.execute(
+            "insert into caseproof.organization_members(org_id, user_id, actions)"
+            " values(%s, %s, array['case:read','finding:write','review:request']::text[]),"
+            " (%s, %s, array['case:read','evidence:read','finding:write']::text[])",
+            (org, user_a, org, viewer))
+        conn.execute("insert into caseproof.cases(id, org_id, created_by_user,"
+                     " effective_policy_version) values(%s, %s, %s, 'v1')",
+                     (case, org, user_a))
+        conn.execute(
+            "insert into caseproof._m1_matter_grants(org_id, case_id, user_id, role,"
+            " permissions) values(%s, %s, %s, 'reviewer',"
+            " array['case:read','draft:check','review:request']::text[]),"
+            " (%s, %s, %s, 'viewer',"
+            " array['case:read','evidence:read','draft:check']::text[])",
+            (org, case, user_a, org, case, viewer))
+        conn.execute(
+            "insert into caseproof._m1_exhibit_heads(org_id, case_id, revision, payload,"
+            " payload_sha256) values(%s, %s, 1, '{\"entries\":[]}', %s)",
+            (org, case, "0" * 64))
+        conn.execute("insert into caseproof.documents(id, org_id, case_id, source_label)"
+                     " values(%s, %s, %s, 'synthétique')", (doc, org, case))
+        conn.execute("insert into caseproof.document_versions(id, org_id, document_id,"
+                     " version_number, original_sha256_hex, byte_length, media_type)"
+                     " values(%s, %s, %s, 1, %s, 4, 'text/plain')", (ver, org, doc, sha))
+        _insert_storage_bound_brief(conn,org=org,case=case,user=user_a,doc=doc,
+                                   source_version=ver,brief=uuid4(),version=brief_version,
+                                   original_sha=sha)
+
+        def as_user(sub, role="authenticated"):
+            claims = json.dumps({"role": role, "is_anonymous": "false"})
+            conn.execute("select set_config('request.jwt.claim.sub', %s, true)", (str(sub),))
+            conn.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+
+        def publish(sub, *, snap=snapshot, text=payload, text_sha=payload_sha,
+                    exhibit_rev=1, jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute(
+                "select public.caseproof_signed_review_run_publish(%s, %s, %s, %s, %s, %s)",
+                (str(case), snap, brief_version, exhibit_rev, text, text_sha),
+            ).fetchone()[0]
+
+        def record(sub, *, request=None, expected=0, text=dec_text, jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute(
+                "select public.caseproof_signed_review_decision(%s, %s, %s, %s, %s)",
+                (str(case), snapshot, str(request or uuid4()), expected, text),
+            ).fetchone()[0]
+
+        def state(sub, *, snap=snapshot, jwt_role="authenticated"):
+            as_user(sub, jwt_role)
+            return conn.execute("select public.caseproof_signed_review_state(%s, %s)",
+                                (str(case), snap)).fetchone()[0]
+
+        # Publish: happy path, idempotent replay, falsified digest, wrong
+        # exhibit pin and custody violation are refused server-side.
+        assert publish(user_a) == {"ok": True, "replay": False}
+        assert publish(user_a) == {"ok": True, "replay": True}
+        assert publish(user_a, text_sha="0" * 64) == {"ok": False, "error": "invalid"}
+        stale_payload = json.dumps({**json.loads(payload), "exhibit_revision": 9},
+                                   ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert publish(user_a, text=stale_payload, text_sha=_digest(stale_payload),
+                       exhibit_rev=9) == {"ok": False, "error": "conflict"}
+        tampered = json.dumps({**json.loads(payload), "case_id": str(uuid4())},
+                              ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert publish(user_a, text=tampered, text_sha=_digest(tampered)) == {
+            "ok": False, "error": "invalid"}
+        with conn.transaction(force_rollback=True):
+            conn.execute("delete from storage.objects where bucket_id='caseproof-originals-dev' and name=%s",
+                         (f"{org}/{case}/{doc}/{ver}/{sha}",))
+            assert publish(user_a, snap="c" * 64) == {"ok": False, "error": "invalid"}
+        with conn.transaction(force_rollback=True):
+            wrong = json.loads(payload)
+            wrong["citations"][0]["source_sha256"] = "d" * 64
+            text = json.dumps(wrong, ensure_ascii=False, sort_keys=True,
+                              separators=(",", ":"))
+            assert publish(user_a, snap="e" * 64, text=text, text_sha=_digest(text)) == {
+                "ok": False, "error": "invalid"}
+
+        # Record: full chain with digests equal to the Python canonical form.
+        request_id = uuid4()
+        first = record(user_a, request=request_id)
+        event_sha_1 = _digest(_canonical({
+            "run": snapshot, "revision": 1, "request": str(request_id),
+            "actor": str(user_a), "previous_sha": ZERO_HASH, "decision": decision}))
+        assert first == {"ok": True, "replay": False, "revision": 1,
+                         "event_sha": event_sha_1}
+        fingerprint = _digest(_canonical({
+            "run": snapshot, "actor": str(user_a), "request": str(request_id),
+            "expected": 0, "decision": dec_text}))
+        assert conn.execute("select input_sha from caseproof._m2_review_receipts"
+                            " where snapshot_sha=%s", (snapshot,)).fetchone()[0] == fingerprint
+        assert record(user_a, request=request_id) == {
+            "ok": True, "replay": True, "revision": 1, "event_sha": event_sha_1}
+        other = json.dumps(dict(decision, rationale="autre"), ensure_ascii=False,
+                           sort_keys=True, separators=(",", ":"))
+        assert record(user_a, request=request_id, text=other) == {
+            "ok": False, "error": "conflict"}
+        assert record(user_a, expected=0) == {
+            "ok": False, "error": "conflict", "revision": 1}
+        # Adversarial contract violations, all refused server-side.
+        fake = json.dumps(dict(decision, actor_id=str(stranger)), ensure_ascii=False,
+                          sort_keys=True, separators=(",", ":"))
+        assert record(user_a, expected=1, text=fake) == {"ok": False, "error": "invalid"}
+        unknown = json.dumps(dict(decision, observation_id="citation:inconnu"),
+                             ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert record(user_a, expected=1, text=unknown) == {"ok": False, "error": "invalid"}
+        bad_dispo = json.dumps(dict(decision, disposition="approuvé_juridiquement"),
+                               ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert record(user_a, expected=1, text=bad_dispo) == {"ok": False, "error": "invalid"}
+        blank = json.dumps(dict(decision, rationale="   "), ensure_ascii=False,
+                           sort_keys=True, separators=(",", ":"))
+        assert record(user_a, expected=1, text=blank) == {"ok": False, "error": "invalid"}
+        # Second event chains on the first.
+        request_2 = uuid4()
+        second_dec = dict(decision, disposition="dismissed", rationale="écarté")
+        second_text = json.dumps(second_dec, ensure_ascii=False, sort_keys=True,
+                                 separators=(",", ":"))
+        second = record(user_a, request=request_2, expected=1, text=second_text)
+        event_sha_2 = _digest(_canonical({
+            "run": snapshot, "revision": 2, "request": str(request_2),
+            "actor": str(user_a), "previous_sha": event_sha_1, "decision": second_dec}))
+        assert second == {"ok": True, "replay": False, "revision": 2,
+                          "event_sha": event_sha_2}
+
+        # State: full history, verified head; staleness and custody drift are
+        # typed failures, never silent reads.
+        st = state(user_a)
+        assert st["ok"] is True
+        assert st["head"] == {"revision": 2, "event_sha": event_sha_2}
+        assert [e["decision"] for e in st["events"]] == [dec_text, second_text]
+        assert st["run"]["payload"] == payload
+        with conn.transaction(force_rollback=True):
+            conn.execute("update caseproof._m1_exhibit_heads set revision=2"
+                         " where org_id=%s and case_id=%s", (org, case))
+            assert state(user_a) == {"ok": False, "error": "stale"}
+            assert record(user_a, expected=2) == {"ok": False, "error": "stale"}
+        with conn.transaction(force_rollback=True):
+            conn.execute("delete from storage.objects where bucket_id='caseproof-originals-dev' and name=%s",
+                         (f"{org}/{case}/{doc}/{ver}/{sha}",))
+            assert state(user_a) == {"ok": False, "error": "conflict"}
+
+        # Masked denials: viewer without reviewer grant, stranger and anon get
+        # the same 42501 on every RPC; existence is never revealed.
+        for sub, role in ((viewer, "authenticated"), (stranger, "authenticated"),
+                          (user_a, "anon")):
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute("select public.caseproof_signed_review_state(%s, %s)",
+                                 (str(case), snapshot))
+            with conn.transaction(force_rollback=True):
+                as_user(sub, role)
+                with pytest.raises(errors.InsufficientPrivilege):
+                    conn.execute(
+                        "select public.caseproof_signed_review_decision(%s, %s, %s, %s, %s)",
+                        (str(case), snapshot, str(uuid4()), 2, dec_text))
+        # The viewer holds draft:check: publish authorizes per action, so the
+        # viewer reaches the contract stage (digest falsified -> invalid).
+        assert publish(viewer, text_sha="0" * 64) == {"ok": False, "error": "invalid"}
+        with conn.transaction(force_rollback=True):
+            as_user(stranger)
+            with pytest.raises(errors.InsufficientPrivilege):
+                conn.execute(
+                    "select public.caseproof_signed_review_run_publish"
+                    "(%s, %s, %s, %s, %s, %s)",
+                    (str(case), snapshot, brief_version, 1, payload, payload_sha))
+        conn.rollback()
+
+
+def _review_ledger_run():
+    from application.litigation.brief_checks import CitationCheckState, CitationObservation
+    from application.litigation.unified_review import VerificationRun
+    citation = CitationObservation(
+        reference_id="ref-1", state=CitationCheckState.EXACT_MATCH,
+        exhibit_id=None, source_id=_UUID_D, source_version_id=_UUID_E,
+        source_sha256="b" * 64, representation_id=None, text_start=None,
+        text_end=None, scope_note="synthétique")
+    return VerificationRun(
+        case_id=_UUID_C, brief_version_id=_UUID_B, brief_sha256="c" * 64,
+        representation_sha256="d" * 64, exhibit_revision=1, rule_version="v1",
+        declared=((_UUID_D, _UUID_E),), excluded=(),
+        processed=((_UUID_D, _UUID_E),), incomplete=(),
+        citation_observations=(citation,), factual_observations=(),
+        snapshot_hash="a" * 64)
+
+
+def _review_ledger(responses):
+    from apps.api.signed_supabase_review_ledger import LiveReviewLedger
+    calls = []
+
+    def fake_rpc(*, publishable_key, bearer, name, args):
+        calls.append((name, args))
+        return responses(calls)
+
+    ledger = LiveReviewLedger(call_rpc=fake_rpc,
+                              publishable_key="sb_publishable_k", bearer="jwt")
+    return ledger, calls
+
+
+def _review_event(run, decision, *, revision, request_id, previous):
+    import json
+
+    from apps.api.disposable_litigation_review_ledger import _canonical, _digest
+    item = {"actor_id": decision.actor_id, "disposition": decision.disposition.value,
+            "observation_id": decision.observation_id,
+            "rationale": decision.rationale}
+    text = json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    event_sha = _digest(_canonical({
+        "run": run.snapshot_hash, "revision": revision,
+        "request": str(request_id), "actor": decision.actor_id,
+        "previous_sha": previous, "decision": item}))
+    return {"revision": revision, "request_id": str(request_id),
+            "actor_id": decision.actor_id, "previous_sha": previous,
+            "event_sha": event_sha, "decision": text}
+
+
+def test_live_review_ledger_publish_contract():
+    from apps.api.disposable_litigation_review_ledger import M2LedgerConflict
+    run = _review_ledger_run()
+    ledger, calls = _review_ledger(lambda c: {"ok": True, "replay": False})
+    assert ledger.publish(org_id=_UUID_A, actor_id=_UUID_B, run=run) is True
+    name, args = calls[0]
+    assert name == "caseproof_signed_review_run_publish"
+    assert args["p_case"] == _UUID_C and args["p_snapshot_sha"] == "a" * 64
+    ledger, _ = _review_ledger(lambda c: {"ok": True, "replay": True})
+    assert ledger.publish(org_id=_UUID_A, actor_id=_UUID_B, run=run) is False
+    for bad in ({"ok": False, "error": "invalid"}, {"ok": False, "error": "conflict"},
+                {"ok": True, "replay": "oui"}, {"nok": True}):
+        ledger, _ = _review_ledger(lambda c, bad=bad: bad)
+        with pytest.raises(M2LedgerConflict):
+            ledger.publish(org_id=_UUID_A, actor_id=_UUID_B, run=run)
+
+
+def test_live_review_ledger_state_and_tamper():
+    import hashlib
+    from uuid import UUID, uuid4
+
+    from application.litigation.unified_review import (
+        ObservationReview,
+        ReviewDisposition,
+        verification_record,
+    )
+    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, M2LedgerConflict
+    run = _review_ledger_run()
+    decision = ObservationReview("citation:ref-1", _UUID_B,
+                                 ReviewDisposition.CONFIRMED, "contrôle ok")
+    request_id = uuid4()
+    event = _review_event(run, decision, revision=1, request_id=request_id,
+                          previous=ZERO_HASH)
+    payload = verification_record(run).decode("utf-8")
+
+    def responses(calls, *, event_rows=(), head=None, stored_payload=None):
+        return {"ok": True,
+                "run": {"payload": stored_payload if stored_payload is not None else payload,
+                        "payload_sha": hashlib.sha256(
+                            (stored_payload if stored_payload is not None
+                             else payload).encode("utf-8")).hexdigest(),
+                        "brief_version_id": run.brief_version_id,
+                        "case_revision": 1, "exhibit_revision": 1},
+                "head": head or {"revision": len(event_rows),
+                                 "event_sha": event_rows[-1]["event_sha"] if event_rows
+                                 else ZERO_HASH},
+                "events": list(event_rows)}
+
+    ledger, _ = _review_ledger(lambda c: responses(c, event_rows=(event,)))
+    state = ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    assert state.revision == 1 and state.event_sha == event["event_sha"]
+    assert len(state.packet.decisions) == 1
+    assert state.packet.decisions[0].observation_id == "citation:ref-1"
+
+    # Empty history: zero head verifies.
+    ledger, _ = _review_ledger(lambda c: responses(c))
+    empty = ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    assert empty.revision == 0 and empty.event_sha == ZERO_HASH
+
+    # Tampered event digest, broken chain, wrong head and payload drift all
+    # fail closed from the returned content.
+    tampered_event = dict(event, event_sha="0" * 64)
+    ledger, _ = _review_ledger(lambda c: responses(c, event_rows=(tampered_event,)))
+    with pytest.raises(M2LedgerConflict):
+        ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    broken = dict(event, previous_sha="1" * 64)
+    broken["event_sha"] = event["event_sha"]
+    ledger, _ = _review_ledger(lambda c: responses(c, event_rows=(broken,)))
+    with pytest.raises(M2LedgerConflict):
+        ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    ledger, _ = _review_ledger(
+        lambda c: responses(c, event_rows=(event,),
+                            head={"revision": 1, "event_sha": "f" * 64}))
+    with pytest.raises(M2LedgerConflict):
+        ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+    drift = payload.replace("ref-1", "ref-9", 1)
+    ledger, _ = _review_ledger(lambda c: responses(c, stored_payload=drift))
+    with pytest.raises(M2LedgerConflict):
+        ledger.state(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run)
+
+
+def test_live_review_ledger_record_flow():
+    import hashlib
+    from uuid import UUID, uuid4
+
+    from application.litigation.unified_review import (
+        ObservationReview,
+        ReviewDisposition,
+        verification_record,
+    )
+    from apps.api.disposable_litigation_review_ledger import ZERO_HASH, M2LedgerConflict
+    run = _review_ledger_run()
+    decision = ObservationReview("citation:ref-1", _UUID_B,
+                                 ReviewDisposition.CONFIRMED, "contrôle ok")
+    request_id = uuid4()
+    event = _review_event(run, decision, revision=1, request_id=request_id,
+                          previous=ZERO_HASH)
+    payload = verification_record(run).decode("utf-8")
+
+    def responses(calls, *, replay):
+        if calls[-1][0] == "caseproof_signed_review_decision":
+            return {"ok": True, "replay": replay, "revision": 1,
+                    "event_sha": event["event_sha"]}
+        return {"ok": True,
+                "run": {"payload": payload,
+                        "payload_sha": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+                        "brief_version_id": run.brief_version_id,
+                        "case_revision": 1, "exhibit_revision": 1},
+                "head": {"revision": 1, "event_sha": event["event_sha"]},
+                "events": [event]}
+
+    ledger, calls = _review_ledger(lambda c: responses(c, replay=False))
+    state, replayed = ledger.record(
+        org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run,
+        request_id=UUID(str(request_id)), expected_revision=0, decision=decision)
+    assert replayed is False and state.revision == 1
+    name, args = calls[0]
+    assert name == "caseproof_signed_review_decision"
+    assert args["p_request"] == str(request_id) and args["p_expected"] == 0
+    # The state after the write is re-read and re-derived, not trusted.
+    assert calls[1][0] == "caseproof_signed_review_state"
+
+    ledger, _ = _review_ledger(lambda c: responses(c, replay=True))
+    state, replayed = ledger.record(
+        org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run,
+        request_id=UUID(str(request_id)), expected_revision=0, decision=decision)
+    assert replayed is True and state.revision == 1
+
+    # A decision naming another actor never reaches the transport.
+    impostor = ObservationReview("citation:ref-1", str(uuid4()),
+                                 ReviewDisposition.DISMISSED, "détourné")
+    ledger, calls = _review_ledger(lambda c: responses(c, replay=False))
+    with pytest.raises(M2LedgerConflict):
+        ledger.record(org_id=UUID(_UUID_A), actor_id=UUID(_UUID_B), run=run,
+                      request_id=UUID(str(request_id)), expected_revision=0,
+                      decision=impostor)
+    assert calls == []
+
+
+def test_live_request_workbench_assembly():
+    from apps.api.signed_live_composition import _MISSING_PORTS, assemble_request_workbench
+    env = {"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_" + "D" * 24}
+    workbench = assemble_request_workbench(env, "signed-jwt")
+    # The checker must publish to the exact ledger the workspace records into.
+    assert workbench.checker.publisher is workbench.ledger
+    assert workbench.workspace.ledger is workbench.ledger
+    assert workbench.store._bearer == "signed-jwt"
+    assert workbench.originals.checker is workbench.checker
+    assert _MISSING_PORTS == ()
+    with pytest.raises(ValueError):
+        assemble_request_workbench({}, "signed-jwt")
+    with pytest.raises(ValueError):
+        assemble_request_workbench(env, "")
+    with pytest.raises(ValueError):
+        assemble_request_workbench(
+            {"CASEPROOF_SUPABASE_PUBLISHABLE_KEY": "service_key"}, "signed-jwt")
+
+
+def test_demo_journey_pdf_source_real_pages_and_visible_refusals(tmp_path):
+    import json
+
+    from docx import Document
+    from fastapi.testclient import TestClient
+
+    from application.litigation.corpus import CORPUS_FORMAT_VERSION
+    from apps.api.demo_journey_app import create_demo_app
+    from tests.test_demo_belgian_dossier import RULE, SOURCE_TEXT, _corpus_entry
+
+    quote = "paiement sous 30 jours"
+    brief = f"Le juge retient « {quote} » (Contrat, art. 5)."
+    dossier = tmp_path / "dossier"
+    (dossier / "corpus").mkdir(parents=True)
+    (dossier / "rules").mkdir()
+    (dossier / "corpus" / "corpus-manifest.toml").write_text(
+        f'format = "{CORPUS_FORMAT_VERSION}"\n' + _corpus_entry(), encoding="utf-8")
+    (dossier / "corpus" / "synthetic-original.html").write_bytes(b"<html>synthetic</html>")
+    (dossier / "corpus" / "synthetic-derived.txt").write_text(SOURCE_TEXT, encoding="utf-8")
+    (dossier / "rules" / "regle.toml").write_text(RULE, encoding="utf-8")
+    (dossier / "facts.json").write_text(json.dumps({"facts": [
+        {"name": "fait_confirme", "value": True, "confirmed": True}]}), encoding="utf-8")
+    (dossier / "decisions.json").write_text(json.dumps(
+        {"decided_at": "2026-11-23T10:00:00+01:00", "decisions": []}), encoding="utf-8")
+    doc = Document()
+    doc.add_paragraph(brief)
+    doc.save(str(dossier / "brief.docx"))
+    (dossier / "meta.json").write_text(
+        json.dumps({"title": "fixture-pdf", "brief": "brief.docx"}), encoding="utf-8")
+    (dossier / "m2.json").write_text(json.dumps({
+        "case_id": "fixture-pdf", "brief_version_id": "brief-v1", "brief_text": brief,
+        "references": [{"reference_id": "ref-pdf", "exhibit_label": "Contrat, art. 5",
+                        "exact_quote": quote, "pdf_page": 2}],
+        "claims": [], "passages": [], "register_revision": 1,
+        "exhibits": [{"exhibit_id": "ex-corpus", "display_label": "Corpus",
+                      "aliases": [], "confirmed": True,
+                      "pages": [{"source_id": "src-corpus", "version_id": "v1"}]}],
+        "sources": [{"source_id": "src-corpus", "document_id": "doc-corpus",
+                     "version_id": "v1", "label": "corpus synthétique",
+                     "synthetic": True, "text": SOURCE_TEXT}],
+        "review": {"decisions": []},
+    }), encoding="utf-8")
+    client = TestClient(create_demo_app(dossier))
+    session = client.get("/demo/api/state").json()["session"]
+    headers = {"x-demo-session": session, "origin": "http://testserver"}
+
+    pdf = _pdf_fixture_bytes([["Contrat-cadre synthétique."], ["Clause prix:", quote]])
+    params = ("act=Contrat&article=5&alias=Contrat%2C%20art.%205"
+              "&source_uri=https%3A%2F%2Fexample.test%2Fcontrat.pdf&filename=contrat.pdf")
+    imported = client.post(f"/demo/api/source?{params}", content=pdf,
+                           headers={**headers, "content-type": "application/octet-stream"})
+    assert imported.status_code == 200, imported.text
+    exhibit_id = imported.json()["exhibit_id"]
+    # Inventaire physique réel (2 pages), jamais une page 1 inventée.
+    entry = next(e for e in imported.json()["exhibits"] if e["exhibit_id"] == exhibit_id)
+    assert [page["pdf_page"] for page in entry["pages"]] == [1, 2]
+
+    # PDF avec page scannée/image : refus visible, avertissements typés.
+    gap = _pdf_fixture_bytes([["Page texte."], []], image_page=1)
+    refused = client.post(f"/demo/api/source?{params}", content=gap,
+                          headers={**headers, "content-type": "application/octet-stream"})
+    assert refused.status_code == 422
+    assert refused.json()["error"] == "source_coverage_gap"
+    assert any("pdf_page_needs_ocr_or_review" in w for w in refused.json()["warnings"])
+
+    confirmed = client.post("/demo/api/exhibits/confirm",
+                            json={"exhibit_id": exhibit_id}, headers=headers)
+    assert confirmed.status_code == 200, confirmed.text
+    run = client.post("/demo/api/run", json={}, headers=headers)
+    assert run.status_code == 200, run.text
+    citation = next(c for c in run.json()["findings"]["citations"]
+                    if c["state"] == "exact_match")
+    assert citation["quote"] == quote
+    # La citation est sur la page physique 2 du PDF : résolue, pas déclarée.
+    assert citation["source_pdf_page"] == 2
+
+
+def test_demo_journey_page_resolution_abstains_and_text_stays_unpaginated(tmp_path):
+    """Contract: only verified PDF inventory yields physical pages; a quote on
+    two pages abstains; a text source resolves with no page at all."""
+    import json
+
+    from docx import Document
+    from fastapi.testclient import TestClient
+
+    from application.litigation.corpus import CORPUS_FORMAT_VERSION
+    from apps.api.demo_journey_app import create_demo_app
+    from tests.test_demo_belgian_dossier import RULE, SOURCE_TEXT, _corpus_entry
+
+    corpus_quote = "Le congé est notifié au moins six mois"
+    brief = (
+        f"Le preneur : « {corpus_quote} » (Corpus, art. 1732). "
+        "Le juge retient « clause répétée » (Contrat, art. 5)."
+    )
+    dossier = tmp_path / "dossier"
+    (dossier / "corpus").mkdir(parents=True)
+    (dossier / "rules").mkdir()
+    (dossier / "corpus" / "corpus-manifest.toml").write_text(
+        f'format = "{CORPUS_FORMAT_VERSION}"\n' + _corpus_entry(), encoding="utf-8")
+    (dossier / "corpus" / "synthetic-original.html").write_bytes(b"<html>synthetic</html>")
+    (dossier / "corpus" / "synthetic-derived.txt").write_text(SOURCE_TEXT, encoding="utf-8")
+    (dossier / "rules" / "regle.toml").write_text(RULE, encoding="utf-8")
+    (dossier / "facts.json").write_text(json.dumps({"facts": [
+        {"name": "fait_confirme", "value": True, "confirmed": True}]}), encoding="utf-8")
+    (dossier / "decisions.json").write_text(json.dumps(
+        {"decided_at": "2026-11-23T10:00:00+01:00", "decisions": []}), encoding="utf-8")
+    doc = Document()
+    doc.add_paragraph(brief)
+    doc.save(str(dossier / "brief.docx"))
+    (dossier / "meta.json").write_text(
+        json.dumps({"title": "fixture-abstain", "brief": "brief.docx"}), encoding="utf-8")
+    (dossier / "m2.json").write_text(json.dumps({
+        "case_id": "fixture-abstain", "brief_version_id": "brief-v1", "brief_text": brief,
+        "references": [{"reference_id": "ref-declared", "exhibit_label": "Corpus",
+                        "exact_quote": corpus_quote}],
+        "claims": [], "passages": [], "register_revision": 1,
+        "exhibits": [{"exhibit_id": "ex-corpus", "display_label": "Corpus",
+                      "aliases": [], "confirmed": True,
+                      "pages": [{"source_id": "src-corpus", "version_id": "v1"}]}],
+        "sources": [{"source_id": "src-corpus", "document_id": "doc-corpus",
+                     "version_id": "v1", "label": "corpus synthétique",
+                     "synthetic": True, "text": SOURCE_TEXT}],
+        "review": {"decisions": []},
+    }), encoding="utf-8")
+    client = TestClient(create_demo_app(dossier))
+    session = client.get("/demo/api/state").json()["session"]
+    headers = {"x-demo-session": session, "origin": "http://testserver"}
+
+    # Quote present on BOTH physical pages: no unambiguous pinpoint exists.
+    pdf = _pdf_fixture_bytes([["clause répétée"], ["clause répétée"]])
+    params = ("act=Contrat&article=5&alias=Contrat%2C%20art.%205"
+              "&source_uri=https%3A%2F%2Fexample.test%2Fc.pdf&filename=c.pdf")
+    imported = client.post(f"/demo/api/source?{params}", content=pdf,
+                           headers={**headers, "content-type": "application/octet-stream"})
+    assert imported.status_code == 200, imported.text
+    entry = next(e for e in imported.json()["exhibits"]
+                 if e["exhibit_id"] == imported.json()["exhibit_id"])
+    assert [page["pdf_page"] for page in entry["pages"]] == [1, 2]
+    confirmed = client.post("/demo/api/exhibits/confirm",
+                            json={"exhibit_id": imported.json()["exhibit_id"]},
+                            headers=headers)
+    assert confirmed.status_code == 200, confirmed.text
+
+    run = client.post("/demo/api/run", json={}, headers=headers)
+    assert run.status_code == 200, run.text
+    citations = {c["quote"]: c for c in run.json()["findings"]["citations"]}
+    # Text source: exact match, genuinely unpaginated (no page invented).
+    assert citations[corpus_quote]["state"] == "exact_match"
+    assert citations[corpus_quote]["source_pdf_page"] is None
+    # Same quote on two physical pages: abstention, never a guessed page.
+    assert citations["clause répétée"]["state"] == "reference_ambiguous"
+    assert citations["clause répétée"]["source_pdf_page"] is None
+
+
+def test_signed_composed_workflow_on_disposable_postgres():
+    """Composed SIGNED path against a disposable PostgreSQL.
+
+    Real: the db/proposals SQL RPCs (run under authenticated/service_role with
+    JWT claims), the Python adapters, the fail-closed DOCX reader, the PDF
+    inventory, the deterministic fact/citation checks, the review ledger and
+    the review record. FAKE (labeled): PostgREST transport, Supabase Storage
+    bytes and the auth verifier (see tests/signed_composed_rig.py). Local
+    disposable run, not a CI-proof of the live path and not a signed-user
+    isolation proof for the service_role ingest step.
+    """
+    import hashlib
+    import json
+    import os
+    from dataclasses import replace
+    from datetime import UTC, datetime, timedelta
+    from functools import partial
+    from pathlib import Path
+    from uuid import UUID, uuid4
+
+    from application.litigation.library import EvidenceIndexer
+    from application.litigation.review_cycle import CorrectionProposal, preview_correction
+    from application.litigation.unified_review import ReviewDisposition
+    from infrastructure.parsers.limited import LimitedDocumentParser
+
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") != "YES":
+        pytest.skip("disposable PostgreSQL required")
+    from apps.api.access_control import InvalidBearer, VerifiedSubject
+    from apps.api.litigation_check_service import AuthorizedLitigationChecker
+    from apps.api.litigation_review_workspace import ReviewCommand, SignedReviewWorkspace
+    from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
+    from apps.api.signed_registry_ingest import ingest_parsed_original
+    from apps.api.signed_supabase_brief_publisher import LiveSignedBriefPublisher
+    from apps.api.signed_supabase_check_store import LiveMatterCheckStore
+    from apps.api.signed_supabase_review_ledger import LiveReviewLedger
+    from apps.api.signed_supabase_review_record import LiveSignedReviewRecord
+    from apps.api.signed_supabase_rpc import call_rpc
+    from scripts.verify_vault_integration import connect
+    from tests.signed_composed_rig import (
+        PUBLISHABLE_KEY,
+        SERVICE_KEY,
+        FakePostgrest,
+        FakeStorageLibrary,
+        docx_without_custom_xml,
+        install_shims,
+    )
+
+    docx_media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    sentence_a = "Le juge retient « paiement sous 30 jours » (Contrat). "
+    sentence_b = "Le paiement de 12.500,00 EUR est invoqué par le demandeur. "
+    sentence_c = "Selon « Le prix est payable » (Contrat), le paiement est dû le 22 mai 2026."
+    brief_text = sentence_a + sentence_b + sentence_c + (
+        " Voir Pièce 1, pdf p. 2. Voir Stuk 1, pdf p. 1. Voir Pièce 99. "
+        "Voir « citation absente de la source » (Contrat).")
+    pdf = _pdf_fixture_bytes([
+        ["Contrat-cadre synthétique."],
+        ["Article 5 - Prix et paiement",
+         "Le prix est payable selon la clause : paiement sous 30 jours.",
+         "Le paiement de 15.000,00 EUR est exigible.",
+         "Le paiement est exigible le 04/05/2026 ou le 22 mai 2026."],
+    ])
+    org, case, user = uuid4(), uuid4(), uuid4()
+    root = Path(__file__).resolve().parents[1] / "db" / "proposals"
+    names = (
+        "SIGNED_review_run_publish", "SIGNED_review_state_read",
+        "SIGNED_review_decision_record", "SIGNED_review_record_read",
+        "SIGNED_matter_access_read", "SIGNED_document_inventory",
+        "SIGNED_registry_ingest_parsed", "SIGNED_exhibit_register_read",
+        "SIGNED_exhibit_confirm", "SIGNED_publish_uploaded",
+        "SIGNED_brief_head_read", "SIGNED_check_bundle_read",
+        "SIGNED_matter_fact_confirm", "SIGNED_passage_flags",
+    )
+    with connect() as conn:
+        install_shims(conn, root, names)
+        conn.execute("insert into caseproof.organizations(id, display_name) values(%s,'synth')", (org,))
+        conn.execute("insert into auth.users(id, instance_id) values(%s,%s) on conflict (id) do nothing", (user, org))
+        conn.execute("insert into caseproof.organization_members(org_id,user_id,actions) values(%s,%s,array['case:read','evidence:read','finding:write','review:request']::text[])", (org, user))
+        conn.execute("insert into caseproof.cases(id,org_id,created_by_user,effective_policy_version) values(%s,%s,%s,'v1')", (case, org, user))
+        conn.execute("insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions) values(%s,%s,%s,'reviewer',array['case:read','evidence:read','evidence:upload','draft:check','review:request','exhibit:confirm']::text[])", (org, case, user))
+        rig = FakePostgrest(conn, {"user-token-a": str(user)})
+        rpc = partial(call_rpc, _conn_factory=rig.factory)
+        pub = LiveSignedBriefPublisher(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY)
+        lib = FakeStorageLibrary(conn, org)
+
+        def upload(label, data, media):
+            reg = pub.register_source_version(
+                bearer="user-token-a", case_id=str(case), label=label,
+                media_type=media, byte_length=len(data),
+                sha256_hex=hashlib.sha256(data).hexdigest())
+            lib.put(case=case, doc=UUID(reg.document_id), ver=UUID(reg.version_id),
+                    actor=user, data=data, media=media)
+            ingest_parsed_original(
+                secret_key=SERVICE_KEY, case_id=str(case), document_id=reg.document_id,
+                version_id=reg.version_id, request_id=str(uuid4()), data=data,
+                media_type=media, _conn_factory=rig.factory)
+            return reg
+
+        contract = upload("contrat", pdf, "application/pdf")
+        brief_reg = upload("mémoire", docx_without_custom_xml([brief_text]), docx_media)
+        pub.confirm_exhibit(
+            bearer="user-token-a", case_id=str(case), document_id=contract.document_id,
+            version_id=contract.version_id, display_label="Contrat")
+        pub.confirm_exhibit(bearer="user-token-a",case_id=str(case),document_id=contract.document_id,
+                            version_id=contract.version_id,display_label="Pièce 1")
+        pub.confirm_exhibit(bearer="user-token-a",case_id=str(case),document_id=contract.document_id,
+                            version_id=contract.version_id,display_label="Stuk 1")
+        composer = ComposedSignedBriefPublisher(library=lib, publisher=pub, publishable_key=PUBLISHABLE_KEY)
+        out1 = composer.publish_uploaded(
+            bearer="user-token-a", case_id=str(case), document_id=brief_reg.document_id,
+            version_id=brief_reg.version_id, document_role="own_draft", expected_revision=0)
+        assert out1.published_revision == 1
+
+        class FakeVerifier:  # FAKE auth boundary: maps the bearer to a subject
+            def verify_bearer(self, token):
+                if token not in rig.tokens:
+                    raise InvalidBearer()
+                now = datetime.now(UTC)
+                return VerifiedSubject(rig.tokens[token], "iss", "aud", now - timedelta(seconds=5),
+                                       now + timedelta(hours=1), True)
+
+        store = LiveMatterCheckStore(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY,
+                                     bearer="user-token-a", library=lib,
+                                     indexer=EvidenceIndexer(LimitedDocumentParser()))
+        ledger = LiveReviewLedger(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY, bearer="user-token-a")
+        checker = AuthorizedLitigationChecker(verifier=FakeVerifier(), store=store, issuer="iss",
+                                              audience="aud", publisher=ledger)
+        workspace = SignedReviewWorkspace(checker, ledger)
+        run1 = checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out1.brief_version_id)
+        facts = {f.claim_id: f for f in run1.factual_observations}
+        diff = [f for f in facts.values() if f.state.value == "candidate_difference"]
+        abst = [f for f in facts.values() if f.state.value in {"needs_context", "not_assessed"}]
+        assert diff and abst, {k: v.state.value for k, v in facts.items()}
+        assert diff[0].source_pdf_page == 2  # verified PDF inventory, not invented
+        citation_states = [c.state.value for c in run1.citation_observations]
+        assert citation_states.count("exact_match") == 2
+        assert citation_states.count("reference_checked_no_quotation") == 2
+        assert "reference_unresolved" in citation_states and "quote_not_found" in citation_states
+
+        # Review: decide on the contradiction, replay, then a stale revision.
+        obs = f"fact:{diff[0].claim_id}"
+        req = uuid4()
+        cmd = ReviewCommand(run1.snapshot_hash, obs, req, 0, ReviewDisposition.CONFIRMED,
+                            "Écart de montant à corriger.")
+        receipt = workspace.record(bearer="user-token-a", case_id=str(case),
+                                   brief_version_id=out1.brief_version_id, command=cmd)
+        assert receipt["revision"] == 1 and receipt["replayed"] is False
+        again = workspace.record(bearer="user-token-a", case_id=str(case),
+                                 brief_version_id=out1.brief_version_id, command=cmd)
+        assert again["replayed"] is True and again["revision"] == 1
+        with pytest.raises(AccessRejected):
+            workspace.record(bearer="user-token-a", case_id=str(case),
+                             brief_version_id=out1.brief_version_id,
+                             command=replace(cmd, request_id=uuid4()))  # stale expected revision 0
+        state = workspace.state(bearer="user-token-a", case_id=str(case),
+                                brief_version_id=out1.brief_version_id)
+        assert state["revision"] == 1 and state["release_authorized"] is False
+
+        # Correction: bounded exact-range edit, then a NEW uploaded version and recheck.
+        text = run1_text = brief_text
+        start = text.index("12.500,00")
+        proposal = CorrectionProposal(
+            obs, str(user), run1.snapshot_hash, out1.brief_version_id,
+            run1.representation_sha256, start, start + len("12.500,00"),
+            "12.500,00", "15.000,00", "Montant du contrat.")
+        preview = preview_correction(run=run1, text=run1_text, proposal=proposal)
+        corrected_reg = upload("mémoire corrigé", docx_without_custom_xml([preview.proposed_text]), docx_media)
+        out2 = composer.publish_uploaded(
+            bearer="user-token-a", case_id=str(case), document_id=corrected_reg.document_id,
+            version_id=corrected_reg.version_id, document_role="own_draft", expected_revision=1)
+        assert out2.published_revision == 2
+        run2 = checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out2.brief_version_id)
+        assert run2.snapshot_hash != run1.snapshot_hash
+        states2 = {f.state.value for f in run2.factual_observations}
+        assert "candidate_difference" not in states2 and "value_match" in states2
+        assert "needs_context" in states2 or "not_assessed" in states2  # abstention persists
+
+        # The product routes reach the SAME signed adapters (fake auth/transport only).
+        from types import SimpleNamespace
+
+        record = LiveSignedReviewRecord(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY)
+        from apps.api.litigation_original_reader import AuthorizedOriginalReader, Original
+
+        class FakeOriginalPort:  # FAKE storage boundary: bytes from the test's own blob map
+            def read(self, *, access, source_id, version_id):
+                for (_doc, ver), (data, media) in lib.blobs.items():
+                    if ver == str(version_id):
+                        return Original(data, hashlib.sha256(data).hexdigest(), media)
+                raise KeyError(version_id)
+
+        bench = SimpleNamespace(checker=checker, workspace=workspace, store=store,
+                                originals=AuthorizedOriginalReader(checker, FakeOriginalPort()))
+        client = TestClient(create_litigation_development_app(
+            signed_workbench_factory=lambda bearer: bench, signed_review_record=record,
+            signed_brief_publisher=composer),
+            client=("127.0.0.1", 50000))
+        auth = {"Authorization": "Bearer user-token-a"}
+        base2 = f"/dev/signed/matters/{case}/briefs/{out2.brief_version_id}"
+        base1 = f"/dev/signed/matters/{case}/briefs/{out1.brief_version_id}"
+        assert client.get("/dev/clearbrief/config").json()["signed_workbench"] is True
+        script = (Path(__file__).resolve().parents[1] / "apps/web/clearbrief/workspace.js").read_text()
+        assert "correction-preview" in script and 'id="correction-form"' in (Path(__file__).resolve().parents[1] / "apps/web/clearbrief/index.html").read_text()
+        assert 'api(reviewPath()+"/check"' in script and 'api(reviewPath()+"/review"' in script
+        docs = client.get(f"/dev/signed/matters/{case}/documents", headers=auth)
+        assert docs.status_code == 200
+        assert client.get(base2 + "/check").status_code == 401
+        assert client.post(base2 + "/check", headers=auth).status_code == 200
+        assert client.get(base2 + "/check", headers={"Authorization": "Bearer nobody"}).status_code == 401
+        http_run2 = client.get(base2 + "/check", headers=auth).json()
+        assert http_run2["snapshot_hash"] == run2.snapshot_hash
+        assert "not legal conclusions" in http_run2["note"]
+        assert "candidate_difference" not in {
+            f["state"] for f in http_run2["factual_observations"]}
+        # Recheck of the ORIGINAL version still reports the candidate difference.
+        http_run1 = client.get(base1 + "/check", headers=auth).json()
+        assert http_run1["snapshot_hash"] == run1.snapshot_hash
+        assert any(f["state"] == "candidate_difference" for f in http_run1["factual_observations"])
+        # Correction preview: bounded, writes nothing, bound to the current snapshot.
+        body_cp = {"snapshot_hash": run1.snapshot_hash, "observation_id": obs,
+                   "start": start, "end": start + len("12.500,00"), "before": "12.500,00",
+                   "after": "15.000,00", "rationale": "Montant du contrat."}
+        cp = client.post(base1 + "/correction-preview", headers=auth, json=body_cp)
+        assert cp.status_code == 200 and cp.json()["persisted"] is False
+        assert cp.json()["proposed_text"] == preview.proposed_text
+        located = {k: v for k, v in body_cp.items() if k not in {"start", "end"}}
+        assert client.post(base1 + "/correction-preview", headers=auth,
+                           json=located).json()["proposed_text"] == preview.proposed_text
+        # Text that does not occur exactly once abstains instead of guessing.
+        assert client.post(base1 + "/correction-preview", headers=auth,
+                           json={**located, "before": "Le "}).status_code == 409
+        assert client.post(base1 + "/correction-preview", headers=auth,
+                           json={**body_cp, "snapshot_hash": "0" * 64}).status_code == 409
+        assert client.post(base1 + "/correction-preview", headers=auth,
+                           json={**body_cp, "before": "99.999,00"}).status_code == 409
+        assert client.post(base1 + "/correction-preview", json=body_cp).status_code == 401
+        inv = client.get(base2 + "/sources", headers=auth).json()
+        assert inv["brief_version_id"] == out2.brief_version_id and inv["rows"]
+        locs=inv["reference_locations"]
+        assert locs["ref-03"]["identity_confirmed"] is True and locs["ref-03"]["pdf_page"]==2
+        assert locs["ref-04"]["identity_confirmed"] is True and locs["ref-04"]["pdf_page"]==1
+        assert locs["ref-05"]["identity_confirmed"] is False
+        src_id = inv["rows"][0]["source_id"]
+        assert inv["labels"][src_id] == "Contrat"  # confirmed register label, not a UUID
+        assert client.get(f"{base2}/sources/{src_id}", headers=auth).status_code == 200
+        assert client.get(base2 + "/sources").status_code == 401
+        # Source inspection over the signed routes: verified bytes and a page rendering.
+        ver_id = inv["rows"][0]["version_id"]
+        orig = client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/original", headers=auth)
+        assert orig.status_code == 200 and orig.content == pdf
+        assert orig.headers["x-caseproof-original-sha256"] == hashlib.sha256(pdf).hexdigest()
+        assert orig.headers["content-disposition"].startswith("attachment")
+        page_png = client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/pages/2", headers=auth)
+        assert page_png.status_code == 200 and page_png.content[:4] == b"\x89PNG"
+        assert client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/pages/99", headers=auth).status_code == 404
+        assert client.get(f"{base2}/sources/{src_id}/versions/{ver_id}/original").status_code == 401
+        assert client.get(f"{base2}/sources/{src_id}/versions/{uuid4()}/original", headers=auth).status_code in {403, 404}
+        # Literal search over the declared, verified versions (never a support claim).
+        assert client.post(base2 + "/evidence/search", json={"query": "ab"}).status_code == 401
+        assert client.post(base2 + "/evidence/search", json={"query": "a"}, headers=auth).status_code == 422
+        found = client.post(base2 + "/evidence/search", json={"query": "zzqx-absent-term"}, headers=auth)
+        assert found.status_code == 200 and found.json()["hits"] == []
+        assert found.json()["schema"] == "caseproof-evidence-search-v1"
+        # Review over HTTP on the current version; replay is idempotent.
+        assert client.get(base2 + "/review", headers=auth).json()["revision"] == 0
+        inventory = client.get(base2 + "/review", headers=auth).json()["blocker_inventory"]
+        assert inventory["verdict"] == "not_computed" and inventory["release_authorized"] is False
+
+        abst2 = next(f for f in run2.factual_observations
+                     if f.state.value in {"needs_context", "not_assessed"})
+        rv = {"snapshot_hash": run2.snapshot_hash, "observation_id": f"fact:{abst2.claim_id}",
+              "request_id": "11111111-1111-4111-8111-111111111111", "expected_revision": 0,
+              "disposition": "needs_information", "rationale": "Date à vérifier au contrat."}
+        first = client.post(base2 + "/review", headers=auth, json=rv).json()
+        assert first["revision"] == 1 and first["replayed"] is False
+        assert client.post(base2 + "/review", headers=auth, json=rv).json()["replayed"] is True
+        assert client.post(base2 + "/review", headers=auth, json={**rv, "snapshot_hash": "0" * 64,
+                           "request_id": "22222222-2222-4222-8222-222222222222",
+                           "expected_revision": 1}).status_code in {403, 404, 409}
+        assert client.get(base2 + "/review", headers=auth).json()["revision"] == 1
+        exported = client.get(f"/dev/signed/matters/{case}/review-record", headers=auth)
+        assert exported.status_code == 200
+        assert out2.brief_version_id in exported.text
+
+        # Export: signed review record, all revisions consistent and verified.
+        body = record.record(bearer="user-token-a", case_id=str(case), document_role="own_draft")
+        dumped = json.dumps(body, default=str)
+        assert out2.brief_version_id in dumped
+        assert run1.snapshot_hash in dumped and run2.snapshot_hash in dumped
+
+        # Human missed-passage report: actor/custody and replay are enforced in SQL.
+        from apps.api.signed_supabase_facts import FactRefused
+        from apps.api.signed_supabase_flags import LivePassageFlags
+        flag_port = LivePassageFlags(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY, bearer="user-token-a")
+        checker.passage_flags_for = lambda b: flag_port
+        flag_request = str(uuid4())
+        # Reopen the actual authorized representation, no invented passage.
+        flag_bundle = store.load_bundle(case_id=str(case), brief_version_id=out2.brief_version_id,
+                                       access=checker._scope(checker._verified("user-token-a"), str(case)))
+        flag_preview = flag_bundle.previews[0]
+        f = {"brief_version_id": out2.brief_version_id,
+             "source_document_id": flag_preview.row.document_id,
+             "source_version_id": flag_preview.row.version_id,
+             "draft_passage": flag_bundle.representation.text[:30],
+             "source_passage": flag_preview.text[:30], "source_start": 0,
+             "rationale": "Synthetic human report of a missed passage."}
+        assert client.post(f"/dev/signed/matters/{case}/passage-flags", json={"request_id": flag_request, **f}).status_code == 401
+        url_flag = f"/dev/signed/matters/{case}/passage-flags"
+        assert client.post(url_flag, json={"request_id": flag_request, **f}, headers=auth).status_code == 200
+        assert client.post(url_flag, json={"request_id": flag_request, **f}, headers=auth).json()["recorded"] is False
+        assert client.post(url_flag, json={"request_id": str(uuid4()), **f, "source_passage": "not in this source"}, headers=auth).status_code in {403, 404}
+        with pytest.raises(FactRefused):
+            flag_port.record(case_id=str(case), request_id=flag_request, flag={**f,"rationale":"changed"})
+        flags = flag_port.list(case_id=str(case))
+        assert len(flags) == 1 and flags[0]["actor_id"] == str(user)
+        flagged_run = checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out2.brief_version_id)
+        assert flagged_run.snapshot_hash != run2.snapshot_hash
+        assert flagged_run.passage_flags[0]["binding_current"] is True
+        flagged_inventory = client.get(base2 + "/review", headers=auth).json()["blocker_inventory"]
+        assert any(x["observation_id"].startswith("flag:") for x in flagged_inventory["items"])
+        assert checker.check(bearer="user-token-a", case_id=str(case), brief_version_id=out1.brief_version_id).passage_flags == ()
+        assert client.get(base2 + "/review", headers=auth).json()["revision"] == 0
+        from application.litigation.unified_review import verification_record
+        assert b"human_passage_flags" in verification_record(flagged_run)
+        from psycopg.errors import RaiseException
+        with pytest.raises(RaiseException), conn.transaction():
+            conn.execute("delete from caseproof._m3_passage_flags")
+
+        # Fact confirmation: actor and source hash come from the server, append-only.
+        from apps.api.signed_supabase_facts import FactRefused, LiveMatterFacts
+        facts_port = LiveMatterFacts(call_rpc=rpc, publishable_key=PUBLISHABLE_KEY, bearer="user-token-a")
+        rid = str(uuid4())
+        kw = {"case_id": str(case), "name": "bail_ecrit", "value": True, "confirmed": True,
+              "source_document_id": contract.document_id, "source_version_id": contract.version_id,
+              "locator": "page 1"}
+        assert facts_port.confirm(request_id=rid, **kw) is True
+        assert facts_port.confirm(request_id=rid, **kw) is False  # exact replay
+        with pytest.raises(FactRefused):  # same request id, different content
+            facts_port.confirm(request_id=rid, **{**kw, "value": False})
+        with pytest.raises(FactRefused):  # unknown source version of this matter
+            facts_port.confirm(request_id=str(uuid4()), **{**kw, "source_version_id": str(uuid4())})
+        listed = facts_port.list(case_id=str(case))
+        assert [(r["name"], r["value"], r["confirmed"]) for r in listed] == [("bail_ecrit", True, True)]
+        assert listed[0]["actor_id"] == str(user)
+        assert listed[0]["source_sha256"] == hashlib.sha256(pdf).hexdigest()
+        facts_port.confirm(request_id=str(uuid4()), **{**kw, "value": False})
+        assert facts_port.list(case_id=str(case))[0]["value"] is False  # latest wins, history kept
+        assert conn.execute("select count(*) from caseproof._m3_matter_facts where org_id=%s and case_id=%s", (org,case)).fetchone()[0] == 2
+        # The actor selects a passage that exists verbatim in the named source version.
+        from types import SimpleNamespace
+
+        from apps.api.signed_workbench_routes import FactConfirmBody, _verified_passage
+        wb = SimpleNamespace(checker=checker)
+        pbody = {"request_id": str(uuid4()), "name": "bail_ecrit", "value": True, "confirmed": True,
+                 "source_document_id": contract.document_id, "source_version_id": contract.version_id,
+                 "brief_version_id": out2.brief_version_id, "passage": "Le prix est payable"}
+        locator = _verified_passage(wb, "user-token-a", str(case), FactConfirmBody(**pbody))
+        assert locator.startswith("p.2 offsets ") and "Le prix est payable" in locator
+        with pytest.raises(AccessRejected):  # words that are not in the source
+            _verified_passage(wb, "user-token-a", str(case),
+                              FactConfirmBody(**{**pbody, "passage": "texte absent de la source"}))
+        with pytest.raises(AccessRejected):  # a source version of another document
+            _verified_passage(wb, "user-token-a", str(case), FactConfirmBody(
+                **{**pbody, "source_document_id": brief_reg.document_id,
+                   "source_version_id": brief_reg.version_id}))
+        with pytest.raises(Exception, match="append-only"), conn.transaction():
+            conn.execute("update caseproof._m3_matter_facts set confirmed=false")
+
+        # Real-model custody: no intent row exists for either uploaded source.
+        assert conn.execute("select count(*) from caseproof._s2_009b_vault_intents where org_id=%s", (org,)).fetchone()[0] == 0
+        bound = conn.execute("select vault_intent_id,source_binding_kind,source_binding from caseproof._m2_brief_versions where org_id=%s and version_id=%s", (org,out2.brief_version_id)).fetchone()
+        assert bound[0] is None and bound[1] == "trusted_storage_source_v1"
+        assert bound[2]["object_key"].endswith(hashlib.sha256(lib.blobs[(corrected_reg.document_id,corrected_reg.version_id)][0]).hexdigest())
+        # Tampered storage key immediately refuses a new check and review replay.
+        with conn.transaction(force_rollback=True):
+            conn.execute("delete from storage.objects where name=%s", (f"{org}/{case}/{contract.document_id}/{contract.version_id}/{hashlib.sha256(pdf).hexdigest()}",))
+            with pytest.raises(AccessRejected):
+                checker.check(bearer="user-token-a",case_id=str(case),brief_version_id=out2.brief_version_id)
+            assert rpc(publishable_key=PUBLISHABLE_KEY,bearer="user-token-a",name="caseproof_signed_review_state",args={"p_case":str(case),"p_snapshot_sha":run2.snapshot_hash})["ok"] is False
+            with pytest.raises(FactRefused):
+                facts_port.confirm(request_id=rid, **kw)
+        with conn.transaction(force_rollback=True):
+            conn.execute("alter table storage.objects add column if not exists archived_at timestamptz")
+            conn.execute("update storage.objects set archived_at=now() where name=%s",
+                         (bound[2]["object_key"],))
+            assert conn.execute("select caseproof._signed_brief_binding_current(%s,%s,%s)",
+                                (org,case,out2.brief_version_id)).fetchone()[0] is False
+            with pytest.raises(AccessRejected):
+                checker.check(bearer="user-token-a",case_id=str(case),brief_version_id=out2.brief_version_id)
+        # Legacy lineages remain present but cannot claim the new binding.
+        assert conn.execute("select caseproof._signed_brief_binding_current(%s,%s,%s)",
+                            (org,case,str(uuid4()))).fetchone()[0] is False
+        # Current authorization is rechecked even for an identical replay.
+        with conn.transaction(force_rollback=True):
+            conn.execute("update caseproof._m1_matter_grants set active=false where org_id=%s and case_id=%s and user_id=%s", (org,case,user))
+            with pytest.raises(FactRefused):
+                facts_port.confirm(request_id=rid, **kw)
+
+
+def test_configured_dev_entry_installs_the_signed_workbench(monkeypatch):
+    """The normal configured entrypoint installs assemble_request_workbench.
+
+    Construction only: no network call, no credential use. Opt-in is explicit.
+    """
+    import importlib
+
+    key = "sb_publishable_" + "D" * 24
+    monkeypatch.setenv("CASEPROOF_DEV_PUBLISHABLE_KEY", key)
+    monkeypatch.delenv("CASEPROOF_SIGNED_WORKBENCH_DEV", raising=False)
+    import apps.api.dev_live_entry as entry
+
+    off = TestClient(importlib.reload(entry).app, client=("127.0.0.1", 50000))
+    assert off.get("/dev/clearbrief/config").json()["signed_workbench"] is False
+    monkeypatch.setenv("CASEPROOF_SIGNED_WORKBENCH_DEV", "YES")
+    on = TestClient(importlib.reload(entry).app, client=("127.0.0.1", 50000))
+    assert on.get("/dev/clearbrief/config").json()["signed_workbench"] is True
+    # Without a bearer the signed routes refuse before any network call.
+    brief = "00000000-0000-4000-8000-000000000001"
+    assert on.get(f"/dev/signed/matters/{brief}/briefs/{brief}/check").status_code == 401
+    assert on.get(f"/dev/signed/matters/{brief}/review-record").status_code == 401
+    monkeypatch.delenv("CASEPROOF_SIGNED_WORKBENCH_DEV")
+    monkeypatch.delenv("CASEPROOF_DEV_PUBLISHABLE_KEY")
+    importlib.reload(entry)
+
+
+def test_signed_upload_runs_server_side_ingest_on_verified_readback():
+    # Fake library and fake ingest port: this proves route wiring only, not RPC behaviour.
+    from types import SimpleNamespace
+
+    from fastapi.testclient import TestClient
+
+    from apps.api.litigation_development_app import create_litigation_development_app
+    stored, ingested = {}, []
+
+    class _Lib:
+        def put_once(self, *, bearer, case_id, document_id, version_id, data):
+            stored["bytes"] = data
+
+        def read(self, *, bearer, case_id, document_id, version_id):
+            return b"READBACK:" + stored["bytes"]
+
+        def source(self, *, bearer, case_id, document_id, version_id):
+            return SimpleNamespace(content_type="application/pdf"), 1
+
+    app = create_litigation_development_app(
+        signed_originals=_Lib(), signed_source_ingest=lambda **k: ingested.append(k))
+    url = f"/dev/signed/matters/{_UUID_C}/documents/{_UUID_D}/versions/{_UUID_E}/original"
+    r = TestClient(app, client=("127.0.0.1", 50000)).put(url, content=b"abc", headers={"Authorization": "Bearer t"})
+    assert r.status_code == 201
+    assert ingested[0]["data"] == b"READBACK:abc" and ingested[0]["media_type"] == "application/pdf"
+    # An ingest failure is never reported as a successful upload.
+    app2 = create_litigation_development_app(
+        signed_originals=_Lib(), signed_source_ingest=lambda **k: (_ for _ in ()).throw(ValueError("x")))
+    assert TestClient(app2, client=("127.0.0.1", 50000)).put(url, content=b"abc", headers={"Authorization": "Bearer t"}).status_code == 503
+
+
+# --- legal-reference check against a chosen corpus (synthetic corpus text) ---
+def _legal_corpus(*, versions=("v1",), article="12"):
+    import hashlib
+
+    from application.litigation.corpus import ArticleRecord
+    text = "Le preneur répond des dégradations survenues pendant sa jouissance."
+    return [ArticleRecord(
+        act="synthetic-civ", article=article, language="fr", version=v,
+        source_uri="synthetic://corpus", acquired_at="2026-11-22T00:00:00+01:00",
+        consolidated=True, original_sha256="0" * 64, derived_text=text,
+        derived_sha256=hashlib.sha256(text.encode()).hexdigest()) for v in versions]
+
+
+def test_legal_reference_check_statuses_and_honest_boundaries():
+    from application.litigation.legal_references import check_legal_references
+    from application.litigation.rule_results import RuleStatus as S
+    aliases = {"C.civ.": "synthetic-civ"}
+    recs = _legal_corpus()
+
+    def run(text, records=recs, **kw):
+        return check_legal_references(text, records, aliases, **kw)
+
+    ok = run("Selon l'Article 12 du Code civil, « le preneur répond  des dégradations ».")
+    assert [o.status for o in ok] == [S.PASS] and ok[0].reason == "quotation_found_verbatim_in_corpus_article"
+    assert ok[0].corpus_version == "v1" and len(ok[0].corpus_text_sha256) == 64
+    # A quotation that is not in the stored article text fails, narrowly.
+    bad = run("Article 12 du Code civil : « le preneur ne répond de rien ».")
+    assert bad[0].status is S.FAIL and bad[0].reason == "quotation_absent_from_corpus_article_text"
+    # Present article, no bound quotation: existence only, never support.
+    bare = run("Voir Article 12 du Code civil.")
+    assert bare[0].status is S.PASS and bare[0].reason.endswith("no_quotation_bound")
+    # Article absent from the chosen corpus is the one UNVERIFIED case.
+    assert run("Article 99 du Code civil.")[0].status is S.UNVERIFIED
+    # Act not mapped by the corpus owner: UNDETERMINED, never UNVERIFIED.
+    other = check_legal_references("Article 12 du Code judiciaire.", recs, aliases)
+    assert other[0].status is S.UNDETERMINED and other[0].reason == "act_not_mapped_to_chosen_corpus"
+    # Several declared versions and none chosen: UNDETERMINED; choice resolves it.
+    multi = _legal_corpus(versions=("v1", "v2"))
+    assert run("Article 12 du Code civil.", multi)[0].reason == "several_declared_versions_none_chosen"
+    assert run("Article 12 du Code civil.", multi,
+               chosen_versions={"synthetic-civ": "v2"})[0].corpus_version == "v2"
+    # A mention in a form the parser cannot read is surfaced, never skipped.
+    lower = run("Selon l'article 12 du Code civil, ...")
+    assert [o.status for o in lower] == [S.PASS] and lower[0].article == "12"
+    unreadable = run("Selon l'article 12 précité, ...")
+    assert unreadable and all(o.status is S.UNDETERMINED for o in unreadable)
+    assert unreadable[0].reason == "article_mention_not_readable_by_level1_parser"
+    # Deterministic and bounded to explicit inputs.
+    assert run("Article 12 du Code civil.") == run("Article 12 du Code civil.")
+
+
+def test_legal_observations_are_part_of_the_frozen_run_and_reviewable():
+    import json
+    from dataclasses import replace
+
+    from application.litigation.legal_references import check_legal_references
+    from application.litigation.unified_review import (
+        ObservationReview,
+        ReviewDisposition,
+        run_unified_check,
+        verification_record,
+    )
+    from tests.test_litigation_m2_unified_review import rig
+    b, register, previews, scope = rig()
+    legal = check_legal_references(
+        "Article 12 du Code civil : « le preneur ne répond de rien ».",
+        _legal_corpus(), {"C.civ.": "synthetic-civ"})
+    kw = {"representation": b, "register": register, "previews": previews,
+          "source_scope": scope, "authorized_case_id": "case-1",
+          "authorized_register_revision": 4}
+    plain = run_unified_check(**kw)
+    with_legal = run_unified_check(**kw, legal_observations=legal)
+    # No legal observation: the historical snapshot hash is unchanged.
+    assert plain.legal_observations == () and run_unified_check(**kw).snapshot_hash == plain.snapshot_hash
+    # Legal results are bound into the snapshot, so a corpus change is a new run.
+    assert with_legal.snapshot_hash != plain.snapshot_hash
+    other = replace(legal[0], corpus_text_sha256="1" * 64)
+    assert run_unified_check(**kw, legal_observations=(other,)).snapshot_hash != with_legal.snapshot_hash
+    oid = "legal:" + legal[0].reference_id
+    review = ObservationReview(oid, "actor-1", ReviewDisposition.CONFIRMED, "citation a corriger")
+    record = json.loads(verification_record(with_legal, reviews=(review,)))
+    assert record["legal_references"][0]["status"] == "FAIL"
+    # A decision on a legal id the run does not contain is refused.
+    import pytest
+
+    from application.litigation.unified_review import VerificationError
+    with pytest.raises(VerificationError):
+        verification_record(plain, reviews=(review,))
+
+
+def test_legal_corpus_is_chosen_per_matter_never_by_default(tmp_path):
+    import json
+
+    import pytest
+
+    from apps.api.signed_live_composition import legal_corpus_provider
+    assert legal_corpus_provider({})("case-a") is None
+    (tmp_path / "corpus-manifest.toml").write_text("")
+    chosen = legal_corpus_provider({"CASEPROOF_LEGAL_CORPUS_BY_CASE": json.dumps({"case-a": str(tmp_path)})})
+    assert chosen("case-b") is None
+    # A chosen but unreadable corpus fails closed instead of silently reading as "no corpus".
+    from application.litigation.corpus import CorpusError
+    with pytest.raises(CorpusError):
+        chosen("case-a")
+    with pytest.raises(ValueError):
+        legal_corpus_provider({"CASEPROOF_LEGAL_CORPUS_BY_CASE": "[1]"})
+
+
+def test_lawyer_rules_run_on_cited_articles_and_name_missing_inputs():
+    from application.litigation.legal_references import check_legal_references
+    from application.litigation.suitability_review import (
+        SuitabilityConfig,
+        evaluate_suitability,
+    )
+    from application.litigation.suitability_rules import ConfirmedFact, load_rule
+    recs = _legal_corpus()
+    keys = frozenset(r.key for r in recs)
+    rule = load_rule("""
+[rule]
+format = "caseproof-suitability-rule-format-v1"
+id = "synthetic.rule"
+version = "0.1.0"
+scope = "Synthetic rule."
+reference = "Synthetic art. 12"
+[article]
+act = "synthetic-civ"
+article = "12"
+language = "fr"
+version = "v1"
+[condition]
+all = [ { fact = "a", op = "eq", value = true }, { fact = "b", op = "eq", value = true } ]
+""")
+    legal = check_legal_references("Article 12 du Code civil.", recs, {"C.civ.": "synthetic-civ"})
+    facts = ((ConfirmedFact("a", True, True), "Pièce 1, confirmé"),
+             (ConfirmedFact("b", True, False), "à confirmer"))
+    out = evaluate_suitability(legal, SuitabilityConfig((rule,), facts), keys)
+    assert [(o.status, o.reason) for o in out] == [("UNDETERMINED", "facts_unavailable_unconfirmed_or_incomparable")]
+    assert out[0].missing == ("b",) and out[0].cited_by == (legal[0].reference_id,)
+    assert dict((n, p) for n, _, _, p in out[0].facts)["a"] == "Pièce 1, confirmé"
+    confirmed = SuitabilityConfig((rule,), ((ConfirmedFact("a", True, True), "p1"),
+                                            (ConfirmedFact("b", True, True), "p2")))
+    assert evaluate_suitability(legal, confirmed, keys)[0].status == "PASS"
+    # A rule whose article the brief does not cite is not run.
+    assert evaluate_suitability((), confirmed, keys) == ()
+    # A fact without provenance is refused at load time.
+    import tempfile
+    from pathlib import Path
+
+    from application.litigation.suitability_review import load_suitability_config
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "confirmed-facts.toml").write_text('[[fact]]\nname = "a"\nvalue = true\nconfirmed = true\n')
+        cfg = load_suitability_config(Path(d))
+        assert cfg.facts == () and cfg.failures
+
+
+def test_authenticated_facts_replace_declared_file_facts():
+    from application.litigation.suitability_review import (
+        SuitabilityConfig,
+        merge_authenticated_facts,
+    )
+    from application.litigation.suitability_rules import ConfirmedFact
+    base = SuitabilityConfig((), ((ConfirmedFact("a", True, False), "file: declared"),))
+    row = {"name": "a", "value": True, "confirmed": True, "actor_id": "u-1",
+           "source_version_id": "v-1", "source_sha256": "ab" * 32, "locator": "p2",
+           "recorded_at": "2026-11-23T15:00:00+01:00"}
+    merged = merge_authenticated_facts(base, [row])
+    (fact, prov), = merged.facts
+    assert fact.confirmed is True and prov.startswith("authenticated signed session: actor u-1")
+    bad = merge_authenticated_facts(base, [{**row, "value": None}])
+    assert bad.failures
+    # A declared file fact never counts as confirmed once a signed ledger is in use.
+    (declared, why), = bad.facts
+    assert declared.confirmed is False and why.startswith("declared in file, not authenticated")
+    legacy = merge_authenticated_facts(
+        SuitabilityConfig((), ((ConfirmedFact("a", True, True), "file"),)), [],
+        require_authenticated=False)
+    assert legacy.facts[0][0].confirmed is True
+
+
+def test_fact_or_rule_change_makes_a_new_snapshot_so_old_decisions_do_not_carry_over():
+    from dataclasses import replace
+
+    from application.litigation.unified_review import SuitabilityObservation, run_unified_check
+    from tests.test_litigation_m2_unified_review import rig
+    b, register, previews, scope = rig()
+    kw = {"representation": b, "register": register, "previews": previews,
+          "source_scope": scope, "authorized_case_id": "case-1",
+          "authorized_register_revision": 4}
+    obs = SuitabilityObservation(
+        rule_id="r", rule_version="0.1.0", reference="ref", scope="s", status="PASS",
+        reason="ok", article_key="a#1#fr#v", cited_by=("legal-ref-01",), missing=(),
+        facts=(("f", "True", True, "authenticated: actor, source sha"),),
+        input_hashes=(("rule_source", "1" * 64),), subresults=(("p0", "holds"),))
+    base = run_unified_check(**kw, suitability_observations=(obs,)).snapshot_hash
+    assert base == run_unified_check(**kw, suitability_observations=(obs,)).snapshot_hash
+    for changed in (
+        replace(obs, facts=(("f", "False", True, "authenticated: actor, source sha"),)),
+        replace(obs, facts=(("f", "True", True, "authenticated: other source sha"),)),
+        replace(obs, rule_version="0.2.0"),
+        replace(obs, input_hashes=(("rule_source", "2" * 64),)),
+    ):
+        assert run_unified_check(**kw, suitability_observations=(changed,)).snapshot_hash != base
+
+
+def test_event_language_review_is_separate_from_equal_dates_and_human_support():
+    import json
+    from dataclasses import replace
+
+    from application.litigation.unified_review import (
+        ObservationReview,
+        ReviewDisposition,
+        run_unified_check,
+        verification_record,
+    )
+    from tests.test_litigation_m2_unified_review import rig
+
+    source = "Le contrat a été envoyé pour signature le 12 mars."
+    text = 'Le contrat a été signé le 12 mars. Voir « ' + source + ' » (Pièce 1).'
+    b, register, previews, scope = rig(text, source, quote=source)
+    b = replace(b, claims=())
+
+    def check(rep=b, ps=previews):
+        return run_unified_check(representation=rep, register=register, previews=ps,
+                                 source_scope=scope, authorized_case_id="case-1",
+                                 authorized_register_revision=4)
+
+    run = check()
+    e, = run.event_observations
+    assert e.draft_events == ("signed",) and e.source_events == ("sent_for_signature",)
+    assert e.reason == "different_event_wording_requires_human_review"
+    assert e.state == "needs_context" and e.semantic_support == "not_assessed"
+    assert e.source_text == source and e.source_id == "src-1"
+    decision = ObservationReview("event:" + e.observation_id, "actor-1",
+                                 ReviewDisposition.NEEDS_INFORMATION,
+                                 "Transmission shown; signature still needs evidence (synthetic).")
+    payload = json.loads(verification_record(run, reviews=(decision,)))
+    assert payload["event_candidates"][0]["source_sha256"] == previews[0].row.original_sha256
+    assert payload["reviewer_dispositions"][0]["observation_id"].startswith("event:")
+    changed = replace(previews[0], row=replace(previews[0].row, original_sha256="f" * 64))
+    assert check(ps=(changed,)).snapshot_hash != run.snapshot_hash
+    # Uncited, negated, uncertain or same-event wording never becomes support.
+    from application.litigation.event_review import review_events
+    assert review_events("Le contrat a été signé le 12 mars.", (), (), ())[0].source_id is None
+    neg = text.replace("a été signé", "n'a pas été signé")
+    assert review_events(neg, (), (), ()) == ()  # phrase not in supported detector
+    same = text.replace("a été signé", "a été envoyé pour signature")
+    rows = review_events(same, b.brief.references, run.citation_observations, previews)
+    assert rows[0].reason == "same_event_wording_support_not_assessed"
+    assert rows[0].semantic_support == "not_assessed"
+    assert review_events('« Le contrat a été signé » (Pièce 1).', (), (), ()) == ()
+
+
+@pytest.mark.parametrize(("claim", "source"), [
+    ("Le contrat a été signé.", "Le contrat a été envoyé pour signature."),
+    ("The contract was signed.", "The contract was sent for signature."),
+    ("Het contract werd ondertekend.", "Het contract is ter ondertekening verzonden."),
+])
+def test_event_review_supported_languages_abstentions(claim, source):
+    from dataclasses import replace
+
+    from application.litigation.brief_checks import check_brief_references
+    from application.litigation.event_review import review_events
+    from tests.test_litigation_m2_unified_review import rig
+    text = claim + ' « ' + source + ' » (Pièce 1).'
+    b, register, previews, _ = rig(text, source, quote=source)
+    c = check_brief_references(brief=b.brief, register=register, previews=previews,
+                              authorized_case_id="case-1", authorized_register_revision=4)
+    e, = review_events(text, b.brief.references, c.observations, previews)
+    assert e.reason == "different_event_wording_requires_human_review"
+    p = replace(previews[0], row=replace(previews[0].row, warnings=("partial",)))
+    assert review_events(text, b.brief.references, c.observations, (p,))[0].source_id is None
+    assert review_events(text + '\n' + text, b.brief.references, c.observations, previews)[0].source_id is None
+    assert review_events("Possibly " + text, b.brief.references, c.observations, previews)[0].reason == "draft_event_context_ambiguous"
+
+
+def test_cli_stack_failure_diagnostics_remain_redacted_and_failing():
+    import inspect
+
+    from scripts import fresh_supabase_cli_profile, probe_historical_74_upgrade, probe_supabase_cli_local
+    from scripts.probe_supabase_cli_local import output_tail
+    assert '"cli_output_tail": output_tail(start.stdout' in inspect.getsource(probe_supabase_cli_local)
+    # The failure report must include redacted startup output, not only a category.
+    for module in (fresh_supabase_cli_profile, probe_historical_74_upgrade):
+        code = inspect.getsource(module)
+        startup = code[code.index('"status": "' + ('LOCAL_STACK_FAILED' if module is fresh_supabase_cli_profile else 'HISTORICAL_LOCAL_STACK_FAILED')):]
+        assert '"cli_output_tail": output_tail(' in startup.split('folder =')[0]
+    diagnostic = output_tail("Error: container failed password=sentinel-secret\npostgres://u:sentinel-password@host/db")
+    assert "container failed" in diagnostic
+    assert "sentinel-secret" not in diagnostic and "sentinel-password" not in diagnostic
+
+
+def test_blocker_inventory_is_not_readiness_and_human_review_does_not_waive():
+    from application.litigation.review_blockers import review_blockers
+    from application.litigation.unified_review import ObservationReview, ReviewDisposition
+    from tests.test_litigation_m2_unified_review import check
+    run = check()
+    before = review_blockers(run)
+    assert before["verdict"] == "not_computed" and before["release_authorized"] is False
+    assert before["waiver_policy"] == "not_decided"
+    oid = "fact:" + run.factual_observations[0].claim_id
+    after = review_blockers(run, (ObservationReview(oid, "actor", ReviewDisposition.DISMISSED, "Human review"),))
+    assert any(r["observation_id"] == oid and r["reason"] != "human_review_not_recorded" for r in after["items"])
+    assert not any(r["observation_id"] == oid and r["reason"] == "human_review_not_recorded" for r in after["items"])
+    assert after["verdict"] == "not_computed"
+
+
+def test_storage_binding_rejects_identity_digest_and_length_tamper():
+    from apps.api.signed_source_binding import valid_storage_binding
+    payload=_bundle_payload("contrat",b"contrat")
+    source=payload["sources"][0]
+    binding=source["source_binding"]
+    kw={"org":_UUID_A,"case":_UUID_C,"document":_UUID_D,"version":_UUID_E,
+        "original_sha":source["original_sha256_hex"],"byte_length":7,"media_type":"text/plain"}
+    assert valid_storage_binding(binding,**kw)
+    for field,value in (("kind","legacy_vault_intent"),("audit_id","not-an-id"),
+                        ("snapshot_sha256","bad"),("bucket","other"),("object_key","other/case"),
+                        ("original_sha256","0"*64),("representation_sha256","bad"),
+                        ("byte_length",8),("media_type","image/png")):
+        assert not valid_storage_binding({**binding,field:value},**kw)
+    assert not valid_storage_binding(None,**kw)
+
+
+def test_composed_piece_stuk_references_keep_unresolved_and_page_spaces():
+    import copy
+    register=copy.deepcopy(_REGISTER)
+    register["entries"][0]["display_label"]="Pièce 1"
+    register["entries"][0]["aliases"]=["Stuk 1"]
+    register["entries"][0]["pages"]=[
+        {"source_id":_PUBLISH_DOC,"version_id":_PUBLISH_VER,
+         "pdf_page":n,"printed_page":n+6,"bundle_page":n+19} for n in (1,2,3)]
+    text=("Voir Pièce 1, imprimée p. 8. Zie Stuk 1, bundle p. 22. "
+          "Voir Pièce 1, p. 8. Voir Pièce 99. "
+          "Citation « terme introuvable » (Pièce 1).")
+    composer,captured=_composer_rig(text.encode(),register)
+    composer.publish_uploaded(bearer="jwt",case_id=_PUBLISH_CASE,document_id=_PUBLISH_DOC,
+                              version_id=_PUBLISH_VER,document_role="own_draft",expected_revision=0)
+    refs=captured["p_references"]
+    assert len(refs)==5
+    assert [r["pdf_page"] for r in refs[:4]]==[2,3,None,None]
+    assert [r["exact_quote"] for r in refs[:4]]==[None]*4
+    assert refs[3]["exhibit_label"]=="pièce 99"
+    assert refs[4]["exact_quote"]=="terme introuvable"
+
+
+def _docx_with_note_story(note_xml, *, kind="footnotes", body_xml=None, extra=None):
+    import io
+    import zipfile
+    ns="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    raw=_docx_fixture_bytes(["Voir Pièce 1."])
+    target=io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(target,"w",zipfile.ZIP_DEFLATED) as out:
+        for item in source.infolist():
+            blob=source.read(item.filename)
+            if item.filename=="word/document.xml" and body_xml is not None:
+                blob=f'<w:document xmlns:w="{ns}"><w:body>{body_xml}</w:body></w:document>'.encode()
+            out.writestr(item.filename,blob)
+        out.writestr(f"word/{kind}.xml",f'<w:{kind} xmlns:w="{ns}">{note_xml}</w:{kind}>')
+        for name,blob in (extra or {}).items():
+            out.writestr(name,blob)
+    return target.getvalue()
+
+
+@pytest.mark.parametrize("kind",["footnotes","endnotes"])
+def test_signed_docx_plain_notes_preserve_text_without_inventing_pages(kind):
+    from apps.api.signed_document_parse import parse_verified_original
+    from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
+    media="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    note=f'<w:{"footnote" if kind=="footnotes" else "endnote"} w:id="2"><w:p><w:r><w:t>Voir Stuk 2, art. 1382.</w:t></w:r></w:p></w:{"footnote" if kind=="footnotes" else "endnote"}>'
+    raw=_docx_with_note_story(note,kind=kind)
+    text,manifest=parse_verified_original(document_id=_PUBLISH_DOC,version_id=_PUBLISH_VER,data=raw,media_type=media)
+    assert "Voir Stuk 2, art. 1382." in text
+    assert any(b["kind"]=="docx_note" for b in manifest["blocks"])
+    assert all(b["page_index"] is None for b in manifest["blocks"])
+    assert set(manifest["warnings"])=={"docx_layout_page_numbers_unverified"}
+    assert ComposedSignedBriefPublisher._parse_verified_text(document_id=_PUBLISH_DOC,version_id=_PUBLISH_VER,data=raw,media_type=media)[0]==text
+
+
+@pytest.mark.parametrize("story",["body","footnotes","endnotes"])
+@pytest.mark.parametrize("element",[
+    '<w:ins><w:r><w:t>Stuk 99</w:t></w:r></w:ins>',
+    '<w:fldSimple w:instr="PAGE"><w:r><w:t>99</w:t></w:r></w:fldSimple>',
+    '<w:r><w:rPr><w:vanish/></w:rPr><w:t>Stuk 99</w:t></w:r>',
+    '<w:r><w:drawing/></w:r>',
+    '<w:r><w:instrText>REF secret</w:instrText></w:r>',
+])
+def test_signed_docx_unsupported_story_content_never_publishes(story,element):
+    from apps.api.signed_live_brief_composer import ComposedSignedBriefPublisher
+    from apps.api.signed_supabase_originals import PrivateStorageFailure
+    media="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    raw=_docx_with_note_story(f'<w:p>{element}</w:p>',kind="footnotes" if story=="body" else story,
+                             body_xml=f'<w:p>{element}</w:p>' if story=="body" else None)
+    with pytest.raises(PrivateStorageFailure):
+        ComposedSignedBriefPublisher._parse_verified_text(document_id=_PUBLISH_DOC,version_id=_PUBLISH_VER,data=raw,media_type=media)
+
+
+@pytest.mark.parametrize("language,brief,article_text",[
+    ("fr","Art. 1382 du Code civil : « Chaque fait oblige à réparation. »","Chaque fait oblige à réparation."),
+    ("nl","Art. 1382 BW: « Elke daad verplicht tot vergoeding. »","Elke daad verplicht tot vergoeding."),
+])
+def test_offline_requested_historical_version_never_falls_back(language,brief,article_text):
+    import hashlib
+
+    from application.litigation.corpus import ArticleRecord
+    from application.litigation.legal_references import check_legal_references
+    sha=hashlib.sha256(article_text.encode()).hexdigest()
+    record=ArticleRecord("code-civil","1382",language,"snapshot-current","urn:synthetic:offline", "2026-11-23",True,sha,article_text,sha)
+    aliases={"C.civ.":"code-civil","BW":"code-civil"}
+    present=check_legal_references(brief,(record,),aliases,chosen_versions={"code-civil":"snapshot-current"})
+    assert present and present[0].status=="PASS",present
+    changed=check_legal_references(brief.replace(article_text,"Texte modifié sans correspondance."),(record,),aliases,chosen_versions={"code-civil":"snapshot-current"})
+    assert changed[0].status=="FAIL",changed
+    missing=check_legal_references(brief,(record,),aliases,chosen_versions={"code-civil":"historical-not-installed"})
+    assert missing[0].status=="UNDETERMINED"
+    assert missing[0].reason=="requested_version_absent_from_chosen_corpus"
+    assert missing[0].corpus_version is None and missing[0].corpus_text_sha256 is None
+
+
+@pytest.mark.parametrize('language,citation,text', [
+    ('fr', 'Article 12 du Code civil', 'Texte entièrement synthétique pour le test.'),
+    ('nl', 'Art. 12 BW', 'Volledig synthetische tekst voor deze test.'),
+])
+@pytest.mark.parametrize('scenario', ['correct', 'modified', 'missing-history'])
+def test_offline_legal_pack_cold_replay_pins_exact_corpus(tmp_path, monkeypatch, language, citation, text, scenario):
+    import hashlib
+    import json
+    import socket
+    from dataclasses import replace
+    from zipfile import ZipFile
+
+    from application.litigation.corpus import ArticleRecord, CorpusError
+    from application.litigation.legal_references import LegalCorpusConfig, check_legal_references
+    from application.litigation.offline_legal_pack import build_legal_pack, verify_legal_pack
+    from application.litigation.unified_review import run_unified_check
+    from tests.test_litigation_m2_unified_review import rig
+    quote = text if scenario != 'modified' else 'Invented words absent from the chosen corpus.'
+    brief = citation + ': « ' + quote + ' ».'
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    article = ArticleRecord('synthetic-act', '12', language, 'pack-v1', 'urn:synthetic:corpus',
+                            '2026-11-23', True, sha, text, sha, text.encode(), 'synthetic', 'Test only')
+    versions = {'synthetic-act': 'not-installed-1990' if scenario == 'missing-history' else 'pack-v1'}
+    config = LegalCorpusConfig((article,), {'C.civ.': 'synthetic-act'}, versions)
+    b, register, previews, scope = rig(brief)
+    run = run_unified_check(representation=b, register=register, previews=previews, source_scope=scope,
+                            authorized_case_id='case-1', authorized_register_revision=4,
+                            legal_observations=check_legal_references(brief, config.records, config.act_aliases,
+                                                                     chosen_versions=config.chosen_versions),
+                            corpus_pack_sha256=config.pack_sha256)
+    review = {'snapshot_hash': run.snapshot_hash, 'revision': 0, 'decisions': [], 'release_authorized': False}
+    raw, checkpoint = build_legal_pack(config=config, run=run, brief_text=brief, review=review)
+    path = tmp_path / 'review.zip'
+    path.write_bytes(raw)
+    # The installed pack can change; the exported old review never consults it.
+    newer = replace(config, chosen_versions={'synthetic-act': 'pack-v2'})
+    assert newer.pack_sha256 != config.pack_sha256
+    monkeypatch.setattr(socket, 'socket', lambda *a, **k: (_ for _ in ()).throw(AssertionError('network forbidden')))
+    reopened = verify_legal_pack(path.read_bytes(), expected_sha256=checkpoint)
+    obs = reopened['references'][0]
+    assert obs['status'] == {'correct': 'PASS', 'modified': 'FAIL', 'missing-history': 'UNDETERMINED'}[scenario]
+    assert reopened['articles'][0]['derived_text'] == text
+    assert reopened['corpus_pack_sha256'] == config.pack_sha256
+    if scenario == 'missing-history':
+        assert obs['corpus_key'] is None and obs['reason'] == 'requested_version_absent_from_chosen_corpus'
+    else:
+        assert obs['corpus_version'] == 'pack-v1'
+    with pytest.raises(CorpusError):
+        verify_legal_pack(raw, expected_sha256='0' * 64)
+    # Altering the inert HTML view is rejected too, even if JSON remains intact.
+    from io import BytesIO
+    output = BytesIO()
+    with ZipFile(BytesIO(raw)) as source, ZipFile(output, 'w') as target:
+        target.writestr('review.json', source.read('review.json'))
+        target.writestr('report.html', b'changed')
+    with pytest.raises(CorpusError):
+        verify_legal_pack(output.getvalue(), expected_sha256=checkpoint)
+    # A newly selected but still absent historical version changes run identity.
+    other = replace(config, chosen_versions={'synthetic-act': 'different-missing-version'})
+    other_run = run_unified_check(representation=b, register=register, previews=previews, source_scope=scope,
+                                  authorized_case_id='case-1', authorized_register_revision=4,
+                                  legal_observations=run.legal_observations, corpus_pack_sha256=other.pack_sha256)
+    assert run.snapshot_hash != other_run.snapshot_hash
+    assert json.loads(json.dumps(reopened))['review']['release_authorized'] is False
+
+
+def test_offline_legal_pack_export_refuses_missing_original_and_drift():
+    from dataclasses import replace
+
+    from application.litigation.corpus import CorpusError
+    from application.litigation.legal_references import LegalCorpusConfig
+    from application.litigation.offline_legal_pack import build_legal_pack
+    from application.litigation.unified_review import run_unified_check
+    from tests.test_litigation_m2_unified_review import rig
+    config = LegalCorpusConfig(tuple(_legal_corpus()), {'C.civ.': 'synthetic-civ'}, {})
+    b, register, previews, scope = rig()
+    run = run_unified_check(representation=b, register=register, previews=previews, source_scope=scope,
+                            authorized_case_id='case-1', authorized_register_revision=4,
+                            corpus_pack_sha256=config.pack_sha256)
+    with pytest.raises(CorpusError):
+        build_legal_pack(config=config, run=run, brief_text=b.text, review={'snapshot_hash': run.snapshot_hash})
+    with pytest.raises(CorpusError):
+        build_legal_pack(config=config, run=replace(run, corpus_pack_sha256='0' * 64), brief_text=b.text,
+                         review={'snapshot_hash': run.snapshot_hash})
+
+
+def test_fresh_offline_word_checks_run_without_network_and_refuse_hidden_content(tmp_path, monkeypatch):
+    import hashlib
+    import json
+    import socket
+
+    from application.litigation.corpus import CORPUS_FORMAT_VERSION, CorpusError
+    from application.litigation.offline_legal_pack import verify_legal_pack
+    from apps.api.offline_docx_check import check_offline_docx
+    from tests.signed_composed_rig import docx_without_custom_xml
+    corpus = tmp_path / 'corpus'
+    corpus.mkdir()
+    text = 'Article synthétique de contrôle uniquement.'
+    (corpus / 'source.txt').write_text(text)
+    (corpus / 'article.txt').write_text(text)
+    entry = {'act': 'synthetic-civ', 'article': '12', 'language': 'fr', 'version': 'v1',
+             'source_uri': 'urn:synthetic:offline-test', 'acquired_at': '2026-11-23', 'consolidated': True,
+             'original_file': 'source.txt', 'derived_file': 'article.txt',
+             'original_sha256': hashlib.sha256(text.encode()).hexdigest(), 'source_artifact_kind': 'synthetic'}
+    lines = ['format = ' + json.dumps(CORPUS_FORMAT_VERSION), '[[publication]]']
+    lines += [k + ' = ' + (str(v).lower() if isinstance(v, bool) else json.dumps(v)) for k, v in entry.items()]
+    (corpus / 'corpus-manifest.toml').write_text('\n'.join(lines))
+    (corpus / 'act-aliases.toml').write_text('[act_aliases]\n"C.civ." = "synthetic-civ"\n[chosen_versions]\n"synthetic-civ" = "v1"\n')
+    path = tmp_path / 'brief.docx'
+    path.write_bytes(docx_without_custom_xml(['Article 12 du Code civil : « '+text+' ».']))
+    monkeypatch.setattr(socket, 'socket', lambda *a, **k: (_ for _ in ()).throw(AssertionError('network forbidden')))
+    for scenario, versions, expected in [('correct', None, 'PASS'), ('changed', None, 'FAIL'),
+                                          ('history', {'synthetic-civ': 'v0-missing'}, 'UNDETERMINED')]:
+        if scenario == 'changed':
+            path.write_bytes(docx_without_custom_xml(['Article 12 du Code civil : « invented quotation ».']))
+        raw, checkpoint = check_offline_docx(docx=path, corpus=corpus, chosen_versions=versions)
+        body = verify_legal_pack(raw, expected_sha256=checkpoint)
+        assert body['references'][0]['status'] == expected
+        assert body['review']['origin'] == 'local_offline_check_not_authenticated_lawyer_review'
+    path.write_bytes(_docx_with_note_story('<w:p><w:r><w:rPr><w:vanish/></w:rPr><w:t>hidden</w:t></w:r></w:p>'))
+    with pytest.raises(CorpusError):
+        check_offline_docx(docx=path, corpus=corpus)
+
+
+def test_local_offline_legal_browser_requires_local_origin_and_fresh_word(tmp_path):
+    import json
+    import threading
+    import urllib.error
+    import urllib.request
+    from http.server import HTTPServer
+
+    from scripts.serve_offline_legal_workbench import serve
+    from tests.signed_composed_rig import docx_without_custom_xml
+
+    # Reuse the corpus-manifest helper: synthetic-only local server contract.
+    from tests.test_corpus import _entry, _write_corpus
+    corpus = tmp_path / 'corpus'
+    corpus.mkdir()
+    _write_corpus(corpus, [_entry(article='12')])
+    (corpus / 'act-aliases.toml').write_text('[act_aliases]\n"C.civ." = "synthetic-act-2026"\n')
+    captured = {}
+    original = HTTPServer.serve_forever
+
+    def bounded_server(server, *args, **kwargs):
+        captured['server'] = server
+        captured['ready'].set()
+        return original(server, *args, **kwargs)
+
+    from unittest.mock import patch
+    ready = threading.Event()
+    captured['ready'] = ready
+    with patch.object(HTTPServer, 'serve_forever', bounded_server):
+        thread = threading.Thread(target=serve, args=(corpus, 0), kwargs={'open_browser': False}, daemon=True)
+        thread.start()
+        assert ready.wait(3)
+        server = captured['server']
+        port = server.server_port
+        base = f'http://127.0.0.1:{port}'
+        try:
+            with urllib.request.urlopen(base) as response:
+                page = response.read().decode()
+            import re
+            token = re.search("const token='([0-9a-f]+)'", page).group(1)
+            raw = docx_without_custom_xml(['Article 12 du Code civil : « texte derive synthetique 12 ».'])
+            for headers in ({}, {'X-CaseProof-Local': token, 'Origin': 'https://untrusted.invalid'}):
+                with pytest.raises(urllib.error.HTTPError) as exc:
+                    urllib.request.urlopen(urllib.request.Request(base+'/check?version=installed', data=raw, headers=headers))
+                assert exc.value.code == 403
+            request = urllib.request.Request(base+'/check?version=installed', data=raw,
+                                             headers={'X-CaseProof-Local': token, 'Origin': base})
+            with urllib.request.urlopen(request) as response:
+                from application.litigation.offline_legal_pack import verify_legal_pack
+                body = verify_legal_pack(response.read(), expected_sha256=response.headers['X-CaseProof-Legal-Review-SHA256'])
+                assert body['references'][0]['status'] == 'PASS'
+                assert response.headers['X-CaseProof-Legal-Summary'] == 'PASS: 1'
+                assert json.dumps(body['review']['decisions']) == '[]'
+            import base64
+            request = urllib.request.Request(base+'/check?version=installed', data=raw,
+                                             headers={'X-CaseProof-Local': token, 'Origin': base,
+                                                      'Accept': 'application/json'})
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read())
+                assert payload['references'][0]['status'] == 'PASS'
+                assert 'synthetique 12' in payload['references'][0]['article_text']
+                assert verify_legal_pack(base64.b64decode(payload['archive_base64']),
+                                         expected_sha256=payload['checkpoint'])['references'][0]['status'] == 'PASS'
+            # An edited installed pack is never silently substituted behind the displayed identity.
+            (corpus / 'act-aliases.toml').write_text('[act_aliases]\n"C.civ." = "different-act"\n')
+            with pytest.raises(urllib.error.HTTPError) as exc:
+                urllib.request.urlopen(request)
+            assert exc.value.code == 422
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
+
+def test_local_corpus_library_append_only_versions_and_frozen_review(tmp_path):
+    from dataclasses import replace
+
+    from application.litigation.corpus import CorpusError
+    from application.litigation.legal_references import load_corpus_config
+    from application.litigation.local_corpus_library import LocalCorpusLibrary, encode_corpus_pack
+    from application.litigation.offline_legal_pack import verify_legal_pack
+    from apps.api.offline_docx_check import check_offline_docx
+    from tests.signed_composed_rig import docx_without_custom_xml
+    from tests.test_corpus import _entry, _write_corpus
+    corpus = tmp_path / 'corpus'
+    corpus.mkdir()
+    _write_corpus(corpus, [_entry(article='12')])
+    (corpus / 'act-aliases.toml').write_text('[act_aliases]\n"C.civ." = "synthetic-act-2026"\n')
+    first = load_corpus_config(corpus)
+    library = LocalCorpusLibrary(tmp_path / 'library')
+    first_id = library.install(encode_corpus_pack(first))
+    docx = tmp_path / 'brief.docx'
+    docx.write_bytes(docx_without_custom_xml(['Article 12 du Code civil : « texte derive synthetique 12 ».']))
+    raw, checkpoint = check_offline_docx(docx=docx, corpus=library.select(first_id))
+    second = replace(first, records=tuple(replace(r, version='v2-explicit-synthetic') for r in first.records))
+    second_id = library.install(encode_corpus_pack(second))
+    assert second_id != first_id
+    assert library.install(encode_corpus_pack(first)) == first_id
+    assert len(library.inventory()) == 2
+    assert library.select(first_id).records[0].version == first.records[0].version
+    frozen = verify_legal_pack(raw, expected_sha256=checkpoint)
+    assert frozen['corpus_pack_sha256'] == first_id and frozen['references'][0]['status'] == 'PASS'
+    for bad in ('latest', '../escape', '0' * 64):
+        with pytest.raises(CorpusError):
+            library.select(bad)
+    # A damaged path cannot be repaired by overwriting its old declared identity.
+    (library.directory / (first_id + '.zip')).write_bytes(encode_corpus_pack(second))
+    with pytest.raises(CorpusError):
+        library.select(first_id)
+    with pytest.raises(CorpusError):
+        library.install(encode_corpus_pack(first))
+    assert verify_legal_pack(raw, expected_sha256=checkpoint)['corpus_pack_sha256'] == first_id
+
+
+@pytest.mark.parametrize('name', ['../escape', '/absolute', 'data/../../escape', 'rules.toml'])
+def test_local_corpus_pack_refuses_unsafe_inventory(name):
+    import io
+    from zipfile import ZIP_STORED, ZipFile
+
+    from application.litigation.corpus import CorpusError
+    from application.litigation.local_corpus_library import decode_corpus_pack
+    output = io.BytesIO()
+    with ZipFile(output, 'w', compression=ZIP_STORED) as archive:
+        archive.writestr('corpus-manifest.toml', b'bad')
+        archive.writestr('act-aliases.toml', b'')
+        archive.writestr(name, b'bad')
+    with pytest.raises(CorpusError):
+        decode_corpus_pack(output.getvalue())
+
+
+_MIXED_BRIEF = ("Le juge constate que «paiement sous 30 jours» (Contrat). "
+                "Le paiement du 20/01/2024 de 1.250,00 EUR a été fait le 15/03/2024. "
+                "Le paiement de 1.250,00 EUR est dû.")
+
+
+def test_composed_publisher_thousands_amount_with_second_date_abstains_and_is_stable():
+    """Changed-shape regression through the unit/fake-port signed composer (no real signed stack).
+
+    A thousands dot used to end the sentence, so the first date became a truncated
+    assertion "…de 1" while the amount and the second date vanished from its window.
+    """
+    import json
+    runs = []
+    for _ in range(2):
+        composer, captured = _composer_rig(_MIXED_BRIEF.encode("utf-8"), _REGISTER)
+        composer.publish_uploaded(
+            bearer="jwt", case_id=_PUBLISH_CASE, document_id=_PUBLISH_DOC,
+            version_id=_PUBLISH_VER, document_role="own_draft", expected_revision=0)
+        runs.append(captured)
+    assertions = runs[0]["p_assertions"]
+    assert not [a for a in assertions if a["kind"] == "date"]  # two dates in one sentence: abstain
+    money = [a for a in assertions if a["kind"] == "money"]
+    assert money and all(_MIXED_BRIEF[a["text_start"]:a["text_end"]] == a["assertion_text"] for a in assertions)
+    assert all("1.250,00 EUR" in a["assertion_text"] for a in money)  # never cut at the thousands dot
+    # Re-publishing the same text yields identical claim ids and offsets (what a carried decision binds to).
+    assert [a["claim_id"] for a in assertions] == [a["claim_id"] for a in runs[1]["p_assertions"]]
+    assert json.loads(runs[0]["p_graph_text"])["assertions"] == assertions

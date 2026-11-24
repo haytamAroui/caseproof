@@ -130,6 +130,7 @@ def probe_historical_upgrade() -> dict[str, object]:
                 return result | {
                     "status": "HISTORICAL_LOCAL_STACK_FAILED",
                     "error_category": error_category(started.stdout + started.stderr),
+                    "cli_output_tail": output_tail(started.stdout + "\n" + started.stderr),
                 }
             folder = root / "supabase/migrations"
             receipt = copy_historical_sql(folder, files)

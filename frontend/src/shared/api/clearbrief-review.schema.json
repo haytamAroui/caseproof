@@ -1,0 +1,189 @@
+{
+  "$defs": {
+    "BlockerInventoryView": {
+      "additionalProperties": false,
+      "description": "Open items only. Not readiness and not permission to file.",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/BlockerItemView"
+          },
+          "maxItems": 20000,
+          "title": "Items",
+          "type": "array"
+        },
+        "note": {
+          "maxLength": 1000,
+          "title": "Note",
+          "type": "string"
+        },
+        "release_authorized": {
+          "const": false,
+          "title": "Release Authorized",
+          "type": "boolean"
+        },
+        "schema": {
+          "const": "caseproof-blocker-inventory-v1",
+          "title": "Schema",
+          "type": "string"
+        },
+        "snapshot_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Snapshot Hash",
+          "type": "string"
+        },
+        "verdict": {
+          "const": "not_computed",
+          "title": "Verdict",
+          "type": "string"
+        },
+        "waiver_policy": {
+          "const": "not_decided",
+          "title": "Waiver Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "snapshot_hash",
+        "items",
+        "verdict",
+        "release_authorized",
+        "waiver_policy",
+        "note"
+      ],
+      "title": "BlockerInventoryView",
+      "type": "object"
+    },
+    "BlockerItemView": {
+      "additionalProperties": false,
+      "properties": {
+        "observation_id": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 800,
+          "title": "Reason",
+          "type": "string"
+        },
+        "review_disposition": {
+          "maxLength": 100,
+          "title": "Review Disposition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observation_id",
+        "reason",
+        "review_disposition"
+      ],
+      "title": "BlockerItemView",
+      "type": "object"
+    },
+    "ClearbriefDecisionView": {
+      "additionalProperties": false,
+      "description": "A signed reviewer statement about one observation. Never semantic truth.",
+      "properties": {
+        "actor_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "disposition": {
+          "enum": [
+            "confirmed_candidate",
+            "dismissed",
+            "needs_information",
+            "omission"
+          ],
+          "title": "Disposition",
+          "type": "string"
+        },
+        "observation_id": {
+          "maxLength": 220,
+          "minLength": 1,
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observation_id",
+        "actor_id",
+        "disposition",
+        "rationale"
+      ],
+      "title": "ClearbriefDecisionView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blocker_inventory": {
+      "$ref": "#/$defs/BlockerInventoryView"
+    },
+    "brief_version_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Brief Version Id",
+      "type": "string"
+    },
+    "case_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Case Id",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/ClearbriefDecisionView"
+      },
+      "maxItems": 10000,
+      "title": "Decisions",
+      "type": "array"
+    },
+    "release_authorized": {
+      "const": false,
+      "title": "Release Authorized",
+      "type": "boolean"
+    },
+    "revision": {
+      "maximum": 100000,
+      "minimum": 0,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "schema": {
+      "const": "caseproof-clearbrief-review-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "case_id",
+    "brief_version_id",
+    "snapshot_hash",
+    "revision",
+    "decisions",
+    "blocker_inventory",
+    "release_authorized"
+  ],
+  "title": "ClearbriefReviewState",
+  "type": "object"
+}

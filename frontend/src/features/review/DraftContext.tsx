@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ApiClient } from '../../shared/api';
 import { parseDraftExcerpt } from '../../shared/api/review';
 import { useSession } from '../../shared/session';
+import { useLocale } from '../../shared/i18n';
 import { Notice } from '../../shared/ui';
 
 export function DraftContext({
@@ -23,6 +24,7 @@ export function DraftContext({
   renderCorrection: (originalSha: string) => ReactNode;
 }) {
   const session = useSession();
+  const { t } = useLocale();
   const excerpt = useQuery({
     queryKey: [
       'draft-excerpt',
@@ -44,23 +46,13 @@ export function DraftContext({
   });
   return (
     <section className="draft-context" aria-label="Read-only draft reference">
-      <h3>Preserved DOCX reference context</h3>
-      <Notice>
-        Bounded extracted plain text, not Word pagination or a safe editable
-        location. No document mutation is performed.
-      </Notice>
-      {excerpt.isPending && <p>Loading authorized draft context…</p>}
-      {excerpt.isError && (
-        <Notice error>
-          Draft context unavailable; do not infer the reference anchor.
-        </Notice>
-      )}
+      <h3>{t('draftContextTitle')}</h3>
+      <Notice>{t('draftContextNotice')}</Notice>
+      {excerpt.isPending && <p>{t('draftContextLoading')}</p>}
+      {excerpt.isError && <Notice error>{t('draftContextUnavailable')}</Notice>}
       {excerpt.data &&
         (!excerpt.data.available ? (
-          <Notice>
-            Draft anchor unsupported or ambiguous. Do not guess the first
-            matching paragraph.
-          </Notice>
+          <Notice>{t('draftAnchorUnsupported')}</Notice>
         ) : (
           <>
             <p className="small">

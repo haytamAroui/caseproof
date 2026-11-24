@@ -1,5 +1,7 @@
 # Product definition and prioritized delivery — 31 October 2026
 
+> **24 November 2026 update:** Competitive positioning, target extensions (bounded offline Belgian legal corpus, distortion/subtle-trap detectors, lawyer-defined conditions), the 4-state lawyer display taxonomy, explicit non-goals, and the Single Official UI Lock (`frontend/`) are updated and superseded by [PRODUCT_STRATEGY_2026-11-24.md](PRODUCT_STRATEGY_2026-11-24.md) and [ADR 0038](adr/0038-pre-filing-truth-layer-and-competitive-strategy.md). The verification dimensions, report invariants, deployment-mode boundary rules, trademark/regulatory cautions, and M0–M6/SEC-01–16 gates below remain in force.
+
 **31 October owner refinement (superseding PR #141's planning snapshot).** This document refines the existing
 [M0–M6 roadmap](ROADMAP.md), [workflow](PRODUCT_WORKFLOW.md) and
 [ADR 0019](adr/0019-evidence-engine-and-first-market.md). It does not reset milestones,
