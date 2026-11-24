@@ -42,6 +42,12 @@ from application.litigation.factual_values import (
 from application.litigation.inventory_mapping import map_exhibit_references
 from application.litigation.library import EvidencePreview, EvidenceRow
 from application.litigation.suitability_rules import ConfirmedFact, evaluate_rule, load_rule
+from application.litigation.workspace_contract import (
+    ExhibitReferencesView,
+    LegalReferencesView,
+    MatterCatalogView,
+    ReportCatalogView,
+)
 from domains.disputes.reference_detection import detect_exhibit_references
 
 DEMO_CASE_ID = "11111111-1111-4111-8111-111111111111"
@@ -91,6 +97,79 @@ all = [
 
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _minimal_pdf_bytes(lines: list[str]) -> bytes:
+    """Build a minimal valid PDF 1.4 document with Helvetica text for pdfjs-dist."""
+    escaped = [
+        line.encode("latin-1", "replace")
+        .decode("latin-1")
+        .replace("\\", "\\\\")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        for line in lines
+    ]
+    ops = ["BT", "/F1 12 Tf", "50 760 Td", "16 TL"]
+    for i, line in enumerate(escaped):
+        ops.append(f"({line}) Tj" if i == 0 else f"T* ({line}) Tj")
+    ops.append("ET")
+    stream = "\n".join(ops).encode("latin-1")
+
+    objects = [
+        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
+        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
+        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n",
+        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+        f"5 0 obj << /Length {len(stream)} >> stream\n".encode("ascii") + stream + b"\nendstream endobj\n",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets: list[int] = [0]
+    for obj in objects:
+        offsets.append(len(out))
+        out.extend(obj)
+    xref_pos = len(out)
+    out.extend(f"xref\n0 {len(offsets)}\n0000000000 65535 f \n".encode("ascii"))
+    for off in offsets[1:]:
+        out.extend(f"{off:010d} 00000 n \n".encode("ascii"))
+    out.extend(
+        f"trailer << /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode(
+            "ascii"
+        )
+    )
+    return bytes(out)
+
+
+DEMO_PDF_SOURCES: dict[str, tuple[str, bytes]] = {
+    "33333333-3333-4333-8333-333333333301": (
+        "piece-01-bail-commercial.pdf",
+        _minimal_pdf_bytes(
+            [
+                "SYNTHETIC DEMO EXHIBIT - PIECE 1 (Printed p. 14 / PDF p. 16 / Bundle p. 22)",
+                "Article 8 - Cession du bail commercial.",
+                "Sous reserve de l'accord ecrit du bailleur, le locataire peut ceder son droit au bail.",
+            ]
+        ),
+    ),
+    "33333333-3333-4333-8333-333333333302": (
+        "stuk-02-rekeninguittreksel.pdf",
+        _minimal_pdf_bytes(
+            [
+                "SYNTHETIC DEMO EXHIBIT - STUK 2 (NL Bank Statement)",
+                "Rekeninguittreksel BE68 5390 0754 7034",
+                "Betaling ontvangen: 10.000,00 EUR",
+            ]
+        ),
+    ),
+    "33333333-3333-4333-8333-333333333303": (
+        "piece-03-projet-avenant.pdf",
+        _minimal_pdf_bytes(
+            [
+                "SYNTHETIC DEMO EXHIBIT - PIECE 3 (Unsigned Draft Amendment)",
+                "Projet d'avenant n. 2 - envoye pour signature le 14 mars 2026 - non paraphe.",
+            ]
+        ),
+    ),
+}
 
 
 def _omitted_reservation_cue(quote: str, source_text: str) -> dict[str, Any] | None:
@@ -200,8 +279,24 @@ def build_five_trap_audit(*, confirmed_inventory: bool = False, fact_confirmed: 
         if row.get("status_cue_flag")
     ]
 
-    reservation_flag = _omitted_reservation_cue(
-        "le locataire peut céder son droit au bail", SOURCE_BAIL_TEXT
+    reservation_flags = [
+        {
+            "reference_id": row["reference_id"],
+            "raw_text": row["raw_text"],
+            **row["reservation_cue_flag"],
+        }
+        for row in confirmed_exhibit_report["references"]
+        if row.get("reservation_cue_flag")
+    ]
+    reservation_flag = (
+        {
+            "kind": "omitted_opening_reservation",
+            "triage": "appreciation",
+            **reservation_flags[0],
+            "notice": "Flagged for lawyer appraisal — not semantically verified.",
+        }
+        if reservation_flags
+        else _omitted_reservation_cue("le locataire peut céder son droit au bail", SOURCE_BAIL_TEXT)
     )
 
     claim_sentence = "Le paiement de 12\u00a0500,00 EUR a été effectué selon l'extrait bancaire (Stuk 2)."
@@ -338,6 +433,182 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         }
         state["omissions"].append(entry)
         return {"recorded": entry, "count": len(state["omissions"])}
+
+    from fastapi.responses import Response
+
+    @app.post("/v2/workspace/session")
+    def demo_session() -> dict[str, Any]:
+        return {
+            "schema": "caseproof-workspace-session-v1",
+            "access_token": "synthetic-partner-demo-loopback-token",
+            "expires_at": 4102444800,
+            "synthetic_demo": True,
+        }
+
+    @app.get("/v2/workspace/matters")
+    def demo_matters() -> dict[str, Any]:
+        return MatterCatalogView.model_validate(
+            {
+                "schema": "caseproof-workspace-matters-v1",
+                "matters": [
+                    {
+                        "case_id": DEMO_CASE_ID,
+                        "case_revision": 1,
+                        "state": "synthetic_partner_demo",
+                    }
+                ],
+            }
+        ).model_dump(by_alias=True)
+
+    @app.get("/v2/workspace/matters/{case_id}/reports")
+    def demo_reports(case_id: str) -> dict[str, Any]:
+        if case_id != DEMO_CASE_ID:
+            raise HTTPException(404, "unknown demo matter")
+        audit = get_audit()
+        return ReportCatalogView.model_validate(
+            {
+                "schema": "caseproof-workspace-reports-v1",
+                "case_id": DEMO_CASE_ID,
+                "reports": [
+                    {
+                        "brief_id": DEMO_BRIEF_ID,
+                        "snapshot_hash": audit["snapshot_hash"],
+                        "created_at": "2026-11-24T12:00:00+00:00",
+                    }
+                ],
+                "next_cursor": None,
+            }
+        ).model_dump(by_alias=True)
+
+    @app.get("/v2/matters/{case_id}/briefs/{brief_id}/exhibit-references")
+    def demo_exhibit_references(case_id: str, brief_id: str) -> dict[str, Any]:
+        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
+            raise HTTPException(404, "unknown demo brief")
+        previews = (
+            _preview("src-bail-01", "ver-bail-01", SOURCE_BAIL_TEXT, page_index=15),
+            _preview("src-bank-02", "ver-bank-02", SOURCE_BANK_NL_TEXT, page_index=0),
+            _preview("src-avenant-03", "ver-avenant-03", SOURCE_AVENANT_TEXT, page_index=0),
+        )
+        intake = {
+            "brief_id": DEMO_BRIEF_ID,
+            "confirmation_id": "conf-demo-001" if state["confirmed_inventory"] else None,
+            "inventory_complete": state["confirmed_inventory"],
+            "sources": [
+                {
+                    "version_id": "ver-bail-01",
+                    "filename": "piece-01-bail-commercial.pdf",
+                    "sha256": _sha(SOURCE_BAIL_TEXT),
+                    "readback": "verified",
+                    "page_count": 18,
+                },
+                {
+                    "version_id": "ver-bank-02",
+                    "filename": "stuk-02-rekeninguittreksel.pdf",
+                    "sha256": _sha(SOURCE_BANK_NL_TEXT),
+                    "readback": "verified",
+                    "page_count": 2,
+                },
+                {
+                    "version_id": "ver-avenant-03",
+                    "filename": "piece-03-projet-avenant.pdf",
+                    "sha256": _sha(SOURCE_AVENANT_TEXT),
+                    "readback": "verified",
+                    "page_count": 3,
+                },
+            ],
+            "entries": [
+                {
+                    "label": "piece",
+                    "number": "1",
+                    "source_version_id": "ver-bail-01",
+                    "pages": [
+                        {"space": "printed", "label": "14", "pdf_page": 16},
+                        {"space": "bundle", "label": "22", "pdf_page": 16},
+                    ],
+                },
+                {"label": "stuk", "number": "2", "source_version_id": "ver-bank-02", "pages": []},
+                {"label": "piece", "number": "3", "source_version_id": "ver-avenant-03", "pages": []},
+            ],
+        }
+        mapped = map_exhibit_references(
+            DRAFT_TEXT,
+            brief_version_id=DEMO_BRIEF_ID,
+            intake=intake,
+            previews=previews,
+        )
+        audit = get_audit()
+        return ExhibitReferencesView.model_validate(
+            {
+                "schema": "caseproof-exhibit-references-v1",
+                "brief_version_id": DEMO_BRIEF_ID,
+                "snapshot_hash": audit["snapshot_hash"],
+                "note": "SYNTHETIC DEMO: located never means content verified.",
+                **mapped,
+            }
+        ).model_dump(by_alias=True)
+
+    @app.get("/v2/matters/{case_id}/briefs/{brief_id}/legal-references")
+    def demo_legal_references(case_id: str, brief_id: str) -> dict[str, Any]:
+        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
+            raise HTTPException(404, "unknown demo brief")
+        audit = get_audit()
+        cite = "art. 1732 Code civil (version 1991)"
+        start = DRAFT_TEXT.index(cite)
+        return LegalReferencesView.model_validate(
+            {
+                "schema": "caseproof-legal-references-v1",
+                "brief_version_id": DEMO_BRIEF_ID,
+                "snapshot_hash": audit["snapshot_hash"],
+                "note": "SYNTHETIC DEMO: absent historical version fails closed (UNVERIFIED).",
+                "corpus": "configured",
+                "corpus_pack_sha256": _sha("synthetic-belgian-corpus-2024"),
+                "corpus_articles": 1,
+                "corpus_failures": [],
+                "references": [
+                    {
+                        "reference_id": "legal-ref-01",
+                        "observation_id": "legal:legal-ref-01",
+                        "raw_text": cite,
+                        "start": start,
+                        "end": start + len(cite),
+                        "act_code": "code-civil-be",
+                        "article": "1732",
+                        "language": "fr",
+                        "status": "UNVERIFIED",
+                        "reason": "requested_version_absent_from_chosen_corpus",
+                        "corpus_key": None,
+                        "corpus_version": None,
+                        "corpus_text_sha256": None,
+                        "corpus_source_uri": None,
+                        "quote": None,
+                        "claim_support": "not_assessed",
+                    }
+                ],
+                "coverage": {
+                    "detected": 1,
+                    "by_status": {"PASS": 0, "FAIL": 0, "UNVERIFIED": 1, "UNDETERMINED": 0},
+                    "analysed": "main_body",
+                    "not_analysed": ["footnotes", "headers", "textboxes"],
+                },
+                "suitability": [],
+            }
+        ).model_dump(by_alias=True)
+
+    @app.get("/v2/matters/{case_id}/briefs/{brief_id}/dossier/sources/{version_id}/original")
+    def demo_original_pdf(case_id: str, brief_id: str, version_id: str) -> Response:
+        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID or version_id not in DEMO_PDF_SOURCES:
+            raise HTTPException(404, "unknown demo source")
+        filename, pdf_bytes = DEMO_PDF_SOURCES[version_id]
+        digest = hashlib.sha256(pdf_bytes).hexdigest()
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "X-Content-SHA256": digest,
+                "Cache-Control": "no-store",
+            },
+        )
 
     dist = frontend_dist or (Path(__file__).resolve().parents[1] / "frontend" / "dist")
     if dist.is_dir() and (dist / "index.html").is_file():

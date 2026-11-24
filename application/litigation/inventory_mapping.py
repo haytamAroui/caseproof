@@ -40,6 +40,60 @@ MAPPING_REASONS = frozenset({
     M_UNBOUND, M_SOURCE_UNKNOWN, M_INTEGRITY, M_NOTATION, R_PAGE, R_RANGE})
 
 _EXACT = re.compile(r"^\d{1,4}(?:bis|ter)?$")
+_QUOTE_RE = re.compile(r"(?:«\s*([^«»\n]{12,400}?)\s*»|\"([^\"\n]{12,400}?)\")")
+_OPENING_RESERVATION_RE = re.compile(
+    r"\b(?:sous\s+r[ée]serve(?:\s+de)?|onder\s+voorbehoud(?:\s+van)?|behoudens|"
+    r"sauf\s+(?:accord|stipulation|convention)|hormis\s+les\s+cas|"
+    r"[àa]\s+l['’]exception\s+de|subject\s+to)\b",
+    re.IGNORECASE,
+)
+
+
+def _detect_reservation_cue_flag(
+    text: str,
+    start: int,
+    end: int,
+    preview: Any,
+) -> dict[str, Any] | None:
+    """Detect an opening reservation clause omitted immediately before a matched quote.
+
+    Strictly an appraisal cue (! Appréciation requise): never changes exhibit
+    mapping status and never asserts general semantic verification.
+    """
+    if not _readable_preview(preview):
+        return None
+    sentence, _values = _claim(text, start, end)
+    spans = getattr(preview, "spans", ()) or ()
+    source_text = preview.text
+    source_folded = source_text.casefold()
+    for match in _QUOTE_RE.finditer(sentence):
+        quote = (match.group(1) or match.group(2) or "").strip()
+        if len(quote) < 12 or _OPENING_RESERVATION_RE.search(quote) is not None:
+            continue
+        idx = source_folded.find(quote.casefold())
+        if idx <= 0:
+            continue
+        prefix_lo = max(0, idx - 120)
+        # Keep the check within the immediately preceding clause/sentence.
+        prefix_raw = source_text[prefix_lo:idx]
+        last_break = max(prefix_raw.rfind("\n"), prefix_raw.rfind(". "))
+        if last_break >= 0:
+            prefix_raw = prefix_raw[last_break + 1 :]
+        prefix = " ".join(prefix_raw.split()).strip()
+        cue = _OPENING_RESERVATION_RE.search(prefix)
+        if cue is not None:
+            excerpt_hi = min(len(source_text), idx + len(quote) + 60)
+            excerpt = " ".join(source_text[max(0, idx - len(prefix_raw)) : excerpt_hi].split())[
+                :MAX_EXCERPT
+            ]
+            return {
+                "reservation_cue": cue.group(0),
+                "draft_quote": quote[:MAX_EXCERPT],
+                "omitted_source_prefix": prefix[:MAX_EXCERPT],
+                "source_excerpt": excerpt,
+                "pdf_page": _page_at(spans, idx),
+            }
+    return None
 
 
 def _readable_preview(preview: Any) -> bool:
@@ -169,6 +223,18 @@ def map_exhibit_references(
             )
             else None
         )
+        reservation_flag = (
+            _detect_reservation_cue_flag(
+                text, ref["start"], ref["end"], previews_by_version.get(version_id)
+            )
+            if (
+                entry is not None
+                and source is not None
+                and source.get("readback") != "integrity_mismatch"
+                and version_id in previews_by_version
+            )
+            else None
+        )
         rows.append({
             "reference_id": f"exhibit-ref-{n:02d}",
             "raw_text": f"{ref['word']} {ref['number']}",
@@ -185,6 +251,7 @@ def map_exhibit_references(
                           for p in entry.get("pages") or []],
             },
             "status_cue_flag": cue_flag,
+            "reservation_cue_flag": reservation_flag,
         })
     uncited = [f"{e['label']} {e['number']}" for e in entries if (e["label"], e["number"]) not in cited]
     return {

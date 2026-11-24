@@ -145,3 +145,47 @@ def test_abstains_on_negation_unreadable_preview_and_unconfirmed_inventory() -> 
         previews=[_Preview(row=_Row(version_id="ver-1"), text=source_text)],
     )
     assert res_unconf["references"][0]["status_cue_flag"] is None
+
+
+def test_omitted_opening_reservation_cue_surfaces_in_exhibit_references_view() -> None:
+    brief = "Le bail prévoit que « le locataire peut céder son droit au bail » (Pièce 1)."
+    source_text = (
+        "Article 8. Sous réserve de l'accord écrit du bailleur, "
+        "le locataire peut céder son droit au bail."
+    )
+    previews = [
+        _Preview(
+            row=_Row(version_id="ver-1"),
+            text=source_text,
+            spans=((0, len(source_text), "pdf-page-1", 0),),
+        )
+    ]
+
+    mapped = map_exhibit_references(
+        brief, brief_version_id="brief-1", intake=_intake(), previews=previews
+    )
+    validated = ExhibitReferencesView.model_validate(
+        {
+            "schema": "caseproof-exhibit-references-v1",
+            "brief_version_id": "brief-1",
+            "snapshot_hash": "b" * 64,
+            "note": "Located never means content verified.",
+            **mapped,
+        }
+    )
+    ref = validated.references[0]
+    assert ref.status == "UNDETERMINED"
+    assert ref.reservation_cue_flag is not None
+    assert "sous réserve" in ref.reservation_cue_flag.reservation_cue.casefold()
+    assert "accord écrit" in ref.reservation_cue_flag.omitted_source_prefix
+    assert ref.reservation_cue_flag.pdf_page == 1
+
+    # When the draft quote preserves the opening reservation, do NOT false-alarm.
+    clean_brief = (
+        "Le bail prévoit que « Sous réserve de l'accord écrit du bailleur, "
+        "le locataire peut céder son droit au bail » (Pièce 1)."
+    )
+    clean_mapped = map_exhibit_references(
+        clean_brief, brief_version_id="brief-1", intake=_intake(), previews=previews
+    )
+    assert clean_mapped["references"][0]["reservation_cue_flag"] is None

@@ -351,6 +351,16 @@ class StatusCueFlagView(BaseModel):
     pdf_page: int | None = Field(default=None, ge=1)
 
 
+class ReservationCueFlagView(BaseModel):
+    """Targeted FR/NL/EN omitted opening reservation cue. Appraisal cue only."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    reservation_cue: str = Field(min_length=1, max_length=64)
+    draft_quote: str = Field(min_length=1, max_length=400)
+    omitted_source_prefix: str = Field(min_length=1, max_length=400)
+    source_excerpt: str = Field(min_length=1, max_length=400)
+    pdf_page: int | None = Field(default=None, ge=1)
+
+
 class ExhibitReferenceView(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     reference_id: str = Field(pattern=r"^exhibit-ref-\d{2,5}$")
@@ -362,6 +372,7 @@ class ExhibitReferenceView(BaseModel):
     page_cited: bool
     entry: ExhibitEntryView | None = None
     status_cue_flag: StatusCueFlagView | None = None
+    reservation_cue_flag: ReservationCueFlagView | None = None
 
 
 class ExhibitCoverageView(BaseModel):

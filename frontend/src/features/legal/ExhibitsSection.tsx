@@ -132,6 +132,35 @@ export function ExhibitsSection(props: {
                         </p>
                       </div>
                     )}
+                    {r.reservation_cue_flag && (
+                      <div className="status-cue-callout" role="note">
+                        <div className="status-cue-head">
+                          <span className="legal-badge" data-tone="warning">
+                            <span aria-hidden="true">!</span>{' '}
+                            <strong>{t('lexicalCueReservationTitle')}</strong>
+                          </span>
+                          <span className="small">
+                            <code>
+                              {r.reservation_cue_flag.reservation_cue}
+                            </code>
+                            {r.reservation_cue_flag.pdf_page
+                              ? ` (PDF p.${r.reservation_cue_flag.pdf_page})`
+                              : ''}
+                          </span>
+                        </div>
+                        <p className="small">
+                          <strong>{t('legalDraft')}:</strong>{' '}
+                          {r.reservation_cue_flag.draft_quote}
+                        </p>
+                        <p className="small">
+                          <strong>{t('sourceEvidenceHeading')}:</strong>{' '}
+                          {r.reservation_cue_flag.source_excerpt}
+                        </p>
+                        <p className="small muted">
+                          {t('lexicalCueStatusDisclaimer')}
+                        </p>
+                      </div>
+                    )}
                   </li>
                 );
               })}
