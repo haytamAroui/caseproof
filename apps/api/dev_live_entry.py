@@ -24,6 +24,8 @@ _originals = _signed.pop("signed_originals", None) or (
     SignedSourceLibrary(SignedOriginalsStorage(key), rights_shadow_enabled=True)
     if key and os.environ.get("CASEPROOF_RIGHTS_SHADOW_DEV") == "YES" else None
 )
+_previous_hmac_raw = os.environ.get("CASEPROOF_RECEIPT_HMAC_PREVIOUS_SECRETS", "")
+_previous_hmac_secrets = tuple(s.strip() for s in _previous_hmac_raw.split(",") if s.strip())
 app = create_litigation_development_app(
     publishable_key=key,
     rights_gate=SignedRightsGate(SignedRightsPolicyReader(key))
@@ -33,6 +35,8 @@ app = create_litigation_development_app(
     page_worker_secret=os.environ.get("CASEPROOF_PAGE_WORKER_SECRET"),
     headless=SupabaseHeadlessMatterStore(key) if key else None,
     trusted_ingest_key=os.environ.get("CASEPROOF_DEV_AUTH_ADMIN_KEY"),
+    receipt_hmac_secret=os.environ.get("CASEPROOF_RECEIPT_HMAC_SECRET"),
+    previous_receipt_hmac_secrets=_previous_hmac_secrets,
     ocr=LocalPDFOCR() if os.environ.get("CASEPROOF_PHASE3_LIVE") == "YES" else None,
     **_signed,
 )

@@ -475,6 +475,13 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       {selected && (
         <section className="draft-context" aria-label="Selected release">
           <h2>Selected frozen release</h2>
+          <Notice>
+            <strong>Server-Signed HMAC Receipt</strong> (authenticated release
+            bound to this snapshot and manifest SHA-256) — distinct from an{' '}
+            <strong>Offline SHA-256 Digest</strong> (disconnected ZIP byte
+            check). Neither is a qualified electronic signature or{' '}
+            <em>constat d’huissier</em>.
+          </Notice>
           <p>
             Snapshot <code>{selected.snapshot_hash}</code>
           </p>

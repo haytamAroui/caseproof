@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
-import { ApiClient, parseIntake } from '../../shared/api';
+import { ApiClient, ApiError, parseIntake } from '../../shared/api';
 import type { IntakeView } from '../../shared/api';
 import { useSessionController } from '../../shared/session';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 import capacity from '../../shared/api/capacity-policy.json';
-import { slots, prepareFiles } from './files';
+import {
+  IntakeValidationError,
+  slots,
+  prepareFiles,
+  type IntakeFileIssue,
+} from './files';
 export function IntakeScreen({ api }: { api: ApiClient }) {
   const { caseId = '' } = useParams();
   if (
@@ -22,6 +27,8 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState('');
+  const [fileIssues, setFileIssues] = useState<IntakeFileIssue[]>([]);
+  const [validCheckedFiles, setValidCheckedFiles] = useState<string[]>([]);
   const [receipt, setReceipt] = useState<IntakeView | null>(null);
   const abort = useRef<AbortController | null>(null),
     lock = useRef(false);
@@ -165,6 +172,8 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
             abort.current = control;
             lock.current = true;
             setBusy(true);
+            setFileIssues([]);
+            setValidCheckedFiles([]);
             setMessage('Reading and hashing all four originals…');
             const epoch = session.getSnapshot().epoch;
             try {
@@ -201,15 +210,29 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
                 throw Error('No complete readback receipt');
               setDirty(false);
               setReceipt(result);
+              setFileIssues([]);
+              setValidCheckedFiles([]);
               setMessage('Original preservation acknowledged by the backend.');
               form.reset();
-            } catch {
-              if (session.getSnapshot().epoch === epoch)
-                setMessage(
-                  control.signal.aborted
-                    ? 'Transfer stopped. Server outcome may be partial. Refresh or reselect the exact originals to reconcile; existing originals will not be overwritten.'
-                    : 'No completed intake receipt was received. Check file names, formats and limits. If transfer was interrupted, reselect the exact originals and reconcile.',
-                );
+            } catch (error) {
+              if (session.getSnapshot().epoch === epoch) {
+                if (
+                  error instanceof IntakeValidationError ||
+                  (error instanceof ApiError && error.fileErrors.length > 0)
+                ) {
+                  setFileIssues(error.fileErrors);
+                  setValidCheckedFiles(error.validFiles);
+                  setMessage(
+                    'No completed intake receipt was received. One or more files failed fail-closed intake validation; replace the rejected file(s) while keeping valid files selected.',
+                  );
+                } else {
+                  setMessage(
+                    control.signal.aborted
+                      ? 'Transfer stopped. Server outcome may be partial. Refresh or reselect the exact originals to reconcile; existing originals will not be overwritten.'
+                      : 'No completed intake receipt was received. Check file names, formats and limits. If transfer was interrupted, reselect the exact originals and reconcile.',
+                  );
+                }
+              }
             } finally {
               lock.current = false;
               if (session.getSnapshot().epoch === epoch) setBusy(false);
@@ -243,7 +266,28 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
           </div>
         </form>
       )}
-      <div id="intake-status">{message && <Notice>{message}</Notice>}</div>
+      <div id="intake-status">
+        {message && <Notice error={fileIssues.length > 0}>{message}</Notice>}
+        {fileIssues.length > 0 && (
+          <section className="draft-context" aria-label="Rejected intake files">
+            <h2>Files rejected during preflight (no originals written)</h2>
+            <ul className="matter-list">
+              {fileIssues.map((issue) => (
+                <li key={`${issue.role}:${issue.filename}:${issue.code}`}>
+                  <strong>{issue.filename}</strong> ({issue.role}) ·{' '}
+                  <code>{issue.code}</code> — {issue.message}
+                </li>
+              ))}
+            </ul>
+            {validCheckedFiles.length > 0 && (
+              <p className="small">
+                Valid files passed preflight and can be kept as selected:{' '}
+                {validCheckedFiles.join(', ')}.
+              </p>
+            )}
+          </section>
+        )}
+      </div>
     </section>
   );
 }

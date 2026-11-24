@@ -179,6 +179,8 @@ def create_litigation_development_app(
     signed_source_ingest: Callable[..., object] | None = None,
     publishable_key: str | None = None,
     trusted_ingest_key: str | None = None,
+    receipt_hmac_secret: str | None = None,
+    previous_receipt_hmac_secrets: tuple[str, ...] = (),
     ocr: LocalPDFOCR | None = None,
     headless: HeadlessMatterStore | None = None,
     page_worker_secret: str | None = None,
@@ -217,7 +219,13 @@ def create_litigation_development_app(
         raise ValueError("Only a public Supabase development publishable key is allowed")
 
     dossier_store = (
-        DossierStore(publishable_key, trusted_ingest_key, rights_gate=rights_gate)
+        DossierStore(
+            publishable_key,
+            trusted_ingest_key,
+            rights_gate=rights_gate,
+            hmac_secret=receipt_hmac_secret,
+            previous_hmac_secrets=previous_receipt_hmac_secrets,
+        )
         if publishable_key
         else None
     )

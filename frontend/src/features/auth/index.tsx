@@ -10,6 +10,7 @@ export function SignIn({
 }) {
   const session = useSessionController();
   const request = useRef<AbortController | null>(null);
+  const submitting = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [invalid, setInvalid] = useState<string[]>([]);
@@ -20,7 +21,7 @@ export function SignIn({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        if (busy) return;
+        if (busy || submitting.current) return;
         const form = event.currentTarget;
         const data = new FormData(form);
         const email = String(data.get('email') ?? '').trim();
@@ -41,6 +42,7 @@ export function SignIn({
         request.current = controller;
         const epoch = session.getSnapshot().epoch;
         const transport = new AuthTransport();
+        submitting.current = true;
         setBusy(true);
         setError('');
         setInvalid([]);
@@ -90,6 +92,7 @@ export function SignIn({
               );
           })
           .finally(() => {
+            submitting.current = false;
             if (!controller.signal.aborted) {
               setBusy(false);
               const input = form.elements.namedItem('password');

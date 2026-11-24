@@ -15,8 +15,19 @@ type BinaryBinding = {
   editorCandidate?: true;
   originalSha256?: string;
 };
+export type ApiFileIssue = {
+  filename: string;
+  role: string;
+  code: string;
+  message: string;
+};
+
 export class ApiError extends Error {
-  constructor(public readonly status: number) {
+  constructor(
+    public readonly status: number,
+    public readonly fileErrors: ApiFileIssue[] = [],
+    public readonly validFiles: string[] = [],
+  ) {
     super(
       status === 401 || status === 403 || status === 404
         ? 'This report is unavailable for the current session.'
@@ -385,6 +396,47 @@ export class ApiClient {
             !editorBoundary)
         )
           this.session.clear();
+        if (
+          response.status === 422 &&
+          path.includes('/workspace/intake/') &&
+          response.headers.get('content-type')?.includes('application/json')
+        ) {
+          try {
+            const text = (await response.text()).slice(0, 8192);
+            const parsed = JSON.parse(text) as {
+              detail?: {
+                file_errors?: unknown;
+                valid_files?: unknown;
+              };
+            };
+            const detail = parsed?.detail;
+            const fileErrors: ApiFileIssue[] = Array.isArray(
+              detail?.file_errors,
+            )
+              ? detail.file_errors
+                  .filter(
+                    (item): item is ApiFileIssue =>
+                      Boolean(item) &&
+                      typeof item === 'object' &&
+                      typeof (item as ApiFileIssue).filename === 'string' &&
+                      typeof (item as ApiFileIssue).role === 'string' &&
+                      typeof (item as ApiFileIssue).code === 'string' &&
+                      typeof (item as ApiFileIssue).message === 'string',
+                  )
+                  .slice(0, 16)
+              : [];
+            const validFiles: string[] = Array.isArray(detail?.valid_files)
+              ? detail.valid_files
+                  .filter((name): name is string => typeof name === 'string')
+                  .slice(0, 16)
+              : [];
+            if (fileErrors.length > 0) {
+              throw new ApiError(422, fileErrors, validFiles);
+            }
+          } catch (error) {
+            if (error instanceof ApiError) throw error;
+          }
+        }
         throw new ApiError(response.status);
       }
       if (

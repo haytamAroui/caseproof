@@ -119,8 +119,29 @@ class IntakeView(Contract):
     readback_complete: bool
 
 
+def _classify_file_error(exc: Exception, *, role: str) -> tuple[str, str]:
+    text = str(exc).lower()
+    if "encrypted" in text or "password" in text or "locked" in text:
+        return "ENCRYPTED_OR_LOCKED", "File is encrypted or password-protected and cannot be verified."
+    if "digest" in text or "size" in text:
+        return "DIGEST_MISMATCH", "File size or SHA-256 digest did not match the submitted bytes."
+    if "media" in text:
+        return "MEDIA_TYPE_MISMATCH", "File media type does not match its declared role."
+    if "filename" in text or "path" in text or "unsafe" in text:
+        return "FILENAME_INVALID", "Filename contains disallowed characters or path segments."
+    if "inventory" in text:
+        return "INVALID_INVENTORY", "Inventory text is malformed or exceeds bounds."
+    if role == "draft":
+        return "CORRUPT_OR_UNREADABLE", "DOCX draft failed container or bounded parser verification."
+    if role == "exhibit":
+        return "CORRUPT_OR_UNREADABLE", "PDF exhibit failed container or bounded parser verification."
+    return "CORRUPT_OR_UNREADABLE", "File failed container or format validation."
+
+
 def preflight(command: IntakeCommand) -> list[bytes]:
-    originals = []
+    originals: list[bytes] = []
+    file_errors: list[dict[str, str]] = []
+    valid_files: list[str] = []
     inventory = next(f.byte_length for f in command.files if f.role == "inventory")
     reason = refusal_reason(
         source_count=len(command.files),
@@ -156,11 +177,29 @@ def preflight(command: IntakeCommand) -> list[bytes]:
                 parse_verified_original(
                     document_id="preflight", version_id="preflight", data=raw, media_type=expected
                 )
-        except (ValueError, UnicodeError, binascii.Error, ExtractionError):
-            raise HTTPException(
-                422, "An original failed size, digest, filename or format validation; no files written."
-            ) from None
+        except (ValueError, UnicodeError, binascii.Error, ExtractionError) as exc:
+            code, msg = _classify_file_error(exc, role=source.role)
+            file_errors.append(
+                {
+                    "filename": source.filename,
+                    "role": source.role,
+                    "code": code,
+                    "message": msg,
+                }
+            )
+            continue
         originals.append(raw)
+        valid_files.append(source.filename)
+    if file_errors:
+        raise HTTPException(
+            422,
+            {
+                "message": "An original failed size, digest, filename or format validation; no files written.",
+                "files_written": False,
+                "file_errors": file_errors,
+                "valid_files": valid_files,
+            },
+        )
     return originals
 
 

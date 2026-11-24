@@ -197,6 +197,20 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     bannerInventoryUnconfirmed:
       'Inventory not yet confirmed for this draft: dependent exhibit identities remain NOT_ASSESSED until you confirm mappings.',
     bannerInventoryAction: 'Confirm inventory',
+    bannerInventoryInlineBtn: 'Inspect mappings inline',
+    bannerInventoryInlineTitle:
+      'Unconfirmed exhibit mappings (progressive preview)',
+    bannerInventoryInlineHint:
+      'These references remain NOT_ASSESSED until you confirm each Pièce/Stuk ↔ file link on the inventory screen.',
+    linkConditionsLegal: 'Conditions & legal articles',
+    omissionQuickBtn: 'Report missed passage',
+    omissionQuickTitle: 'Log an omission note (quick shortcut)',
+    omissionQuickHint:
+      'If a relevant clause or exhibit passage was omitted from the draft or scan, record it as an explicit omission disposition in the Legal & Review workspace.',
+    omissionQuickLink: 'Open legal & omission review',
+    lexicalCueReservationTitle: 'Omitted reservation cue · Appraisal required',
+    lexicalCueStatusDisclaimer:
+      'Flagged for lawyer appraisal — not semantically verified.',
     bannerPaginationUnmapped:
       'Page-space conflict or unmapped pinpoint: PDF, printed, and bundle pages are tracked separately and never auto-equated.',
     bannerOcrUnreliable:
@@ -434,6 +448,21 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     bannerInventoryUnconfirmed:
       'Bordereau non encore confirmé : les identités de pièces dépendantes restent « Non évalué » tant que vous ne confirmez pas le rapprochement.',
     bannerInventoryAction: 'Confirmer le bordereau',
+    bannerInventoryInlineBtn: 'Voir les liaisons ici',
+    bannerInventoryInlineTitle:
+      'Liaisons de pièces non confirmées (aperçu progressif)',
+    bannerInventoryInlineHint:
+      'Ces renvois restent « Non évalué » tant que chaque lien Pièce/Stuk ↔ fichier n’est pas confirmé dans le bordereau.',
+    linkConditionsLegal: 'Conditions & articles de loi',
+    omissionQuickBtn: 'Signaler une omission',
+    omissionQuickTitle: 'Signaler un passage omis (raccourci)',
+    omissionQuickHint:
+      'Si une clause ou une pièce pertinente manque dans les conclusions ou l’extrait, enregistrez une mention d’omission explicite dans l’espace Juridique & Revue.',
+    omissionQuickLink: 'Ouvrir la revue juridique & omissions',
+    lexicalCueReservationTitle:
+      'Réserve d’ouverture omise · Appréciation requise',
+    lexicalCueStatusDisclaimer:
+      'Signalé à l’appréciation de l’avocat — non vérifié sémantiquement.',
     bannerPaginationUnmapped:
       'Pagination non localisée ou en conflit : page PDF, page imprimée et page dossier restent strictement séparées.',
     bannerOcrUnreliable:
@@ -674,6 +703,20 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     bannerInventoryUnconfirmed:
       'Inventaris nog niet bevestigd: afhankelijke stukidentiteiten blijven “Niet beoordeeld” tot u de koppeling bevestigt.',
     bannerInventoryAction: 'Inventaris bevestigen',
+    bannerInventoryInlineBtn: 'Koppelingen hier bekijken',
+    bannerInventoryInlineTitle:
+      'Niet-bevestigde stukkoppelingen (progressief overzicht)',
+    bannerInventoryInlineHint:
+      'Deze verwijzingen blijven “Niet beoordeeld” tot elke Stuk/Pièce ↔ bestandskoppeling op het inventarisscherm is bevestigd.',
+    linkConditionsLegal: 'Voorwaarden & wetsartikelen',
+    omissionQuickBtn: 'Omissie melden',
+    omissionQuickTitle: 'Ontbrekende passage melden (snelkoppeling)',
+    omissionQuickHint:
+      'Indien een relevante clausule of stukpassage ontbreekt in de conclusies of scan, registreer dit als expliciete omissiemelding in het juridisch overzicht.',
+    omissionQuickLink: 'Open juridisch & omissie-overzicht',
+    lexicalCueReservationTitle: 'Weggelaten voorbehoud · Beoordeling vereist',
+    lexicalCueStatusDisclaimer:
+      'Gemarkeerd voor beoordeling door de advocaat — niet semantisch geverifieerd.',
     bannerPaginationUnmapped:
       'Niet-gekoppelde of strijdige paginering: PDF-, gedrukte en bundelpagina’s blijven strikt gescheiden.',
     bannerOcrUnreliable:

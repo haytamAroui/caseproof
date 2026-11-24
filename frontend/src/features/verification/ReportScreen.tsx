@@ -9,6 +9,7 @@ import { useLocale, type ResultCategory } from '../../shared/i18n';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
 import { coveragePages, coverageRegions } from './coverageRegions';
+import { detectLexicalCue } from './lexicalCue';
 import { quoteMatches } from './quoteComparison';
 import {
   collectReportFailureBanners,
@@ -66,6 +67,8 @@ export function ReportScreen({
   const [filter, setFilter] = useState<
     'attention' | 'all' | ResultCategory | FilterableFailureBannerKind
   >('attention');
+  const [showInlineInventory, setShowInlineInventory] = useState(false);
+  const [showOmissionShortcut, setShowOmissionShortcut] = useState(false);
   const [search, setSearch] = useState('');
   const query = useQuery({
     queryKey: ['report', session.epoch, caseId, briefId, snapshot],
@@ -206,8 +209,35 @@ export function ReportScreen({
             {t('linkReconfirmInv')}
           </Link>
         )}
+        <Link to={`/matters/${caseId}/briefs/${briefId}/legal`}>
+          {t('linkConditionsLegal')}
+        </Link>
+        {!historical && (
+          <button
+            type="button"
+            className="button"
+            aria-expanded={showOmissionShortcut}
+            onClick={() => setShowOmissionShortcut((open) => !open)}
+          >
+            {t('omissionQuickBtn')}
+          </button>
+        )}
         <p>{t('reviewSubtitle')}</p>
       </header>
+      {showOmissionShortcut && !historical && (
+        <section className="draft-context" aria-label={t('omissionQuickTitle')}>
+          <h2>{t('omissionQuickTitle')}</h2>
+          <p className="small">{t('omissionQuickHint')}</p>
+          <div className="catalog-actions">
+            <Link
+              className="button"
+              to={`/matters/${caseId}/briefs/${briefId}/legal`}
+            >
+              {t('omissionQuickLink')}
+            </Link>
+          </div>
+        </section>
+      )}
       <Notice>
         {historical
           ? t('snapshotHistoricalNotice')
@@ -289,12 +319,22 @@ export function ReportScreen({
                 </span>
                 <span className="report-failure-actions">
                   {banner.kind === 'inventory_unconfirmed' && !historical && (
-                    <Link
-                      className="button"
-                      to={`/matters/${caseId}/inventory`}
-                    >
-                      {t('bannerInventoryAction')}
-                    </Link>
+                    <>
+                      <button
+                        type="button"
+                        className="button"
+                        aria-expanded={showInlineInventory}
+                        onClick={() => setShowInlineInventory((open) => !open)}
+                      >
+                        {t('bannerInventoryInlineBtn')}
+                      </button>
+                      <Link
+                        className="button"
+                        to={`/matters/${caseId}/inventory`}
+                      >
+                        {t('bannerInventoryAction')}
+                      </Link>
+                    </>
                   )}
                   {bannerFilterKind && (
                     <button
@@ -318,6 +358,35 @@ export function ReportScreen({
             );
           })}
         </div>
+      )}
+      {showInlineInventory && !historical && (
+        <section
+          className="draft-context"
+          aria-label={t('bannerInventoryInlineTitle')}
+        >
+          <h2>{t('bannerInventoryInlineTitle')}</h2>
+          <p className="small">{t('bannerInventoryInlineHint')}</p>
+          <ul className="matter-list">
+            {report.findings
+              .filter(
+                (f) =>
+                  f.identity === 'not_assessed' ||
+                  f.reason === 'INVENTORY_UNCONFIRMED',
+              )
+              .slice(0, 12)
+              .map((f) => (
+                <li key={f.reference_id}>
+                  <strong>{f.literal}</strong> ·{' '}
+                  <span className="small">
+                    {typeof f.reason === 'string' ? f.reason : f.identity}
+                  </span>
+                </li>
+              ))}
+          </ul>
+          <Link className="button" to={`/matters/${caseId}/inventory`}>
+            {t('bannerInventoryAction')}
+          </Link>
+        </section>
       )}
       <div
         className="review-layout"
@@ -726,6 +795,10 @@ function QuoteContext({ finding }: { finding: FindingView }) {
   const { t } = useLocale();
   const comparison =
     validQuote && validSource ? quoteMatches(source, quote) : null;
+  const lexicalCue = detectLexicalCue(
+    validQuote ? quote : finding.literal,
+    validSource ? source : null,
+  );
   return (
     <section
       className="draft-context"
@@ -733,6 +806,33 @@ function QuoteContext({ finding }: { finding: FindingView }) {
     >
       <h3>{t('quoteCardTitle')}</h3>
       <ParaphraseGuardPanel finding={finding} />
+      {lexicalCue && (
+        <div
+          className="report-failure-banner"
+          data-tone="warn"
+          role="note"
+          aria-label={
+            lexicalCue.kind === 'status_mismatch'
+              ? t('statusCueFlagTitle')
+              : t('lexicalCueReservationTitle')
+          }
+        >
+          <div>
+            <strong>
+              <span aria-hidden="true">!</span>{' '}
+              {lexicalCue.kind === 'status_mismatch'
+                ? t('statusCueFlagTitle')
+                : t('lexicalCueReservationTitle')}
+            </strong>
+            <p className="small">
+              {t('statusCueFlagClaimVsSource')}{' '}
+              <code>{lexicalCue.draftCue}</code> ↔{' '}
+              <code>{lexicalCue.sourceCue}</code>
+            </p>
+            <p className="small">{t('lexicalCueStatusDisclaimer')}</p>
+          </div>
+        </div>
+      )}
       <p>{t('quoteCompareHint')}</p>
       <h4>{t('quoteInDraftHeading')}</h4>
       <p className="quote-text">{validQuote ? quote : t('quoteUnavailable')}</p>
