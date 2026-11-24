@@ -44,6 +44,7 @@ from application.litigation.legal_references import (
     engine_mode,
 )
 from application.litigation.legal_review_decisions import body_fingerprints, validate_review
+from application.litigation.signed_conditions_pack import validate_section as validate_signed_section
 from application.litigation.unified_review import LegalObservation
 
 MAX_BYTES = 40 * 1024 * 1024
@@ -232,6 +233,8 @@ def _report(body: dict[str, Any]) -> bytes:
         parts += ["<h2>Décisions antérieures sans effet sur ce constat</h2><p>Revue précédente <code>",
                   esc(body["review"].get("prior_checkpoint")), "</code>. Ces décisions restent visibles mais ne couvrent plus aucun constat identique.</p><pre>",
                   esc(json.dumps(superseded, ensure_ascii=False, indent=2, sort_keys=True)), "</pre>"]
+    if "signed_conditions" in body:
+        parts += _signed_conditions_report(body["signed_conditions"])
     parts += ["<h2>Décisions de revue enregistrées</h2><pre>", esc(json.dumps(body["review"], ensure_ascii=False, indent=2, sort_keys=True)),
               "</pre><h2>Texte du mémoire vérifié</h2><pre>", esc(body["brief_text"]), "</pre><h2>Articles conservés</h2>"]
     for i, row in enumerate(body["articles"]):
@@ -251,6 +254,24 @@ def _report(body: dict[str, Any]) -> bytes:
         parts += ["</section>"]
     parts += ["</html>"]
     return "".join(parts).encode()
+
+
+def _signed_conditions_report(section: dict[str, Any]) -> list[str]:
+    def esc(v: object) -> str:
+        return html.escape(str(v), quote=True)
+
+    parts = ["<h2>Conditions définies par l'avocat</h2><p>", esc(section["note"]), "</p><p>Révision ", esc(section["revision"]),
+             " · empreinte <code>", esc(section["spec_sha256"]), "</code></p>"]
+    for a in section["anchors"]:
+        parts += ["<article><p><strong>", esc(a["status"]), "</strong> · ", esc(a["label"]), "<br>", esc(a["sentence"]),
+                  "<br><small>", esc(a["reason"]), "</small></p>"]
+        for f in a["found"]:
+            parts += ["<p>", esc(f["piece"]), (f" p. {f['pdf_page']}" if f.get("pdf_page") else ""), " · mot « ", esc(f["term"]),
+                      " » : ", esc(f["excerpt"]), "</p>"]
+        if a["pieces_not_read"]:
+            parts += ["<p>Pièces non lues : ", esc(", ".join(a["pieces_not_read"])), "</p>"]
+        parts += ["</article>"]
+    return parts
 
 
 class LegalRun(Protocol):
@@ -295,7 +316,8 @@ def observe(text: str, config: LegalCorpusConfig, marker: object, exhibits: dict
 def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
                      brief_text: str, review: dict[str, Any], exhibits: dict[str, Any] | None = None,
                      passages: list[dict[str, Any]] | None = None, passages_rules: str | None = PASSAGE_RULES,
-                     conditions: dict[str, Any] | None = None, condition_evidence: list[dict[str, Any]] | None = None) -> tuple[bytes, str]:
+                     conditions: dict[str, Any] | None = None, condition_evidence: list[dict[str, Any]] | None = None,
+                     signed_conditions: dict[str, Any] | None = None) -> tuple[bytes, str]:
     if config.failures or not config.records or run.corpus_pack_sha256 != config.pack_sha256:
         raise CorpusError("complete exact chosen corpus required for export")
     if _hash(brief_text.encode()) != run.representation_sha256 or review.get("snapshot_hash") != run.snapshot_hash:
@@ -336,6 +358,10 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
     if conditions is not None:
         body["conditions"] = conditions
         body["condition_evidence"] = condition_evidence if condition_evidence is not None else []
+    if signed_conditions is not None:
+        if conditions is not None:
+            raise CorpusError("two conditions sections")
+        body["signed_conditions"] = signed_conditions
     payload = _encode(body)
     checkpoint = _hash(payload)
     report = _report(body)
@@ -387,6 +413,10 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
             spec = validate_spec(body["conditions"])
             validate_evidence(body["brief_text"], spec, body["condition_evidence"])
             cond = (spec, body["condition_evidence"])
+        if "signed_conditions" in body:
+            if "conditions" in body:
+                raise CorpusError("two conditions sections")
+            validate_signed_section(body["brief_text"], body["signed_conditions"])
         observed = observe(body["brief_text"], config, marker, body.get("exhibits"), cond)
         if "passages" in body:
             validate_passages(body["brief_text"], [asdict(x) for x in observed], body["passages"], body.get("passages_rules"))

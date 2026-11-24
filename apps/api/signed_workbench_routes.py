@@ -210,10 +210,23 @@ def create_signed_workbench_router(
         AuthorizedEvidenceSearch._require_evidence(access)
         bundle = wb.store.load_bundle(case_id=case_id, brief_version_id=brief_version_id, access=access)
         review = wb.workspace.state(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        section = None
+        if conditions_store is not None:
+            from application.litigation.signed_conditions import match_conditions
+            from application.litigation.signed_conditions_pack import build_section
+            from apps.api.litigation_workspace_sources import _labels
+            revision, spec = stored_spec(bearer, case_id)
+            if spec is not None and spec["conditions"]:
+                head = conditions_store.read(bearer, case_id)
+                if head is None or int(head["revision"]) != revision:
+                    raise AccessRejected(AccessFailure.STALE_SNAPSHOT)
+                matched = match_conditions(bundle.representation.text, spec, bundle.previews, _labels(bundle))
+                section = build_section(head["spec_text"], head["spec_sha256"], revision, matched)
         try:
             data, checkpoint = build_legal_pack(config=config, run=run,
                                                 brief_text=bundle.representation.text,
-                                                review={**review, "check_engine": ENGINE_STRICT4})
+                                                review={**review, "check_engine": ENGINE_STRICT4},
+                                                signed_conditions=section)
         except CorpusError:
             raise HTTPException(status_code=409, detail="offline_corpus_bytes_unavailable_or_changed") from None
         if (wb.checker._scope(wb.checker._verified(bearer), case_id) != access
