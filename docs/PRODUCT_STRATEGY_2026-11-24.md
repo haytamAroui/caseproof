@@ -50,12 +50,12 @@ Every engineering sprint on CaseProof must strengthen at least one of these seve
    Tracks physical `PDF page`, original `Printed page`, and compiled `Bundle page` independently so renumbered court bundles, coversheets, Roman numerals, and annexes never cause silent mis-citations.
 4. **3-Pane Instant-Snap React Cockpit + Live PDF Pixels** *(patterns from Clearbrief, Legora, and OpenContracts)*  
    Left exception-first review queue | Center conclusions excerpt + exact diff/reason + inline human decision (`Confirm / Qualify / Reject / Waive / Omission`) | Right live `pdfjs-dist` source canvas above the fold with non-obscuring bounding boxes and click-to-jump navigation from any finding, exhibit, or article row.
-5. **Distortion, Subtle-Trap, and Lawyer-Condition Detectors** *(patterns from BriefCatch RealityCheck, Bewijslijn, and Harvey Playbooks)*  
-   Detects omitted opening reservations, dropped negations, event/status reformulations (`"Le contrat a été signé le 12 mars"` vs `"envoyé pour signature le 12 mars"`), same-role Belgian Decimal/date mismatches, cross-language `FR ↔ NL` quotes (`TRANSLATION_REVIEW_REQUIRED`), and structured dossier-specific **Lawyer-Defined Conditions**.
+5. **Targeted Distortion Flags & Lawyer-Condition Triggers** *(patterns from BriefCatch RealityCheck, Bewijslijn, and Harvey Playbooks)*  
+   Deterministically checks omitted opening reservations in matched passages and same-role Belgian Decimal/date mismatches; **explicitly flags for human appraisal (`Appréciation requise`)**—without overclaiming general semantic verification—known lexical traps (`"Le contrat a été signé le 12 mars"` vs `"envoyé pour signature le 12 mars"`), cross-language `FR ↔ NL` quotes (`TRANSLATION_REVIEW_REQUIRED`), and structured dossier-specific **Lawyer-Defined Conditions**.
 6. **Versioned Offline Belgian Legal Corpus** *(patterns from LawCodex/be, Justel/ELI/Moniteur, and VeriLeges)*  
    Content-addressed, append-only FR/NL statutory packs with explicit ELI, Moniteur publication dates, and source digests that execute **with Internet disconnected**—no `"latest"` alias, no silent live scraping, and strict fail-closed abstention (`requested_version_absent_from_chosen_corpus`) when a requested historical version is absent.
 7. **Word Round-Trip Recheck & Cold-Reopenable Diligence Export** *(patterns from Clearbrief Cite Check Report, Ironclad/LegalOn, and CiteProof)*  
-   Lawyer edits `.docx` natively in Word → re-uploads → CaseProof shows exact changes, **carries forward** untouched decisions (`carried`), **reopens** changed/affected items (`superseded` / *À recontrôler*), and produces a self-contained, cold-reopenable, SHA-256-indexed **Pre-Filing Verification Trace** (JSON / HTML / Markdown / reviewed DOCX appendix).
+   Lawyer edits `.docx` natively in Word → re-uploads → CaseProof shows exact changes, **carries forward** untouched decisions (`carried`), **reopens** changed/affected items (`superseded` / *À recontrôler*), and produces a self-contained, cold-reopenable **Pre-Filing Verification Trace** (JSON / HTML / Markdown / reviewed DOCX appendix): **server-signed (`manifest_sha256` + server HMAC-SHA256 receipt)** on authenticated releases ([ADR 0032](adr/0032-reviewed-release-and-historical-artifact-boundary.md), [ADR 0036](adr/0036-firm-controlled-profile.md)) or **SHA-256 digest-verified** on disconnected offline packs—never claimed as a qualified electronic signature or *constat d'huissier*.
 
 ---
 
@@ -71,6 +71,16 @@ To keep the UI immediately legible for Belgian litigators while preserving stric
 | **Correspondance constatée** / **Overeenstemming vastgesteld** / **Match observed** | Teal `✓` | Checked item matches the preserved source within the declared scope. **Does not** imply authenticity, filing, or legal adequacy. | `PASS`, `RESOLVED` + `MAPPED` + `EXACT_MATCH` |
 
 In addition, **Coverage** is always rendered separately (DOCX story regions scanned/unprocessed/unsupported, unreadable pages, corpus selection hash), and lawyers can explicitly log an **`omission`** when a passage was missed by automated detection.
+
+### 4.1 Progressive Confirmation & Mandatory First-Use Failure States
+- **Progressive register confirmation (default):** To avoid blocking time-to-value on first upload, CaseProof runs the initial audit immediately using the proposed `Pièce/Stuk ↔ file` mapping, marking every exhibit-identity result dependent on an unconfirmed mapping as **`NOT_ASSESSED (INVENTORY_UNCONFIRMED)`** (P3-04) while letting the lawyer confirm mappings inline during triage. Strict pre-audit confirmation remains available as an optional firm policy.
+- **First-class failure states (must have explicit screens/banners, never silent empty results):**
+  - *Corrupt, password-protected, or oversized DOCX/PDF:* isolated intake rejection banner naming the exact file and reason; valid files remain preserved.
+  - *Unmappable or overlapping stamped bundle:* explicit `UNMAPPED` / `CONFLICTING` pagination banner with manual page-space resolution (never silently equates `PDF page == Bundle page`).
+  - *Unreadable / low-confidence scan:* explicit `OCR_UNRELIABLE` card surfacing original page pixels/crop directly.
+  - *Missing historical legal version or absent article:* explicit `UNDETERMINED (requested_version_absent_from_chosen_corpus)` or `UNVERIFIED` banner showing exact pack digest/version (never falls back to current law).
+  - *Unsupported DOCX story regions (textboxes, headers/footers, fields, unresolved tracked changes):* explicit partial-coverage denominator banner.
+  - *Stale snapshot, revoked actor, or tampered export bytes:* hard fail-closed screen blocking release/replay until rechecked or re-authorized.
 
 ---
 
@@ -136,7 +146,7 @@ To prevent fragmented UX across prototypes, this strategy locks one product inte
 
 ## 7. Commercial Validation & Pilot Proof Protocol (M5 Alignment)
 
-All M5 rules and [P5-01..04 prerequisites](ROADMAP.md#pre-m5-hard-prerequisites--the-commercial-experiment-must-have-an-exit) remain binding.
+All M5 rules and [P5-01..04 prerequisites](ROADMAP.md#pre-m5-hard-prerequisites--the-commercial-experiment-must-have-an-exit) remain binding. **Willingness-to-pay gate before expanding UI scope:** a trustworthy workflow does not prove commercial demand. Before building additional screens or Level 2 extensions, test the core synthetic flow with 2–5 Belgian FR/NL litigators and partners to confirm whether catching misquoted pièces/pages/reservations before filing is painful enough to budget and pay for—and identify who holds purchasing authority.
 
 ### 7.1 Mandatory Partner Demo Scenario (Synthetic / Rights-Cleared First)
 Before asking a Belgian firm to evaluate a pilot, demonstrate one end-to-end journey containing:

@@ -29,14 +29,14 @@ CaseProof applies the exact same verification workflow to **human-drafted and AI
 This ADR refines ADR 0018's scope boundary without lifting its first-market discipline or its security/commercial gates:
 
 - **Pilot Core (first commercial proof):**
-  1. Conclusions DOCX + confirmed Stuk/Pièce bordereau + preserved PDF/scanned exhibits reconciliation with **3 independent page spaces** (`pdf_page`, `printed_page`, `bundle_page`).
-  2. Deterministic quoted-passage and same-role typed value checks with explicit OCR uncertainty abstention and above-the-fold original source pixels/crops.
+  1. Conclusions DOCX + Stuk/Pièce bordereau + preserved PDF/scanned exhibits reconciliation with **3 independent page spaces** (`pdf_page`, `printed_page`, `bundle_page`). **Progressive confirmation default:** the initial audit runs immediately on proposed mappings—keeping unconfirmed exhibit-identity items explicitly `NOT_ASSESSED (INVENTORY_UNCONFIRMED)` under P3-04—so lawyers see immediate value and confirm mappings inline during triage (strict pre-audit confirmation remains an optional firm policy).
+  2. Deterministic quoted-passage and same-role typed value verification with explicit OCR uncertainty abstention and above-the-fold original source pixels/crops.
   3. Visible coverage denominators (`regions_discovered / scanned / unprocessed / unsupported`, unreadable pages) plus explicit lawyer `omission` signaling.
   4. Accountable human review decisions (`Confirm / Qualify / Reject / Waive`) bound to exact snapshots—preserving both the machine finding and the human disposition.
   5. Frictionless Word round-trip correction and recheck (carrying forward strictly unchanged findings; reopening changed/affected findings) and cold-reopenable, tamper-evident export traces.
 - **Target Extensions (explicitly authorized in-scope engineering tracks, subordinate to Pilot Core):**
   1. **Bounded chosen-corpus legal-article verification:** comparing cited Belgian statutory articles/paragraphs against an explicitly selected, versioned, offline content-addressed FR/NL corpus pack (Justel/ELI/Moniteur provenance). **Hard guardrail:** never perform live unpinned web scraping at check time, never fabricate absent historical versions (`UNDETERMINED / requested_version_absent_from_chosen_corpus`), and never assert temporal applicability or legal validity.
-  2. **Distortion & subtle-trap detection:** surfacing omitted opening reservations (*« Hormis les cas où la loi en dispose autrement »*), dropped negations, event/status reformulations (`"signé"` vs `"envoyé pour signature"`), cross-language FR↔NL translation review (`TRANSLATION_REVIEW_REQUIRED`), and verifiable assertions beyond explicit exhibit tags.
+  2. **Targeted distortion & subtle-trap flagging (not general semantic verification):** deterministically verifying omitted opening reservations (*« Hormis les cas où la loi en dispose autrement »*) in matched quotations, while **flagging for human appraisal (`Appréciation requise`)** known lexical traps (`"signé"` vs `"envoyé pour signature"`), cross-language FR↔NL quotes (`TRANSLATION_REVIEW_REQUIRED`), dropped negations, and unlinked verifiable assertions—never claiming general semantic coverage.
   3. **Lawyer-defined conditions (*conditions définies par l'avocat*):** structured, dossier-scoped checklist rules (e.g., requiring proof of receipt for a *mise en demeure*) whose retrieved passages always route to human appraisal when interpretation is required.
 - **Explicit Non-Goals ("Refuse to Build"):**
   - No AI brief drafting or argument generation (stay the neutral auditor of human and AI prose).
@@ -63,7 +63,10 @@ All product engineering prioritizes seven synergistic capabilities detailed in [
 
 ### 2.5 Licensing, Integrity, and Non-Exclusivity Guardrails
 - **Open-source licensing:** Study public UI/architecture patterns only within license boundaries. **Never copy or vendor AGPL-3.0 code** (e.g., Mike OSS) into proprietary CaseProof. Record license/notices before adopting any permissive (MIT/Apache) dependency.
-- **Integrity vs. legal certification:** Tamper-evident SHA-256 export manifests prove byte consistency across a snapshot. **Never describe a SHA-256 hash or export manifest as a qualified electronic signature, eIDAS seal, court filing receipt, or *constat d'huissier*.**
+- **Integrity vs. server-signed receipt vs. legal certification:** Explicitly distinguish CaseProof's two export integrity levels:
+  - **Authenticated server release (`caseproof-reviewed-release-v1`, ADR 0032/0036):** carries both `manifest_sha256` and a **server-side domain-separated HMAC-SHA256 receipt** verifying byte integrity and server origin on replay (asymmetric RFC 8785/Ed25519 signing and third-party trusted timestamps remain deferred; HMAC key-custody separation/rotation remains an open security item).
+  - **Disconnected offline ZIP pack (`scripts/check_offline_legal_docx.py`):** carries **SHA-256 digests only** (unauthenticated byte consistency verified against an externally stored hash).
+  - **Neither** may ever be described as a qualified electronic signature (eIDAS QES), court filing receipt, or *constat d'huissier*.
 - **Competitive honesty (preserving ADR 0018/0019):** Compare concrete observed behavior (source crops, 3-space pagination, OCR abstention, deterministic isolation, offline corpus pinning) against existing vendors; never claim market exclusivity, untested competitor inability, or regulatory/bar certification.
 
 ---
