@@ -1007,7 +1007,10 @@ function FindingInspection({
             <StateValue label="Identity" value={finding.identity} />
             <StateValue label="Page mapping" value={finding.page_mapping} />
             <StateValue label="Fidelity" value={finding.fidelity} />
-            <StateValue label="Human support" value={finding.support} />
+            <StateValue
+              label="Human support (frozen report)"
+              value={finding.support}
+            />
           </dl>
           <header className="cockpit-pane-heading">
             <h3>{t('draftHeading')}</h3>

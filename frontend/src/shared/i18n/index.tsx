@@ -849,12 +849,15 @@ const DIMENSION_LABELS: Record<Locale, Record<string, string>> = {
     'Page mapping': 'Pagination',
     Fidelity: 'Fidélité citation',
     'Human support': 'Décision humaine',
+    'Human support (frozen report)': 'Décision humaine (rapport figé)',
   },
   nl: {
     Identity: 'Identiteit stuk',
     'Page mapping': 'Paginering',
     Fidelity: 'Citaatgetrouwheid',
     'Human support': 'Menselijke beoordeling',
+    'Human support (frozen report)':
+      'Menselijke beoordeling (bevroren rapport)',
   },
 };
 
