@@ -12,7 +12,7 @@ import html
 import io
 import json
 from dataclasses import asdict
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from zipfile import ZIP_STORED, BadZipFile, ZipFile
 
 from application.litigation.corpus import (
@@ -237,6 +237,8 @@ def _report(body: dict[str, Any]) -> bytes:
         parts += _signed_conditions_report(body["signed_conditions"])
     if "signed_sources" in body:
         parts += _signed_sources_report(body["signed_sources"], body.get("signed_conditions"))
+    if "reservation_cues" in body:
+        parts += _reservation_cues_report(body["reservation_cues"])
     parts += ["<h2>Décisions de revue enregistrées</h2><pre>", esc(json.dumps(body["review"], ensure_ascii=False, indent=2, sort_keys=True)),
               "</pre><h2>Texte du mémoire vérifié</h2><pre>", esc(body["brief_text"]), "</pre><h2>Articles conservés</h2>"]
     for i, row in enumerate(body["articles"]):
@@ -256,6 +258,21 @@ def _report(body: dict[str, Any]) -> bytes:
         parts += ["</section>"]
     parts += ["</html>"]
     return "".join(parts).encode()
+
+
+def _reservation_cues_report(section: dict[str, Any]) -> list[str]:
+    from html import escape as esc
+    parts = ["<h2>Réserves et négations autour des extraits (détection partielle)</h2>",
+             "<p>Règles ", esc(section["rules"]), ". Listes fixes de mots FR/NL. ", esc(str(section["quotations_checked"])),
+             " extrait(s) retrouvé(s) mot pour mot ont été regardés. Ceci ne lit pas le sens, ne change aucun statut et ne dit pas que l'extrait déforme l'article : "
+             "il signale seulement un mot de réserve dans le texte conservé de l'article hors de l'extrait, ou une négation dans la phrase voisine. "
+             "Lecture de l'avocat requise. Une absence de signal ne prouve rien.</p>"]
+    if not section["flagged"]:
+        parts += ["<p>Aucun signal détecté par ces listes.</p>"]
+    for row in section["flagged"]:
+        parts += ["<p><strong>", esc(row["reference_id"]), " : à lire avec l'article.</strong> ",
+                  esc(" · ".join(("réserve" if c["kind"] == "reservation" else "négation voisine") + " « " + c["cue"] + " »" for c in row["cues"])), "</p>"]
+    return parts
 
 
 def _signed_sources_report(section: dict[str, Any], conditions: dict[str, Any] | None) -> list[str]:
@@ -353,7 +370,8 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
                      passages: list[dict[str, Any]] | None = None, passages_rules: str | None = PASSAGE_RULES,
                      conditions: dict[str, Any] | None = None, condition_evidence: list[dict[str, Any]] | None = None,
                      signed_conditions: dict[str, Any] | None = None,
-                     signed_sources: dict[str, Any] | None = None) -> tuple[bytes, str]:
+                     signed_sources: dict[str, Any] | None = None,
+                     reservation_cues: bool = False) -> tuple[bytes, str]:
     if config.failures or not config.records or run.corpus_pack_sha256 != config.pack_sha256:
         raise CorpusError("complete exact chosen corpus required for export")
     if _hash(brief_text.encode()) != run.representation_sha256 or review.get("snapshot_hash") != run.snapshot_hash:
@@ -400,6 +418,9 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
         body["signed_conditions"] = signed_conditions
     if signed_sources is not None:
         body["signed_sources"] = signed_sources
+    if reservation_cues:
+        from application.litigation import reservation_cues as _rc
+        body["reservation_cues"] = _rc.build_section(cast(Any, body["references"]), config.records)
     payload = _encode(body)
     checkpoint = _hash(payload)
     report = _report(body)
@@ -463,6 +484,9 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
                 from application.litigation.signed_conditions import load_stored
                 _ssp.replay_conditions(body["brief_text"], body["signed_sources"], sc,
                                        load_stored(sc["spec_text"], sc["spec_sha256"]))
+        if "reservation_cues" in body:
+            from application.litigation import reservation_cues as _rc
+            _rc.validate_section(body["reservation_cues"], cast(Any, body["references"]), config.records)
         observed = observe(body["brief_text"], config, marker, body.get("exhibits"), cond)
         if "passages" in body:
             validate_passages(body["brief_text"], [asdict(x) for x in observed], body["passages"], body.get("passages_rules"))

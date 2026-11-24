@@ -239,7 +239,7 @@ def create_signed_workbench_router(
             data, checkpoint = build_legal_pack(config=config, run=run,
                                                 brief_text=bundle.representation.text,
                                                 review={**review, "check_engine": ENGINE_STRICT4},
-                                                signed_conditions=section, signed_sources=sources)
+                                                signed_conditions=section, signed_sources=sources, reservation_cues=True)
         except CorpusError:
             raise HTTPException(status_code=409, detail="offline_corpus_bytes_unavailable_or_changed") from None
         if (wb.checker._scope(wb.checker._verified(bearer), case_id) != access
