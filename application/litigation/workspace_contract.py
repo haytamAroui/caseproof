@@ -263,7 +263,7 @@ class ClearbriefDecisionView(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     observation_id: str = Field(min_length=1, max_length=220)
     actor_id: str = Field(min_length=1, max_length=200)
-    disposition: Literal["confirmed_candidate", "dismissed", "needs_information"]
+    disposition: Literal["confirmed_candidate", "dismissed", "needs_information", "omission"]
     rationale: str = Field(min_length=1, max_length=2000)
 
 

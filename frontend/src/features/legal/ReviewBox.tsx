@@ -13,6 +13,7 @@ const CHOICES = [
   ['confirmed_candidate', 'I confirm this finding exists as shown'],
   ['dismissed', 'I dismiss this finding'],
   ['needs_information', 'More information is needed'],
+  ['omission', 'A relevant passage or piece was not shown'],
 ] as const;
 
 export function ReviewBox({
