@@ -216,12 +216,16 @@ def create_signed_workbench_router(
             from application.litigation.signed_conditions_pack import build_section
             from apps.api.litigation_workspace_sources import _labels
             revision, spec = stored_spec(bearer, case_id)
-            if spec is not None and spec["conditions"]:
+            if spec is not None:
                 head = conditions_store.read(bearer, case_id)
                 if head is None or int(head["revision"]) != revision:
                     raise AccessRejected(AccessFailure.STALE_SNAPSHOT)
-                matched = match_conditions(bundle.representation.text, spec, bundle.previews, _labels(bundle))
-                section = build_section(head["spec_text"], head["spec_sha256"], revision, matched)
+                from application.litigation.signed_conditions import _readable
+                labels = _labels(bundle)
+                matched = (match_conditions(bundle.representation.text, spec, bundle.previews, labels)
+                           if spec["conditions"] else {"anchors": []})
+                section = build_section(head["spec_text"], head["spec_sha256"], revision, matched, spec,
+                                        bundle.previews, labels, _readable)
         try:
             data, checkpoint = build_legal_pack(config=config, run=run,
                                                 brief_text=bundle.representation.text,

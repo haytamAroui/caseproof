@@ -262,6 +262,11 @@ def _signed_conditions_report(section: dict[str, Any]) -> list[str]:
 
     parts = ["<h2>Conditions définies par l'avocat</h2><p>", esc(section["note"]), "</p><p>Révision ", esc(section["revision"]),
              " · empreinte <code>", esc(section["spec_sha256"]), "</code></p>"]
+    parts += ["<p><strong>Conditions effacées volontairement à cette révision : aucune condition n'est active (ce n'est pas un dossier jamais configuré).</strong></p>"
+              if section["state"] == "cleared" else "<p>Conditions actives.</p>"]
+    parts += ["<p>Inventaire des sources au moment de l'export (", esc(len(section["inventory"])), ") : ",
+              esc("; ".join(f"{r['piece']} {'lue' if r['read'] else 'non lue'}" for r in section["inventory"]) or "aucune"),
+              ". Couverture recalculée au rejeu à partir de cet inventaire. Les empreintes d'extraits ne contrôlent que la cohérence interne du pack : les sources elles-mêmes ne sont pas rejointes ici et n'ont pas été revérifiées de façon indépendante.</p>"]
     for a in section["anchors"]:
         parts += ["<article><p><strong>", esc(a["status"]), "</strong> · ", esc(a["label"]), "<br>", esc(a["sentence"]),
                   "<br><small>", esc(a["reason"]), "</small></p>"]

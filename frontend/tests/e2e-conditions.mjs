@@ -49,6 +49,13 @@ await page.screenshot({
   fullPage: true,
 });
 
+const downloadPromise = page.waitForEvent('download');
+await page
+  .getByRole('button', { name: /Download offline review pack/ })
+  .click();
+const download = await downloadPromise;
+await download.saveAs(`${out}/e2e-conditions-pack-configured.zip`);
+
 await page.getByRole('button', { name: 'Remove' }).click();
 await page
   .getByText('Saved as revision 2 and read back from the store.')
@@ -63,6 +70,12 @@ await page.screenshot({
   path: `${out}/e2e-conditions-cleared.png`,
   fullPage: true,
 });
+
+const cleared = page.waitForEvent('download');
+await page
+  .getByRole('button', { name: /Download offline review pack/ })
+  .click();
+await (await cleared).saveAs(`${out}/e2e-conditions-pack-cleared.zip`);
 
 await open();
 await page.getByText(/Revision 2, spec/).waitFor({ timeout: 10000 });

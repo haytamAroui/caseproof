@@ -86,11 +86,19 @@ def test_pack_without_conditions_has_no_section_and_replays(tmp_path, monkeypatc
     assert "signed_conditions" not in body and "Conditions définies" not in ZipFile(io.BytesIO(raw)).read("report.html").decode()
 
 
-def test_cleared_conditions_add_no_section(tmp_path, monkeypatch):
+def test_cleared_revision_is_exported_and_distinct_from_never_configured(tmp_path, monkeypatch):
     c = build(tmp_path, monkeypatch, [COND], [])
     assert c.post("/v2/matters/c/conditions", json={"expected_revision": 1, "conditions": []}, headers=H).status_code == 200
-    body = verify_legal_pack(pack(c)[0], expected_sha256=pack(c)[1])
-    assert "signed_conditions" not in body
+    raw, cp = pack(c)
+    body = verify_legal_pack(raw, expected_sha256=cp)
+    sec = body["signed_conditions"]
+    assert sec["state"] == "cleared" and sec["revision"] == 2 and sec["anchors"] == []
+    assert "effacées volontairement" in ZipFile(io.BytesIO(raw)).read("report.html").decode()
+    from application.litigation.signed_conditions_pack import validate_section
+    forged = json.loads(json.dumps(sec))
+    forged["state"] = "configured"
+    with pytest.raises(CorpusError):
+        validate_section(body["brief_text"], forged)
 
 
 def test_partial_stays_undetermined_found_is_never_pass_and_replays(tmp_path, monkeypatch):
@@ -134,3 +142,58 @@ def test_replay_refuses_forged_sections(tmp_path, monkeypatch):
     with pytest.raises(CorpusError):
         validate_section(body["brief_text"], forged)
     assert olp  # module imported for the real replay path above
+
+
+def test_coverage_is_recomputed_from_the_inventory_not_trusted(tmp_path, monkeypatch):
+    previews = [NS(row=_row("s1"), text="Le courrier est bien reçu.", spans=((0, 30, "para", 1),)),
+                NS(row=_row("s2", "partial", ("scan",)), text="x", spans=())]
+    c = build(tmp_path, monkeypatch, [{**COND, "evidence": ["absentmot"]}], previews)
+    raw, cp = pack(c)
+    body = verify_legal_pack(raw, expected_sha256=cp)
+    from application.litigation.signed_conditions_pack import validate_section
+    sec = body["signed_conditions"]
+    assert [r["read"] for r in sec["inventory"]] == [True, False]
+
+    def refuses(mutate):
+        forged = json.loads(json.dumps(sec))
+        mutate(forged)
+        with pytest.raises(CorpusError):
+            validate_section(body["brief_text"], forged)
+
+    refuses(lambda f: f["inventory"][1].update(read=True))                       # unread source declared read
+    refuses(lambda f: f["anchors"][0].update(sources_not_read=[]))                # omitted unread coverage
+    refuses(lambda f: f["anchors"][0].update(sources_read=["s1", "s1"]))          # duplicate coverage
+    refuses(lambda f: f["anchors"][0].update(pieces_read=["Pièce 1", "Pièce 2"]))  # overlapping piece coverage
+    refuses(lambda f: f["inventory"].append(dict(f["inventory"][0])))             # duplicated inventory entry
+    refuses(lambda f: f["anchors"][0].update(pieces_missing=["pièce 9"]))         # invented missing piece
+
+
+def test_older_verifier_cannot_certify_a_pack_with_the_section(tmp_path, monkeypatch):
+    """Failure mode check: the verifier as of the previous commit rejects the new pack (fails closed)."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    previews = [NS(row=_row("s1"), text="Le courrier est bien reçu.", spans=((0, 30, "para", 1),))]
+    raw, cp = pack(build(tmp_path, monkeypatch, [COND], previews))
+    root = Path(__file__).resolve().parents[1]
+    old = subprocess.run(["git", "show", "8fd8c101:application/litigation/offline_legal_pack.py"], cwd=root,
+                         capture_output=True, text=True)
+    if old.returncode != 0:
+        pytest.skip("previous verifier not available in this checkout")
+    mod = tmp_path / "old_pack_mod"
+    (mod / "application" / "litigation").mkdir(parents=True)
+    (mod / "pack.zip").write_bytes(raw)
+    code = ("import sys, types, importlib.util\n"
+            f"sys.path.insert(0, {str(root)!r})\n"
+            "import application.litigation.offline_legal_pack as cur\n"
+            f"src = {old.stdout!r}\n"
+            "m = types.ModuleType('old_pack'); m.__dict__['__name__'] = 'old_pack'\n"
+            "exec(compile(src, 'old', 'exec'), m.__dict__)\n"
+            f"raw = open({str(mod / 'pack.zip')!r}, 'rb').read()\n"
+            "try:\n"
+            f"    m.verify_legal_pack(raw, expected_sha256={cp!r})\n"
+            "    print('CERTIFIED')\n"
+            "except Exception as e:\n"
+            "    print('REJECTED', type(e).__name__)\n")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=root)
+    assert "REJECTED CorpusError" in out.stdout, out.stdout + out.stderr

@@ -134,7 +134,7 @@ def match_conditions(text: str, spec: Mapping[str, Any], previews: Sequence[Any]
             "anchor_id": f"condition-anchor-{n:02d}", "condition_id": cond["id"], "label": cond["label"],
             "question": cond["question"], "start": anchor["start"], "end": anchor["end"],
             "sentence": anchor["sentence"], "status": status, "reason": reason, "found": found,
-            "pieces_read": sorted({label_of(p) for p in read}),
+            "pieces_read": sorted({label_of(p) for p in read} - {label_of(p) for p in not_read}),
             "pieces_not_read": sorted({label_of(p) for p in not_read} | set(missing_labels))})
     return {
         "spec_sha256": spec["spec_sha256"], "scope": SCOPE, "anchors": rows,
