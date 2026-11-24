@@ -1,0 +1,84 @@
+name: Belgian pre-filing audit CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches: [main, feat/demo-belgian-dossier, feat/frontend-2026-ux-polish]
+
+permissions:
+  contents: read
+
+jobs:
+  belgian-audit-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          python-version: '3.11'
+      - name: Architecture, scope, and frontend contract checks
+        run: |
+          uv run --locked python scripts/check_architecture.py
+          uv run --locked python -m scripts.check_clearbrief_roadmap
+          uv run --locked python -m scripts.generate_frontend_contract --check
+          git diff --exit-code -- frontend/src/shared/api/*.schema.json
+      - name: Ruff and mypy on pre-filing audit modules
+        run: |
+          uv run --locked ruff check \
+            application/litigation/inventory_mapping.py \
+            application/litigation/workspace_contract.py \
+            application/litigation/reservation_cues.py \
+            apps/api/dossier_journey.py \
+            apps/api/signed_workbench_routes.py \
+            infrastructure/parsers/pdf_ocr.py \
+            tests/test_progressive_inventory_confirmation.py \
+            tests/test_exhibit_status_cue_fastapi.py \
+            tests/test_reservation_cues.py
+          uv run --locked mypy --explicit-package-bases \
+            application/litigation/inventory_mapping.py \
+            application/litigation/workspace_contract.py \
+            application/litigation/reservation_cues.py \
+            apps/api/dossier_journey.py \
+            apps/api/signed_workbench_routes.py \
+            infrastructure/parsers/pdf_ocr.py
+      - name: Run Belgian pre-filing audit pytest suite
+        run: |
+          uv run --locked pytest -q \
+            tests/test_progressive_inventory_confirmation.py \
+            tests/test_exhibit_status_cue_fastapi.py \
+            tests/test_inventory_mapping.py \
+            tests/test_exhibit_identity_contract.py \
+            tests/test_reservation_cues.py \
+            tests/test_signed_conditions_pack.py \
+            tests/test_signed_sources_pack.py \
+            tests/test_v2_conditions_route.py \
+            tests/test_exhibit_coverage.py
+
+  belgian-audit-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run contracts, typecheck, lint, policy, unit tests, and build
+        working-directory: frontend
+        run: |
+          npm run contracts:check
+          npm run typecheck
+          npm run lint
+          npm run policy:check
+          npm test
+          npm run build
