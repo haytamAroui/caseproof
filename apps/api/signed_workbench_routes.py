@@ -693,6 +693,7 @@ def create_signed_workbench_router(
             source_id=source_id, version_id=version_id)
 
     @router.get(base + "/sources/{source_id}/versions/{version_id}/original")
+    @router.get("/v2/matters/{case_id}/briefs/{brief_version_id}/sources/{source_id}/versions/{version_id}/original")
     def signed_original(
         case_id: str, brief_version_id: str, source_id: str, version_id: str,
         authorization: Annotated[str | None, Header()] = None,

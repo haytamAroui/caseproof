@@ -9,6 +9,7 @@ type BinaryBinding = {
     | 'application/zip'
     | 'text/markdown'
     | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  originalByDigest?: true;
   export?: true;
   offlinePack?: true;
   editorCandidate?: true;
@@ -74,6 +75,27 @@ export class ApiClient {
     return (await this.read(path, signal, {
       ...binding,
       media: 'application/octet-stream',
+    })) as Uint8Array;
+  }
+  /** Signed-matter original by digest: the caller already holds the SHA-256 from a signed result. The body must hash to it. */
+  async signedOriginal(
+    path: string,
+    sha256: string,
+    signal: AbortSignal,
+  ): Promise<Uint8Array> {
+    if (
+      !/^[0-9a-f]{64}$/.test(sha256) ||
+      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/sources\/[^/]+\/versions\/[^/]+\/original$/.test(
+        new URL(path, 'https://caseproof.invalid').pathname,
+      )
+    )
+      throw new ApiError(502);
+    return (await this.read(path, signal, {
+      sha256,
+      snapshot: '',
+      length: 5_242_880,
+      media: 'application/octet-stream',
+      originalByDigest: true,
     })) as Uint8Array;
   }
   async offlinePack(
@@ -403,8 +425,11 @@ export class ApiClient {
       }
       if (binding) {
         if (
-          size !== binding.length ||
-          response.headers.get('X-CaseProof-Snapshot') !== binding.snapshot ||
+          (binding.originalByDigest
+            ? size < 1
+            : size !== binding.length ||
+              response.headers.get('X-CaseProof-Snapshot') !==
+                binding.snapshot) ||
           response.headers.get(
             binding.offlinePack
               ? 'X-CaseProof-Pack-SHA256'

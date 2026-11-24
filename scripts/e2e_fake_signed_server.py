@@ -82,7 +82,7 @@ class FakeCondStore:
         self.rows.append((t,s)); return len(self.rows)
 def _mini_pdf(pages):
     """LABELLED FAKE exhibit: a tiny hand-built PDF whose pages say they are synthetic. Not a real piece."""
-    objs=[b"<</Type/Catalog/Pages 2 0 R>>", b"", b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>"]
+    objs=[b"<</Type/Catalog/Pages 2 0 R>>", b"", b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>"]
     kids=[]
     for n,t in enumerate(pages):
         c=f"BT /F1 16 Tf 60 700 Td ({t}) Tj ET".encode()
@@ -96,17 +96,31 @@ def _mini_pdf(pages):
     x=len(out); out+=f"xref\n0 {len(objs)+1}\n0000000000 65535 f \n".encode()+b"".join(f"{o:010d} 00000 n \n".encode() for o in offs)
     return out+f"trailer\n<</Size {len(objs)+1}/Root 1 0 R>>\nstartxref\n{x}\n%%EOF\n".encode()
 _S1="Accuse de reception. Le paiement a bien ete recu par la banque le 3 mars. Fin."
-_BLOBS={"s1":(_S1.encode(),"text/plain"),"s2":(_mini_pdf(["SYNTHETIC EXHIBIT - page 1 of 2","SYNTHETIC EXHIBIT - page 2 of 2 - scanned, not read"]),"application/pdf")}
-_row=lambda sid,**k: SimpleNamespace(source_id=sid,version_id=H1,original_sha256=hashlib.sha256(_BLOBS[sid][0]).hexdigest(),media_type=_BLOBS[sid][1],status=k.get("status","ready"),warnings=k.get("warnings",()),representation_id="r")
-_prev=[SimpleNamespace(row=_row("s1"),text=_S1,spans=((0,len(_S1),"para",1),)),
-       SimpleNamespace(row=_row("s2",status="partial",warnings=("scan",)),text="",spans=())]
+_BLOBS={"s1":(_S1.encode(),"text/plain"),
+        "s2":(_mini_pdf(["Piece 2 - page 1 sur 2. Rien a signaler.","Le paiement a bien ete re\\347u par la banque le 3 mars."]),"application/pdf"),
+        "s3":(_mini_pdf([""]),"application/pdf")}
+from datetime import UTC, datetime
+
+from application.litigation.library import CapturedDocument, EvidenceIndexer
+from infrastructure.parsers.limited import LimitedDocumentParser
+from packages.evidence_kernel.domain.source_versions import SourceVersion
+
+_idx=EvidenceIndexer(LimitedDocumentParser())
+def _mk(sid):
+    """s1: stored text identity preview. s2/s3: the REAL product parser (pypdf text layer, no OCR) on the synthetic PDFs."""
+    data,media=_BLOBS[sid]; sha=hashlib.sha256(data).hexdigest()
+    if media=="text/plain":
+        return SimpleNamespace(row=SimpleNamespace(source_id=sid,version_id=H1,original_sha256=sha,media_type=media,status="ready",warnings=(),representation_id="r"),text=_S1,spans=((0,len(_S1),"para",None),))
+    p=_idx.preview(CapturedDocument(sid,SourceVersion(str(__import__("uuid").uuid4()),H1,sha,data,datetime(1970,1,1,tzinfo=UTC),media)))
+    return SimpleNamespace(row=SimpleNamespace(source_id=sid,version_id=H1,original_sha256=sha,media_type=media,status=p.row.status,warnings=p.row.warnings,representation_id=p.row.representation_id),text=p.text,spans=p.spans)
+_prev=[_mk("s1"),_mk("s2"),_mk("s3")]
 wb.originals=SimpleNamespace(checker=checker,read=lambda **k: SimpleNamespace(data=_BLOBS[k["source_id"]][0],sha256_hex=hashlib.sha256(_BLOBS[k["source_id"]][0]).hexdigest(),media_type=_BLOBS[k["source_id"]][1]))
 _orig=wb.store.load_bundle
 def _lb(**k):
     b=_orig(**k)
     return SimpleNamespace(representation=SimpleNamespace(text=b.representation.text,brief=SimpleNamespace(case_id=k["case_id"],version_id=k["brief_version_id"],references=())),
-        register=SimpleNamespace(entries=[SimpleNamespace(confirmed=True,display_label="Pièce 1",pages=[SimpleNamespace(source_id="s1")]),SimpleNamespace(confirmed=True,display_label="Pièce 2",pages=[SimpleNamespace(source_id="s2")])]),
-        previews=tuple(_prev),source_scope=SimpleNamespace(declared_source_versions=(("s1",H1),("s2",H1)),excluded_source_versions=()))
+        register=SimpleNamespace(entries=[SimpleNamespace(confirmed=True,display_label="Pièce 1",pages=[SimpleNamespace(source_id="s1")]),SimpleNamespace(confirmed=True,display_label="Pièce 2",pages=[SimpleNamespace(source_id="s2")]),SimpleNamespace(confirmed=True,display_label="Pièce 3",pages=[SimpleNamespace(source_id="s3")])]),
+        previews=tuple(_prev),source_scope=SimpleNamespace(declared_source_versions=(("s1",H1),("s2",H1),("s3",H1)),excluded_source_versions=()))
 wb.store.load_bundle=_lb
 outer.include_router(create_signed_workbench_router(lambda b: wb, lambda b,c: INTAKE, FakeCondStore()))
 outer.mount("/", app)

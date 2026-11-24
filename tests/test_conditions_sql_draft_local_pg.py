@@ -34,6 +34,16 @@ def test_draft_text_is_append_only_and_not_granted_to_anon():
     assert "to anon" not in low and "to public" not in low
 
 
+def _users_sql(*named: tuple[str, str]) -> str:
+    """auth.users rows. The repo's disposable stub makes instance_id NOT NULL; a minimal stub may lack the column."""
+    has = _psql("select 1 from information_schema.columns where table_schema='auth' and table_name='users' "
+                "and column_name='instance_id'")[1].strip() == "1"
+    zero = "'00000000-0000-0000-0000-000000000000'"
+    if has:
+        return "insert into auth.users(id,instance_id,email) values " + ",".join(f"('{u}',{zero},'{n}@x')" for u, n in named) + ";"
+    return "insert into auth.users(id,email) values " + ",".join(f"('{u}','{n}@x')" for u, n in named) + ";"
+
+
 def _psql(sql: str) -> tuple[int, str]:
     r = subprocess.run(["psql", URI or "", "-v", "ON_ERROR_STOP=1", "-At", "-f", "-"],
                        input=sql, capture_output=True, text=True, timeout=60)
@@ -44,16 +54,7 @@ def _psql(sql: str) -> tuple[int, str]:
 def test_rpc_and_policies_on_local_postgres():
     org, case = str(uuid.uuid4()), str(uuid.uuid4())
     writer, viewer, outsider = (str(uuid.uuid4()) for _ in range(3))
-    # The repo's own disposable stub (scripts.verify_s2_002_database) makes auth.users.instance_id NOT NULL; a minimal
-    # local stub may not have the column. Fill it only when it exists.
-    has_instance = _psql("select 1 from information_schema.columns where table_schema='auth' and table_name='users' "
-                         "and column_name='instance_id'")[1].strip() == "1"
-    zero = "'00000000-0000-0000-0000-000000000000'"
-    users = ("insert into auth.users(id,instance_id,email) values "
-             + ",".join(f"('{u}',{zero},'{n}@x')" for u, n in ((writer, "w"), (viewer, "v"), (outsider, "o"))) + ";"
-             if has_instance else
-             "insert into auth.users(id,email) values "
-             + ",".join(f"('{u}','{n}@x')" for u, n in ((writer, "w"), (viewer, "v"), (outsider, "o"))) + ";")
+    users = _users_sql((writer, "w"), (viewer, "v"), (outsider, "o"))
     setup = f"""
 {users}
 insert into caseproof.organizations(id,display_name) values ('{org}','t');
@@ -122,7 +123,7 @@ def test_retention_companion_is_a_bounded_generated_function():
 def test_purge_finalize_removes_condition_revisions_and_soft_deleted_matter_refuses_writes():
     org, case, writer = (str(uuid.uuid4()) for _ in range(3))
     assert _psql(f"""
-insert into auth.users(id,email) values ('{writer}','p@x');
+{_users_sql((writer, 'p'))}
 insert into caseproof.organizations(id,display_name) values ('{org}','t');
 insert into caseproof.organization_members(org_id,user_id,actions) values ('{org}','{writer}','{{case:read,finding:write}}');
 insert into caseproof.cases(id,org_id,created_by_user,effective_policy_version) values ('{case}','{org}','{writer}','p1');

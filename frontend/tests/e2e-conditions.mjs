@@ -22,6 +22,16 @@ await page.addInitScript(() => {
   };
 });
 const requests = [];
+page.on('console', (m) => {
+  if (process.env.E2E_DEBUG) console.log('console:', m.text());
+});
+page.on('pageerror', (e) => {
+  if (process.env.E2E_DEBUG) console.log('pageerror:', e.message);
+});
+page.on('response', (r) => {
+  if (process.env.E2E_DEBUG)
+    console.log('resp', r.status(), r.url().slice(-60));
+});
 page.on('request', (r) => requests.push(r.url()));
 const open = async () => {
   await page.goto(
@@ -46,6 +56,36 @@ await page
 await page.getByLabel('Condition anchors').waitFor({ timeout: 10000 });
 await page.screenshot({
   path: `${out}/e2e-conditions-saved.png`,
+  fullPage: true,
+});
+// Exact-page reopening in the app: the original PDF is fetched by digest and one physical page is rendered.
+await page
+  .getByText(/Pièce 3/)
+  .first()
+  .waitFor();
+await page
+  .getByRole('button', { name: /Open original PDF page 2 \(Pièce 2\)/ })
+  .click();
+const pageCanvas = page.getByLabel('Original PDF page 2 of Pièce 2');
+await pageCanvas.waitFor({ timeout: 15000 });
+await page.waitForFunction(
+  () => {
+    const c = document.querySelector('canvas[aria-label^="Original PDF page"]');
+    if (!(c instanceof HTMLCanvasElement) || c.width === 0) return false;
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    for (let i = 0; i < d.length; i += 4)
+      if (d[i + 3] > 0 && d[i] < 128) return true;
+    return false;
+  },
+  null,
+  { timeout: 15000 },
+);
+await page.getByText(/verified before display/).waitFor();
+await pageCanvas.screenshot({
+  path: `${out}/e2e-conditions-original-page.png`,
+});
+await page.screenshot({
+  path: `${out}/e2e-conditions-original-page-full.png`,
   fullPage: true,
 });
 
