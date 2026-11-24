@@ -9,6 +9,7 @@ import {
 } from '../../shared/api/legal';
 import { useSession } from '../../shared/session';
 import { Button, Notice } from '../../shared/ui';
+import { ConditionsSection } from './ConditionsSection';
 import { ExhibitsSection } from './ExhibitsSection';
 import { PackDownload } from './PackDownload';
 import { ReviewBox } from './ReviewBox';
@@ -184,6 +185,7 @@ export function LegalScreen({ api }: { api: ApiClient }) {
             briefId={briefId}
             snapshot={refs.data.snapshot_hash}
           />
+          <ConditionsSection api={api} caseId={caseId} briefId={briefId} />
           <h2>Lawyer-defined rules on declared facts</h2>
           {refs.data.suitability.length === 0 ? (
             <Notice>

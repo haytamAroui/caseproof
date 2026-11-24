@@ -19,7 +19,7 @@ from dataclasses import asdict
 from typing import Annotated, Any, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Header, HTTPException, Response
+from fastapi import APIRouter, Body, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.litigation.review_cycle import CorrectionProposal, preview_correction
@@ -34,7 +34,7 @@ from apps.api.signed_supabase_facts import FactRefused
 from infrastructure.parsers.pdf_ocr import OCRUnavailable
 from infrastructure.parsers.pdf_source_crop import render_pdf_page
 
-__all__ = ["create_signed_workbench_router"]
+__all__ = ["ConflictError", "create_signed_workbench_router"]
 
 _NOTE = (
     "Candidate differences compare typed values in one verified source passage. "
@@ -157,9 +157,19 @@ _EXHIBIT_NOTE = (
     "ambiguous or unnamed page-space references stay undetermined.")
 
 
+_CONDITIONS_NOTE = (
+    "Conditions are defined by the lawyer: literal words, no synonyms, no reading of meaning. "
+    "Nothing here is a verdict and no condition is ever marked as met.")
+
+
+class ConflictError(Exception):
+    """The stored revision moved since the caller read it."""
+
+
 def create_signed_workbench_router(
     factory: Callable[[str], _Workbench] | None,
     intake_context: Callable[[str, str], Any] | None = None,
+    conditions_store: Any | None = None,
 ) -> APIRouter:
     router = APIRouter()
     base = "/dev/signed/matters/{case_id}/briefs/{brief_version_id}"
@@ -487,6 +497,106 @@ def create_signed_workbench_router(
                 "note": _EXHIBIT_NOTE,
                 **mapped,
             })
+        except ValueError:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return view.model_dump(by_alias=True)
+
+    def cond_store() -> Any:
+        if conditions_store is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return conditions_store
+
+    def stored_spec(bearer: str, case_id: str) -> tuple[int, dict[str, Any] | None]:
+        from application.litigation.corpus import CorpusError
+        from application.litigation.signed_conditions import load_stored
+        try:
+            head = cond_store().read(bearer, case_id)
+            if head is None:
+                return 0, None
+            return int(head["revision"]), load_stored(head["spec_text"], head["spec_sha256"])
+        except AccessRejected:
+            raise
+        except (CorpusError, KeyError, ValueError, TypeError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        except Exception:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+
+    @router.get("/v2/matters/{case_id}/conditions")
+    def v2_conditions_state(
+        case_id: str, authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Lawyer-defined conditions of this matter: the stored revision, re-hashed on read."""
+        from application.litigation.workspace_contract import ConditionsStateView
+        bearer = _token(authorization)
+        revision, spec = stored_spec(bearer, case_id)
+        view = ConditionsStateView.model_validate({
+            "schema": "caseproof-conditions-state-v1", "revision": revision,
+            "spec_sha256": None if spec is None else spec["spec_sha256"],
+            "conditions": [] if spec is None else spec["conditions"], "note": _CONDITIONS_NOTE})
+        return view.model_dump(by_alias=True)
+
+    @router.post("/v2/matters/{case_id}/conditions")
+    def v2_conditions_save(
+        case_id: str, body: Annotated[Any, Body()],
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        from pydantic import ValidationError
+
+        from application.litigation.corpus import CorpusError
+        from application.litigation.signed_conditions import canonical_text, normalise_input
+        from application.litigation.workspace_contract import ConditionsSaveBody, ConditionsStateView
+        bearer = _token(authorization)
+        try:
+            parsed = ConditionsSaveBody.model_validate(body)
+            spec = normalise_input([c.model_dump() for c in parsed.conditions])
+            text, digest = canonical_text(spec)
+        except (ValidationError, CorpusError) as exc:
+            raise HTTPException(422, "conditions refused: " + (str(exc) if isinstance(exc, CorpusError) else "invalid shape")) from None
+        store = cond_store()
+        try:
+            revision = int(store.append(bearer, case_id, parsed.expected_revision, text, digest))
+        except AccessRejected:
+            raise
+        except ConflictError:
+            raise HTTPException(409, "conditions changed since you loaded them; reload") from None
+        except Exception:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        # Read back: only report what the store now holds.
+        got, stored = stored_spec(bearer, case_id)
+        if got != revision or stored is None or stored["spec_sha256"] != digest:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return ConditionsStateView.model_validate({
+            "schema": "caseproof-conditions-state-v1", "revision": got, "spec_sha256": digest,
+            "conditions": stored["conditions"], "note": _CONDITIONS_NOTE}).model_dump(by_alias=True)
+
+    @router.get("/v2/matters/{case_id}/briefs/{brief_version_id}/conditions")
+    def v2_condition_matches(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Where the brief hits a lawyer trigger, and the literal passages found in readable sources."""
+        from application.litigation.corpus import CorpusError
+        from application.litigation.signed_conditions import match_conditions
+        from application.litigation.workspace_contract import ConditionMatchesView
+        bearer, wb = bench(authorization)
+        revision, spec = stored_spec(bearer, case_id)
+        sources = SignedBriefSources(wb.checker)
+        bundle = sources._bundle(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        if spec is None:
+            matched: dict[str, Any] = {"spec_sha256": None, "scope": _CONDITIONS_NOTE, "anchors": [],
+                                       "coverage": {"conditions": 0, "anchors": 0, "sources_read": 0,
+                                                    "sources_not_read": 0,
+                                                    "by_status": {s: 0 for s in ("PASS", "FAIL", "UNVERIFIED", "UNDETERMINED")}}}
+        else:
+            from apps.api.litigation_workspace_sources import _labels
+            try:
+                matched = match_conditions(bundle.representation.text, spec, bundle.previews, _labels(bundle))
+            except CorpusError:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        try:
+            view = ConditionMatchesView.model_validate({
+                "schema": "caseproof-condition-matches-v1", "brief_version_id": brief_version_id,
+                "revision": revision, **matched})
         except ValueError:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return view.model_dump(by_alias=True)

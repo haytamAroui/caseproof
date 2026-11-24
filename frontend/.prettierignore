@@ -48,6 +48,10 @@ src/shared/api/legal-references-generated*
 src/shared/api/legal-passage-generated*
 src/shared/api/exhibit-references-generated*
 src/shared/api/exhibit-references.schema.json
+src/shared/api/conditions-*-generated*
+src/shared/api/condition-matches-generated*
+src/shared/api/conditions-*.schema.json
+src/shared/api/condition-matches.schema.json
 src/shared/api/legal-references.schema.json
 src/shared/api/legal-passage.schema.json
 src/shared/api/clearbrief-review-generated*

@@ -20,6 +20,9 @@ for (const [name, type, stem] of [
     'ExhibitReferencesView',
     'exhibit-references-generated',
   ],
+  ['conditions-state', 'ConditionsStateView', 'conditions-state-generated'],
+  ['conditions-save', 'ConditionsSaveBody', 'conditions-save-generated'],
+  ['condition-matches', 'ConditionMatchesView', 'condition-matches-generated'],
   ['clearbrief-review', 'ClearbriefReviewState', 'clearbrief-review-generated'],
   [
     'clearbrief-receipt',

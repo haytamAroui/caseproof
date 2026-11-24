@@ -1,0 +1,264 @@
+{
+  "$defs": {
+    "ConditionAnchorView": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_id": {
+          "pattern": "^condition-anchor-\\d{2,5}$",
+          "title": "Anchor Id",
+          "type": "string"
+        },
+        "condition_id": {
+          "maxLength": 41,
+          "title": "Condition Id",
+          "type": "string"
+        },
+        "end": {
+          "minimum": 0,
+          "title": "End",
+          "type": "integer"
+        },
+        "found": {
+          "items": {
+            "$ref": "#/$defs/ConditionFoundView"
+          },
+          "maxItems": 600,
+          "title": "Found",
+          "type": "array"
+        },
+        "label": {
+          "maxLength": 120,
+          "title": "Label",
+          "type": "string"
+        },
+        "pieces_not_read": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Pieces Not Read",
+          "type": "array"
+        },
+        "pieces_read": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Pieces Read",
+          "type": "array"
+        },
+        "question": {
+          "maxLength": 300,
+          "title": "Question",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 120,
+          "title": "Reason",
+          "type": "string"
+        },
+        "sentence": {
+          "maxLength": 4000,
+          "title": "Sentence",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "UNVERIFIED",
+            "UNDETERMINED"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "anchor_id",
+        "condition_id",
+        "label",
+        "question",
+        "start",
+        "end",
+        "sentence",
+        "status",
+        "reason",
+        "found",
+        "pieces_read",
+        "pieces_not_read"
+      ],
+      "title": "ConditionAnchorView",
+      "type": "object"
+    },
+    "ConditionCoverageView": {
+      "additionalProperties": false,
+      "properties": {
+        "anchors": {
+          "minimum": 0,
+          "title": "Anchors",
+          "type": "integer"
+        },
+        "by_status": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Status",
+          "type": "object"
+        },
+        "conditions": {
+          "minimum": 0,
+          "title": "Conditions",
+          "type": "integer"
+        },
+        "sources_not_read": {
+          "minimum": 0,
+          "title": "Sources Not Read",
+          "type": "integer"
+        },
+        "sources_read": {
+          "minimum": 0,
+          "title": "Sources Read",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conditions",
+        "anchors",
+        "sources_read",
+        "sources_not_read",
+        "by_status"
+      ],
+      "title": "ConditionCoverageView",
+      "type": "object"
+    },
+    "ConditionFoundView": {
+      "additionalProperties": false,
+      "properties": {
+        "excerpt": {
+          "maxLength": 400,
+          "title": "Excerpt",
+          "type": "string"
+        },
+        "excerpt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Excerpt Sha256",
+          "type": "string"
+        },
+        "original_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Original Sha256",
+          "type": "string"
+        },
+        "pdf_page": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pdf Page"
+        },
+        "piece": {
+          "maxLength": 200,
+          "title": "Piece",
+          "type": "string"
+        },
+        "source_id": {
+          "maxLength": 128,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "term": {
+          "maxLength": 80,
+          "title": "Term",
+          "type": "string"
+        },
+        "version_id": {
+          "maxLength": 128,
+          "title": "Version Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "piece",
+        "source_id",
+        "version_id",
+        "original_sha256",
+        "term",
+        "excerpt",
+        "excerpt_sha256"
+      ],
+      "title": "ConditionFoundView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Condition anchors of ONE brief version. Routing for the lawyer, never a verdict.",
+  "properties": {
+    "anchors": {
+      "items": {
+        "$ref": "#/$defs/ConditionAnchorView"
+      },
+      "maxItems": 200,
+      "title": "Anchors",
+      "type": "array"
+    },
+    "brief_version_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Brief Version Id",
+      "type": "string"
+    },
+    "coverage": {
+      "$ref": "#/$defs/ConditionCoverageView"
+    },
+    "revision": {
+      "maximum": 100000,
+      "minimum": 0,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "schema": {
+      "const": "caseproof-condition-matches-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "scope": {
+      "maxLength": 1200,
+      "title": "Scope",
+      "type": "string"
+    },
+    "spec_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Spec Sha256"
+    }
+  },
+  "required": [
+    "schema",
+    "brief_version_id",
+    "revision",
+    "scope",
+    "anchors",
+    "coverage"
+  ],
+  "title": "ConditionMatchesView",
+  "type": "object"
+}
