@@ -2320,6 +2320,67 @@ ins {
   align-self: end;
 }
 
+.report-triage-strip {
+  margin: 10px 0 12px;
+}
+.report-failure-banners {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.report-failure-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--muted);
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.report-failure-banner[data-tone='error'] {
+  border-left-color: var(--danger);
+  background: var(--danger-tint);
+}
+.report-failure-banner[data-tone='impossible'] {
+  border-left-color: var(--slate-impossible);
+  background: var(--slate-tint);
+  border-left-style: dashed;
+}
+.report-failure-banner[data-tone='warning'] {
+  border-left-color: var(--warn);
+  background: var(--warn-tint);
+}
+.report-failure-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.finding-category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+.finding-category-pill[data-tone='error'] {
+  color: var(--danger);
+}
+.finding-category-pill[data-tone='impossible'] {
+  color: var(--slate-impossible);
+}
+.finding-category-pill[data-tone='warning'] {
+  color: var(--warn);
+}
+.finding-category-pill[data-tone='success'] {
+  color: var(--ok);
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-instant: 0ms;

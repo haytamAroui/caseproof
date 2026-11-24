@@ -5,11 +5,19 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient, FindingView } from '../../shared/api';
 import { SplitHandle } from '../../shared/ui/SplitHandle';
 import { useSession } from '../../shared/session';
-import { useLocale } from '../../shared/i18n';
+import { useLocale, type ResultCategory } from '../../shared/i18n';
 import { Notice, StateValue } from '../../shared/ui';
 import { readReport } from './api';
 import { coveragePages, coverageRegions } from './coverageRegions';
 import { quoteMatches } from './quoteComparison';
+import {
+  collectReportFailureBanners,
+  countByTriageCategory,
+  TRIAGE_ICON,
+  TRIAGE_PRIORITY,
+  TRIAGE_TONE,
+  triageCategoryOf,
+} from './triageCategory';
 import { CoverageSource } from './CoverageSource';
 import { OriginalDraftDownload } from './OriginalDraftDownload';
 import type { ReactNode } from 'react';
@@ -39,7 +47,7 @@ export function ReportScreen({
   const [params, setParams] = useSearchParams();
   const snapshot = params.get('snapshot') ?? '';
   const session = useSession();
-  const { t, stateLabel } = useLocale();
+  const { t, stateLabel, categoryLabel } = useLocale();
   const valid =
     uuid.test(caseId) && uuid.test(briefId) && /^[0-9a-f]{64}$/.test(snapshot);
   const queueRef = useRef<HTMLElement>(null);
@@ -53,7 +61,9 @@ export function ReportScreen({
     'split',
   );
   const focusReference = useRef<string | null>(null);
-  const [filter, setFilter] = useState<'attention' | 'all'>('attention');
+  const [filter, setFilter] = useState<'attention' | 'all' | ResultCategory>(
+    'attention',
+  );
   const [search, setSearch] = useState('');
   const query = useQuery({
     queryKey: ['report', session.epoch, caseId, briefId, snapshot],
@@ -85,16 +95,23 @@ export function ReportScreen({
     report.findings.find((f) => f.reference_id === params.get('finding')) ??
     report.findings[0];
   const needsAttention = (f: FindingView) =>
-    f.identity !== 'resolved' ||
-    f.page_mapping !== 'mapped' ||
-    f.fidelity !== 'exact_match' ||
-    f.support !== 'supported';
+    triageCategoryOf(f) !== 'correspondance';
+  const triageCounts = countByTriageCategory(report.findings);
+  const failureBanners = collectReportFailureBanners(report);
   const filtered = report.findings
-    .filter((f) => filter === 'all' || needsAttention(f))
+    .filter((f) => {
+      if (filter === 'all') return true;
+      if (filter === 'attention') return needsAttention(f);
+      return triageCategoryOf(f) === filter;
+    })
     .filter((f) =>
       f.literal.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
     )
-    .sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
+    .sort(
+      (a, b) =>
+        TRIAGE_PRIORITY[triageCategoryOf(a)] -
+        TRIAGE_PRIORITY[triageCategoryOf(b)],
+    );
   function selectReference(referenceId: string) {
     // Coverage links may target a reference hidden by the current filters.
     // Reveal it in the queue rather than displaying a selection the queue omits.
@@ -184,6 +201,102 @@ export function ReportScreen({
           ? t('snapshotHistoricalNotice')
           : t('snapshotCurrentNotice')}
       </Notice>
+      {report.findings.length > 0 && (
+        <div
+          className="legal-kpi-strip report-triage-strip"
+          role="group"
+          aria-label={t('triageSummaryLabel')}
+        >
+          {(
+            [
+              ['ecart', triageCounts.ecart],
+              ['impossible', triageCounts.impossible],
+              ['appreciation', triageCounts.appreciation],
+              ['correspondance', triageCounts.correspondance],
+            ] as const
+          ).map(([category, count]) => (
+            <button
+              key={category}
+              type="button"
+              className="legal-kpi"
+              data-tone={TRIAGE_TONE[category]}
+              aria-pressed={filter === category}
+              onClick={() => {
+                setFilter((current) =>
+                  current === category ? 'attention' : category,
+                );
+                resetPage();
+              }}
+            >
+              <span className="legal-kpi-count">
+                <span aria-hidden="true">{TRIAGE_ICON[category]}</span> {count}
+              </span>
+              <span className="legal-kpi-label">{categoryLabel(category)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {failureBanners.length > 0 && (
+        <div
+          className="report-failure-banners"
+          role="region"
+          aria-label={t('scopeLimits')}
+        >
+          {failureBanners.map((banner) => {
+            const textKey =
+              banner.kind === 'inventory_unconfirmed'
+                ? 'bannerInventoryUnconfirmed'
+                : banner.kind === 'pagination_unmapped'
+                  ? 'bannerPaginationUnmapped'
+                  : banner.kind === 'ocr_unreliable'
+                    ? 'bannerOcrUnreliable'
+                    : 'bannerPartialCoverage';
+            return (
+              <div
+                key={banner.kind}
+                className="report-failure-banner"
+                data-tone={banner.tone}
+              >
+                <span>
+                  <strong>
+                    <span aria-hidden="true">
+                      {banner.tone === 'error'
+                        ? '✕'
+                        : banner.tone === 'impossible'
+                          ? '⊘'
+                          : '!'}
+                    </span>{' '}
+                    ({banner.count})
+                  </strong>{' '}
+                  {t(textKey)}
+                </span>
+                <span className="report-failure-actions">
+                  {banner.kind === 'inventory_unconfirmed' && !historical && (
+                    <Link
+                      className="button"
+                      to={`/matters/${caseId}/inventory`}
+                    >
+                      {t('bannerInventoryAction')}
+                    </Link>
+                  )}
+                  {banner.filterCategory && (
+                    <button
+                      type="button"
+                      className="button"
+                      onClick={() => {
+                        setFilter(banner.filterCategory ?? 'attention');
+                        resetPage();
+                      }}
+                    >
+                      {t('bannerFilterAction')}
+                    </button>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div
         className="review-layout"
         ref={layoutRef}
@@ -345,9 +458,15 @@ export function ReportScreen({
                     )}
                     {f.literal}
                     <small>
-                      {needsAttention(f)
-                        ? t('filterAttention')
-                        : t('queueNoFlag')}{' '}
+                      <span
+                        className="finding-category-pill"
+                        data-tone={TRIAGE_TONE[triageCategoryOf(f)]}
+                      >
+                        <span aria-hidden="true">
+                          {TRIAGE_ICON[triageCategoryOf(f)]}
+                        </span>{' '}
+                        {categoryLabel(triageCategoryOf(f))}
+                      </span>{' '}
                       · {stateLabel(f.identity)}
                     </small>
                   </button>

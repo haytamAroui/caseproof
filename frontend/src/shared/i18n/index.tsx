@@ -193,6 +193,27 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     conditionsEvidenceField: 'Words to find in the pieces (comma separated)',
     conditionsPiecesField: 'Only these pieces (optional, e.g. Pièce 1)',
     conditionNoPassage: 'No passage found in the pieces read',
+    triageSummaryLabel: 'Filter findings by verification category',
+    bannerInventoryUnconfirmed:
+      'Inventory not yet confirmed for this draft: dependent exhibit identities remain NOT_ASSESSED until you confirm mappings.',
+    bannerInventoryAction: 'Confirm inventory',
+    bannerPaginationUnmapped:
+      'Page-space conflict or unmapped pinpoint: PDF, printed, and bundle pages are tracked separately and never auto-equated.',
+    bannerOcrUnreliable:
+      'Unreadable or low-confidence scan detected: inspect the preserved original page pixels directly.',
+    bannerPartialCoverage:
+      'Partial DOCX coverage: some story regions (headers, footers, textboxes, or unsupported parts) were not scanned.',
+    bannerFilterAction: 'Show affected',
+    exhibitsConfirmedComplete: 'Inventory confirmed and declared complete',
+    exhibitsConfirmedIncomplete: 'Inventory confirmed, not declared complete',
+    exhibitsUnconfirmed:
+      'No confirmed inventory for this draft. Nothing is mapped to a file.',
+    exhibitsDetectedLabel: 'Detected:',
+    exhibitsLocatedLabel: 'located in the inventory:',
+    exhibitsContentNotCompared: 'Content not compared to the brief.',
+    exhibitsUncitedPrefix:
+      'Inventory entries with no mention detected in the assessed text:',
+    exhibitsUncitedDisclaimer: 'This is not a finding that they are uncited.',
   },
   fr: {
     skip: 'Aller au contenu',
@@ -368,6 +389,28 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       'Mots à retrouver dans les pièces (séparés par des virgules)',
     conditionsPiecesField: 'Limiter à ces pièces (optionnel, ex. Pièce 1)',
     conditionNoPassage: 'Aucun passage trouvé dans les pièces lues',
+    triageSummaryLabel: 'Filtrer les constats par catégorie de contrôle',
+    bannerInventoryUnconfirmed:
+      'Bordereau non encore confirmé : les identités de pièces dépendantes restent « Non évalué » tant que vous ne confirmez pas le rapprochement.',
+    bannerInventoryAction: 'Confirmer le bordereau',
+    bannerPaginationUnmapped:
+      'Pagination non localisée ou en conflit : page PDF, page imprimée et page dossier restent strictement séparées.',
+    bannerOcrUnreliable:
+      'Scan illisible ou OCR peu fiable détecté : consultez directement les pixels de la page originale conservée.',
+    bannerPartialCoverage:
+      'Couverture DOCX partielle : certaines zones (en-têtes, pieds de page, zones de texte ou éléments non pris en charge) n’ont pas été analysées.',
+    bannerFilterAction: 'Afficher les constats',
+    exhibitsConfirmedComplete: 'Bordereau confirmé et déclaré complet',
+    exhibitsConfirmedIncomplete: 'Bordereau confirmé, non déclaré complet',
+    exhibitsUnconfirmed:
+      'Aucun bordereau confirmé pour ces conclusions. Aucune pièce n’est reliée à un fichier.',
+    exhibitsDetectedLabel: 'Détectés :',
+    exhibitsLocatedLabel: 'localisés au bordereau :',
+    exhibitsContentNotCompared: 'Contenu non comparé aux conclusions.',
+    exhibitsUncitedPrefix:
+      'Entrées du bordereau sans mention détectée dans le texte analysé :',
+    exhibitsUncitedDisclaimer:
+      'Ceci ne constitue pas un constat d’absence de citation.',
   },
   nl: {
     skip: 'Naar inhoud',
@@ -543,6 +586,29 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       'Te zoeken woorden in de stukken (komma-gescheiden)',
     conditionsPiecesField: 'Enkel deze stukken (optioneel, bv. Stuk 1)',
     conditionNoPassage: 'Geen passage gevonden in de gelezen stukken',
+    triageSummaryLabel: 'Filter vaststellingen per controlecategorie',
+    bannerInventoryUnconfirmed:
+      'Inventaris nog niet bevestigd: afhankelijke stukidentiteiten blijven « Niet beoordeeld » tot u de koppeling bevestigt.',
+    bannerInventoryAction: 'Inventaris bevestigen',
+    bannerPaginationUnmapped:
+      'Niet-gekoppelde of strijdige paginering: PDF-, gedrukte en bundelpagina’s blijven strikt gescheiden.',
+    bannerOcrUnreliable:
+      'Onleesbare of onbetrouwbare scan gedetecteerd: inspecteer rechtstreeks de bewaarde originele pagina.',
+    bannerPartialCoverage:
+      'Gedeeltelijke DOCX-dekking: bepaalde zones (kop-/voetteksten, tekstvakken of niet-ondersteunde delen) werden niet gescand.',
+    bannerFilterAction: 'Betrokken tonen',
+    exhibitsConfirmedComplete: 'Inventaris bevestigd en volledig verklaard',
+    exhibitsConfirmedIncomplete:
+      'Inventaris bevestigd, niet volledig verklaard',
+    exhibitsUnconfirmed:
+      'Geen bevestigde inventaris voor deze conclusies. Niets is aan een bestand gekoppeld.',
+    exhibitsDetectedLabel: 'Gedetecteerd:',
+    exhibitsLocatedLabel: 'teruggevonden op de inventaris:',
+    exhibitsContentNotCompared: 'Inhoud niet vergeleken met de conclusies.',
+    exhibitsUncitedPrefix:
+      'Inventarisposten zonder gedetecteerde vermelding in de geanalyseerde tekst:',
+    exhibitsUncitedDisclaimer:
+      'Dit is geen vaststelling dat ze niet geciteerd werden.',
   },
 };
 

@@ -40,10 +40,10 @@ export function ExhibitsSection(props: {
           <Notice>{q.data.note}</Notice>
           <p>
             {q.data.inventory_confirmed
-              ? `Inventory confirmed${q.data.inventory_complete ? ' and declared complete' : ', not declared complete'} (confirmation ${q.data.confirmation_id ?? 'n/a'}).`
-              : 'No confirmed inventory for this draft. Nothing is mapped to a file.'}{' '}
-            Detected: {q.data.coverage.detected}; located in the inventory:{' '}
-            {q.data.coverage.located}.
+              ? `${q.data.inventory_complete ? t('exhibitsConfirmedComplete') : t('exhibitsConfirmedIncomplete')} (confirmation ${q.data.confirmation_id ?? 'n/a'}).`
+              : t('exhibitsUnconfirmed')}{' '}
+            {t('exhibitsDetectedLabel')} {q.data.coverage.detected};{' '}
+            {t('exhibitsLocatedLabel')} {q.data.coverage.located}.
           </p>
           {q.data.references.length === 0 ? (
             <Notice>{t('exhibitsNone')}</Notice>
@@ -100,7 +100,7 @@ export function ExhibitsSection(props: {
                                 `${p.space} ${p.label} = PDF p.${p.pdf_page}`,
                             )
                             .join(', ')}`}
-                        . Content not compared to the brief.
+                        . {t('exhibitsContentNotCompared')}
                       </span>
                     )}
                   </li>
@@ -110,9 +110,9 @@ export function ExhibitsSection(props: {
           )}
           {q.data.coverage.entries_not_detected_in_brief.length > 0 && (
             <p className="small">
-              Inventory entries with no mention detected in the assessed text:{' '}
-              {q.data.coverage.entries_not_detected_in_brief.join(', ')}. This
-              is not a finding that they are uncited.
+              {t('exhibitsUncitedPrefix')}{' '}
+              {q.data.coverage.entries_not_detected_in_brief.join(', ')}.{' '}
+              {t('exhibitsUncitedDisclaimer')}
             </p>
           )}
         </>
