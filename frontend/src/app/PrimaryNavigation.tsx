@@ -1,4 +1,5 @@
 import { Link } from 'react-router';
+import { useLocale } from '../shared/i18n';
 
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -15,6 +16,7 @@ export function PrimaryNavigation({
   pathname: string;
   search: string;
 }) {
+  const { t } = useLocale();
   const segments = pathname.split('/').filter(Boolean);
   const matter = segments[0] === 'matters' ? segments[1] : null;
   const query = new URLSearchParams(search);
@@ -29,7 +31,7 @@ export function PrimaryNavigation({
     : null;
   const legalUrl =
     uuid.test(matter ?? '') && uuid.test(brief ?? '')
-      ? `/matters/${matter}/briefs/${brief}/legal`
+      ? `/matters/${matter}/briefs/${brief}/legal${snapshot && sha.test(snapshot) ? `?snapshot=${snapshot}` : ''}`
       : null;
   const exportUrl = reportReady
     ? `/matters/${matter}/exports?brief=${brief}&snapshot=${snapshot}`
@@ -45,7 +47,7 @@ export function PrimaryNavigation({
   return (
     <nav className="app-primary-nav" aria-label="Primary workspace">
       <Link to="/" aria-current={current === 'matter' ? 'page' : undefined}>
-        Matter
+        {t('navMatter')}
       </Link>
       <span className="app-primary-divider" aria-hidden="true">
         ·
@@ -55,11 +57,11 @@ export function PrimaryNavigation({
           to={reportUrl}
           aria-current={current === 'verification' ? 'page' : undefined}
         >
-          Verification
+          {t('navVerification')}
         </Link>
       ) : (
         <span className="app-primary-unavailable" aria-disabled="true">
-          Verification
+          {t('navVerification')}
         </span>
       )}
       <span className="app-primary-divider" aria-hidden="true">
@@ -70,11 +72,11 @@ export function PrimaryNavigation({
           to={legalUrl}
           aria-current={current === 'legal' ? 'page' : undefined}
         >
-          Legal articles
+          {t('navLegal')}
         </Link>
       ) : (
         <span className="app-primary-unavailable" aria-disabled="true">
-          Legal articles
+          {t('navLegal')}
         </span>
       )}
       <span className="app-primary-divider" aria-hidden="true">
@@ -85,11 +87,11 @@ export function PrimaryNavigation({
           to={exportUrl}
           aria-current={current === 'export' ? 'page' : undefined}
         >
-          Export
+          {t('navExport')}
         </Link>
       ) : (
         <span className="app-primary-unavailable" aria-disabled="true">
-          Export
+          {t('navExport')}
         </span>
       )}
     </nav>

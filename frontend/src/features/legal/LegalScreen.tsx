@@ -8,21 +8,36 @@ import {
   type LegalPassageView,
 } from '../../shared/api/legal';
 import { useSession } from '../../shared/session';
+import { useLocale } from '../../shared/i18n';
 import { Button, Notice } from '../../shared/ui';
 import { ReviewBox } from './ReviewBox';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const LABEL: Record<string, string> = {
-  PASS: 'Found in the stored text',
-  FAIL: 'Does not match the stored text',
-  UNVERIFIED: 'Not in the chosen corpus',
-  UNDETERMINED: 'Cannot be decided',
+const STATUS_ORDER: Record<string, number> = {
+  FAIL: 0,
+  UNVERIFIED: 1,
+  UNDETERMINED: 2,
+  PASS: 3,
+};
+const STATUS_TONE: Record<string, string> = {
+  FAIL: 'error',
+  UNVERIFIED: 'impossible',
+  UNDETERMINED: 'warning',
+  PASS: 'success',
+};
+const STATUS_ICON: Record<string, string> = {
+  FAIL: '✕',
+  UNVERIFIED: '⊘',
+  UNDETERMINED: '!',
+  PASS: '✓',
 };
 
 export function LegalScreen({ api }: { api: ApiClient }) {
   const { caseId = '', briefId = '' } = useParams();
   const session = useSession();
+  const { t, legalStatusLabel, categoryLabel } = useLocale();
   const [open, setOpen] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const valid = uuid.test(caseId) && uuid.test(briefId);
   const base = `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(briefId)}/legal-references`;
   const refs = useQuery({
@@ -46,8 +61,8 @@ export function LegalScreen({ api }: { api: ApiClient }) {
   });
   return (
     <section aria-labelledby="legal-title">
-      <Link to={`/matters/${caseId}`}>Back to preserved reports</Link>
-      <h1 id="legal-title">Cited legal articles</h1>
+      <Link to={`/matters/${caseId}`}>{t('legalBack')}</Link>
+      <h1 id="legal-title">{t('legalTitle')}</h1>
       {!valid ? (
         <Notice error>This link is invalid.</Notice>
       ) : refs.isPending ? (
@@ -72,12 +87,13 @@ export function LegalScreen({ api }: { api: ApiClient }) {
           <p>
             {refs.data.corpus === 'configured' ? (
               <>
-                Chosen corpus: {refs.data.corpus_articles} articles, pack{' '}
-                <code>{refs.data.corpus_pack_sha256}</code>. No applicability or
-                currency claim is made about it.
+                {t('legalCorpusPrefix')} {refs.data.corpus_articles}{' '}
+                {t('legalCorpusArticles')}{' '}
+                <code>{refs.data.corpus_pack_sha256}</code>.{' '}
+                {t('legalCorpusDisclaimer')}
               </>
             ) : (
-              'No corpus is chosen for this matter. No article can be found, so nothing is marked as found.'
+              t('legalNoCorpus')
             )}
           </p>
           {refs.data.corpus_failures.length > 0 && (
@@ -85,17 +101,70 @@ export function LegalScreen({ api }: { api: ApiClient }) {
               Corpus entries refused: {refs.data.corpus_failures.join(', ')}
             </Notice>
           )}
-          <p>
-            Detected: {refs.data.coverage.detected} (
-            {(['PASS', 'FAIL', 'UNVERIFIED', 'UNDETERMINED'] as const)
-              .map((s) => `${s} ${refs.data.coverage.by_status[s]}`)
-              .join(', ')}
-            ). Looked at: {refs.data.coverage.analysed}.
-          </p>
-          <p>
-            Not looked at: {refs.data.coverage.not_analysed.join('; ')}. A
-            citation the check does not detect is not a verified citation.
-          </p>
+          <div
+            className="legal-kpi-strip"
+            role="group"
+            aria-label="Filter by status"
+          >
+            {(
+              [
+                ['ALL', t('legalAll'), refs.data.coverage.detected, 'neutral'],
+                [
+                  'FAIL',
+                  categoryLabel('ecart'),
+                  refs.data.coverage.by_status.FAIL,
+                  'error',
+                ],
+                [
+                  'UNVERIFIED',
+                  categoryLabel('impossible'),
+                  refs.data.coverage.by_status.UNVERIFIED,
+                  'impossible',
+                ],
+                [
+                  'UNDETERMINED',
+                  categoryLabel('appreciation'),
+                  refs.data.coverage.by_status.UNDETERMINED,
+                  'warning',
+                ],
+                [
+                  'PASS',
+                  categoryLabel('correspondance'),
+                  refs.data.coverage.by_status.PASS,
+                  'success',
+                ],
+              ] as const
+            ).map(([key, title, count, tone]) => (
+              <button
+                key={key}
+                type="button"
+                className="legal-kpi"
+                data-tone={tone}
+                aria-pressed={statusFilter === key}
+                onClick={() => setStatusFilter(key)}
+              >
+                <span className="legal-kpi-count">{count}</span>
+                <span className="legal-kpi-label">{title}</span>
+              </button>
+            ))}
+          </div>
+          <details className="legal-coverage-disclosure">
+            <summary>
+              {t('legalCoverage')} ({refs.data.coverage.detected} ·{' '}
+              {refs.data.coverage.analysed})
+            </summary>
+            <p className="small">
+              Detected: {refs.data.coverage.detected} (
+              {(['PASS', 'FAIL', 'UNVERIFIED', 'UNDETERMINED'] as const)
+                .map((s) => `${s} ${refs.data.coverage.by_status[s]}`)
+                .join(', ')}
+              ). Looked at: {refs.data.coverage.analysed}.
+            </p>
+            <p className="small">
+              Not looked at: {refs.data.coverage.not_analysed.join('; ')}. A
+              citation the check does not detect is not a verified citation.
+            </p>
+          </details>
           {refs.data.references.length === 0 ? (
             <Notice>No explicit article citation was detected.</Notice>
           ) : (
@@ -103,82 +172,106 @@ export function LegalScreen({ api }: { api: ApiClient }) {
               className="matter-list legal-list"
               aria-label="Detected citations"
             >
-              {refs.data.references.map((r) => (
-                <li key={r.reference_id}>
-                  <strong>{LABEL[r.status]}</strong> <code>{r.status}</code>
-                  <span className="small">
-                    {r.act_code ?? 'unknown act'} art. {r.article ?? '?'}
-                    {r.language ? ` (${r.language})` : ''}: {r.raw_text}
-                  </span>
-                  <span className="small">
-                    Reason: <code>{r.reason}</code>. Claim support: not
-                    assessed.
-                  </span>
-                  <Button
-                    aria-expanded={open === r.reference_id}
-                    onClick={() =>
-                      setOpen(open === r.reference_id ? null : r.reference_id)
-                    }
+              {[...refs.data.references]
+                .filter(
+                  (r) => statusFilter === 'ALL' || r.status === statusFilter,
+                )
+                .sort(
+                  (a, b) =>
+                    (STATUS_ORDER[a.status] ?? 9) -
+                    (STATUS_ORDER[b.status] ?? 9),
+                )
+                .map((r) => (
+                  <li
+                    key={r.reference_id}
+                    className="legal-card"
+                    data-tone={STATUS_TONE[r.status] ?? 'neutral'}
                   >
-                    {open === r.reference_id ? 'Hide' : 'Compare'} with stored
-                    article
-                  </Button>
-                  {open === r.reference_id && (
-                    <div aria-live="polite">
-                      {passage.isPending ? (
-                        <Notice>Loading passage…</Notice>
-                      ) : passage.isError ? (
-                        <Notice error>
-                          The stored article cannot be shown. The corpus may
-                          have changed since this run; run the check again.
-                        </Notice>
-                      ) : (
-                        <div className="legal-compare">
-                          <div>
-                            <h3>Your draft</h3>
-                            <DraftExcerpt p={passage.data} />
-                          </div>
-                          <div>
-                            <h3>Stored article text</h3>
-                            <p>
-                              {passage.data.article_text ??
-                                'No stored article for this citation.'}
-                            </p>
-                            <p className="small">
-                              Source: {passage.data.corpus_source_uri ?? 'n/a'};
-                              version {passage.data.corpus_version ?? 'n/a'};
-                              text SHA-256{' '}
-                              <code>
-                                {passage.data.corpus_text_sha256 ?? 'n/a'}
-                              </code>
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      <ReviewBox
-                        api={api}
-                        caseId={caseId}
-                        briefId={briefId}
-                        snapshot={snapshot}
-                        observationId={`legal:${r.reference_id}`}
-                      />
+                    <div className="legal-card-head">
+                      <span
+                        className="legal-badge"
+                        data-tone={STATUS_TONE[r.status] ?? 'neutral'}
+                      >
+                        <span aria-hidden="true">
+                          {STATUS_ICON[r.status] ?? '·'}
+                        </span>{' '}
+                        <strong>{legalStatusLabel(r.status)}</strong>{' '}
+                        <code>{r.status}</code>
+                      </span>
+                      <span className="legal-ref-title">
+                        {r.act_code ?? 'unknown act'} art. {r.article ?? '?'}
+                        {r.language ? ` (${r.language})` : ''}: {r.raw_text}
+                      </span>
                     </div>
-                  )}
-                </li>
-              ))}
+                    <span className="small">
+                      {t('legalReasonLabelPrefix')} <code>{r.reason}</code>.{' '}
+                      {t('legalClaimSupportUnassessed')}
+                    </span>
+                    <Button
+                      aria-expanded={open === r.reference_id}
+                      onClick={() =>
+                        setOpen(open === r.reference_id ? null : r.reference_id)
+                      }
+                    >
+                      {open === r.reference_id
+                        ? t('legalHide')
+                        : t('legalCompare')}
+                    </Button>
+                    {open === r.reference_id && (
+                      <div aria-live="polite" className="legal-detail-panel">
+                        {passage.isPending ? (
+                          <Notice>Loading passage…</Notice>
+                        ) : passage.isError ? (
+                          <Notice error>
+                            The stored article cannot be shown. The corpus may
+                            have changed since this run; run the check again.
+                          </Notice>
+                        ) : (
+                          <div className="legal-compare">
+                            <div className="legal-compare-pane">
+                              <h3>{t('legalDraft')}</h3>
+                              <DraftExcerpt p={passage.data} />
+                            </div>
+                            <div className="legal-compare-pane">
+                              <h3>{t('legalStored')}</h3>
+                              <p className="legal-prose">
+                                {passage.data.article_text ??
+                                  t('legalNoArticleStored')}
+                              </p>
+                              <p className="small legal-provenance">
+                                Source:{' '}
+                                {passage.data.corpus_source_uri ?? 'n/a'};
+                                version {passage.data.corpus_version ?? 'n/a'};
+                                text SHA-256{' '}
+                                <code>
+                                  {passage.data.corpus_text_sha256 ?? 'n/a'}
+                                </code>
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        <ReviewBox
+                          api={api}
+                          caseId={caseId}
+                          briefId={briefId}
+                          snapshot={snapshot}
+                          observationId={`legal:${r.reference_id}`}
+                        />
+                      </div>
+                    )}
+                  </li>
+                ))}
             </ul>
           )}
-          <h2>Lawyer-defined rules on declared facts</h2>
+          <h2>{t('legalRulesHeading')}</h2>
           {refs.data.suitability.length === 0 ? (
-            <Notice>
-              No lawyer-defined rule was evaluated for this run. Nothing here is
-              a legal conclusion.
-            </Notice>
+            <Notice>{t('legalNoRulesEvaluated')}</Notice>
           ) : (
             <ul className="matter-list legal-list" aria-label="Rules">
               {refs.data.suitability.map((x) => (
                 <li key={x.observation_id}>
-                  <strong>{LABEL[x.status]}</strong> <code>{x.status}</code>
+                  <strong>{legalStatusLabel(x.status)}</strong>{' '}
+                  <code>{x.status}</code>
                   <span className="small">
                     Rule {x.rule_id} v{x.rule_version}: {x.reference}
                   </span>
