@@ -71,3 +71,46 @@ def test_docx_page_requests_remain_partial():
     assert result.row.status == "partial"
     assert "page_lineage_unverified" in result.row.warnings
     assert "Texte fictif" in result.text
+
+
+def test_register_read_rejects_mismatched_exhibit_snapshot_hash():
+    import json
+
+    document = {"schema": "caseproof-exhibit-register-v1", "entries": []}
+    canonical_sha = sha256(
+        json.dumps(document, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+    class _FakeResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def fetchall(self):
+            return self._rows
+
+    class _FakeConn:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, *_args):
+            return _FakeResult(self._rows)
+
+    valid_store = PostgresPrivateMatterCheckStore(
+        lambda: _FakeConn([(1, document, canonical_sha)]), None, lambda *_: b"",  # type: ignore[arg-type]
+    )
+    register = valid_store._register(access=Access())  # type: ignore[arg-type]
+    assert register.revision == 1
+    assert register.entries == ()
+
+    for bad_sha in ("9" * 64, None):
+        tampered_store = PostgresPrivateMatterCheckStore(
+            lambda bad=bad_sha: _FakeConn([(1, document, bad)]), None, lambda *_: b"",  # type: ignore[arg-type]
+        )
+        with pytest.raises(PrivateCheckStoreError, match="exhibit snapshot hash mismatch"):
+            tampered_store._register(access=Access())  # type: ignore[arg-type]

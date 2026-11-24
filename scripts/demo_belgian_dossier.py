@@ -417,8 +417,14 @@ def _build_representation(
     text: str,
     version_id: str,
     claim_overrides: dict[str, str] | None = None,
+    references: tuple[DraftReference, ...] | None = None,
 ) -> BriefRepresentation:
-    brief = VersionedBrief(m2.case_id, version_id, _sha(f"original:{version_id}"), m2.references)
+    brief = VersionedBrief(
+        m2.case_id,
+        version_id,
+        _sha(f"original:{version_id}"),
+        m2.references if references is None else references,
+    )
     claims: list[FactAssertion] = []
     for spec in m2.claim_specs:
         claim_text = (claim_overrides or {}).get(spec["claim_id"], spec["text"])
@@ -556,17 +562,29 @@ def _run_m2_journey(m2: M2Dossier) -> M2Journey:
         correction_preview = preview_correction(run=run1, text=m2.brief_text, proposal=proposal)
         corrected_claim_id = claim_id
         corrected_text = correction_preview.proposed_text
-        representation2 = BriefRepresentation(
-            VersionedBrief(
-                m2.case_id,
-                m2.brief_version_id + "-corrige",
-                _sha("original:" + m2.brief_version_id + "-corrige"),
-                _references_with_quote_updates(m2, {passage_spec["passage_id"]: after}),
-            ),
+        claim_overrides: dict[str, str] = {}
+        target_obs = passage_spec["observation_id"]
+        before_passage = passage_spec["text"]
+        for spec in m2.claim_specs:
+            cid = spec["claim_id"]
+            ctext = spec["text"]
+            if target_obs == f"fact:{cid}":
+                if ctext == before_passage:
+                    claim_overrides[cid] = after
+                elif before_passage in ctext:
+                    claim_overrides[cid] = ctext.replace(before_passage, after, 1)
+                else:
+                    claim_overrides[cid] = after
+            elif corrected_text.count(ctext) != 1 and before_passage in ctext:
+                updated_claim = ctext.replace(before_passage, after, 1)
+                if corrected_text.count(updated_claim) == 1:
+                    claim_overrides[cid] = updated_claim
+        representation2 = _build_representation(
+            m2,
             corrected_text,
-            _sha(corrected_text),
-            "caseproof-demo-runner-v2",
-            (),
+            m2.brief_version_id + "-corrige",
+            claim_overrides=claim_overrides,
+            references=_references_with_quote_updates(m2, {passage_spec["passage_id"]: after}),
         )
         run2 = _run_check(m2, representation2)
 

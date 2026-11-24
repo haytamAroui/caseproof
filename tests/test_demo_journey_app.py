@@ -495,3 +495,90 @@ def test_fact_confirmation_reevaluates_rules(client: TestClient) -> None:
     response = _post(client, "/demo/api/facts", {"name": "fait_confirme", "confirmed": True}, session)
     assert response.status_code == 200
     assert response.json()["rule_results"][0]["status"] == "PASS"
+
+
+def test_factual_checks_persist_after_correction(tmp_path: Path) -> None:
+    """Factual observations remain evaluated on /run and after /correction."""
+    dossier = _dossier(tmp_path)
+    claim_bad = "Le paiement est de 12500 EUR selon le preneur."
+    claim_ok = "Le paiement est de 15000 EUR selon le preneur."
+    payment_source = "Le paiement de 15000 EUR a été reçu."
+    brief_with_fact = f"{APP_BRIEF} {claim_bad} (Pièce 2, art. 1)."
+
+    doc = Document()
+    doc.add_paragraph(brief_with_fact)
+    doc.save(str(dossier / "brief.docx"))
+
+    data = json.loads((dossier / "m2.json").read_text(encoding="utf-8"))
+    data["brief_text"] = brief_with_fact
+    data["sources"].append(
+        {
+            "source_id": "src-2",
+            "document_id": "doc-2",
+            "version_id": "v1",
+            "label": "relevé de paiement synthétique",
+            "synthetic": True,
+            "text": payment_source,
+        }
+    )
+    data["exhibits"].append(
+        {
+            "exhibit_id": "ex-2",
+            "display_label": "Pièce 2",
+            "aliases": [],
+            "confirmed": True,
+            "pages": [{"source_id": "src-2", "version_id": "v1"}],
+        }
+    )
+    data["references"].append(
+        {"reference_id": "ref-pay", "exhibit_label": "Pièce 2", "exact_quote": None}
+    )
+    data["claims"] = [
+        {
+            "claim_id": "claim-paiement",
+            "reference_id": "ref-pay",
+            "text": claim_bad,
+            "kind": "money",
+            "role": "payment",
+            "language": "fr",
+            "source_language": "fr",
+        }
+    ]
+    (dossier / "m2.json").write_text(json.dumps(data), encoding="utf-8")
+
+    app_client = TestClient(create_demo_app(dossier))
+    session = _session(app_client)
+
+    run = _post(app_client, "/demo/api/run", {}, session)
+    assert run.status_code == 200
+    facts_before = run.json()["findings"]["facts"]
+    assert len(facts_before) == 1
+    assert facts_before[0]["claim_id"] == "claim-paiement"
+    assert facts_before[0]["state"] == "candidate_difference"
+
+    # Citation correction must preserve factual verifications.
+    corr_cit = _post(
+        app_client,
+        "/demo/api/correction",
+        {"passage_id": "passage:cit-02", "after": "six mois", "rationale": "citation alignée"},
+        session,
+    )
+    assert corr_cit.status_code == 200
+    facts_after_cit = corr_cit.json()["findings"]["facts"]
+    assert len(facts_after_cit) == 1
+    assert facts_after_cit[0]["claim_id"] == "claim-paiement"
+    assert facts_after_cit[0]["state"] == "candidate_difference"
+
+    # Direct factual correction preserves and flips the factual check to value_match.
+    corr_fact = _post(
+        app_client,
+        "/demo/api/correction",
+        {"passage_id": "passage:fact:claim-paiement", "after": claim_ok, "rationale": "montant aligné"},
+        session,
+    )
+    assert corr_fact.status_code == 200
+    facts_after_fact = corr_fact.json()["findings"]["facts"]
+    assert len(facts_after_fact) == 1
+    assert facts_after_fact[0]["claim_id"] == "claim-paiement"
+    assert facts_after_fact[0]["state"] == "value_match"
+    assert facts_after_fact[0]["brief_passage"] == claim_ok

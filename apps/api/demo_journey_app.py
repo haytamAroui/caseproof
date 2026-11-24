@@ -33,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from application.extraction.contracts import ExtractionError
 from application.litigation.brief_checks import DraftReference, VersionedBrief
 from application.litigation.corpus import ArticleRecord, load_corpus
+from application.litigation.factual_values import FactAssertion, FactKind, FactRole
 from application.litigation.lawyer_decisions import (
     Disposition,
     LawyerDecisionError,
@@ -223,9 +224,64 @@ class DemoState:
     def _resolve_exhibit_label(self, target: str) -> str:
         return _resolve_exhibit_label(self.register, target)
 
+    def _claim_text_for_current(self, spec: dict[str, Any], text: str | None = None) -> str:
+        """Track a declared factual claim's text across session corrections."""
+        target_text = self.active_text if text is None else text
+        claim_text = str(spec["text"])
+        target_obs = f"fact:{spec['claim_id']}"
+        for version in self.versions:
+            before = str(version.get("before", ""))
+            after = str(version.get("after", ""))
+            if version.get("observation_id") == target_obs:
+                if claim_text == before:
+                    claim_text = after
+                elif before and before in claim_text:
+                    claim_text = claim_text.replace(before, after, 1)
+                else:
+                    claim_text = after
+            elif before and before in claim_text and target_text.count(claim_text) != 1:
+                candidate = claim_text.replace(before, after, 1)
+                if target_text.count(candidate) == 1:
+                    claim_text = candidate
+        return claim_text
+
+    def _resolve_claim_reference_id(
+        self, spec: dict[str, Any], references: tuple[DraftReference, ...]
+    ) -> str | None:
+        """Bind a declared factual claim to an extracted active reference without guessing."""
+        declared_id = str(spec["reference_id"])
+        active_ids = {ref.reference_id for ref in references}
+        if declared_id in active_ids:
+            return declared_id
+        declared = next((ref for ref in self.m2.references if ref.reference_id == declared_id), None)
+        if declared is None:
+            return None
+        declared_res = self.register.resolve(declared.exhibit_label, pdf_page=declared.pdf_page)
+        if declared_res.exhibit_id is None:
+            return None
+        same_exhibit = [
+            ref
+            for ref in references
+            if self.register.resolve(ref.exhibit_label, pdf_page=ref.pdf_page).exhibit_id
+            == declared_res.exhibit_id
+        ]
+        if not same_exhibit:
+            return None
+        if declared.exact_quote:
+            quote_candidates = [declared.exact_quote]
+            for version in self.versions:
+                if version.get("before") in quote_candidates and isinstance(version.get("after"), str):
+                    quote_candidates.append(version["after"])
+            quote_matches = [ref for ref in same_exhibit if ref.exact_quote in quote_candidates]
+            if len(quote_matches) == 1:
+                return quote_matches[0].reference_id
+        if len(same_exhibit) == 1:
+            return same_exhibit[0].reference_id
+        return None
+
     def correctable_passages(self) -> list[dict[str, Any]]:
-        """Every extracted quotation is a correctable passage of the brief."""
-        return [
+        """Every extracted quotation and uniquely located factual claim is a correctable passage."""
+        passages = [
             {
                 "passage_id": f"passage:{marker.marker_id}",
                 "observation_id": f"citation:{marker.marker_id}",
@@ -234,6 +290,20 @@ class DemoState:
             for marker in self.extraction.markers
             if marker.quote is not None
         ]
+        references = self.active_references()
+        for spec in self.m2.claim_specs:
+            if self._resolve_claim_reference_id(spec, references) is None:
+                continue
+            claim_text = self._claim_text_for_current(spec)
+            if self.active_text.count(claim_text) == 1:
+                passages.append(
+                    {
+                        "passage_id": f"passage:fact:{spec['claim_id']}",
+                        "observation_id": f"fact:{spec['claim_id']}",
+                        "text": claim_text,
+                    }
+                )
+        return passages
 
     def extraction_payload(self) -> dict[str, Any]:
         return {
@@ -302,7 +372,29 @@ class DemoState:
     def representation(self, text: str, version: str) -> BriefRepresentation:
         references = self.active_references()
         brief = VersionedBrief(self.m2.case_id, version, _sha(f"original:{version}"), references)
-        return BriefRepresentation(brief, text, _sha(text), DEMO_RUNNER_VERSION, ())
+        claims: list[FactAssertion] = []
+        for spec in self.m2.claim_specs:
+            ref_id = self._resolve_claim_reference_id(spec, references)
+            if ref_id is None:
+                continue
+            claim_text = self._claim_text_for_current(spec, text)
+            if text.count(claim_text) != 1:
+                continue
+            start = text.index(claim_text)
+            claims.append(
+                FactAssertion(
+                    spec["claim_id"],
+                    ref_id,
+                    claim_text,
+                    start,
+                    start + len(claim_text),
+                    FactKind(spec["kind"]),
+                    FactRole(spec["role"]),
+                    spec["language"],
+                    spec["source_language"],
+                )
+            )
+        return BriefRepresentation(brief, text, _sha(text), DEMO_RUNNER_VERSION, tuple(claims))
 
     def extraction_warnings(self) -> list[str]:
         """Honest extraction diagnostics, never silent: unreadable body,
@@ -398,7 +490,7 @@ def _finding_payloads(state: DemoState, run: Any) -> dict[str, Any]:
     claims = {c["claim_id"]: c for c in state.m2.claim_specs}
     for obs in run.factual_observations:
         source = previews.get(obs.source_id or "")
-        claim = claims.get(obs.claim_id, {})
+        claim = claims.get(obs.claim_id)
         facts.append(
             {
                 "observation_id": f"fact:{obs.claim_id}",
@@ -407,7 +499,7 @@ def _finding_payloads(state: DemoState, run: Any) -> dict[str, Any]:
                 "role": obs.role.value,
                 "state": obs.state.value,
                 "explanation": obs.explanation,
-                "brief_passage": claim.get("text"),
+                "brief_passage": state._claim_text_for_current(claim) if claim is not None else None,
                 "brief_token": obs.brief_token,
                 "source_token": obs.source_token,
                 "source_id": obs.source_id,

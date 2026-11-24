@@ -26,7 +26,10 @@ from apps.api.disposable_signed_brief_publisher import (
 )
 from apps.api.disposable_signed_source_library import DisposableSignedSourceLibrary
 from apps.api.evidence_vault_protocol import VaultScope
-from apps.api.postgres_litigation_check_store import PostgresPrivateMatterCheckStore
+from apps.api.postgres_litigation_check_store import (
+    PostgresPrivateMatterCheckStore,
+    PrivateCheckStoreError,
+)
 from apps.api.signed_supabase_originals import PrivateStorageDenied
 from scripts.verify_document_intake_integration import SyntheticVerifier
 from scripts.verify_vault_integration import connect, coordinator, seed
@@ -217,13 +220,12 @@ class DisposableSignedBriefPublisherTests(unittest.TestCase):
         self.assertEqual(second.exhibit_revision, 3)
         self.assertNotEqual(first.exhibit_id, second.exhibit_id)
 
-    def test_false_stored_register_digest_does_not_poison_reads(self) -> None:
-        # A well-formed but false payload_sha256 (the RPC write path cannot
-        # recompute sha256 without pgcrypto) must not block authorized
-        # readers: the digest is derived from the content, never gated on
-        # the stored column.
-        src = b"SOURCE A LECTURE GARANTIE. quote gamma\n"
-        d, v = self._register(src, "source a lire")
+    def test_mismatched_stored_register_digest_fails_closed(self) -> None:
+        # Fail closed on read: a tampered or mismatched payload_sha256 must
+        # block both exhibit confirmation and private-matter check reads even
+        # when the proposed SQL write-side digest check is not installed.
+        src = b"SOURCE INTEGRITE LECTURE. quote gamma\n"
+        d, v = self._register(src, "source integrite")
         self._upload(d, v, src)
         with connect() as conn:
             conn.execute(
@@ -231,14 +233,21 @@ class DisposableSignedBriefPublisherTests(unittest.TestCase):
                 "where case_id=%s",
                 ("9" * 64, self.f.scope.case_id),
             )
-        confirmed = self.publisher.confirm_exhibit(
-            bearer="synthetic-fixture-only",
-            case_id=self.case_id,
-            document_id=d,
-            version_id=v,
-            display_label="Source lisible",
-        )
-        self.assertGreaterEqual(confirmed.exhibit_revision, 2)
+        with self.assertRaises(PrivateStorageDenied):
+            self.publisher.confirm_exhibit(
+                bearer="synthetic-fixture-only",
+                case_id=self.case_id,
+                document_id=d,
+                version_id=v,
+                display_label="Source refusee",
+            )
+        store = PostgresPrivateMatterCheckStore.__new__(PostgresPrivateMatterCheckStore)
+        store._connect = connect
+        access = store.current_access(str(self.f.actor), self.case_id)
+        self.assertIsNotNone(access)
+        assert access is not None
+        with self.assertRaisesRegex(PrivateCheckStoreError, "exhibit snapshot hash mismatch"):
+            store._register(access=access)
 
     def test_confirm_exhibit_unknown_document_masked(self) -> None:
         with self.assertRaises(PrivateStorageDenied):

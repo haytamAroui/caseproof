@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 from collections.abc import Callable
 from typing import cast
 from uuid import UUID, uuid4
@@ -307,23 +308,24 @@ class DisposableSignedBriefPublisher:
             rows = cur.fetchall()
             if len(rows) != 1:
                 raise PrivateStorageDenied("Private source unavailable")
-            revision, document_head, stored_sha = rows[0]
-            # The register digest is DERIVED, never gated on the stored
-            # column: the write RPC (reachable by any authenticated user
-            # with confirm permission) cannot recompute sha256 without
-            # pgcrypto, so a well-formed false stored digest must not be
-            # able to poison availability. Content is the source of truth
-            # and is fully validated below and at write time; the stored
-            # column stays as audit correlation of the writer's claim.
-            if stored_sha is not None and type(stored_sha) is not str:
-                raise PrivateStorageDenied("Private source unavailable")
+            revision, document_head, expected_sha = rows[0]
             if (
                 type(revision) is not int
                 or revision < 1
                 or not isinstance(document_head, dict)
                 or document_head.get("schema") != "caseproof-exhibit-register-v1"
                 or type(document_head.get("entries")) is not list
+                or type(expected_sha) is not str
             ):
+                raise PrivateStorageDenied("Private source unavailable")
+            # Fail closed on read: verify the canonical payload digest against
+            # stored payload_sha256 without relying solely on a write-side RPC.
+            digest = hashlib.sha256(
+                json.dumps(
+                    document_head, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+                ).encode("utf-8")
+            ).hexdigest()
+            if digest != expected_sha:
                 raise PrivateStorageDenied("Private source unavailable")
             try:
                 entries = tuple(

@@ -187,3 +187,86 @@ def test_cli_writes_report(tmp_path: Path) -> None:
     assert main(["--dossier", str(dossier), "--out", str(out)]) == 0
     assert "exact_match" not in out.read_text(encoding="utf-8") or True
     assert out.stat().st_size > 5000
+
+
+def test_factual_checks_survive_citation_correction_and_fact_correction(tmp_path: Path) -> None:
+    """Factual verifications must not vanish after a correction recheck."""
+    dossier = _dossier(tmp_path)
+    claim_bad = "Le paiement est de 12500 EUR selon le preneur."
+    claim_ok = "Le paiement est de 15000 EUR selon le preneur."
+    brief_with_fact = f"{BRIEF_TEXT} {claim_bad}"
+    payment_source = "Le paiement de 15000 EUR a été reçu."
+
+    doc = Document()
+    doc.add_paragraph(brief_with_fact)
+    doc.save(str(dossier / "brief.docx"))
+
+    data = json.loads((dossier / "m2.json").read_text(encoding="utf-8"))
+    data["brief_text"] = brief_with_fact
+    data["sources"].append(
+        {
+            "source_id": "src-2",
+            "document_id": "doc-2",
+            "version_id": "v1",
+            "label": "relevé de paiement synthétique",
+            "synthetic": True,
+            "text": payment_source,
+        }
+    )
+    data["exhibits"].append(
+        {
+            "exhibit_id": "ex-2",
+            "display_label": "Pièce 2",
+            "aliases": ["Relevé bancaire"],
+            "confirmed": True,
+            "pages": [{"source_id": "src-2", "version_id": "v1"}],
+        }
+    )
+    data["references"].append(
+        {"reference_id": "ref-pay", "exhibit_label": "Pièce 2", "exact_quote": None}
+    )
+    data["claims"] = [
+        {
+            "claim_id": "claim-paiement",
+            "reference_id": "ref-pay",
+            "text": claim_bad,
+            "kind": "money",
+            "role": "payment",
+            "language": "fr",
+            "source_language": "fr",
+        }
+    ]
+    (dossier / "m2.json").write_text(json.dumps(data), encoding="utf-8")
+
+    # 1. Citation correction: factual verification must persist in run2.
+    run = _evaluate(dossier)
+    journey = run["journey"]
+    assert [(o.claim_id, o.state.value) for o in journey.run1.factual_observations] == [
+        ("claim-paiement", "candidate_difference")
+    ]
+    assert [(o.claim_id, o.state.value) for o in journey.run2.factual_observations] == [
+        ("claim-paiement", "candidate_difference")
+    ]
+
+    # 2. Direct factual correction: factual verification persists and flips to value_match.
+    data["passages"].append(
+        {
+            "passage_id": "p-fact",
+            "observation_id": "fact:claim-paiement",
+            "text": claim_bad,
+        }
+    )
+    data["correction"] = {
+        "passage_id": "p-fact",
+        "after": claim_ok,
+        "rationale": "montant aligné sur la pièce",
+    }
+    (dossier / "m2.json").write_text(json.dumps(data), encoding="utf-8")
+    run_fact = _evaluate(dossier)
+    journey_fact = run_fact["journey"]
+    assert [(o.claim_id, o.state.value) for o in journey_fact.run1.factual_observations] == [
+        ("claim-paiement", "candidate_difference")
+    ]
+    assert [(o.claim_id, o.state.value) for o in journey_fact.run2.factual_observations] == [
+        ("claim-paiement", "value_match")
+    ]
