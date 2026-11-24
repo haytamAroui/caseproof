@@ -3,7 +3,9 @@
 Wires the official React frontend (`frontend/dist` under `/workspace/`) directly
 to a real FastAPI application executing the real CaseProof deterministic checkers
 (`detect_exhibit_references`, `map_exhibit_references`, `compare_fact`,
-`evaluate_rule`) over a clearly labeled synthetic Belgian FR/NL 5-trap dossier:
+`evaluate_rule`) over a clearly labeled synthetic Belgian FR/NL 5-trap dossier
+packaged in the canonical 4-source intake envelope (1 draft, 1 inventory, 2 PDF
+exhibits):
 
   1. Wrong 3-space page (printed p. 14 vs PDF p. 16 / bundle p. 22)
   2. Omitted opening reservation ("Sous réserve de l'accord écrit du bailleur,")
@@ -23,7 +25,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import io
+import json
+import uuid
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -65,16 +70,17 @@ DEMO_CASE_ID = "11111111-1111-4111-8111-111111111111"
 DEMO_BRIEF_ID = "22222222-2222-4222-8222-222222222222"
 DEMO_ACTOR_ID = "55555555-5555-4555-8555-555555555555"
 DEMO_ACTOR_EMAIL = "demo-lawyer@caseproof.local"
+DEMO_HMAC_KEY = b"synthetic-partner-demo-loopback-hmac-key-not-production"
 
+# Canonical 4-source intake envelope (capacity-policy.json source_count == 4):
+# 1 draft + 1 inventory + 2 exhibit PDFs (piece-01 bundles bail p.16 + avenant p.17).
 VER_PIECE_1 = "33333333-3333-4333-8333-333333333301"
 VER_STUK_2 = "33333333-3333-4333-8333-333333333302"
-VER_PIECE_3 = "33333333-3333-4333-8333-333333333303"
 VER_INVENTORY = "33333333-3333-4333-8333-333333333304"
 
 DOC_DRAFT = "44444444-4444-4444-8444-444444444400"
 DOC_PIECE_1 = "44444444-4444-4444-8444-444444444401"
 DOC_STUK_2 = "44444444-4444-4444-8444-444444444402"
-DOC_PIECE_3 = "44444444-4444-4444-8444-444444444403"
 DOC_INVENTORY = "44444444-4444-4444-8444-444444444404"
 
 DEMO_BANNER = (
@@ -97,12 +103,13 @@ SOURCE_BAIL_TEXT = (
 SOURCE_AVENANT_TEXT = (
     "Projet d'avenant n°2 — envoyé pour signature le 14 mars 2026 — non encore paraphé.\n"
 )
+SOURCE_PIECE_1_COMBINED_TEXT = SOURCE_BAIL_TEXT + "\n" + SOURCE_AVENANT_TEXT
 SOURCE_BANK_NL_TEXT = "Rekeninguittreksel BE68 5390 0754 7034.\nBetaling ontvangen: 10.000,00 €.\n"
 INVENTORY_TEXT = (
     "Inventaire des pièces (synthétique)\n"
     "Pièce 1 : Contrat de bail commercial (p. imprimée 14 = p. PDF 16 / liasse 22)\n"
     "Stuk 2 : Rekeninguittreksel BE68 5390 0754 7034\n"
-    "Pièce 3 : Projet d'avenant n°2\n"
+    "Pièce 3 : Projet d'avenant n°2 (annexé en p. PDF 17 du classeur Pièce 1)\n"
 )
 
 CONDITION_RULE_TOML = """
@@ -138,9 +145,6 @@ def _minimal_pdf_bytes(pages: list[list[str]]) -> bytes:
     """Build a minimal valid multi-page PDF 1.4 document with Helvetica text for pdfjs-dist."""
     if not pages:
         pages = [["Empty page"]]
-    # Object numbering:
-    # 1: Catalog, 2: Pages, 3: Helvetica font
-    # For each page i (0-based): page_obj = 4 + 2*i, stream_obj = 5 + 2*i
     kids = " ".join(f"{4 + 2 * i} 0 R" for i in range(len(pages)))
     objects: list[bytes] = [
         b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
@@ -193,7 +197,7 @@ def _minimal_pdf_bytes(pages: list[list[str]]) -> bytes:
 
 
 def _minimal_docx_bytes(text: str) -> bytes:
-    """Build a minimal valid synthetic DOCX archive for draft download/editor parity."""
+    """Build a minimal valid synthetic DOCX archive for draft download/editor/export parity."""
     from xml.sax.saxutils import escape
 
     paragraphs = "".join(
@@ -231,7 +235,7 @@ def _minimal_docx_bytes(text: str) -> bytes:
 
 _PIECE_1_PAGES: list[list[str]] = [
     [
-        f"SYNTHETIC DEMO EXHIBIT - PIECE 1 (PDF page {idx} of 16)",
+        f"SYNTHETIC DEMO EXHIBIT - PIECE 1 (PDF page {idx} of 17)",
         "Contrat de bail commercial (page d'annexe synthétique).",
     ]
     for idx in range(1, 16)
@@ -240,12 +244,16 @@ _PIECE_1_PAGES: list[list[str]] = [
         "SYNTHETIC DEMO EXHIBIT - PIECE 1 (Printed p. 14 / PDF p. 16 / Bundle p. 22)",
         "Article 8 - Cession du bail commercial.",
         "Sous reserve de l'accord ecrit du bailleur, le locataire peut ceder son droit au bail.",
-    ]
+    ],
+    [
+        "SYNTHETIC DEMO EXHIBIT - PIECE 3 / ANNEXE AVENANT (PDF p. 17)",
+        "Projet d'avenant n. 2 - envoye pour signature le 14 mars 2026 - non encore paraphe.",
+    ],
 ]
 
 DEMO_PDF_SOURCES: dict[str, tuple[str, bytes]] = {
     VER_PIECE_1: (
-        "piece-01-bail-commercial.pdf",
+        "piece-01-bail-et-avenant.pdf",
         _minimal_pdf_bytes(_PIECE_1_PAGES),
     ),
     VER_STUK_2: (
@@ -261,35 +269,12 @@ DEMO_PDF_SOURCES: dict[str, tuple[str, bytes]] = {
             ]
         ),
     ),
-    VER_PIECE_3: (
-        "piece-03-projet-avenant.pdf",
-        _minimal_pdf_bytes(
-            [
-                [
-                    "SYNTHETIC DEMO EXHIBIT - PIECE 3 (Unsigned Draft Amendment, p. 1)",
-                    "Projet d'avenant n. 2 - envoye pour signature le 14 mars 2026 - non paraphe.",
-                ],
-                ["SYNTHETIC DEMO EXHIBIT - PIECE 3 (p. 2 - signature block blank)"],
-            ]
-        ),
-    ),
 }
 
 DEMO_DRAFT_DOCX_BYTES = _minimal_docx_bytes(DRAFT_TEXT)
 DEMO_DRAFT_DOCX_SHA256 = _sha_bytes(DEMO_DRAFT_DOCX_BYTES)
 DEMO_INVENTORY_BYTES = INVENTORY_TEXT.encode("utf-8")
 DEMO_INVENTORY_SHA256 = _sha_bytes(DEMO_INVENTORY_BYTES)
-DEMO_BUNDLE_SIGNATURE = _sha(
-    "|".join(
-        [
-            DEMO_DRAFT_DOCX_SHA256,
-            DEMO_INVENTORY_SHA256,
-            _sha_bytes(DEMO_PDF_SOURCES[VER_PIECE_1][1]),
-            _sha_bytes(DEMO_PDF_SOURCES[VER_STUK_2][1]),
-            _sha_bytes(DEMO_PDF_SOURCES[VER_PIECE_3][1]),
-        ]
-    )
-)
 
 DEMO_SOURCE_META: dict[str, dict[str, Any]] = {
     VER_PIECE_1: {
@@ -299,9 +284,17 @@ DEMO_SOURCE_META: dict[str, dict[str, Any]] = {
         "filename": DEMO_PDF_SOURCES[VER_PIECE_1][0],
         "sha256": _sha_bytes(DEMO_PDF_SOURCES[VER_PIECE_1][1]),
         "byte_length": len(DEMO_PDF_SOURCES[VER_PIECE_1][1]),
-        "page_count": 16,
-        "text": SOURCE_BAIL_TEXT,
-        "page_index": 15,
+        "page_count": 17,
+        "text": SOURCE_PIECE_1_COMBINED_TEXT,
+        "spans": (
+            (0, len(SOURCE_BAIL_TEXT), "pdf-page-16", 15),
+            (
+                len(SOURCE_BAIL_TEXT) + 1,
+                len(SOURCE_PIECE_1_COMBINED_TEXT),
+                "pdf-page-17",
+                16,
+            ),
+        ),
     },
     VER_STUK_2: {
         "source_id": "src-bank-02",
@@ -312,20 +305,25 @@ DEMO_SOURCE_META: dict[str, dict[str, Any]] = {
         "byte_length": len(DEMO_PDF_SOURCES[VER_STUK_2][1]),
         "page_count": 2,
         "text": SOURCE_BANK_NL_TEXT,
-        "page_index": 0,
-    },
-    VER_PIECE_3: {
-        "source_id": "src-avenant-03",
-        "document_id": DOC_PIECE_3,
-        "version_id": VER_PIECE_3,
-        "filename": DEMO_PDF_SOURCES[VER_PIECE_3][0],
-        "sha256": _sha_bytes(DEMO_PDF_SOURCES[VER_PIECE_3][1]),
-        "byte_length": len(DEMO_PDF_SOURCES[VER_PIECE_3][1]),
-        "page_count": 2,
-        "text": SOURCE_AVENANT_TEXT,
-        "page_index": 0,
+        "spans": ((0, len(SOURCE_BANK_NL_TEXT), "pdf-page-1", 0),),
     },
 }
+
+
+def _bundle_signature_for(draft_sha256: str) -> str:
+    return _sha(
+        "|".join(
+            [
+                draft_sha256,
+                DEMO_INVENTORY_SHA256,
+                DEMO_SOURCE_META[VER_PIECE_1]["sha256"],
+                DEMO_SOURCE_META[VER_STUK_2]["sha256"],
+            ]
+        )
+    )
+
+
+DEMO_BUNDLE_SIGNATURE = _bundle_signature_for(DEMO_DRAFT_DOCX_SHA256)
 
 
 def _default_inventory_entries() -> list[dict[str, Any]]:
@@ -358,8 +356,15 @@ def _default_inventory_entries() -> list[dict[str, Any]]:
         {
             "label": "piece",
             "number": "3",
-            "source_version_id": VER_PIECE_3,
-            "pages": [],
+            "source_version_id": VER_PIECE_1,
+            "pages": [
+                {
+                    "space": "printed",
+                    "label": "1",
+                    "pdf_page": 17,
+                    "rationale": "Draft amendment (Pièce 3) appears on physical PDF page 17.",
+                }
+            ],
         },
     ]
 
@@ -384,8 +389,6 @@ def _omitted_reservation_cue(quote: str, source_text: str) -> dict[str, Any] | N
 
 
 def _preview(meta: dict[str, Any]) -> EvidencePreview:
-    text = meta["text"]
-    page_index = meta["page_index"]
     return EvidencePreview(
         EvidenceRow(
             source_id=meta["source_id"],
@@ -399,31 +402,34 @@ def _preview(meta: dict[str, Any]) -> EvidencePreview:
             pages=(),
             warnings=(),
         ),
-        text,
-        ((0, len(text), f"pdf-page-{page_index + 1}", page_index),),
+        meta["text"],
+        meta["spans"],
     )
 
 
-def _demo_previews() -> tuple[EvidencePreview, EvidencePreview, EvidencePreview]:
+def _demo_previews() -> tuple[EvidencePreview, EvidencePreview]:
     return (
         _preview(DEMO_SOURCE_META[VER_PIECE_1]),
         _preview(DEMO_SOURCE_META[VER_STUK_2]),
-        _preview(DEMO_SOURCE_META[VER_PIECE_3]),
     )
 
 
 def _demo_intake_dict(
     *,
+    brief_id: str = DEMO_BRIEF_ID,
+    draft_sha256: str = DEMO_DRAFT_DOCX_SHA256,
+    draft_byte_length: int = len(DEMO_DRAFT_DOCX_BYTES),
     confirmation_id: str | None,
     inventory_complete: bool,
     entries: list[dict[str, Any]] | None = None,
     exceptions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    """Return canonical 4-source `caseproof-workspace-intake-v1` (1 draft, 1 inventory, 2 exhibits)."""
     return {
         "schema": "caseproof-workspace-intake-v1",
         "case_id": DEMO_CASE_ID,
-        "brief_id": DEMO_BRIEF_ID,
-        "bundle_signature": DEMO_BUNDLE_SIGNATURE,
+        "brief_id": brief_id,
+        "bundle_signature": _bundle_signature_for(draft_sha256),
         "confirmation_id": confirmation_id,
         "inventory_complete": inventory_complete,
         "readback_complete": True,
@@ -432,9 +438,9 @@ def _demo_intake_dict(
                 "role": "draft",
                 "filename": "conclusions-synthese-demo.docx",
                 "document_id": DOC_DRAFT,
-                "version_id": DEMO_BRIEF_ID,
-                "sha256": DEMO_DRAFT_DOCX_SHA256,
-                "byte_length": len(DEMO_DRAFT_DOCX_BYTES),
+                "version_id": brief_id,
+                "sha256": draft_sha256,
+                "byte_length": draft_byte_length,
                 "media_type": (
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 ),
@@ -476,29 +482,32 @@ def _demo_intake_dict(
 
 
 def build_five_trap_audit(
-    *, confirmed_inventory: bool = False, fact_confirmed: bool = False
+    *,
+    confirmed_inventory: bool = False,
+    fact_confirmed: bool = False,
+    draft_text: str = DRAFT_TEXT,
+    brief_id: str = DEMO_BRIEF_ID,
 ) -> dict[str, Any]:
     """Run real CaseProof deterministic checks over the synthetic 5-trap Belgian dossier."""
     previews = _demo_previews()
     intake = _demo_intake_dict(
+        brief_id=brief_id,
         confirmation_id="conf-demo-001" if confirmed_inventory else None,
         inventory_complete=confirmed_inventory,
     )
-    detected = detect_exhibit_references(DRAFT_TEXT, region="body")
+    detected = detect_exhibit_references(draft_text, region="body")
     exhibit_report = map_exhibit_references(
-        DRAFT_TEXT,
-        brief_version_id=DEMO_BRIEF_ID,
+        draft_text,
+        brief_version_id=brief_id,
         intake=intake,
         previews=previews,
     )
-    # Also compute status/reservation cues under confirmed preview binding so the
-    # lexical traps are visible in the 5-trap summary even before confirmation.
     confirmed_exhibit_report = (
         exhibit_report
         if confirmed_inventory
         else map_exhibit_references(
-            DRAFT_TEXT,
-            brief_version_id=DEMO_BRIEF_ID,
+            draft_text,
+            brief_version_id=brief_id,
             intake={**intake, "confirmation_id": "conf-preview", "inventory_complete": True},
             previews=previews,
         )
@@ -537,7 +546,10 @@ def build_five_trap_audit(
     claim_sentence = (
         "Le paiement de 12\u00a0500,00 EUR a été effectué selon l'extrait bancaire (Stuk 2)."
     )
-    claim_start = DRAFT_TEXT.index(claim_sentence)
+    claim_start = draft_text.find(claim_sentence)
+    if claim_start < 0:
+        claim_start = 0
+        claim_sentence = draft_text.splitlines()[-1] if draft_text.splitlines() else draft_text
     fact_assertion = FactAssertion(
         claim_id="fact-paiement-fr-nl",
         reference_id="ref-stuk-2",
@@ -551,7 +563,7 @@ def build_five_trap_audit(
     )
     fact_obs = compare_fact(
         fact_assertion,
-        verified_brief_text=DRAFT_TEXT,
+        verified_brief_text=draft_text,
         preview=previews[1],
         pdf_page=1,
     )
@@ -600,8 +612,8 @@ def build_five_trap_audit(
         "not_legal_validation": True,
         "banner": DEMO_BANNER,
         "case_id": DEMO_CASE_ID,
-        "brief_id": DEMO_BRIEF_ID,
-        "snapshot_hash": _sha(f"{DRAFT_TEXT}:{confirmed_inventory}:{fact_confirmed}"),
+        "brief_id": brief_id,
+        "snapshot_hash": _sha(f"{brief_id}:{draft_text}:{confirmed_inventory}:{fact_confirmed}"),
         "inventory_confirmed": confirmed_inventory,
         "identity_reason": None if confirmed_inventory else "INVENTORY_UNCONFIRMED",
         "detected_reference_count": len(detected),
@@ -612,19 +624,27 @@ def build_five_trap_audit(
 
 def _build_demo_dossier(
     *,
+    brief_id: str,
+    draft_text: str,
+    draft_sha256: str,
+    draft_byte_length: int,
     snapshot_hash: str,
     confirmed_inventory: bool,
+    literal_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build a canonical `caseproof-dossier-v1` payload for the official React cockpit."""
     identity_state = "resolved" if confirmed_inventory else "not_assessed"
     identity_reason = None if confirmed_inventory else "INVENTORY_UNCONFIRMED"
+    overrides = literal_overrides or {}
     m1 = DEMO_SOURCE_META[VER_PIECE_1]
     m2 = DEMO_SOURCE_META[VER_STUK_2]
-    m3 = DEMO_SOURCE_META[VER_PIECE_3]
+    p1_literal = overrides.get("ref-piece-1", "Pièce 1, p. 14")
+    p3_literal = overrides.get("ref-piece-3", "Pièce 3")
+    s2_literal = overrides.get("ref-stuk-2", "Stuk 2")
     findings = [
         {
             "reference_id": "ref-piece-1",
-            "literal": "Pièce 1, p. 14",
+            "literal": p1_literal,
             "identity": identity_state,
             "page_mapping": "mapped",
             "fidelity": "exact_match",
@@ -645,7 +665,7 @@ def _build_demo_dossier(
         },
         {
             "reference_id": "ref-piece-3",
-            "literal": "Pièce 3",
+            "literal": p3_literal,
             "identity": identity_state,
             "page_mapping": "mapped",
             "fidelity": "quote_not_found",
@@ -654,19 +674,19 @@ def _build_demo_dossier(
             "quoted_text": "l'avenant a été signé le 14 mars 2026 par les deux parties",
             "source_text_context": SOURCE_AVENANT_TEXT.strip(),
             "source_text_context_partial": False,
-            "version_id": m3["version_id"],
-            "source_sha256": m3["sha256"],
-            "pdf_page": 1,
+            "version_id": m1["version_id"],
+            "source_sha256": m1["sha256"],
+            "pdf_page": 17,
             "page_spaces": {
-                "pdf": {"state": "mapped", "value": 1},
-                "printed": {"state": "unmapped", "value": None},
+                "pdf": {"state": "mapped", "value": 17},
+                "printed": {"state": "mapped", "value": "1"},
                 "bundle": {"state": "unmapped", "value": None},
             },
             "visual_assessment": {"regions": []},
         },
         {
             "reference_id": "ref-stuk-2",
-            "literal": "Stuk 2",
+            "literal": s2_literal,
             "identity": identity_state,
             "page_mapping": "mapped",
             "fidelity": "translation_review_required",
@@ -689,7 +709,7 @@ def _build_demo_dossier(
     return {
         "schema": "caseproof-dossier-v1",
         "case_id": DEMO_CASE_ID,
-        "brief_id": DEMO_BRIEF_ID,
+        "brief_id": brief_id,
         "snapshot_hash": snapshot_hash,
         "findings": findings,
         "coverage": {
@@ -700,10 +720,10 @@ def _build_demo_dossier(
             "sources": [
                 {
                     "role": "draft",
-                    "version_id": DEMO_BRIEF_ID,
+                    "version_id": brief_id,
                     "filename": "conclusions-synthese-demo.docx",
-                    "sha256": DEMO_DRAFT_DOCX_SHA256,
-                    "byte_length": len(DEMO_DRAFT_DOCX_BYTES),
+                    "sha256": draft_sha256,
+                    "byte_length": draft_byte_length,
                 },
                 *[
                     {
@@ -762,6 +782,36 @@ class ConfirmationBody(BaseModel):
     exceptions: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class CheckCommandBody(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    require_confirmed_inventory: bool = True
+
+
+class CorrectionPreviewBody(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    snapshot_hash: str
+    original_sha256: str
+    reference_id: str
+    paragraph_index: int
+    before: str
+    after: str
+    locator_identity: dict[str, Any] | None = None
+
+
+class CorrectionCommitBody(CorrectionPreviewBody):
+    request_id: str
+
+
+class ReleaseCreateBody(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    release_id: str
+    snapshot_hash: str
+    release_type: str
+    partial_acknowledged: bool = False
+    release_acknowledged: bool = True
+    acknowledgement_version: str = "caseproof-release-ack-v1"
+
+
 def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     """Create the loopback-only FastAPI partner demo app."""
     app = FastAPI(title="CaseProof Belgian Partner Demo (Synthetic Loopback)")
@@ -777,6 +827,15 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         ],
     )
     state: dict[str, Any] = {
+        "current_brief_id": DEMO_BRIEF_ID,
+        "briefs": {
+            DEMO_BRIEF_ID: {
+                "text": DRAFT_TEXT,
+                "docx": DEMO_DRAFT_DOCX_BYTES,
+                "sha256": DEMO_DRAFT_DOCX_SHA256,
+                "literal_overrides": {},
+            }
+        },
         "confirmed_inventory": False,
         "inventory_complete": False,
         "confirmation_id": None,
@@ -789,35 +848,101 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         "clearbrief_decisions": [],
         "clearbrief_requests": set(),
         "snapshots": {},
+        "latest_snapshot_by_brief": {},
+        "reports_catalog": [],
+        "correction_commits": {},
+        "releases": {},
+        "release_artifacts": {},
     }
 
-    def _current_audit() -> dict[str, Any]:
+    def _require_brief(case_id: str, brief_id: str) -> dict[str, Any]:
+        if case_id != DEMO_CASE_ID or brief_id not in state["briefs"]:
+            raise HTTPException(404, "unknown demo brief")
+        return state["briefs"][brief_id]
+
+    def _register_snapshot(brief_id: str, dossier: dict[str, Any]) -> None:
+        snap = dossier["snapshot_hash"]
+        state["snapshots"][snap] = dossier
+        state["latest_snapshot_by_brief"][brief_id] = snap
+        if not any(
+            row["brief_id"] == brief_id and row["snapshot_hash"] == snap
+            for row in state["reports_catalog"]
+        ):
+            state["reports_catalog"].insert(
+                0,
+                {
+                    "brief_id": brief_id,
+                    "snapshot_hash": snap,
+                    "created_at": datetime.now(UTC).isoformat(),
+                },
+            )
+
+    def _current_audit(brief_id: str | None = None) -> dict[str, Any]:
+        target_brief = brief_id or state["current_brief_id"]
+        brief = state["briefs"][target_brief]
         audit = build_five_trap_audit(
             confirmed_inventory=state["confirmed_inventory"],
             fact_confirmed=state["fact_confirmed"],
+            draft_text=brief["text"],
+            brief_id=target_brief,
         )
         audit["omissions"] = list(state["omissions"])
         snap = audit["snapshot_hash"]
         if snap not in state["snapshots"]:
-            state["snapshots"][snap] = _build_demo_dossier(
+            dossier = _build_demo_dossier(
+                brief_id=target_brief,
+                draft_text=brief["text"],
+                draft_sha256=brief["sha256"],
+                draft_byte_length=len(brief["docx"]),
                 snapshot_hash=snap,
                 confirmed_inventory=state["confirmed_inventory"],
+                literal_overrides=brief["literal_overrides"],
             )
+            _register_snapshot(target_brief, dossier)
         return audit
 
-    def _dossier_for(snapshot_hash: str | None) -> dict[str, Any]:
-        audit = _current_audit()
+    def _dossier_for(brief_id: str, snapshot_hash: str | None) -> dict[str, Any]:
+        audit = _current_audit(brief_id)
         target = snapshot_hash or audit["snapshot_hash"]
         if target in state["snapshots"]:
             return state["snapshots"][target]
         return state["snapshots"][audit["snapshot_hash"]]
 
-    def _finding_for(snapshot_hash: str, reference_id: str) -> dict[str, Any]:
-        dossier = _dossier_for(snapshot_hash)
+    def _finding_for(brief_id: str, snapshot_hash: str, reference_id: str) -> dict[str, Any]:
+        dossier = _dossier_for(brief_id, snapshot_hash)
         for row in dossier["findings"]:
             if row["reference_id"] == reference_id:
                 return row
         raise HTTPException(404, "unknown demo reference")
+
+    def _review_completeness(dossier: dict[str, Any]) -> dict[str, Any]:
+        snap = dossier["snapshot_hash"]
+        all_refs = [f["reference_id"] for f in dossier["findings"]]
+        reviewed = {
+            row["reference_id"] for row in state["reviews_by_snapshot"].get(snap, [])
+        }
+        unreviewed = [ref for ref in all_refs if ref not in reviewed]
+        total = len(all_refs)
+        reviewed_count = total - len(unreviewed)
+        review_complete = total > 0 and len(unreviewed) == 0
+        can_partial = reviewed_count > 0 and not review_complete
+        return {
+            "policy_version": "caseproof-release-completeness-v1",
+            "total_findings": total,
+            "required_reviews": total,
+            "reviewed_findings": reviewed_count,
+            "unreviewed_findings": len(unreviewed),
+            "unreviewed_reference_ids": unreviewed,
+            "review_complete": review_complete,
+            "can_release_complete": review_complete,
+            "can_release_partial": can_partial,
+            "text_coverage_complete": True,
+            "reference_recall_measured": False,
+            "reason_codes": ["synthetic_demo_only"],
+        }
+
+    # Seed initial snapshot into reports catalog.
+    _current_audit(DEMO_BRIEF_ID)
 
     @app.get("/v2/demo/health")
     def health() -> dict[str, Any]:
@@ -896,29 +1021,28 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_reports(case_id: str) -> dict[str, Any]:
         if case_id != DEMO_CASE_ID:
             raise HTTPException(404, "unknown demo matter")
-        audit = _current_audit()
+        _current_audit()
         return ReportCatalogView.model_validate(
             {
                 "schema": "caseproof-workspace-reports-v1",
                 "case_id": DEMO_CASE_ID,
-                "reports": [
-                    {
-                        "brief_id": DEMO_BRIEF_ID,
-                        "snapshot_hash": audit["snapshot_hash"],
-                        "created_at": "2026-11-24T12:00:00+00:00",
-                    }
-                ],
+                "reports": list(state["reports_catalog"]),
                 "next_cursor": None,
             }
         ).model_dump(by_alias=True)
 
-    # --- Intake & Inventory Confirmation ---
+    # --- Intake, Inventory Confirmation & Explicit Check Execution ---
 
     @app.get("/v2/workspace/intake/matters/{case_id}")
     def demo_intake(case_id: str) -> dict[str, Any]:
         if case_id != DEMO_CASE_ID:
             raise HTTPException(404, "unknown demo matter")
+        cur_id = state["current_brief_id"]
+        brief = state["briefs"][cur_id]
         return _demo_intake_dict(
+            brief_id=cur_id,
+            draft_sha256=brief["sha256"],
+            draft_byte_length=len(brief["docx"]),
             confirmation_id=state["confirmation_id"],
             inventory_complete=state["inventory_complete"],
             entries=state["entries"],
@@ -929,20 +1053,33 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_confirm_inventory(
         case_id: str, brief_id: str, body: ConfirmationBody
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        if body.bundle_signature != DEMO_BUNDLE_SIGNATURE:
+        brief = _require_brief(case_id, brief_id)
+        expected_sig = _bundle_signature_for(brief["sha256"])
+        if body.bundle_signature != expected_sig:
             raise HTTPException(409, "stale bundle signature")
         state["confirmation_id"] = body.request_id
         state["confirmed_inventory"] = True
         state["inventory_complete"] = body.inventory_complete
         state["entries"] = body.entries
         state["exceptions"] = body.exceptions
-        _current_audit()
+        _current_audit(brief_id)
         return {
             "confirmation_id": body.request_id,
             "inventory_complete": body.inventory_complete,
         }
+
+    @app.post("/v2/matters/{case_id}/briefs/{brief_id}/dossier/checks")
+    def demo_run_check(
+        case_id: str,
+        brief_id: str,
+        body: CheckCommandBody | None = None,
+    ) -> dict[str, Any]:
+        _require_brief(case_id, brief_id)
+        require_confirmed = True if body is None else body.require_confirmed_inventory
+        if require_confirmed and not state["confirmed_inventory"]:
+            raise HTTPException(409, "confirmed inventory required before explicit check")
+        audit = _current_audit(brief_id)
+        return state["snapshots"][audit["snapshot_hash"]]
 
     # --- Main Verification Cockpit (Dossier, History, Reviews, Viewer, Draft Context) ---
 
@@ -952,21 +1089,17 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         brief_id: str,
         snapshot_hash: str | None = Query(default=None),
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        audit = _current_audit()
+        _require_brief(case_id, brief_id)
+        audit = _current_audit(brief_id)
         if snapshot_hash is not None and snapshot_hash != audit["snapshot_hash"]:
-            if snapshot_hash in state["snapshots"]:
-                raise HTTPException(409, "snapshot superseded; use historical read-only route")
-            raise HTTPException(409, "snapshot superseded")
+            raise HTTPException(409, "snapshot superseded; use historical read-only route")
         return state["snapshots"][audit["snapshot_hash"]]
 
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/dossier/history/{snapshot_hash}")
     def demo_dossier_history(
         case_id: str, brief_id: str, snapshot_hash: str
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
+        _require_brief(case_id, brief_id)
         dossier = state["snapshots"].get(snapshot_hash)
         if dossier is None:
             raise HTTPException(404, "unknown demo snapshot")
@@ -977,22 +1110,83 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             "report": dossier,
         }
 
+    @app.get(
+        "/v2/matters/{case_id}/briefs/{brief_id}/dossier/history/{snapshot_hash}/comparison"
+    )
+    def demo_history_comparison(
+        case_id: str,
+        brief_id: str,
+        snapshot_hash: str,
+        current_brief_id: str = Query(...),
+        current_snapshot_hash: str = Query(...),
+    ) -> dict[str, Any]:
+        _require_brief(case_id, brief_id)
+        old = state["snapshots"].get(snapshot_hash)
+        current = state["snapshots"].get(current_snapshot_hash)
+        if old is None or current is None:
+            raise HTTPException(409, "comparison unavailable")
+        old_by_id = {f["reference_id"]: f for f in old["findings"]}
+        cur_by_id = {f["reference_id"]: f for f in current["findings"]}
+        rows = []
+        for ref_id, cur in cur_by_id.items():
+            prev = old_by_id.get(ref_id)
+            if prev is None:
+                rows.append(
+                    {
+                        "previous_reference_id": None,
+                        "current_reference_id": ref_id,
+                        "status": "added",
+                        "reasons": ["added_in_revised_draft"],
+                        "review_transfer": "never",
+                    }
+                )
+            elif prev["literal"] != cur["literal"]:
+                rows.append(
+                    {
+                        "previous_reference_id": ref_id,
+                        "current_reference_id": ref_id,
+                        "status": "changed",
+                        "reasons": ["literal_changed_recheck_required"],
+                        "review_transfer": "never",
+                    }
+                )
+            else:
+                rows.append(
+                    {
+                        "previous_reference_id": ref_id,
+                        "current_reference_id": ref_id,
+                        "status": "unchanged",
+                        "reasons": ["literal_unchanged_human_review_not_auto_transferred"],
+                        "review_transfer": "never",
+                    }
+                )
+        return {
+            "schema": "caseproof-finding-drift-v1",
+            "case_id": DEMO_CASE_ID,
+            "previous_brief_id": brief_id,
+            "previous_snapshot_hash": snapshot_hash,
+            "current_brief_id": current_brief_id,
+            "current_snapshot_hash": current_snapshot_hash,
+            "correspondence_basis": "unique_region_and_start_offset_candidate_not_identity_proof",
+            "review_transfer": "never",
+            "rows": rows,
+        }
+
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/dossier/reviews")
     def demo_reviews(
         case_id: str,
         brief_id: str,
         snapshot_hash: str | None = Query(default=None),
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        audit = _current_audit()
+        _require_brief(case_id, brief_id)
+        audit = _current_audit(brief_id)
         snap = snapshot_hash or audit["snapshot_hash"]
         decisions = list(state["reviews_by_snapshot"].get(snap, []))
         return ReviewLedgerView.model_validate(
             {
                 "schema": "caseproof-review-ledger-v1",
                 "case_id": DEMO_CASE_ID,
-                "brief_id": DEMO_BRIEF_ID,
+                "brief_id": brief_id,
                 "snapshot_hash": snap,
                 "decisions": decisions,
             }
@@ -1002,8 +1196,7 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_record_review(
         case_id: str, brief_id: str, body: VisualReviewBody
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
+        _require_brief(case_id, brief_id)
         rows = state["reviews_by_snapshot"].setdefault(body.snapshot_hash, [])
         if not any(r["request_id"] == body.request_id for r in rows):
             rows.append(
@@ -1024,13 +1217,13 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             "reviewer_id": DEMO_ACTOR_EMAIL,
         }
 
-    def _viewer_payload(snapshot_hash: str, reference_id: str) -> dict[str, Any]:
-        finding = _finding_for(snapshot_hash, reference_id)
+    def _viewer_payload(brief_id: str, snapshot_hash: str, reference_id: str) -> dict[str, Any]:
+        finding = _finding_for(brief_id, snapshot_hash, reference_id)
         meta = DEMO_SOURCE_META[finding["version_id"]]
         return {
             "schema": "caseproof-viewer-v1",
             "case_id": DEMO_CASE_ID,
-            "brief_id": DEMO_BRIEF_ID,
+            "brief_id": brief_id,
             "snapshot_hash": snapshot_hash,
             "reference_id": reference_id,
             "version_id": meta["version_id"],
@@ -1042,8 +1235,10 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             "geometry_policy": "derived_pdf_text_only_legacy_raster_not_projected",
         }
 
-    def _viewer_original_response(snapshot_hash: str, reference_id: str) -> Response:
-        finding = _finding_for(snapshot_hash, reference_id)
+    def _viewer_original_response(
+        brief_id: str, snapshot_hash: str, reference_id: str
+    ) -> Response:
+        finding = _finding_for(brief_id, snapshot_hash, reference_id)
         version_id = finding["version_id"]
         filename, pdf_bytes = DEMO_PDF_SOURCES[version_id]
         digest = _sha_bytes(pdf_bytes)
@@ -1059,8 +1254,10 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             },
         )
 
-    def _viewer_regions_payload(snapshot_hash: str, reference_id: str) -> dict[str, Any]:
-        finding = _finding_for(snapshot_hash, reference_id)
+    def _viewer_regions_payload(
+        brief_id: str, snapshot_hash: str, reference_id: str
+    ) -> dict[str, Any]:
+        finding = _finding_for(brief_id, snapshot_hash, reference_id)
         meta = DEMO_SOURCE_META[finding["version_id"]]
         return {
             "schema": "caseproof-raster-overlays-v1",
@@ -1083,9 +1280,8 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_viewer(
         case_id: str, brief_id: str, snapshot_hash: str, reference_id: str
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        return _viewer_payload(snapshot_hash, reference_id)
+        _require_brief(case_id, brief_id)
+        return _viewer_payload(brief_id, snapshot_hash, reference_id)
 
     @app.get(
         "/v2/matters/{case_id}/briefs/{brief_id}/dossier/snapshots/{snapshot_hash}"
@@ -1098,9 +1294,8 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_viewer_original(
         case_id: str, brief_id: str, snapshot_hash: str, reference_id: str
     ) -> Response:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        return _viewer_original_response(snapshot_hash, reference_id)
+        _require_brief(case_id, brief_id)
+        return _viewer_original_response(brief_id, snapshot_hash, reference_id)
 
     @app.get(
         "/v2/matters/{case_id}/briefs/{brief_id}/dossier/snapshots/{snapshot_hash}"
@@ -1113,9 +1308,8 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_viewer_regions(
         case_id: str, brief_id: str, snapshot_hash: str, reference_id: str
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        return _viewer_regions_payload(snapshot_hash, reference_id)
+        _require_brief(case_id, brief_id)
+        return _viewer_regions_payload(brief_id, snapshot_hash, reference_id)
 
     @app.get(
         "/v2/matters/{case_id}/briefs/{brief_id}/dossier/snapshots/{snapshot_hash}"
@@ -1124,19 +1318,19 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_draft_context(
         case_id: str, brief_id: str, snapshot_hash: str, reference_id: str
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        finding = _finding_for(snapshot_hash, reference_id)
+        brief = _require_brief(case_id, brief_id)
+        finding = _finding_for(brief_id, snapshot_hash, reference_id)
         literal = finding["literal"]
-        idx = DRAFT_TEXT.find(literal)
+        text = brief["text"]
+        idx = text.find(literal)
         if idx < 0:
             payload = {
                 "schema": "caseproof-draft-excerpt-v1",
                 "case_id": DEMO_CASE_ID,
-                "brief_id": DEMO_BRIEF_ID,
+                "brief_id": brief_id,
                 "snapshot_hash": snapshot_hash,
                 "reference_id": reference_id,
-                "original_sha256": DEMO_DRAFT_DOCX_SHA256,
+                "original_sha256": brief["sha256"],
                 "available": False,
                 "region": None,
                 "excerpt": "",
@@ -1148,18 +1342,20 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             payload = {
                 "schema": "caseproof-draft-excerpt-v1",
                 "case_id": DEMO_CASE_ID,
-                "brief_id": DEMO_BRIEF_ID,
+                "brief_id": brief_id,
                 "snapshot_hash": snapshot_hash,
                 "reference_id": reference_id,
-                "original_sha256": DEMO_DRAFT_DOCX_SHA256,
+                "original_sha256": brief["sha256"],
                 "available": True,
                 "region": "body",
-                "excerpt": DRAFT_TEXT,
+                "excerpt": text,
                 "selection_start": idx,
                 "selection_end": idx + len(literal),
                 "reason": None,
             }
         return DraftExcerptView.model_validate(payload).model_dump(by_alias=True)
+
+    # --- Corrections (Anchor, Review Receipt, Preview, Commit, Recheck) ---
 
     @app.get(
         "/v2/matters/{case_id}/briefs/{brief_id}/dossier/snapshots/{snapshot_hash}"
@@ -1168,12 +1364,11 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_correction_operations(
         case_id: str, brief_id: str, snapshot_hash: str, reference_id: str
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        _finding_for(snapshot_hash, reference_id)
+        _require_brief(case_id, brief_id)
+        _finding_for(brief_id, snapshot_hash, reference_id)
         return {
             "operations": [],
-            "current_draft_version_id": DEMO_BRIEF_ID,
+            "current_draft_version_id": state["current_brief_id"],
         }
 
     @app.get(
@@ -1183,19 +1378,18 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_correction_anchor(
         case_id: str, brief_id: str, snapshot_hash: str, reference_id: str
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        finding = _finding_for(snapshot_hash, reference_id)
+        brief = _require_brief(case_id, brief_id)
+        finding = _finding_for(brief_id, snapshot_hash, reference_id)
         literal = finding["literal"]
-        lines = [line for line in DRAFT_TEXT.splitlines() if line]
+        lines = [line for line in brief["text"].splitlines() if line]
         for p_idx, line in enumerate(lines):
             pos = line.find(literal)
             if pos >= 0:
                 return {
                     "snapshot_hash": snapshot_hash,
-                    "brief_version_id": DEMO_BRIEF_ID,
+                    "brief_version_id": brief_id,
                     "reference_id": reference_id,
-                    "original_sha256": DEMO_DRAFT_DOCX_SHA256,
+                    "original_sha256": brief["sha256"],
                     "before": literal,
                     "paragraph_index": p_idx,
                     "locator_identity": {
@@ -1204,7 +1398,7 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
                         "suffix": line[pos + len(literal) :],
                         "occurrence_index": 0,
                         "content_hash": _sha(line),
-                        "source_version_id": DEMO_BRIEF_ID,
+                        "source_version_id": brief_id,
                         "paragraph_id": None,
                     },
                 }
@@ -1217,8 +1411,7 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         snapshot_hash: str = Query(...),
         reference_id: str = Query(...),
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
+        _require_brief(case_id, brief_id)
         matching = [
             row
             for row in state["reviews_by_snapshot"].get(snapshot_hash, [])
@@ -1228,37 +1421,100 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             raise HTTPException(409, "persisted actor review required before correction")
         return {
             "schema": "caseproof-correction-review-receipt-v1",
-            "brief_version_id": DEMO_BRIEF_ID,
+            "brief_version_id": brief_id,
             "snapshot_hash": snapshot_hash,
             "reference_id": reference_id,
             "reviewer_id": DEMO_ACTOR_ID,
             "review_request_id": matching[-1]["request_id"],
         }
 
+    @app.post("/v2/matters/{case_id}/briefs/{brief_id}/dossier/corrections/preview")
+    def demo_correction_preview(
+        case_id: str, brief_id: str, body: CorrectionPreviewBody
+    ) -> dict[str, Any]:
+        brief = _require_brief(case_id, brief_id)
+        if body.original_sha256 != brief["sha256"] or body.before not in brief["text"]:
+            raise HTTPException(409, "draft changed or anchor not found")
+        new_text = brief["text"].replace(body.before, body.after, 1)
+        deriv = _minimal_docx_bytes(new_text)
+        return {
+            "schema": "caseproof-docx-correction-preview-v1",
+            "committed": False,
+            "requires_recheck": True,
+            "original_sha256": body.original_sha256,
+            "derivative_sha256": _sha_bytes(deriv),
+            "derivative_byte_length": len(deriv),
+            "reference_id": body.reference_id,
+            "paragraph_index": body.paragraph_index,
+            "before": body.before,
+            "after": body.after,
+            "brief_version_id": brief_id,
+            "snapshot_hash": body.snapshot_hash,
+        }
+
+    @app.post("/v2/matters/{case_id}/briefs/{brief_id}/dossier/corrections/commit")
+    def demo_correction_commit(
+        case_id: str, brief_id: str, body: CorrectionCommitBody
+    ) -> dict[str, Any]:
+        brief = _require_brief(case_id, brief_id)
+        existing = state["correction_commits"].get(body.request_id)
+        if existing is not None:
+            return existing
+        if body.original_sha256 != brief["sha256"] or body.before not in brief["text"]:
+            raise HTTPException(409, "draft changed or anchor not found")
+        new_text = brief["text"].replace(body.before, body.after, 1)
+        new_docx = _minimal_docx_bytes(new_text)
+        new_brief_id = str(uuid.uuid4())
+        overrides = dict(brief["literal_overrides"])
+        overrides[body.reference_id] = body.after
+        state["briefs"][new_brief_id] = {
+            "text": new_text,
+            "docx": new_docx,
+            "sha256": _sha_bytes(new_docx),
+            "literal_overrides": overrides,
+        }
+        state["current_brief_id"] = new_brief_id
+        receipt = {
+            "state": "active",
+            "version_id": new_brief_id,
+            "committed": True,
+            "requires_recheck": True,
+        }
+        state["correction_commits"][body.request_id] = receipt
+        return receipt
+
+    @app.post("/v2/matters/{case_id}/briefs/{brief_id}/dossier/recheck")
+    def demo_recheck(case_id: str, brief_id: str) -> dict[str, Any]:
+        _require_brief(case_id, brief_id)
+        audit = _current_audit(brief_id)
+        return state["snapshots"][audit["snapshot_hash"]]
+
     # --- Legal, Exhibits, Reservation Cues, Conditions & Clearbrief Review ---
 
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/exhibit-references")
     def demo_exhibit_references(case_id: str, brief_id: str) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
+        brief = _require_brief(case_id, brief_id)
         previews = _demo_previews()
         intake = _demo_intake_dict(
+            brief_id=brief_id,
+            draft_sha256=brief["sha256"],
+            draft_byte_length=len(brief["docx"]),
             confirmation_id=state["confirmation_id"],
             inventory_complete=state["inventory_complete"],
             entries=state["entries"],
             exceptions=state["exceptions"],
         )
         mapped = map_exhibit_references(
-            DRAFT_TEXT,
-            brief_version_id=DEMO_BRIEF_ID,
+            brief["text"],
+            brief_version_id=brief_id,
             intake=intake,
             previews=previews,
         )
-        audit = _current_audit()
+        audit = _current_audit(brief_id)
         return ExhibitReferencesView.model_validate(
             {
                 "schema": "caseproof-exhibit-references-v1",
-                "brief_version_id": DEMO_BRIEF_ID,
+                "brief_version_id": brief_id,
                 "snapshot_hash": audit["snapshot_hash"],
                 "note": "SYNTHETIC DEMO: located never means content verified.",
                 **mapped,
@@ -1267,15 +1523,14 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
 
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/legal-references")
     def demo_legal_references(case_id: str, brief_id: str) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        audit = _current_audit()
+        brief = _require_brief(case_id, brief_id)
+        audit = _current_audit(brief_id)
         cite = "art. 1732 Code civil (version 1991)"
-        start = DRAFT_TEXT.index(cite)
+        start = max(0, brief["text"].find(cite))
         return LegalReferencesView.model_validate(
             {
                 "schema": "caseproof-legal-references-v1",
-                "brief_version_id": DEMO_BRIEF_ID,
+                "brief_version_id": brief_id,
                 "snapshot_hash": audit["snapshot_hash"],
                 "note": "SYNTHETIC DEMO: absent historical version fails closed (UNVERIFIED).",
                 "corpus": "configured",
@@ -1316,9 +1571,10 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_legal_passage(
         case_id: str, brief_id: str, reference_id: str
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID or reference_id != "legal-ref-01":
+        _require_brief(case_id, brief_id)
+        if reference_id != "legal-ref-01":
             raise HTTPException(404, "unknown demo legal reference")
-        audit = _current_audit()
+        audit = _current_audit(brief_id)
         excerpt = (
             "3. Conformément à l'art. 1732 Code civil (version 1991), la responsabilité est engagée."
         )
@@ -1350,16 +1606,15 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
 
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/reservation-cues")
     def demo_reservation_cues(case_id: str, brief_id: str) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        audit = _current_audit()
+        _require_brief(case_id, brief_id)
+        audit = _current_audit(brief_id)
         return {
             "schema": "caseproof-reservation-cues-v1",
             "rules": "belgian-reservation-cues-v1",
             "advisory": True,
             "note": "Advisory literal cues only; never alters a legal reference status.",
             "snapshot_hash": audit["snapshot_hash"],
-            "brief_version_id": DEMO_BRIEF_ID,
+            "brief_version_id": brief_id,
             "rows": [],
         }
 
@@ -1392,19 +1647,18 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
 
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/conditions")
     def demo_condition_matches(case_id: str, brief_id: str) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        sentence = (
-            "1. Selon le contrat de bail commercial, le locataire peut sous-louer librement "
-            "« le locataire peut céder son droit au bail » (Pièce 1, p. 14)."
-        )
-        start = DRAFT_TEXT.index(sentence)
+        brief = _require_brief(case_id, brief_id)
+        first_line = brief["text"].splitlines()[0]
+        start = brief["text"].find(first_line)
         m1 = DEMO_SOURCE_META[VER_PIECE_1]
-        excerpt = "Sous réserve de l'accord écrit du bailleur, le locataire peut céder son droit au bail."
+        excerpt = (
+            "Sous réserve de l'accord écrit du bailleur, "
+            "le locataire peut céder son droit au bail."
+        )
         return ConditionMatchesView.model_validate(
             {
                 "schema": "caseproof-condition-matches-v1",
-                "brief_version_id": DEMO_BRIEF_ID,
+                "brief_version_id": brief_id,
                 "revision": 1,
                 "spec_sha256": _sha(CONDITION_RULE_TOML),
                 "scope": "SYNTHETIC DEMO: literal keyword routing only — lawyer decides.",
@@ -1418,8 +1672,8 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
                             "conformément à la clause de bail ?"
                         ),
                         "start": start,
-                        "end": start + len(sentence),
-                        "sentence": sentence,
+                        "end": start + len(first_line),
+                        "sentence": first_line,
                         "status": "UNDETERMINED",
                         "reason": "condition_passages_found_appraisal_required",
                         "found": [
@@ -1441,7 +1695,7 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
                 "coverage": {
                     "conditions": 1,
                     "anchors": 1,
-                    "sources_read": 3,
+                    "sources_read": 2,
                     "sources_not_read": 0,
                     "by_status": {"UNDETERMINED": 1, "UNVERIFIED": 0},
                 },
@@ -1450,14 +1704,13 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
 
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/review")
     def demo_clearbrief_review_state(case_id: str, brief_id: str) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        audit = _current_audit()
+        _require_brief(case_id, brief_id)
+        audit = _current_audit(brief_id)
         return ClearbriefReviewState.model_validate(
             {
                 "schema": "caseproof-clearbrief-review-v1",
                 "case_id": DEMO_CASE_ID,
-                "brief_version_id": DEMO_BRIEF_ID,
+                "brief_version_id": brief_id,
                 "snapshot_hash": audit["snapshot_hash"],
                 "revision": state["clearbrief_revision"],
                 "decisions": list(state["clearbrief_decisions"]),
@@ -1484,9 +1737,8 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_clearbrief_review_record(
         case_id: str, brief_id: str, body: ClearbriefReviewCommandBody
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        audit = _current_audit()
+        _require_brief(case_id, brief_id)
+        audit = _current_audit(brief_id)
         if body.snapshot_hash != audit["snapshot_hash"]:
             raise HTTPException(409, "stale snapshot_hash")
         replayed = body.request_id in state["clearbrief_requests"]
@@ -1513,13 +1765,13 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             }
         ).model_dump(by_alias=True)
 
-    # --- Exports Preview & History ---
+    # --- Exports Preview, Release Commit, Status & Artifact Download ---
 
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/dossier/releases")
     def demo_releases(case_id: str, brief_id: str) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        return {"releases": []}
+        _require_brief(case_id, brief_id)
+        items = [r for r in state["releases"].values() if r["brief_id"] == brief_id]
+        return {"releases": items}
 
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/dossier/releases/preview")
     def demo_releases_preview(
@@ -1527,42 +1779,19 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         brief_id: str,
         snapshot_hash: str | None = Query(default=None),
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        dossier = _dossier_for(snapshot_hash)
-        snap = dossier["snapshot_hash"]
-        all_refs = [f["reference_id"] for f in dossier["findings"]]
-        reviewed = {
-            row["reference_id"] for row in state["reviews_by_snapshot"].get(snap, [])
-        }
-        unreviewed = [ref for ref in all_refs if ref not in reviewed]
-        total = len(all_refs)
-        reviewed_count = total - len(unreviewed)
-        review_complete = total > 0 and len(unreviewed) == 0
-        can_partial = reviewed_count > 0 and not review_complete
+        _require_brief(case_id, brief_id)
+        dossier = _dossier_for(brief_id, snapshot_hash)
+        comp = _review_completeness(dossier)
         return {
             "schema": "caseproof-release-preview-v1",
             "case_id": DEMO_CASE_ID,
-            "brief_id": DEMO_BRIEF_ID,
-            "snapshot_hash": snap,
-            "finding_count": total,
-            "review_count": reviewed_count,
-            "release_ready": review_complete,
-            "can_release": review_complete or can_partial,
-            "review_completeness": {
-                "policy_version": "caseproof-release-completeness-v1",
-                "total_findings": total,
-                "required_reviews": total,
-                "reviewed_findings": reviewed_count,
-                "unreviewed_findings": len(unreviewed),
-                "unreviewed_reference_ids": unreviewed,
-                "review_complete": review_complete,
-                "can_release_complete": review_complete,
-                "can_release_partial": can_partial,
-                "text_coverage_complete": True,
-                "reference_recall_measured": False,
-                "reason_codes": ["synthetic_demo_only"],
-            },
+            "brief_id": brief_id,
+            "snapshot_hash": dossier["snapshot_hash"],
+            "finding_count": comp["total_findings"],
+            "review_count": comp["reviewed_findings"],
+            "release_ready": comp["can_release_complete"],
+            "can_release": comp["can_release_complete"] or comp["can_release_partial"],
+            "review_completeness": comp,
             "formats": ["json", "markdown", "docx"],
             "release_actor": {
                 "actor_id": DEMO_ACTOR_ID,
@@ -1580,7 +1809,213 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             ],
         }
 
-    # --- Scoped DOCX Editor read endpoints (so /edit opens cleanly without 404) ---
+    @app.post("/v2/matters/{case_id}/briefs/{brief_id}/dossier/releases")
+    def demo_create_release(
+        case_id: str, brief_id: str, body: ReleaseCreateBody
+    ) -> dict[str, Any]:
+        brief = _require_brief(case_id, brief_id)
+        existing = state["releases"].get(body.release_id)
+        if existing is not None:
+            return existing
+        dossier = _dossier_for(brief_id, body.snapshot_hash)
+        snap = dossier["snapshot_hash"]
+        comp = _review_completeness(dossier)
+        if comp["reviewed_findings"] < 1:
+            raise HTTPException(409, "at least one human review decision required before release")
+        if body.release_type == "complete_review" and not comp["can_release_complete"]:
+            raise HTTPException(409, "complete review required")
+        if body.release_type == "partial_review" and not (
+            comp["can_release_partial"] and body.partial_acknowledged
+        ):
+            raise HTTPException(409, "partial acknowledgement required")
+
+        now_iso = datetime.now(UTC).isoformat()
+        reviews = list(state["reviews_by_snapshot"].get(snap, []))
+        json_bytes = json.dumps(
+            {
+                "schema": "caseproof-demo-export-v1",
+                "release_id": body.release_id,
+                "case_id": DEMO_CASE_ID,
+                "brief_id": brief_id,
+                "snapshot_hash": snap,
+                "findings": dossier["findings"],
+                "reviews": reviews,
+                "notice": "Synthetic demo export — not a qualified signature or constat d'huissier.",
+            },
+            sort_keys=True,
+            indent=2,
+        ).encode("utf-8")
+        md_bytes = (
+            f"# CaseProof Synthetic Review Record\n\n"
+            f"- Matter: `{DEMO_CASE_ID}`\n"
+            f"- Brief: `{brief_id}`\n"
+            f"- Snapshot: `{snap}`\n"
+            f"- Reviewed findings: {comp['reviewed_findings']}/{comp['total_findings']}\n\n"
+            f"> Not legal validation, not a qualified signature, not a constat d'huissier.\n"
+        ).encode()
+        docx_bytes = _minimal_docx_bytes(
+            f"CaseProof Synthetic Review Record\nSnapshot: {snap}\n"
+            f"Reviewed: {comp['reviewed_findings']}/{comp['total_findings']}\n"
+            "Not legal validation, not a qualified signature, not a constat d'huissier."
+        )
+        artifacts_raw = {"json": json_bytes, "markdown": md_bytes, "docx": docx_bytes}
+        state["release_artifacts"][body.release_id] = artifacts_raw
+
+        sources = [
+            {"role": "draft", "version_id": brief_id, "sha256": brief["sha256"]},
+            *[
+                {
+                    "role": "exhibit",
+                    "version_id": meta["version_id"],
+                    "sha256": meta["sha256"],
+                }
+                for meta in DEMO_SOURCE_META.values()
+            ],
+        ]
+        source_links = [
+            {
+                "role": s["role"],
+                "version_id": s["version_id"],
+                "sha256": s["sha256"],
+                "original_path": (
+                    f"/v2/matters/{DEMO_CASE_ID}/briefs/{brief_id}"
+                    f"/dossier/history/{snap}/sources/{s['version_id']}/original"
+                ),
+            }
+            for s in sources
+        ]
+        reference_links = [
+            {
+                "reference_id": f["reference_id"],
+                "source_version_id": f["version_id"],
+                "original_sha256": f["source_sha256"],
+                "pdf_page": f["pdf_page"],
+                "viewer_path": (
+                    f"/matters/{DEMO_CASE_ID}/briefs/{brief_id}"
+                    f"?snapshot={snap}&finding={f['reference_id']}"
+                ),
+                "page_space": "unmapped" if f["pdf_page"] is None else "physical_pdf_page",
+            }
+            for f in dossier["findings"]
+        ]
+        manifest_core: dict[str, Any] = {
+            "schema": "caseproof-reviewed-release-v1",
+            "release_id": body.release_id,
+            "case_id": DEMO_CASE_ID,
+            "brief_id": brief_id,
+            "snapshot_hash": snap,
+            "review_count": comp["reviewed_findings"],
+            "finding_count": comp["total_findings"],
+            "release_acknowledgement": {
+                "schema": "caseproof-release-ack-v1",
+                "intent": "AUTHORIZE_REVIEW_RECORD_RELEASE",
+                "release_id": body.release_id,
+                "snapshot_hash": snap,
+                "release_type": body.release_type,
+                "actor_id": DEMO_ACTOR_ID,
+                "actor_label": DEMO_ACTOR_EMAIL,
+                "actor_label_type": "confirmed_email",
+                "acknowledged_at": now_iso,
+                "notice": (
+                    "Synthetic demo release: immutable CaseProof review record only; "
+                    "not a qualified signature or constat d'huissier."
+                ),
+            },
+            "reviewer_ids": [DEMO_ACTOR_EMAIL],
+            "review_completeness": {
+                **comp,
+                "release_type": body.release_type,
+                "partial_acknowledged": (
+                    body.release_type == "partial_review" and body.partial_acknowledged
+                ),
+            },
+            "coverage": dossier["coverage"],
+            "sources": sources,
+            "source_links": source_links,
+            "reference_links": reference_links,
+            "limitations": [
+                "Synthetic partner demo only — not legal validation or a qualified signature."
+            ],
+            "artifacts": {
+                "json": {
+                    "sha256": _sha_bytes(json_bytes),
+                    "byte_length": len(json_bytes),
+                    "media_type": "application/json",
+                },
+                "markdown": {
+                    "sha256": _sha_bytes(md_bytes),
+                    "byte_length": len(md_bytes),
+                    "media_type": "text/markdown; charset=utf-8",
+                },
+                "docx": {
+                    "sha256": _sha_bytes(docx_bytes),
+                    "byte_length": len(docx_bytes),
+                    "media_type": (
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    ),
+                },
+            },
+        }
+        canonical_manifest = json.dumps(manifest_core, sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
+        manifest_sha = _sha_bytes(canonical_manifest)
+        server_receipt = hmac.new(DEMO_HMAC_KEY, canonical_manifest, hashlib.sha256).hexdigest()
+        manifest = {
+            **manifest_core,
+            "manifest_sha256": manifest_sha,
+            "server_receipt": server_receipt,
+        }
+        record = {
+            "state": "released",
+            "release_id": body.release_id,
+            "brief_id": brief_id,
+            "snapshot_hash": snap,
+            "manifest": manifest,
+            "created_at": now_iso,
+        }
+        state["releases"][body.release_id] = record
+        return record
+
+    @app.get("/v2/matters/{case_id}/briefs/{brief_id}/dossier/releases/{release_id}")
+    def demo_release_status(case_id: str, brief_id: str, release_id: str) -> dict[str, Any]:
+        _require_brief(case_id, brief_id)
+        record = state["releases"].get(release_id)
+        if record is None:
+            return {"state": "absent"}
+        return record
+
+    @app.get(
+        "/v2/matters/{case_id}/briefs/{brief_id}/dossier/releases/{release_id}/artifacts/{fmt}"
+    )
+    def demo_release_artifact(
+        case_id: str, brief_id: str, release_id: str, fmt: str
+    ) -> Response:
+        _require_brief(case_id, brief_id)
+        record = state["releases"].get(release_id)
+        raw_map = state["release_artifacts"].get(release_id)
+        if record is None or raw_map is None or fmt not in raw_map:
+            raise HTTPException(404, "unknown release artifact")
+        data = raw_map[fmt]
+        media = {
+            "json": "application/json",
+            "markdown": "text/markdown; charset=utf-8",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }[fmt]
+        digest = _sha_bytes(data)
+        return Response(
+            content=data,
+            media_type=media,
+            headers={
+                "Content-Disposition": f'attachment; filename="caseproof-demo-release.{fmt}"',
+                "X-CaseProof-Snapshot": record["snapshot_hash"],
+                "X-CaseProof-Export-SHA256": digest,
+                "X-CaseProof-Export-Size": str(len(data)),
+                "Cache-Control": "no-store",
+            },
+        )
+
+    # --- Scoped DOCX Editor read endpoints ---
 
     @app.get("/v2/matters/{case_id}/briefs/{brief_id}/dossier/editor/blocks")
     def demo_editor_blocks(
@@ -1590,10 +2025,9 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         offset: int = Query(default=0, ge=0),
         limit: int = Query(default=20, ge=1, le=20),
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        dossier = _dossier_for(snapshot_hash)
-        lines = [line for line in DRAFT_TEXT.splitlines() if line]
+        brief = _require_brief(case_id, brief_id)
+        dossier = _dossier_for(brief_id, snapshot_hash)
+        lines = [line for line in brief["text"].splitlines() if line]
         slice_lines = lines[offset : offset + limit]
         blocks = [
             {
@@ -1608,10 +2042,10 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         ]
         return {
             "schema": "caseproof-docx-editor-blocks-v1",
-            "brief_version_id": DEMO_BRIEF_ID,
+            "brief_version_id": brief_id,
             "snapshot_hash": dossier["snapshot_hash"],
-            "original_sha256": DEMO_DRAFT_DOCX_SHA256,
-            "original_byte_length": len(DEMO_DRAFT_DOCX_BYTES),
+            "original_sha256": brief["sha256"],
+            "original_byte_length": len(brief["docx"]),
             "total": len(lines),
             "editable_count": len(lines),
             "blocks": blocks,
@@ -1624,32 +2058,34 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         brief_id: str,
         snapshot_hash: str | None = Query(default=None),
     ) -> dict[str, Any]:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        dossier = _dossier_for(snapshot_hash)
+        brief = _require_brief(case_id, brief_id)
+        dossier = _dossier_for(brief_id, snapshot_hash)
         return {
             "schema": "caseproof-docx-editor-revisions-v1",
-            "brief_version_id": DEMO_BRIEF_ID,
+            "brief_version_id": brief_id,
             "snapshot_hash": dossier["snapshot_hash"],
-            "original_sha256": DEMO_DRAFT_DOCX_SHA256,
+            "original_sha256": brief["sha256"],
             "revisions": [],
         }
 
     # --- Preserved Original Sources (PDF exhibits + Draft DOCX) ---
 
-    def _source_original_response(version_id: str, snapshot_hash: str | None) -> Response:
-        snap = snapshot_hash or _current_audit()["snapshot_hash"]
-        if version_id == DEMO_BRIEF_ID:
+    def _source_original_response(
+        brief_id: str, version_id: str, snapshot_hash: str | None
+    ) -> Response:
+        snap = snapshot_hash or _current_audit(brief_id)["snapshot_hash"]
+        if version_id in state["briefs"]:
+            brief = state["briefs"][version_id]
             return Response(
-                content=DEMO_DRAFT_DOCX_BYTES,
+                content=brief["docx"],
                 media_type=(
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 ),
                 headers={
                     "Content-Disposition": 'attachment; filename="conclusions-synthese-demo.docx"',
                     "X-CaseProof-Snapshot": snap,
-                    "X-CaseProof-Original-SHA256": DEMO_DRAFT_DOCX_SHA256,
-                    "X-Content-SHA256": DEMO_DRAFT_DOCX_SHA256,
+                    "X-CaseProof-Original-SHA256": brief["sha256"],
+                    "X-Content-SHA256": brief["sha256"],
                     "Cache-Control": "no-store",
                 },
             )
@@ -1676,9 +2112,8 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         version_id: str,
         snapshot_hash: str | None = Query(default=None),
     ) -> Response:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        return _source_original_response(version_id, snapshot_hash)
+        _require_brief(case_id, brief_id)
+        return _source_original_response(brief_id, version_id, snapshot_hash)
 
     @app.get(
         "/v2/matters/{case_id}/briefs/{brief_id}/dossier/history/{snapshot_hash}"
@@ -1687,9 +2122,8 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_history_original_source(
         case_id: str, brief_id: str, snapshot_hash: str, version_id: str
     ) -> Response:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
-        return _source_original_response(version_id, snapshot_hash)
+        _require_brief(case_id, brief_id)
+        return _source_original_response(brief_id, version_id, snapshot_hash)
 
     @app.get(
         "/v2/matters/{case_id}/briefs/{brief_id}/sources/{source_id}/versions/{version_id}/original"
@@ -1697,12 +2131,11 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
     def demo_condition_original_source(
         case_id: str, brief_id: str, source_id: str, version_id: str
     ) -> Response:
-        if case_id != DEMO_CASE_ID or brief_id != DEMO_BRIEF_ID:
-            raise HTTPException(404, "unknown demo brief")
+        _require_brief(case_id, brief_id)
         meta = DEMO_SOURCE_META.get(version_id)
         if meta is None or meta["source_id"] != source_id:
             raise HTTPException(404, "unknown demo source")
-        return _source_original_response(version_id, None)
+        return _source_original_response(brief_id, version_id, None)
 
     # --- Built Frontend SPA Mount (`/workspace/` matches `vite.config.ts` base & BrowserRouter) ---
 

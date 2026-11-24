@@ -231,7 +231,7 @@ def test_partner_demo_cockpit_v2_routes_validate_against_frontend_schemas() -> N
     assert pdf_resp.headers["x-caseproof-snapshot"] == snapshot
     assert pdf_resp.headers["x-caseproof-original-sha256"] == viewer_json["original_sha256"]
     assert hashlib.sha256(pdf_resp.content).hexdigest() == viewer_json["original_sha256"]
-    assert b"/Count 16" in pdf_resp.content
+    assert b"/Count 17" in pdf_resp.content
 
     regions = client.get(f"{viewer_base}/viewer/regions")
     assert regions.status_code == 200
@@ -267,11 +267,12 @@ def test_partner_demo_cockpit_v2_routes_validate_against_frontend_schemas() -> N
     )
     assert unreviewed_receipt.status_code == 409
 
-    # 4. Intake & live inventory confirmation flow.
+    # 4. Intake (strictly 4 sources per frontend parseIntake contract) & live confirmation flow.
     intake_resp = client.get(f"/v2/workspace/intake/matters/{DEMO_CASE_ID}")
     assert intake_resp.status_code == 200
     intake_json = intake_resp.json()
     _assert_matches_frontend_schema("intake.schema.json", intake_json)
+    assert len(intake_json["sources"]) == 4
     assert intake_json["confirmation_id"] is None
 
     confirm_id = str(uuid.uuid4())
@@ -288,8 +289,110 @@ def test_partner_demo_cockpit_v2_routes_validate_against_frontend_schemas() -> N
     assert confirm_resp.status_code == 200
     intake_after = client.get(f"/v2/workspace/intake/matters/{DEMO_CASE_ID}").json()
     _assert_matches_frontend_schema("intake.schema.json", intake_after)
+    assert len(intake_after["sources"]) == 4
     assert intake_after["confirmation_id"] == confirm_id
     assert intake_after["inventory_complete"] is True
+
+    # Run explicit check after confirmation -> findings become identity="resolved".
+    explicit_check = client.post(
+        f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier/checks",
+        json={"require_confirmed_inventory": True},
+    )
+    assert explicit_check.status_code == 200
+    confirmed_dossier = explicit_check.json()
+    _assert_matches_frontend_schema("dossier.schema.json", confirmed_dossier)
+    assert all(f["identity"] == "resolved" for f in confirmed_dossier["findings"])
+    confirmed_snap = confirmed_dossier["snapshot_hash"]
+
+    # Record a human review on the confirmed snapshot, then preview + commit + recheck correction.
+    rev_req = str(uuid.uuid4())
+    assert (
+        client.post(
+            f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier/reviews",
+            json={
+                "snapshot_hash": confirmed_snap,
+                "reference_id": "ref-piece-1",
+                "decision": "CONFIRMED_QUALIFIED",
+                "rationale": "Reservation omitted; correcting citation.",
+                "request_id": rev_req,
+                "reviewed_region_ids": [],
+            },
+        ).status_code
+        == 200
+    )
+    anchor_confirmed = client.get(
+        f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier"
+        f"/snapshots/{confirmed_snap}/references/ref-piece-1/correction-anchor"
+    ).json()
+    preview_resp = client.post(
+        f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier/corrections/preview",
+        json={
+            "snapshot_hash": confirmed_snap,
+            "original_sha256": anchor_confirmed["original_sha256"],
+            "reference_id": "ref-piece-1",
+            "paragraph_index": anchor_confirmed["paragraph_index"],
+            "before": anchor_confirmed["before"],
+            "after": "Pièce 1, p. 14 (PDF p. 16)",
+            "locator_identity": anchor_confirmed["locator_identity"],
+        },
+    )
+    assert preview_resp.status_code == 200
+    assert preview_resp.json()["committed"] is False
+
+    commit_resp = client.post(
+        f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier/corrections/commit",
+        json={
+            "request_id": str(uuid.uuid4()),
+            "snapshot_hash": confirmed_snap,
+            "original_sha256": anchor_confirmed["original_sha256"],
+            "reference_id": "ref-piece-1",
+            "paragraph_index": anchor_confirmed["paragraph_index"],
+            "before": anchor_confirmed["before"],
+            "after": "Pièce 1, p. 14 (PDF p. 16)",
+            "locator_identity": anchor_confirmed["locator_identity"],
+        },
+    )
+    assert commit_resp.status_code == 200
+    new_brief_id = commit_resp.json()["version_id"]
+    recheck_resp = client.post(
+        f"/v2/matters/{DEMO_CASE_ID}/briefs/{new_brief_id}/dossier/recheck",
+        json={},
+    )
+    assert recheck_resp.status_code == 200
+    recheck_dossier = recheck_resp.json()
+    _assert_matches_frontend_schema("dossier.schema.json", recheck_dossier)
+    comp_resp = client.get(
+        f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier/history/{confirmed_snap}/comparison"
+        f"?current_brief_id={new_brief_id}&current_snapshot_hash={recheck_dossier['snapshot_hash']}"
+    )
+    assert comp_resp.status_code == 200
+    assert comp_resp.json()["schema"] == "caseproof-finding-drift-v1"
+
+    # Partial export release + artifact download on confirmed snapshot.
+    release_id = str(uuid.uuid4())
+    rel_create = client.post(
+        f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier/releases",
+        json={
+            "release_id": release_id,
+            "snapshot_hash": confirmed_snap,
+            "release_type": "partial_review",
+            "partial_acknowledged": True,
+            "release_acknowledged": True,
+            "acknowledgement_version": "caseproof-release-ack-v1",
+        },
+    )
+    assert rel_create.status_code == 200
+    rel_body = rel_create.json()
+    assert rel_body["state"] == "released"
+    for fmt in ("json", "markdown", "docx"):
+        art = client.get(
+            f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier/releases/{release_id}/artifacts/{fmt}"
+        )
+        assert art.status_code == 200
+        expected_info = rel_body["manifest"]["artifacts"][fmt]
+        assert art.headers["x-caseproof-export-sha256"] == expected_info["sha256"]
+        assert int(art.headers["x-caseproof-export-size"]) == expected_info["byte_length"]
+        assert hashlib.sha256(art.content).hexdigest() == expected_info["sha256"]
 
     # Historical read-only fallback works for the pre-confirmation snapshot.
     stale_check = client.get(
@@ -359,7 +462,7 @@ def test_partner_demo_cockpit_v2_routes_validate_against_frontend_schemas() -> N
     # 6. Exports & DOCX editor read routes & original source download.
     rel_list = client.get(f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier/releases")
     assert rel_list.status_code == 200
-    assert rel_list.json() == {"releases": []}
+    assert len(rel_list.json()["releases"]) == 1
 
     rel_preview = client.get(
         f"/v2/matters/{DEMO_CASE_ID}/briefs/{DEMO_BRIEF_ID}/dossier/releases/preview"
