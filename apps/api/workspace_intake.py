@@ -150,30 +150,7 @@ def preflight(command: IntakeCommand) -> list[bytes]:
         pdf_page_counts=[],
     )
     if reason:
-        oversized = [
-            {
-                "filename": f.filename,
-                "role": f.role,
-                "code": "OVERSIZED_FILE",
-                "message": f"Exceeds development capacity limit ({MAX_SOURCE_BYTES} bytes max).",
-            }
-            for f in command.files
-            if f.byte_length > MAX_SOURCE_BYTES
-            or (f.role == "inventory" and f.byte_length > MAX_INVENTORY_BYTES)
-        ]
-        raise HTTPException(
-            422,
-            {
-                "message": reason + "; no originals written",
-                "files_written": False,
-                "file_errors": oversized,
-                "valid_files": [
-                    f.filename
-                    for f in command.files
-                    if all(err["filename"] != f.filename for err in oversized)
-                ],
-            },
-        )
+        raise HTTPException(422, reason + "; no originals written")
     for source in command.files:
         try:
             safe_original_filename(source.filename)
@@ -192,18 +169,10 @@ def preflight(command: IntakeCommand) -> list[bytes]:
                     ("stuk" if r.label.startswith("stuk") else "piece", r.number) for r in candidates
                 }
                 if len(identities) > MAX_INVENTORY_IDENTITIES:
-                    file_errors.append(
-                        {
-                            "filename": source.filename,
-                            "role": source.role,
-                            "code": "INVALID_INVENTORY",
-                            "message": (
-                                f"Inventory supports at most {MAX_INVENTORY_IDENTITIES} distinct "
-                                "Stuk/Pièce identities; no files written."
-                            ),
-                        }
+                    raise HTTPException(
+                        422,
+                        f"Inventory supports at most {MAX_INVENTORY_IDENTITIES} distinct Stuk/Pièce identities; no files written.",
                     )
-                    continue
             else:
                 parse_verified_original(
                     document_id="preflight", version_id="preflight", data=raw, media_type=expected
