@@ -43,4 +43,29 @@ describe('detectLexicalCue (FE-01)', () => {
       ),
     ).toBeNull();
   });
+
+  it('abstains when draft sentence already states the reservation outside the quote', () => {
+    expect(
+      detectLexicalCue(
+        'le locataire peut céder son droit au bail',
+        "Sous réserve de l'accord écrit du bailleur, le locataire peut céder son droit au bail.",
+        "Sous réserve de l'accord écrit du bailleur, « le locataire peut céder son droit au bail » (Pièce 1).",
+      ),
+    ).toBeNull();
+  });
+
+  it('abstains when reservation lies in a prior clause or quote occurs multiple times', () => {
+    expect(
+      detectLexicalCue(
+        'le locataire peut céder son droit au bail',
+        "Sous réserve d'inspection préalable ; par ailleurs, le locataire peut céder son droit au bail.",
+      ),
+    ).toBeNull();
+    expect(
+      detectLexicalCue(
+        'le locataire peut céder son droit au bail',
+        "Sous réserve de l'accord écrit du bailleur, le locataire peut céder son droit au bail. Annexe : le locataire peut céder son droit au bail.",
+      ),
+    ).toBeNull();
+  });
 });

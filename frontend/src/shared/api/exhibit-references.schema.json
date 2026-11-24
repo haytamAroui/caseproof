@@ -218,6 +218,17 @@
           "title": "Reference Id",
           "type": "string"
         },
+        "reservation_cue_flag": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReservationCueFlagView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "start": {
           "minimum": 0,
           "title": "Start",
@@ -253,6 +264,57 @@
         "page_cited"
       ],
       "title": "ExhibitReferenceView",
+      "type": "object"
+    },
+    "ReservationCueFlagView": {
+      "additionalProperties": false,
+      "description": "Targeted FR/NL/EN omitted opening reservation cue. Appraisal cue only.",
+      "properties": {
+        "draft_quote": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Draft Quote",
+          "type": "string"
+        },
+        "omitted_source_prefix": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Omitted Source Prefix",
+          "type": "string"
+        },
+        "pdf_page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pdf Page"
+        },
+        "reservation_cue": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Reservation Cue",
+          "type": "string"
+        },
+        "source_excerpt": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Source Excerpt",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reservation_cue",
+        "draft_quote",
+        "omitted_source_prefix",
+        "source_excerpt"
+      ],
+      "title": "ReservationCueFlagView",
       "type": "object"
     },
     "StatusCueFlagView": {

@@ -395,7 +395,7 @@ export function ReportScreen({
       >
         <section
           className="queue"
-          aria-label="References"
+          aria-label={t('ariaReferencesQueue')}
           ref={queueRef}
           onKeyDown={(event) => {
             if (
@@ -798,12 +798,10 @@ function QuoteContext({ finding }: { finding: FindingView }) {
   const lexicalCue = detectLexicalCue(
     validQuote ? quote : finding.literal,
     validSource ? source : null,
+    finding.literal,
   );
   return (
-    <section
-      className="draft-context"
-      aria-label="Quotation and derived source text"
-    >
+    <section className="draft-context" aria-label={t('ariaQuotationDerived')}>
       <h3>{t('quoteCardTitle')}</h3>
       <ParaphraseGuardPanel finding={finding} />
       {lexicalCue && (
@@ -934,7 +932,7 @@ function FindingInspection({
       <div
         className="cockpit-view-switch"
         role="group"
-        aria-label="Reading layout"
+        aria-label={t('ariaReadingLayout')}
       >
         <button
           type="button"
@@ -1009,7 +1007,10 @@ function FindingInspection({
             <StateValue label="Identity" value={finding.identity} />
             <StateValue label="Page mapping" value={finding.page_mapping} />
             <StateValue label="Fidelity" value={finding.fidelity} />
-            <StateValue label="Human support" value={finding.support} />
+            <StateValue
+              label="Human support (frozen report)"
+              value={finding.support}
+            />
           </dl>
           <header className="cockpit-pane-heading">
             <h3>{t('draftHeading')}</h3>
@@ -1151,9 +1152,10 @@ function CoverageSummary({
     ['Visual pages completed', count('visual_pages_completed')],
     ['Visual findings not assessed', count('visual_findings_not_assessed')],
   ] as const;
+  const { t } = useLocale();
   return (
     <section
-      aria-label="Verification and processing coverage"
+      aria-label={t('ariaVerificationCoverage')}
       id="coverage"
       className="draft-context"
     >

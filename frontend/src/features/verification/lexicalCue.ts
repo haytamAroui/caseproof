@@ -27,9 +27,11 @@ const OPENING_RESERVATION =
 export function detectLexicalCue(
   draftQuote: string | null | undefined,
   sourceContext: string | null | undefined,
+  draftContext?: string | null | undefined,
 ): LexicalCueFlag | null {
   const draft = typeof draftQuote === 'string' ? draftQuote.trim() : '';
   const source = typeof sourceContext === 'string' ? sourceContext.trim() : '';
+  const fullDraft = typeof draftContext === 'string' ? draftContext.trim() : '';
   if (!draft || !source) return null;
 
   const draftSigned = ASSERTED_SIGNED.exec(draft);
@@ -49,15 +51,31 @@ export function detectLexicalCue(
     };
   }
 
-  const idx = source.toLocaleLowerCase().indexOf(draft.toLocaleLowerCase());
-  if (idx > 0) {
-    const prefix = source.slice(Math.max(0, idx - 120), idx);
-    const reservation = OPENING_RESERVATION.exec(prefix);
-    if (reservation && !OPENING_RESERVATION.test(draft)) {
+  const draftLower = draft.toLocaleLowerCase();
+  const sourceLower = source.toLocaleLowerCase();
+  const idx = sourceLower.indexOf(draftLower);
+  // Abstain when the quote appears more than once in source (ambiguous match)
+  // or when the reservation is already stated in the draft quote or sentence.
+  if (
+    idx > 0 &&
+    sourceLower.indexOf(draftLower, idx + 1) === -1 &&
+    !OPENING_RESERVATION.test(draft) &&
+    !(fullDraft && OPENING_RESERVATION.test(fullDraft))
+  ) {
+    let prefix = source.slice(Math.max(0, idx - 120), idx);
+    let cut = 0;
+    for (const sep of ['\n', '. ', '; ', '! ', '? ', ': ']) {
+      const pos = prefix.lastIndexOf(sep);
+      if (pos >= 0) cut = Math.max(cut, pos + sep.length);
+    }
+    if (cut > 0) prefix = prefix.slice(cut);
+    const trimmedPrefix = prefix.trim();
+    const reservation = OPENING_RESERVATION.exec(trimmedPrefix);
+    if (reservation) {
       return {
         kind: 'omitted_reservation',
         draftCue: draft.slice(0, 80),
-        sourceCue: prefix.trim(),
+        sourceCue: trimmedPrefix,
       };
     }
   }

@@ -211,6 +211,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     lexicalCueReservationTitle: 'Omitted reservation cue · Appraisal required',
     lexicalCueStatusDisclaimer:
       'Flagged for lawyer appraisal — not semantically verified.',
+    ariaReferencesQueue: 'References',
+    ariaReadingLayout: 'Reading layout',
+    ariaQuotationDerived: 'Quotation and derived source text',
+    ariaVerificationCoverage: 'Verification and processing coverage',
+    ariaWordHandoff: 'Full Microsoft Word editing and signed import',
+    ariaWordRoundtripParity: 'Word round-trip decision parity',
     bannerPaginationUnmapped:
       'Page-space conflict or unmapped pinpoint: PDF, printed, and bundle pages are tracked separately and never auto-equated.',
     bannerOcrUnreliable:
@@ -463,6 +469,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       'Réserve d’ouverture omise · Appréciation requise',
     lexicalCueStatusDisclaimer:
       'Signalé à l’appréciation de l’avocat — non vérifié sémantiquement.',
+    ariaReferencesQueue: 'Références détectées',
+    ariaReadingLayout: 'Disposition de lecture',
+    ariaQuotationDerived: 'Citation et texte dérivé de la pièce',
+    ariaVerificationCoverage: 'Couverture de vérification et de traitement',
+    ariaWordHandoff: 'Édition Microsoft Word complète et réimportation signée',
+    ariaWordRoundtripParity: 'Parité des décisions après aller-retour Word',
     bannerPaginationUnmapped:
       'Pagination non localisée ou en conflit : page PDF, page imprimée et page dossier restent strictement séparées.',
     bannerOcrUnreliable:
@@ -717,6 +729,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     lexicalCueReservationTitle: 'Weggelaten voorbehoud · Beoordeling vereist',
     lexicalCueStatusDisclaimer:
       'Gemarkeerd voor beoordeling door de advocaat — niet semantisch geverifieerd.',
+    ariaReferencesQueue: 'Gedetecteerde verwijzingen',
+    ariaReadingLayout: 'Leesindeling',
+    ariaQuotationDerived: 'Citaat en afgeleide brontekst',
+    ariaVerificationCoverage: 'Controle- en verwerkingsdekking',
+    ariaWordHandoff:
+      'Volledige Microsoft Word-bewerking en ondertekende import',
+    ariaWordRoundtripParity: 'Beslissingspariteit na Word-rondgang',
     bannerPaginationUnmapped:
       'Niet-gekoppelde of strijdige paginering: PDF-, gedrukte en bundelpagina’s blijven strikt gescheiden.',
     bannerOcrUnreliable:
@@ -830,12 +849,15 @@ const DIMENSION_LABELS: Record<Locale, Record<string, string>> = {
     'Page mapping': 'Pagination',
     Fidelity: 'Fidélité citation',
     'Human support': 'Décision humaine',
+    'Human support (frozen report)': 'Décision humaine (rapport figé)',
   },
   nl: {
     Identity: 'Identiteit stuk',
     'Page mapping': 'Paginering',
     Fidelity: 'Citaatgetrouwheid',
     'Human support': 'Menselijke beoordeling',
+    'Human support (frozen report)':
+      'Menselijke beoordeling (bevroren rapport)',
   },
 };
 
