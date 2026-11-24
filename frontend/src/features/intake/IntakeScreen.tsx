@@ -223,7 +223,7 @@ function IntakeForm({ api, caseId }: { api: ApiClient; caseId: string }) {
                   setFileIssues(error.fileErrors);
                   setValidCheckedFiles(error.validFiles);
                   setMessage(
-                    'One or more files failed fail-closed intake validation. Replace the rejected file(s); valid files remain selected and no originals were written.',
+                    'No completed intake receipt was received. One or more files failed fail-closed intake validation; replace the rejected file(s) while keeping valid files selected.',
                   );
                 } else {
                   setMessage(
