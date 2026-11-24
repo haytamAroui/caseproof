@@ -18,7 +18,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 DRAFT = (ROOT / "db/proposals/SIGNED_matter_conditions.sql").read_text()
 RETENTION = (ROOT / "db/proposals/SIGNED_matter_conditions_retention.sql").read_text()
-URI = os.environ.get("CASEPROOF_LOCAL_PG_URI")
+URI = os.environ.get("CASEPROOF_LOCAL_PG_URI") or (
+    "postgresql://postgres:{pw}@127.0.0.1:5432/caseproof_s2_ci".format(pw=os.environ.get("PGPASSWORD", ""))
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") == "YES" and os.environ.get("PGHOST") == "127.0.0.1"
+    and os.environ.get("PGDATABASE") == "caseproof_s2_ci" else None)
 
 
 def test_draft_text_is_append_only_and_not_granted_to_anon():
@@ -41,8 +44,18 @@ def _psql(sql: str) -> tuple[int, str]:
 def test_rpc_and_policies_on_local_postgres():
     org, case = str(uuid.uuid4()), str(uuid.uuid4())
     writer, viewer, outsider = (str(uuid.uuid4()) for _ in range(3))
+    # The repo's own disposable stub (scripts.verify_s2_002_database) makes auth.users.instance_id NOT NULL; a minimal
+    # local stub may not have the column. Fill it only when it exists.
+    has_instance = _psql("select 1 from information_schema.columns where table_schema='auth' and table_name='users' "
+                         "and column_name='instance_id'")[1].strip() == "1"
+    zero = "'00000000-0000-0000-0000-000000000000'"
+    users = ("insert into auth.users(id,instance_id,email) values "
+             + ",".join(f"('{u}',{zero},'{n}@x')" for u, n in ((writer, "w"), (viewer, "v"), (outsider, "o"))) + ";"
+             if has_instance else
+             "insert into auth.users(id,email) values "
+             + ",".join(f"('{u}','{n}@x')" for u, n in ((writer, "w"), (viewer, "v"), (outsider, "o"))) + ";")
     setup = f"""
-insert into auth.users(id,email) values ('{writer}','w@x'),('{viewer}','v@x'),('{outsider}','o@x');
+{users}
 insert into caseproof.organizations(id,display_name) values ('{org}','t');
 insert into caseproof.organization_members(org_id,user_id,actions) values
  ('{org}','{writer}','{{case:read,finding:write}}'),('{org}','{viewer}','{{case:read}}');

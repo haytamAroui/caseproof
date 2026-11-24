@@ -151,3 +151,16 @@ def test_older_verifier_cannot_certify_a_pack_with_retained_sources(tmp_path, mo
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=root)
     assert "REJECTED CorpusError" in out.stdout, out.stdout + out.stderr
     assert json.loads(ZipFile(io.BytesIO(raw)).read("review.json"))["signed_sources"]
+
+
+def test_read_pdf_is_retained_but_its_excerpts_stay_hash_checked_only(tmp_path, monkeypatch):
+    """The product parser extracts PDF text, but the cold replay has no PDF parser: it must say so, not claim a recompute."""
+    text = "Le courrier est bien reçu le 3 mars."
+    prev = [NS(row=NS(source_id="s2", version_id=V, original_sha256=sha(PDF), status="ready", warnings=(),
+                      representation_id="r", media_type="application/pdf"), text=text, spans=((0, len(text), "page:0", 0),))]
+    c = build(tmp_path, monkeypatch, [COND], prev, originals=lambda sid, vid: NS(data=PDF, sha256_hex=sha(PDF), media_type="application/pdf"))
+    raw, cp = pack(c)
+    body = verify_legal_pack(raw, expected_sha256=cp)
+    assert body["signed_conditions"]["anchors"][0]["found"][0]["pdf_page"] == 1
+    assert not ssp.text_replayable(body["signed_sources"], body["signed_conditions"])
+    assert "restent contrôlés par empreinte seulement" in ZipFile(io.BytesIO(raw)).read("report.html").decode()
