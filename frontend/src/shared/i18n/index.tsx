@@ -240,7 +240,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     legalHide: 'Masquer l’article conservé',
     legalDraft: 'Extrait des conclusions',
     legalStored: 'Texte conservé dans le corpus',
-    legalRulesHeading: 'Conditions définies par l’avocat',
+    legalRulesHeading: 'Règles d’adéquation sur faits déclarés',
     legalCoverage: 'Couverture et limites d’analyse',
     legalReviewTitle: 'Décision de l’avocat',
     legalReviewLead:
@@ -415,7 +415,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     legalHide: 'Bewaard artikel verbergen',
     legalDraft: 'Fragment uit conclusies',
     legalStored: 'Bewaarde tekst in het corpus',
-    legalRulesHeading: 'Door de advocaat bepaalde voorwaarden',
+    legalRulesHeading: 'Door de advocaat bepaalde regels op opgegeven feiten',
     legalCoverage: 'Dekking en analysebeperkingen',
     legalReviewTitle: 'Beslissing van de advocaat',
     legalReviewLead:
