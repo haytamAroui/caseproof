@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router';
 import type { ApiClient } from '../../shared/api';
+import { useLocale } from '../../shared/i18n';
 
 const SHA = /^[0-9a-f]{64}$/;
 const UUID =
@@ -72,6 +73,7 @@ export function NativeWordHandoff({
   onActivated,
 }: Props) {
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [selectedName, setSelectedName] = useState('');
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [binding, setBinding] = useState<Binding | null>(null);
@@ -405,10 +407,7 @@ export function NativeWordHandoff({
   }
 
   return (
-    <section
-      className="docx-word-handoff"
-      aria-label="Full Microsoft Word editing and signed import"
-    >
+    <section className="docx-word-handoff" aria-label={t('ariaWordHandoff')}>
       <div className="docx-word-heading">
         <div>
           <p className="docx-eyebrow">Full Word interface · native Office</p>
@@ -504,7 +503,7 @@ export function NativeWordHandoff({
               Reconcile signed commit
             </button>
           </div>
-          {reviewSaved && (
+          {reviewSaved && !activeVersion && (
             <p role="status">
               Document-wide approval saved. The candidate has not been activated
               until the commit succeeds.
@@ -521,7 +520,7 @@ export function NativeWordHandoff({
           {activeVersion && (
             <div
               className="docx-word-recheck-parity"
-              aria-label="Word round-trip decision parity"
+              aria-label={t('ariaWordRoundtripParity')}
             >
               <p className="docx-mono">
                 Activated DOCX version: {activeVersion}. Run the mandatory
