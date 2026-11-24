@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from pathlib import Path
+from typing import Any
 
 from fastapi.testclient import TestClient
 
@@ -22,12 +24,74 @@ from scripts.run_prefiling_partner_demo import (
 SCHEMAS_DIR = Path(__file__).resolve().parents[1] / "frontend" / "src" / "shared" / "api"
 
 
-def _assert_matches_frontend_schema(schema_name: str, payload: dict) -> None:
-    """Validate payload directly against the checked-in frontend JSON schema."""
-    import jsonschema
+def _validate_node(value: Any, schema: dict[str, Any], root: dict[str, Any], path: str = "$") -> None:
+    """Zero-dependency Draft 2020-12 subset validator for checked-in frontend JSON schemas."""
+    if "$ref" in schema:
+        ref = schema["$ref"]
+        assert ref.startswith("#/$defs/"), f"unsupported $ref {ref}"
+        target = root["$defs"][ref.split("/", 2)[2]]
+        _validate_node(value, target, root, path)
+        return
+    if "anyOf" in schema:
+        for branch in schema["anyOf"]:
+            try:
+                _validate_node(value, branch, root, path)
+                return
+            except AssertionError:
+                continue
+        raise AssertionError(f"{path}: {value!r} failed all anyOf branches")
+    if "const" in schema:
+        assert value == schema["const"], f"{path}: expected const {schema['const']!r}, got {value!r}"
+    if "enum" in schema:
+        assert value in schema["enum"], f"{path}: {value!r} not in {schema['enum']!r}"
+    expected_type = schema.get("type")
+    if expected_type == "null":
+        assert value is None, f"{path}: expected null, got {value!r}"
+        return
+    if expected_type == "boolean":
+        assert isinstance(value, bool), f"{path}: expected bool, got {value!r}"
+    elif expected_type == "integer":
+        assert isinstance(value, int) and not isinstance(value, bool), f"{path}: expected int, got {value!r}"
+        if "minimum" in schema:
+            assert value >= schema["minimum"], f"{path}: {value} < {schema['minimum']}"
+        if "maximum" in schema:
+            assert value <= schema["maximum"], f"{path}: {value} > {schema['maximum']}"
+    elif expected_type == "string":
+        assert isinstance(value, str), f"{path}: expected str, got {value!r}"
+        if "minLength" in schema:
+            assert len(value) >= schema["minLength"], f"{path}: len < {schema['minLength']}"
+        if "maxLength" in schema:
+            assert len(value) <= schema["maxLength"], f"{path}: len > {schema['maxLength']}"
+        if "pattern" in schema:
+            assert re.search(schema["pattern"], value) is not None, f"{path}: {value!r} failed {schema['pattern']}"
+    elif expected_type == "array":
+        assert isinstance(value, list), f"{path}: expected list, got {value!r}"
+        if "minItems" in schema:
+            assert len(value) >= schema["minItems"], f"{path}: len < {schema['minItems']}"
+        if "maxItems" in schema:
+            assert len(value) <= schema["maxItems"], f"{path}: len > {schema['maxItems']}"
+        if "items" in schema:
+            for idx, item in enumerate(value):
+                _validate_node(item, schema["items"], root, f"{path}[{idx}]")
+    elif expected_type == "object":
+        assert isinstance(value, dict), f"{path}: expected object, got {value!r}"
+        props = schema.get("properties", {})
+        for req in schema.get("required", ()):
+            assert req in value, f"{path}: missing required key {req!r}"
+        if schema.get("additionalProperties") is False:
+            extra = set(value) - set(props)
+            assert not extra, f"{path}: forbidden extra keys {sorted(extra)}"
+        for key, item in value.items():
+            if key in props:
+                _validate_node(item, props[key], root, f"{path}.{key}")
+            elif isinstance(schema.get("additionalProperties"), dict):
+                _validate_node(item, schema["additionalProperties"], root, f"{path}.{key}")
 
+
+def _assert_matches_frontend_schema(schema_name: str, payload: dict[str, Any]) -> None:
+    """Validate payload directly against the checked-in frontend JSON schema (no external deps)."""
     schema = json.loads((SCHEMAS_DIR / schema_name).read_text(encoding="utf-8"))
-    jsonschema.validate(instance=payload, schema=schema)
+    _validate_node(payload, schema, schema)
 
 
 def test_five_trap_audit_exercises_real_engine_detectors() -> None:
