@@ -396,9 +396,24 @@ class DemoState:
             )
         return BriefRepresentation(brief, text, _sha(text), DEMO_RUNNER_VERSION, tuple(claims))
 
+    def unlocated_claims(self, text: str | None = None) -> list[str]:
+        """Declared factual claims that could not be bound or uniquely located."""
+        if not self.document.body_read:
+            return []
+        target_text = self.active_text if text is None else text
+        references = self.active_references()
+        missing: list[str] = []
+        for spec in self.m2.claim_specs:
+            ref_id = self._resolve_claim_reference_id(spec, references)
+            claim_text = self._claim_text_for_current(spec, target_text)
+            if ref_id is None or target_text.count(claim_text) != 1:
+                missing.append(str(spec["claim_id"]))
+        return missing
+
     def extraction_warnings(self) -> list[str]:
         """Honest extraction diagnostics, never silent: unreadable body,
-        quotations without a citation marker, markers without a quotation."""
+        quotations without a citation marker, markers without a quotation,
+        or declared factual claims that cannot be uniquely located."""
         if not self.document.body_read:
             return ["document body not read (fail-closed)"]
         warnings: list[str] = []
@@ -409,6 +424,11 @@ class DemoState:
         quoteless = [m.marker_id for m in self.extraction.markers if m.quote is None]
         if quoteless:
             warnings.append(f"références sans citation textuelle : {', '.join(quoteless)}")
+        unlocated = self.unlocated_claims()
+        if unlocated:
+            warnings.append(
+                f"affirmations factuelles non localisées (non vérifiées) : {', '.join(unlocated)}"
+            )
         return warnings
 
 
@@ -509,7 +529,11 @@ def _finding_payloads(state: DemoState, run: Any) -> dict[str, Any]:
                 "source_excerpt": _excerpt(source.text, obs.source_start, obs.source_end) if source else None,
             }
         )
-    return {"citations": citations, "facts": facts}
+    return {
+        "citations": citations,
+        "facts": facts,
+        "unlocated_claims": state.unlocated_claims(),
+    }
 
 
 def _rule_payload(result: Any, decision: Any, validity: Any) -> dict[str, Any]:

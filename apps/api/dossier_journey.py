@@ -199,25 +199,50 @@ class VisualDecisionBody(DecisionBody):
     reviewed_region_ids: list[str] = Field(default_factory=list, max_length=96)
 
 
+def _derive_receipt_key(secret: str | None, *, allow_supabase_secret: bool = False) -> bytes | None:
+    if (
+        type(secret) is not str
+        or len(secret) < 32
+        or secret.startswith(("sb_publishable_", "eyJ"))
+        or (not allow_supabase_secret and secret.startswith("sb_"))
+    ):
+        return None
+    return hmac.digest(secret.encode(), b"caseproof:dossier-receipt:v1", "sha256")
+
+
 class DossierStore:
     def __init__(
-        self, key: str, receipt_secret: str | None = None, *,
+        self,
+        key: str,
+        receipt_secret: str | None = None,
+        *,
         rights_gate: SignedRightsGate | None = None,
+        hmac_secret: str | None = None,
+        previous_hmac_secrets: tuple[str, ...] | list[str] = (),
     ):
         self.key = key
         self.client = JourneyClient(key, rights_gate=rights_gate)
         self.rights_gate = rights_gate
         self.revisions = DraftRevisionClient(key, receipt_secret)
         self.visual = PDFVisualFidelity()
-        # Domain-separated receipt key, never the public client key. No key is
-        # serialized, logged, persisted in source, or accepted from HTTP.
-        self.receipt_key = (
-            hmac.digest(receipt_secret.encode(), b"caseproof:dossier-receipt:v1", "sha256")
-            if receipt_secret
-            and len(receipt_secret) >= 32
-            and not receipt_secret.startswith("sb_publishable_")
-            else None
-        )
+        # Domain-separated receipt key, never the public client key. When a
+        # dedicated hmac_secret is provided (P1-7 custody separation), it is
+        # strictly separated from the Supabase admin/service key and rejects
+        # sb_* / JWT secrets fail-closed. No key is serialized, logged,
+        # persisted in source, or accepted from HTTP.
+        if hmac_secret is not None:
+            self.receipt_key = _derive_receipt_key(hmac_secret, allow_supabase_secret=False)
+            self.receipt_key_separated = True
+        else:
+            self.receipt_key = _derive_receipt_key(receipt_secret, allow_supabase_secret=True)
+            self.receipt_key_separated = False
+        rotated: list[bytes] = []
+        for prior in previous_hmac_secrets:
+            derived = _derive_receipt_key(prior, allow_supabase_secret=False)
+            if derived is None:
+                raise ValueError("previous HMAC receipt secret must be a dedicated >=32-char secret")
+            rotated.append(derived)
+        self.previous_receipt_keys: tuple[bytes, ...] = tuple(rotated)
 
     def rpc(self, bearer: str, case: str, action: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         con = http.client.HTTPSConnection(HOST, timeout=30)
@@ -571,6 +596,24 @@ class DossierStore:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return hmac.new(key, canonical(payload).encode(), hashlib.sha256).hexdigest()
 
+    def verify_receipt(self, payload: dict[str, Any], attestation: object) -> bool:
+        """Constant-time verification against active and rotated previous HMAC keys."""
+        key = getattr(self, "receipt_key", None)
+        if not key:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        if (
+            not isinstance(attestation, str)
+            or len(attestation) != 64
+            or any(c not in "0123456789abcdef" for c in attestation)
+        ):
+            return False
+        raw = canonical(payload).encode()
+        keys = (key, *getattr(self, "previous_receipt_keys", ()))
+        return any(
+            hmac.compare_digest(hmac.new(candidate, raw, hashlib.sha256).hexdigest(), attestation)
+            for candidate in keys
+        )
+
     def frozen_report(
         self, bearer: str, case: str, brief: str, snapshot: str, *, historical: bool = False
     ) -> dict[str, Any]:
@@ -587,13 +630,7 @@ class DossierStore:
         if not isinstance(report, dict):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         attestation = report.pop("server_receipt", None)
-        expected = self.receipt(report)
-        if (
-            not isinstance(attestation, str)
-            or len(attestation) != 64
-            or any(c not in "0123456789abcdef" for c in attestation)
-            or not hmac.compare_digest(expected, attestation)
-        ):
+        if not self.verify_receipt(report, attestation):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         report["server_receipt"] = attestation
         if report.get("case_id") != case or report.get("brief_id") != brief:

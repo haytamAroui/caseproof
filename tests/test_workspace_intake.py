@@ -46,6 +46,12 @@ def test_real_formats_preflight_and_corrupt_last_has_no_registration_or_writes()
     with pytest.raises(HTTPException) as failure:
         service.upload('synthetic', CASE, good)
     assert failure.value.status_code == 422
+    assert isinstance(failure.value.detail, dict)
+    assert failure.value.detail["files_written"] is False
+    assert len(failure.value.detail["file_errors"]) == 1
+    assert failure.value.detail["file_errors"][0]["filename"] == last.filename
+    assert failure.value.detail["file_errors"][0]["code"] == "CORRUPT_OR_UNREADABLE"
+    assert len(failure.value.detail["valid_files"]) == 3
     service.register.assert_not_called()
     client.library.put_once.assert_not_called()
 

@@ -73,6 +73,7 @@ jobs:
           uv run --locked python -m scripts.verify_m2_disposable_runs
           uv run --locked python -m scripts.verify_m2_brief_graph
           uv run --locked python -m scripts.verify_m2_private_check_composition
+          uv run --locked python -m scripts.verify_disposable_signed_brief_publisher
           uv run --locked python -m scripts.verify_m2_disposable_corrections
           uv run --locked python -m scripts.verify_m1_private_rls
       - name: Exercise same M1-M2 bearer-check, private Vault, durable reviewer path with synthetic identities

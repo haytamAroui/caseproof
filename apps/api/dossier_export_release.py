@@ -332,13 +332,19 @@ def create_release_router(store: Any) -> APIRouter:
         unsigned = {key: value for key, value in raw.items() if key != "server_receipt"}
         claimed_hash = unsigned.get("manifest_sha256")
         unsigned_without_hash = {key: value for key, value in unsigned.items() if key != "manifest_sha256"}
+        verify = getattr(store, "verify_receipt", None)
+        receipt_valid = (
+            verify(unsigned, receipt)
+            if callable(verify)
+            else isinstance(receipt, str) and hmac.compare_digest(receipt, store.receipt(unsigned))
+        )
         if (
             not isinstance(receipt, str)
             or not isinstance(claimed_hash, str)
             or len(receipt) != 64
             or len(claimed_hash) != 64
             or not hmac.compare_digest(claimed_hash, _hash(canonical(unsigned_without_hash).encode()))
-            or not hmac.compare_digest(receipt, store.receipt(unsigned))
+            or not receipt_valid
         ):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
         return raw

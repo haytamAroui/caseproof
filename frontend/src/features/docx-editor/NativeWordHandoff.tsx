@@ -519,10 +519,26 @@ export function NativeWordHandoff({
             </button>
           )}
           {activeVersion && (
-            <p className="docx-mono">
-              Activated DOCX version: {activeVersion}. Run the mandatory
-              recheck.
-            </p>
+            <div
+              className="docx-word-recheck-parity"
+              aria-label="Word round-trip decision parity"
+            >
+              <p className="docx-mono">
+                Activated DOCX version: {activeVersion}. Run the mandatory
+                recheck.
+              </p>
+              <p className="small">
+                <span className="pill" data-tone="ok">
+                  ✓ Carried
+                </span>{' '}
+                Unchanged findings keep their prior signed decision ·{' '}
+                <span className="pill" data-tone="info">
+                  ↻ À recontrôler (superseded)
+                </span>{' '}
+                Modified or affected findings invalidate prior approvals until
+                fresh lawyer review.
+              </p>
+            </div>
           )}
         </div>
       )}

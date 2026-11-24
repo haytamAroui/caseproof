@@ -582,3 +582,21 @@ def test_factual_checks_persist_after_correction(tmp_path: Path) -> None:
     assert facts_after_fact[0]["claim_id"] == "claim-paiement"
     assert facts_after_fact[0]["state"] == "value_match"
     assert facts_after_fact[0]["brief_passage"] == claim_ok
+    assert corr_fact.json()["findings"]["unlocated_claims"] == []
+
+    # If a later edit duplicates/breaks uniqueness of a factual claim, it must
+    # be surfaced explicitly rather than disappearing silently.
+    dup = _post(
+        app_client,
+        "/demo/api/correction",
+        {
+            "passage_id": "passage:cit-01",
+            "after": f"{QUOTE_OK} {claim_ok}",
+            "rationale": "duplication involontaire du passage",
+        },
+        session,
+    )
+    assert dup.status_code == 200
+    assert dup.json()["findings"]["unlocated_claims"] == ["claim-paiement"]
+    state_after = app_client.get("/demo/api/state").json()
+    assert any("claim-paiement" in w for w in state_after["document"]["extraction_warnings"])

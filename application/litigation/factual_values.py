@@ -63,7 +63,7 @@ _SIGNED_MONEY = re.compile(
     r"(?:[-+−–—]\s*(?:€|EUR\b)|(?:€|EUR\b)\s*[-+−–—]|\(\s*(?:€|EUR\b))",
     re.IGNORECASE,
 )
-_MONEY_AMOUNT = r"(?:\d{1,3}(?:[ .,]\d{3})+(?:[,.]\d{2})?|\d+(?:[,.]\d{2})?)"
+_MONEY_AMOUNT = r"(?:\d{1,3}(?:[ \u00a0\u202f.,]\d{3})+(?:[,.]\d{2})?|\d+(?:[,.]\d{2})?)"
 _MONEY = re.compile(
     r"(?<![\w.,])(?:"
     r"(?:€\s*|EUR\s*)" + _MONEY_AMOUNT + r"(?![\w,.])"
@@ -153,7 +153,12 @@ def _extract(text: str, kind: FactKind, language: str) -> list[tuple[str, int, i
 
 def _money_value(token: str, language: str) -> Decimal | None:
     raw = re.sub(r"^(?:€|EUR)\s*", "", token, flags=re.IGNORECASE)
-    raw = re.sub(r"\s*(?:€|EUR)$", "", raw, flags=re.IGNORECASE).replace(" ", "")
+    raw = (
+        re.sub(r"\s*(?:€|EUR)$", "", raw, flags=re.IGNORECASE)
+        .replace(" ", "")
+        .replace("\u00a0", "")
+        .replace("\u202f", "")
+    )
     # The three-digit grouping separator requires an explicit locale;
     # unsupported mixed forms never silently guess 14,500 == 14.5.
     if re.fullmatch(r"\d{1,3}(?:[.,]\d{3})+", raw):
@@ -209,9 +214,20 @@ def _safe_context(text: str, role: FactRole) -> bool:
     )
 
 
+_BASIS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (
+        marker,
+        re.compile(
+            r"\b" + re.escape(marker) + (r"" if marker.endswith(".") else r"\b"),
+            re.IGNORECASE,
+        ),
+    )
+    for marker in _BASIS_MARKERS
+)
+
+
 def _basis(text: str) -> frozenset[str]:
-    low = text.casefold()
-    return frozenset(x for x in _BASIS_MARKERS if x in low)
+    return frozenset(marker for marker, pattern in _BASIS_PATTERNS if pattern.search(text) is not None)
 
 
 def compare_fact(
@@ -264,6 +280,9 @@ def compare_fact(
         raise FactError("invalid verified source span")
 
     claim_tokens = _extract(assertion.text, assertion.kind, assertion.language)
+    if len(claim_tokens) == 1 and claim_tokens[0][3] is None and _safe_context(assertion.text, assertion.role):
+        code = "AMBIGUOUS_NUMBER_FORMAT" if assertion.kind is FactKind.MONEY else "AMBIGUOUS_DATE_FORMAT"
+        return obs(FactState.NEEDS_CONTEXT, code, brief=claim_tokens[0][0])
     if len(claim_tokens) != 1 or claim_tokens[0][3] is None or not _safe_context(assertion.text, assertion.role):
         return obs(FactState.NEEDS_CONTEXT, "assertion_value_or_role_ambiguous")
     claim_token, _, _, claim_value = claim_tokens[0]
@@ -289,6 +308,9 @@ def compare_fact(
         # Every token in the role-aligned passage counts, including ones
         # without a safely parseable value. Never select the only parseable
         # value out of multiple (e.g. 04/05/2026 OR 22 May 2026).
+        if len(source_tokens) == 1 and source_tokens[0][3] is None:
+            code = "AMBIGUOUS_NUMBER_FORMAT" if assertion.kind is FactKind.MONEY else "AMBIGUOUS_DATE_FORMAT"
+            return obs(FactState.NEEDS_CONTEXT, code, brief=claim_token, source=source_tokens[0][0])
         if len(source_tokens) != 1 or source_tokens[0][3] is None:
             return obs(FactState.NEEDS_CONTEXT, "source_role_or_value_ambiguous", brief=claim_token)
         token, a, b, val = source_tokens[0]
