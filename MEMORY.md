@@ -1,3 +1,7 @@
+## 24 November 2026 — product strategy & competitive alignment
+
+[ADR 0038](docs/adr/0038-pre-filing-truth-layer-and-competitive-strategy.md) and [PRODUCT_STRATEGY_2026-11-24.md](docs/PRODUCT_STRATEGY_2026-11-24.md): positions CaseProof as **Step 3 — Independent Pre-Filing Truth Audit** (human- and AI-drafted Belgian FR/NL conclusions) between drafting (Word, Alice.law, Nexa Legal, Harvey, Copilot) + bundling (CourtMerge, PiecesPerfect/Praxis, Doxflow Legal) and court filing (DPA/e-Deposit/Rechtspraak). Locks the 7 core pillars, 4-state lawyer display taxonomy (*Écart constaté*, *Contrôle impossible*, *Appréciation requise*, *Correspondance constatée* + `omission`), reconciled Pilot Core vs. bounded offline legal-corpus/subtle-trap/lawyer-conditions target extensions, explicit non-goals (no drafting, no bundling, no general case-law search, no e-Filing, no AGPL vendoring, no qualified-signature claims), and the Single Official UI Lock (`frontend/` React + TypeScript + `pdfjs-dist`). Pilot, client data, and release gates remain OPEN.
+
 ## 30 October 2026 — vision clarification
 
 [ADR 0019](docs/adr/0019-evidence-engine-and-first-market.md): reusable evidence engine, Belgian litigation first; web-first product, Word/MCP optional; expansion requires customer pull, technical fit, measured benefit and commercial commitment plus explicit owner approval. No new vertical, generic framework or client-data permission. Roadmap/workflow remain authoritative; PR #140 supplies bounded signed synthetic backend evidence, not market validation.

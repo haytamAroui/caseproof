@@ -1,5 +1,7 @@
 # CaseProof — pre-submission exhibit verification: complete v1 user workflow
 
+**24 November 2026 strategy alignment:** [Product Strategy (24 Nov 2026)](PRODUCT_STRATEGY_2026-11-24.md) and [ADR 0038](adr/0038-pre-filing-truth-layer-and-competitive-strategy.md) refine this journey with the 4-state lawyer-facing display taxonomy (*Écart constaté*, *Contrôle impossible*, *Appréciation requise*, *Correspondance constatée*), explicit `omission` signaling, optional target-extension steps (pinned offline Belgian legal-corpus pack and lawyer-defined conditions), Word round-trip carry-over/reopen semantics, and the Single Official UI Lock (`frontend/`). All four independent backend dimensions and M0–M6/SEC-01–16 gates remain unchanged.
+
 **31 October direction refinement:** [detailed product, report, intake, deployment and pilot plan](PRODUCT_DEFINITION_2026-10-31.md). Preserves M0–M6 gates; no milestone reset, automatic local-first pivot or release claim.
 
 **Decision date:** 28 October 2026. **Authority:** [ROADMAP.md](ROADMAP.md), [ADR 0018](adr/0018-pre-submission-verification-freeze.md), [CONSTITUTION.md](../CONSTITUTION.md). This is the **product acceptance specification**, not a claim that any browser journey is already implemented, secure for clients, legally approved or commercially validated. [Historical Clearbrief-class workflow](https://github.com/haytamAroui/caseproof/blob/486b239926b681d76e1e3f79d30e3dc7098ab6d8/docs/PRODUCT_WORKFLOW.md) is superseded for launch scope.
