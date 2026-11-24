@@ -189,3 +189,42 @@ def test_omitted_opening_reservation_cue_surfaces_in_exhibit_references_view() -
         clean_brief, brief_version_id="brief-1", intake=_intake(), previews=previews
     )
     assert clean_mapped["references"][0]["reservation_cue_flag"] is None
+
+    # Negative control 1: draft sentence states the reservation OUTSIDE the quotation marks.
+    sentence_reservation_brief = (
+        "Sous réserve de l'accord écrit du bailleur, le bail stipule que "
+        "« le locataire peut céder son droit au bail » (Pièce 1)."
+    )
+    res_outside = map_exhibit_references(
+        sentence_reservation_brief,
+        brief_version_id="brief-1",
+        intake=_intake(),
+        previews=previews,
+    )
+    assert res_outside["references"][0]["reservation_cue_flag"] is None
+
+    # Negative control 2: reservation cue lies in an unrelated prior clause separated by '; ' or '. '.
+    prior_clause_source = (
+        "Sous réserve d'inspection préalable ; par ailleurs, "
+        "le locataire peut céder son droit au bail."
+    )
+    res_prior = map_exhibit_references(
+        brief,
+        brief_version_id="brief-1",
+        intake=_intake(),
+        previews=[_Preview(row=_Row(version_id="ver-1"), text=prior_clause_source)],
+    )
+    assert res_prior["references"][0]["reservation_cue_flag"] is None
+
+    # Negative control 3: quoted text occurs more than once in source -> abstain on ambiguity.
+    repeated_source = (
+        "Sous réserve de l'accord écrit du bailleur, le locataire peut céder son droit au bail. "
+        "Annexe : le locataire peut céder son droit au bail."
+    )
+    res_repeated = map_exhibit_references(
+        brief,
+        brief_version_id="brief-1",
+        intake=_intake(),
+        previews=[_Preview(row=_Row(version_id="ver-1"), text=repeated_source)],
+    )
+    assert res_repeated["references"][0]["reservation_cue_flag"] is None

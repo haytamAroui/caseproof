@@ -798,6 +798,7 @@ function QuoteContext({ finding }: { finding: FindingView }) {
   const lexicalCue = detectLexicalCue(
     validQuote ? quote : finding.literal,
     validSource ? source : null,
+    finding.literal,
   );
   return (
     <section className="draft-context" aria-label={t('ariaQuotationDerived')}>

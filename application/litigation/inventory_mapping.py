@@ -58,11 +58,17 @@ def _detect_reservation_cue_flag(
     """Detect an opening reservation clause omitted immediately before a matched quote.
 
     Strictly an appraisal cue (! Appréciation requise): never changes exhibit
-    mapping status and never asserts general semantic verification.
+    mapping status and never asserts general semantic verification. Abstains
+    when the draft sentence itself states a reservation, when the quote occurs
+    more than once in the source, or when the cue lies in a prior sentence/clause.
     """
     if not _readable_preview(preview):
         return None
     sentence, _values = _claim(text, start, end)
+    # Abstain when the lawyer's sentence already states a reservation outside or
+    # inside the quotation marks (e.g. "Sous réserve de..., « ... »").
+    if _OPENING_RESERVATION_RE.search(sentence) is not None:
+        return None
     spans = getattr(preview, "spans", ()) or ()
     source_text = preview.text
     source_folded = source_text.casefold()
@@ -70,15 +76,23 @@ def _detect_reservation_cue_flag(
         quote = (match.group(1) or match.group(2) or "").strip()
         if len(quote) < 12 or _OPENING_RESERVATION_RE.search(quote) is not None:
             continue
-        idx = source_folded.find(quote.casefold())
+        quote_folded = quote.casefold()
+        # Abstain on repeated/ambiguous quote occurrences in the source text.
+        if source_folded.count(quote_folded) != 1:
+            continue
+        idx = source_folded.find(quote_folded)
         if idx <= 0:
             continue
         prefix_lo = max(0, idx - 120)
-        # Keep the check within the immediately preceding clause/sentence.
+        # Keep the check strictly within the immediately preceding clause/sentence.
         prefix_raw = source_text[prefix_lo:idx]
-        last_break = max(prefix_raw.rfind("\n"), prefix_raw.rfind(". "))
-        if last_break >= 0:
-            prefix_raw = prefix_raw[last_break + 1 :]
+        cut = 0
+        for sep in ("\n", ". ", "; ", "! ", "? ", ": "):
+            pos = prefix_raw.rfind(sep)
+            if pos >= 0:
+                cut = max(cut, pos + len(sep))
+        if cut > 0:
+            prefix_raw = prefix_raw[cut:]
         prefix = " ".join(prefix_raw.split()).strip()
         cue = _OPENING_RESERVATION_RE.search(prefix)
         if cue is not None:
