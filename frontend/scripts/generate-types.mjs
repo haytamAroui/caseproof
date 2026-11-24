@@ -15,6 +15,11 @@ for (const [name, type, stem] of [
   ['review-ledger', 'ReviewLedgerView', 'review-ledger-generated'],
   ['draft-excerpt', 'DraftExcerptView', 'draft-excerpt-generated'],
   ['legal-references', 'LegalReferencesView', 'legal-references-generated'],
+  [
+    'exhibit-references',
+    'ExhibitReferencesView',
+    'exhibit-references-generated',
+  ],
   ['clearbrief-review', 'ClearbriefReviewState', 'clearbrief-review-generated'],
   [
     'clearbrief-receipt',

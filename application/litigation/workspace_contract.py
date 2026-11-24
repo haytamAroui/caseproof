@@ -318,3 +318,74 @@ class OfflinePackManifest(BaseModel):
     checkpoint_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     media: Literal["application/zip"]
     note: str = Field(max_length=1000)
+
+
+class ExhibitPageView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    space: Literal["printed", "bundle"]
+    label: str = Field(min_length=1, max_length=12)
+    pdf_page: int = Field(ge=1, le=100000)
+
+
+class ExhibitEntryView(BaseModel):
+    """The confirmed inventory identity, passed through as recorded."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    label: Literal["stuk", "piece"]
+    number: str = Field(max_length=12)
+    source_version_id: str | None = Field(default=None, max_length=64)
+    filename: str | None = Field(default=None, max_length=128)
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    readback: Literal["verified", "unknown", "integrity_mismatch"] | None = None
+    page_count: int | None = Field(default=None, ge=0, le=100000)
+    pages: list[ExhibitPageView] = Field(max_length=128)
+
+
+class ExhibitReferenceView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    reference_id: str = Field(pattern=r"^exhibit-ref-\d{2,5}$")
+    raw_text: str = Field(max_length=64)
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    status: Literal["UNVERIFIED", "UNDETERMINED"]
+    reason: str = Field(max_length=120)
+    page_cited: bool
+    entry: ExhibitEntryView | None = None
+
+
+class ExhibitCoverageView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    detected: int = Field(ge=0)
+    by_status: dict[str, int]
+    located: int = Field(ge=0)
+    inventory_entries: int = Field(ge=0)
+    entries_not_detected_in_brief: list[str] = Field(max_length=600)
+
+
+class ExhibitReferencesView(BaseModel):
+    """Exhibit mentions mapped to the confirmed inventory. Located never means content verified."""
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-exhibit-references-v1"] = Field(alias="schema")
+    brief_version_id: str = Field(min_length=1, max_length=200)
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    note: str = Field(max_length=1000)
+    inventory_confirmed: bool
+    inventory_complete: bool
+    confirmation_id: str | None = Field(default=None, max_length=128)
+    references: list[ExhibitReferenceView] = Field(max_length=10000)
+    coverage: ExhibitCoverageView
+
+    @model_validator(mode="after")
+    def coherent(self) -> "ExhibitReferencesView":
+        ids = [r.reference_id for r in self.references]
+        if len(ids) != len(set(ids)) or self.coverage.detected != len(ids):
+            raise ValueError("references and coverage disagree")
+        if self.inventory_complete and not self.inventory_confirmed:
+            raise ValueError("complete without confirmation")
+        if not self.inventory_confirmed and any(r.entry for r in self.references):
+            raise ValueError("mapping without confirmed inventory")
+        for status, n in self.coverage.by_status.items():
+            if n != sum(1 for r in self.references if r.status == status):
+                raise ValueError("status counts disagree")
+        if self.coverage.located != sum(1 for r in self.references if r.reason.startswith("piece_located")):
+            raise ValueError("located count disagrees")
+        return self

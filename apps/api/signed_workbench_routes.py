@@ -151,8 +151,15 @@ class SearchBody(BaseModel):
     query: str = Field(min_length=2, max_length=120)
 
 
+_EXHIBIT_NOTE = (
+    "Located means the number exists in the inventory a person confirmed, with its recorded "
+    "source file. The exhibit's content is not compared to the brief. Unconfirmed, unbound, "
+    "ambiguous or unnamed page-space references stay undetermined.")
+
+
 def create_signed_workbench_router(
     factory: Callable[[str], _Workbench] | None,
+    intake_context: Callable[[str, str], Any] | None = None,
 ) -> APIRouter:
     router = APIRouter()
     base = "/dev/signed/matters/{case_id}/briefs/{brief_version_id}"
@@ -438,6 +445,48 @@ def create_signed_workbench_router(
             for row in raw["suitability"]]
         try:
             view = LegalReferencesView.model_validate(raw)
+        except ValueError:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return view.model_dump(by_alias=True)
+
+    @router.get("/v2/matters/{case_id}/briefs/{brief_version_id}/exhibit-references")
+    def v2_exhibit_references(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Exhibit mentions mapped to the CONFIRMED inventory of the matter.
+
+        Identities, source versions and page mappings are passed through as
+        confirmed by a person; nothing is numbered here. Located means the
+        number exists in the confirmed inventory, never that content matches.
+        """
+        from application.litigation.inventory_mapping import map_exhibit_references
+        from application.litigation.workspace_contract import ExhibitReferencesView
+        if intake_context is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        bearer, wb = bench(authorization)
+        run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        subject = wb.checker._verified(bearer)
+        scope = wb.checker._scope(subject, case_id)
+        try:
+            bundle = wb.store.load_bundle(
+                case_id=case_id, brief_version_id=brief_version_id, access=scope)
+            intake = intake_context(bearer, case_id)
+        except AccessRejected:
+            raise
+        except Exception:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        raw = intake.model_dump(by_alias=True) if hasattr(intake, "model_dump") else dict(intake)
+        mapped = map_exhibit_references(
+            bundle.representation.text, brief_version_id=brief_version_id, intake=raw)
+        try:
+            view = ExhibitReferencesView.model_validate({
+                "schema": "caseproof-exhibit-references-v1",
+                "brief_version_id": brief_version_id,
+                "snapshot_hash": run.snapshot_hash,
+                "note": _EXHIBIT_NOTE,
+                **mapped,
+            })
         except ValueError:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return view.model_dump(by_alias=True)

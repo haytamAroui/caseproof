@@ -192,8 +192,6 @@ def create_litigation_development_app(
         )
     )
 
-    app.include_router(create_signed_workbench_router(signed_workbench_factory))
-
     if publishable_key is not None and (
         not publishable_key.startswith("sb_publishable_")
         or len(publishable_key) > 512
@@ -210,11 +208,14 @@ def create_litigation_development_app(
         else None
     )
     app.include_router(create_dossier_router(dossier_store))
+    workspace_intake = WorkspaceIntake(dossier_store.client, dossier_store) if dossier_store else None
     app.include_router(
-        create_workspace_intake_router(
-            WorkspaceIntake(dossier_store.client, dossier_store) if dossier_store else None
+        create_signed_workbench_router(
+            signed_workbench_factory,
+            workspace_intake.context if workspace_intake is not None else None,
         )
     )
+    app.include_router(create_workspace_intake_router(workspace_intake))
     app.include_router(create_dossier_viewer_router(dossier_store))
     if dossier_store is not None and page_worker_secret is not None:
         from apps.api.signed_page_jobs import SignedPageJobs, create_page_job_router

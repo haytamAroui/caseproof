@@ -26,6 +26,7 @@ export default tseslint.config(
       'src/shared/api/offline-pack-generated*',
       'src/shared/api/legal-references-generated*',
       'src/shared/api/legal-passage-generated*',
+      'src/shared/api/exhibit-references-generated*',
     ],
   },
   js.configs.recommended,
