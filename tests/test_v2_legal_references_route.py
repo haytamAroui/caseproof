@@ -130,3 +130,45 @@ def test_review_state_from_the_real_blocker_builder_fits_the_product_contract(tm
                                             "release_authorized": False})
     with pytest.raises(ValueError):
         ClearbriefReviewState.model_validate({**state, "release_authorized": True})
+
+
+def test_offline_pack_manifest_matches_download_and_replays(tmp_path, monkeypatch):
+    from application.litigation.offline_legal_pack import verify_legal_pack
+    from apps.api import litigation_evidence_search as les
+    monkeypatch.setattr(les.AuthorizedEvidenceSearch, "_require_evidence", staticmethod(lambda _a: None))
+    # Fake ports (labelled): bench with the review state and the current-store check the pack route needs.
+    from types import SimpleNamespace as NS
+    path = tmp_path / "p2.docx"
+    path.write_bytes(docx_without_custom_xml([f"Article 8.5 du Code civil : « {ARTICLE} »."]))
+    config = load_corpus_config(corpus(tmp_path))
+    text = parse_docx(path.read_bytes())["text"]
+    obs = check_legal_references(text, config.records, config.act_aliases,
+                                 chosen_versions=config.chosen_versions, strict=True, v3=True)
+    run = NS(snapshot_hash=SNAP, representation_sha256=hashlib.sha256(text.encode()).hexdigest(),
+             corpus_pack_sha256=config.pack_sha256, legal_observations=tuple(obs), suitability_observations=())
+    access = NS(case_id="c")
+    wb = NS(checker=NS(check=lambda **_: run, legal_corpus_for=lambda _c: config, _verified=lambda _b: None,
+                       _scope=lambda _s, _c: access),
+            store=NS(load_bundle=lambda **_: NS(representation=NS(text=text)), still_current=lambda **_: True),
+            workspace=NS(state=lambda **_: {"snapshot_hash": SNAP, "decisions": []}))
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse
+
+    from apps.api.access_control import AccessRejected
+    app = FastAPI()
+
+    @app.exception_handler(AccessRejected)
+    async def denied(request: Request, exc: AccessRejected) -> JSONResponse:
+        return JSONResponse({"error": exc.code.value}, status_code=exc.http_status)
+
+    app.include_router(create_signed_workbench_router(lambda _b: wb))
+    c = TestClient(app)
+    base = "/v2/matters/c/briefs/v/offline-pack"
+    m = c.get(base + "/manifest", headers=H).json()
+    r = c.get(base, headers=H)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/zip")
+    assert hashlib.sha256(r.content).hexdigest() == m["sha256"] == r.headers["X-CaseProof-Pack-SHA256"]
+    assert len(r.content) == m["byte_length"] == int(r.headers["X-CaseProof-Pack-Size"])
+    assert r.headers["X-CaseProof-Snapshot"] == m["snapshot_hash"] == SNAP
+    assert verify_legal_pack(r.content, expected_sha256=m["checkpoint_sha256"])["references"]
+    assert c.get(base).status_code == 401 and c.get(base + "/manifest").status_code == 401

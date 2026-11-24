@@ -12,6 +12,7 @@ never proof that the brief is wrong, and never an approval.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Callable
 from dataclasses import asdict
@@ -41,6 +42,10 @@ _NOTE = (
 )
 
 
+_PACK_NOTE = (
+    "The digest proves the downloaded bytes equal what the server built for this check. "
+    "It does not prove who built them, that the corpus is current or applicable, or that any claim is supported."
+)
 _LEGAL_NOTE = (
     "PASS means the article is in the chosen corpus and any bound quotation is "
     "literally in its stored text. It never means the article is applicable, "
@@ -171,11 +176,7 @@ def create_signed_workbench_router(
         run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
         return {"schema": "caseproof-signed-check-v1", "note": _NOTE, **asdict(run)}
 
-    @router.get(base + "/offline-legal-pack")
-    def signed_offline_legal_pack(
-        case_id: str, brief_version_id: str,
-        authorization: Annotated[str | None, Header()] = None,
-    ) -> Response:
+    def pack_for(case_id: str, brief_version_id: str, authorization: str | None) -> tuple[bytes, str, str]:
         """Authorized legal slice with locally preserved corpus, no online fallback."""
         from application.litigation.corpus import CorpusError
         from application.litigation.legal_references import ENGINE_STRICT4
@@ -200,9 +201,49 @@ def create_signed_workbench_router(
         if (wb.checker._scope(wb.checker._verified(bearer), case_id) != access
                 or not wb.store.still_current(access=access, bundle=bundle)):
             raise AccessRejected(AccessFailure.STALE_SNAPSHOT)
+        return data, checkpoint, run.snapshot_hash
+
+    @router.get(base + "/offline-legal-pack")
+    def signed_offline_legal_pack(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        data, checkpoint, _snap = pack_for(case_id, brief_version_id, authorization)
         return Response(data, media_type="application/zip", headers={
             "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
             "Content-Disposition": 'attachment; filename="caseproof-offline-legal-review.zip"',
+            "X-CaseProof-Legal-Review-SHA256": checkpoint,
+        })
+
+    pack_v2 = "/v2/matters/{case_id}/briefs/{brief_version_id}/offline-pack"
+
+    @router.get(pack_v2 + "/manifest")
+    def v2_offline_pack_manifest(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Digest and size of the pack as it would be served now. Download must match it exactly."""
+        from application.litigation.workspace_contract import OfflinePackManifest
+        data, checkpoint, snap = pack_for(case_id, brief_version_id, authorization)
+        view = OfflinePackManifest.model_validate({
+            "schema": "caseproof-offline-pack-manifest-v1", "brief_version_id": brief_version_id,
+            "snapshot_hash": snap, "sha256": hashlib.sha256(data).hexdigest(),
+            "byte_length": len(data), "checkpoint_sha256": checkpoint, "media": "application/zip",
+            "note": _PACK_NOTE})
+        return view.model_dump(by_alias=True)
+
+    @router.get(pack_v2)
+    def v2_offline_pack(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        data, checkpoint, snap = pack_for(case_id, brief_version_id, authorization)
+        return Response(data, media_type="application/zip", headers={
+            "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": 'attachment; filename="caseproof-offline-legal-review.zip"',
+            "X-CaseProof-Snapshot": snap,
+            "X-CaseProof-Pack-SHA256": hashlib.sha256(data).hexdigest(),
+            "X-CaseProof-Pack-Size": str(len(data)),
             "X-CaseProof-Legal-Review-SHA256": checkpoint,
         })
 

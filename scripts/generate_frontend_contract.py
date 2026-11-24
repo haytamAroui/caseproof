@@ -14,6 +14,7 @@ from application.litigation.workspace_contract import (
     LegalPassageView,
     LegalReferencesView,
     MatterCatalogView,
+    OfflinePackManifest,
     ReportCatalogView,
     ReviewLedgerView,
 )
@@ -58,6 +59,7 @@ def main() -> None:
         (ClearbriefReviewState, TARGET.with_name("clearbrief-review.schema.json")),
         (ClearbriefReviewReceipt, TARGET.with_name("clearbrief-receipt.schema.json")),
         (ReviewBody, TARGET.with_name("clearbrief-command.schema.json")),
+        (OfflinePackManifest, TARGET.with_name("offline-pack.schema.json")),
         (LegalPassageView, TARGET.with_name("legal-passage.schema.json")),
         (VisualDecisionBody, TARGET.with_name("review-command.schema.json")),
         (DocxLocatorIdentity, TARGET.with_name("docx-locator-v1.schema.json")),

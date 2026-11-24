@@ -23,6 +23,7 @@ export default tseslint.config(
       'src/shared/api/clearbrief-review-generated*',
       'src/shared/api/clearbrief-receipt-generated*',
       'src/shared/api/clearbrief-command-generated*',
+      'src/shared/api/offline-pack-generated*',
       'src/shared/api/legal-references-generated*',
       'src/shared/api/legal-passage-generated*',
     ],

@@ -6,9 +6,11 @@ type BinaryBinding = {
   media?:
     | 'application/json'
     | 'application/octet-stream'
+    | 'application/zip'
     | 'text/markdown'
     | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   export?: true;
+  offlinePack?: true;
   editorCandidate?: true;
   originalSha256?: string;
 };
@@ -72,6 +74,28 @@ export class ApiClient {
     return (await this.read(path, signal, {
       ...binding,
       media: 'application/octet-stream',
+    })) as Uint8Array;
+  }
+  async offlinePack(
+    path: string,
+    binding: { sha256: string; snapshot: string; length: number },
+    signal: AbortSignal,
+  ): Promise<Uint8Array> {
+    if (
+      !/^[0-9a-f]{64}$/.test(binding.sha256) ||
+      !/^[0-9a-f]{64}$/.test(binding.snapshot) ||
+      !Number.isInteger(binding.length) ||
+      binding.length < 1 ||
+      binding.length > 20_000_000 ||
+      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/offline-pack$/.test(
+        new URL(path, 'https://caseproof.invalid').pathname,
+      )
+    )
+      throw new ApiError(502);
+    return (await this.read(path, signal, {
+      ...binding,
+      media: 'application/zip',
+      offlinePack: true,
     })) as Uint8Array;
   }
   async artifact(
@@ -382,12 +406,17 @@ export class ApiClient {
           size !== binding.length ||
           response.headers.get('X-CaseProof-Snapshot') !== binding.snapshot ||
           response.headers.get(
-            binding.export
-              ? 'X-CaseProof-Export-SHA256'
-              : binding.editorCandidate
-                ? 'X-CaseProof-Edit-Candidate-SHA256'
-                : 'X-CaseProof-Original-SHA256',
+            binding.offlinePack
+              ? 'X-CaseProof-Pack-SHA256'
+              : binding.export
+                ? 'X-CaseProof-Export-SHA256'
+                : binding.editorCandidate
+                  ? 'X-CaseProof-Edit-Candidate-SHA256'
+                  : 'X-CaseProof-Original-SHA256',
           ) !== binding.sha256 ||
+          (binding.offlinePack &&
+            response.headers.get('X-CaseProof-Pack-Size') !==
+              String(binding.length)) ||
           (binding.export &&
             response.headers.get('X-CaseProof-Export-Size') !==
               String(binding.length)) ||

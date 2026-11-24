@@ -9,6 +9,7 @@ import {
 } from '../../shared/api/legal';
 import { useSession } from '../../shared/session';
 import { Button, Notice } from '../../shared/ui';
+import { PackDownload } from './PackDownload';
 import { ReviewBox } from './ReviewBox';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -167,6 +168,14 @@ export function LegalScreen({ api }: { api: ApiClient }) {
                 </li>
               ))}
             </ul>
+          )}
+          {refs.data.corpus === 'configured' && (
+            <PackDownload
+              api={api}
+              caseId={caseId}
+              briefId={briefId}
+              snapshot={refs.data.snapshot_hash}
+            />
           )}
           <h2>Lawyer-defined rules on declared facts</h2>
           {refs.data.suitability.length === 0 ? (

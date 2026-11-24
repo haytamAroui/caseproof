@@ -54,3 +54,5 @@ src/shared/api/clearbrief-receipt-generated*
 src/shared/api/clearbrief-receipt.schema.json
 src/shared/api/clearbrief-command-generated*
 src/shared/api/clearbrief-command.schema.json
+src/shared/api/offline-pack-generated*
+src/shared/api/offline-pack.schema.json

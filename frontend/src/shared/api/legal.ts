@@ -1,5 +1,7 @@
 import referencesValidator from './legal-references-generated-validator';
 import passageValidator from './legal-passage-generated-validator';
+import packValidator from './offline-pack-generated-validator';
+import type { OfflinePackManifest } from './offline-pack-generated';
 import { ContractError } from './contracts';
 import type { LegalReferencesView } from './legal-references-generated';
 import type { LegalPassageView } from './legal-passage-generated';
@@ -57,6 +59,21 @@ export function parseLegalPassage(
       Array.from(value.brief_excerpt)
         .slice(value.quote_span[0], value.quote_span[1])
         .join('') !== value.quote)
+  )
+    throw new ContractError();
+  return value;
+}
+
+export type { OfflinePackManifest };
+export function parseOfflinePackManifest(
+  value: unknown,
+  expected: { briefId: string; snapshot: string },
+): OfflinePackManifest {
+  if (!packValidator(value)) throw new ContractError();
+  if (
+    value.schema !== 'caseproof-offline-pack-manifest-v1' ||
+    value.brief_version_id !== expected.briefId ||
+    value.snapshot_hash !== expected.snapshot
   )
     throw new ContractError();
   return value;

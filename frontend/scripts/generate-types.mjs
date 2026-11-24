@@ -22,6 +22,7 @@ for (const [name, type, stem] of [
     'clearbrief-receipt-generated',
   ],
   ['clearbrief-command', 'ReviewBody', 'clearbrief-command-generated'],
+  ['offline-pack', 'OfflinePackManifest', 'offline-pack-generated'],
   ['legal-passage', 'LegalPassageView', 'legal-passage-generated'],
   ['review-command', 'VisualDecisionBody', 'review-command-generated'],
   ['docx-locator-v1', 'DocxLocatorIdentity', 'docx-locator-v1-generated'],

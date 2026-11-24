@@ -305,3 +305,16 @@ class ClearbriefReviewReceipt(BaseModel):
     revision: int = Field(ge=0, le=100000)
     replayed: bool
     release_authorized: Literal[False]
+
+
+class OfflinePackManifest(BaseModel):
+    """Exact digest and size of the offline review pack for one frozen check."""
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-offline-pack-manifest-v1"] = Field(alias="schema")
+    brief_version_id: str = Field(min_length=1, max_length=200)
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    byte_length: int = Field(ge=1, le=20_000_000)
+    checkpoint_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    media: Literal["application/zip"]
+    note: str = Field(max_length=1000)
