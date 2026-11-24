@@ -586,3 +586,24 @@ def test_partner_demo_mounts_built_frontend_under_workspace_base(tmp_path: Path)
     )
     assert deep_link.status_code == 200
     assert "/workspace/assets/app.js" in deep_link.text
+
+
+def test_demo_dossier_supplies_numeric_coverage_denominators() -> None:
+    from scripts.run_prefiling_partner_demo import DEMO_SOURCE_META, _build_demo_dossier
+
+    report = _build_demo_dossier(
+        brief_id="22222222-2222-4222-8222-222222222222",
+        draft_text="Pièce 1, p. 14",
+        draft_sha256="0" * 64,
+        draft_byte_length=1,
+        snapshot_hash="1" * 64,
+        confirmed_inventory=True,
+    )
+    cov = report["coverage"]
+    assert cov["detected"] == len(report["findings"])
+    assert cov["checked"] + cov["unresolved"] == cov["detected"]
+    assert cov["unprocessed_regions"] == len(cov["unanalysed_regions"])
+    expected_pages = sum(meta["page_count"] for meta in DEMO_SOURCE_META.values())
+    assert cov["source_pages_total"] == len(cov["source_pages"]) == expected_pages
+    assert cov["source_pages_ocr_processed"] == 0
+    assert cov["source_pages_failed_or_skipped"] == expected_pages
