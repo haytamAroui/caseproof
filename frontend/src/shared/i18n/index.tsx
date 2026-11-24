@@ -218,6 +218,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     statusCueFlagClaimVsSource: 'Draft wording vs. source wording:',
     statusCueFlagDisclaimer:
       'Targeted lexical cue only — does not verify legal meaning. Inspect the source passage and decide.',
+    runImmediateUnconfirmedBtn: 'Run immediate audit (unconfirmed inventory)',
   },
   fr: {
     skip: 'Aller au contenu',
@@ -419,6 +420,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     statusCueFlagClaimVsSource: 'Terme des conclusions vs. pièce :',
     statusCueFlagDisclaimer:
       'Signal lexical ciblé uniquement — ne vérifie pas le sens juridique. Consultez le passage original pour décider.',
+    runImmediateUnconfirmedBtn:
+      'Lancer l’audit immédiat (bordereau non confirmé)',
   },
   nl: {
     skip: 'Naar inhoud',
@@ -621,6 +624,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     statusCueFlagClaimVsSource: 'Formulering conclusies vs. stuk:',
     statusCueFlagDisclaimer:
       'Gerichte lexicale signalering — controleert geen juridische betekenis. Inspecteer de oorspronkelijke passage en beslis.',
+    runImmediateUnconfirmedBtn:
+      'Directe controle starten (inventaris niet bevestigd)',
   },
 };
 
