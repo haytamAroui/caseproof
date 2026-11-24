@@ -12,6 +12,7 @@ interface Found {
   version_id: string;
   original_sha256: string;
   pdf_page?: number | null;
+  term?: string;
   piece: string;
 }
 
@@ -28,7 +29,9 @@ export function ConditionPagePreview(props: {
 }) {
   const { api, caseId, briefId, found } = props;
   const canvas = useRef<HTMLCanvasElement>(null);
+  const overlay = useRef<HTMLCanvasElement>(null);
   const engine = useRef<PdfInspection | null>(null);
+  const [outlined, setOutlined] = useState(0);
   const [state, setState] = useState<'closed' | 'loading' | 'open' | 'error'>(
     'closed',
   );
@@ -52,7 +55,36 @@ export function ConditionPagePreview(props: {
     void engine.current?.close();
     engine.current = null;
     if (canvas.current) canvas.current.width = 0;
+    if (overlay.current) overlay.current.width = 0;
+    setOutlined(0);
     setState('closed');
+  }
+
+  /** Outlines the text LINES (extracted text items) that literally contain the word. Line-level, not word-level. */
+  function outline(result: Awaited<ReturnType<PdfInspection['render']>>) {
+    const base = canvas.current;
+    const layer = overlay.current;
+    if (!base || !layer || !result) return;
+    layer.width = base.width;
+    layer.height = base.height;
+    const context = layer.getContext('2d');
+    const word = (found.term ?? '').toLowerCase();
+    let count = 0;
+    if (context && word) {
+      const xs = layer.width / result.width;
+      const ys = layer.height / result.height;
+      context.strokeStyle = '#8a6d00';
+      context.fillStyle = 'rgba(255, 224, 102, 0.35)';
+      context.lineWidth = 2 * xs;
+      for (const item of result.textBoxes) {
+        if (!item.text.toLowerCase().includes(word)) continue;
+        const [x1, y1, x2, y2] = item.box;
+        context.fillRect(x1 * xs, y1 * ys, (x2 - x1) * xs, (y2 - y1) * ys);
+        context.strokeRect(x1 * xs, y1 * ys, (x2 - x1) * xs, (y2 - y1) * ys);
+        count += 1;
+      }
+    }
+    setOutlined(count);
   }
 
   async function open() {
@@ -82,7 +114,7 @@ export function ConditionPagePreview(props: {
       setPages(opened.pages);
       setState('open');
       if (!canvas.current) throw new Error('canvas unavailable');
-      await boundedInspection(
+      const rendered = await boundedInspection(
         opened.render(
           canvas.current,
           page,
@@ -96,6 +128,7 @@ export function ConditionPagePreview(props: {
           void opened.close();
         },
       );
+      outline(rendered);
     } catch (reason) {
       if (controller.signal.aborted) return;
       void inspection?.close();
@@ -110,7 +143,7 @@ export function ConditionPagePreview(props: {
   }
 
   return (
-    <span className="small" style={{ display: 'block' }}>
+    <div className="small">
       {state === 'closed' || state === 'error' ? (
         <Button
           onClick={() => {
@@ -125,15 +158,21 @@ export function ConditionPagePreview(props: {
       {state === 'loading' && ' Opening the original…'}
       {state === 'error' && <Notice error>{message}</Notice>}
       {state === 'open' && (
-        <span role="note" style={{ display: 'block' }}>
-          {`Original page ${page} of ${pages}, digest ${found.original_sha256.slice(0, 12)}… verified before display. The word is not highlighted and the page is not a check of what it means.`}
-        </span>
+        <p role="note">
+          {`Original page ${page} of ${pages}, digest ${found.original_sha256.slice(0, 12)}… verified before display. `}
+          {outlined > 0
+            ? `${outlined} text line(s) containing the word are outlined (line-level, not the exact word). `
+            : 'The word could not be located in the page text layer, so nothing is outlined. '}
+          The page is not a check of what it means.
+        </p>
       )}
-      <canvas
-        ref={canvas}
-        aria-label={`Original PDF page ${page} of ${found.piece}`}
-        style={{ display: state === 'open' ? 'block' : 'none' }}
-      />
-    </span>
+      <div className="viewer-page" hidden={state !== 'open'}>
+        <canvas
+          ref={canvas}
+          aria-label={`Original PDF page ${page} of ${found.piece}`}
+        />
+        <canvas ref={overlay} className="viewer-overlay" aria-hidden="true" />
+      </div>
+    </div>
   );
 }

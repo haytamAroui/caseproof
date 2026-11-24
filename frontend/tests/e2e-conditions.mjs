@@ -1,4 +1,4 @@
-/* global window */
+/* global window, document, HTMLCanvasElement */
 // FAKE-BACKED browser test (loopback only): save a condition, read it back, remove the last one, reload.
 // Real: built React app, route/matching/contract code. FAKE: auth, storage, DB, conditions store, previews.
 // Run from repo root (no network):
