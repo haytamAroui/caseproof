@@ -12,13 +12,14 @@ never proof that the brief is wrong, and never an approval.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Callable
 from dataclasses import asdict
 from typing import Annotated, Any, Protocol
 from uuid import UUID
 
-from fastapi import APIRouter, Header, HTTPException, Response
+from fastapi import APIRouter, Body, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.litigation.review_cycle import CorrectionProposal, preview_correction
@@ -30,10 +31,11 @@ from apps.api.litigation_review_app import ReviewBody
 from apps.api.litigation_review_workspace import ReviewCommand, SignedReviewWorkspace
 from apps.api.litigation_workspace_sources import SignedBriefSources
 from apps.api.signed_supabase_facts import FactRefused
+from apps.api.signed_supabase_originals import PrivateStorageDenied
 from infrastructure.parsers.pdf_ocr import OCRUnavailable
 from infrastructure.parsers.pdf_source_crop import render_pdf_page
 
-__all__ = ["create_signed_workbench_router"]
+__all__ = ["ConflictError", "create_signed_workbench_router"]
 
 _NOTE = (
     "Candidate differences compare typed values in one verified source passage. "
@@ -41,6 +43,10 @@ _NOTE = (
 )
 
 
+_PACK_NOTE = (
+    "The digest proves the downloaded bytes equal what the server built for this check. "
+    "It does not prove who built them, that the corpus is current or applicable, or that any claim is supported."
+)
 _LEGAL_NOTE = (
     "PASS means the article is in the chosen corpus and any bound quotation is "
     "literally in its stored text. It never means the article is applicable, "
@@ -146,8 +152,25 @@ class SearchBody(BaseModel):
     query: str = Field(min_length=2, max_length=120)
 
 
+_EXHIBIT_NOTE = (
+    "Located means the number exists in the inventory a person confirmed, with its recorded "
+    "source file. The exhibit's content is not compared to the brief. Unconfirmed, unbound, "
+    "ambiguous or unnamed page-space references stay undetermined.")
+
+
+_CONDITIONS_NOTE = (
+    "Conditions are defined by the lawyer: literal words, no synonyms, no reading of meaning. "
+    "Nothing here is a verdict and no condition is ever marked as met.")
+
+
+class ConflictError(Exception):
+    """The stored revision moved since the caller read it."""
+
+
 def create_signed_workbench_router(
     factory: Callable[[str], _Workbench] | None,
+    intake_context: Callable[[str, str], Any] | None = None,
+    conditions_store: Any | None = None,
 ) -> APIRouter:
     router = APIRouter()
     base = "/dev/signed/matters/{case_id}/briefs/{brief_version_id}"
@@ -171,11 +194,7 @@ def create_signed_workbench_router(
         run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
         return {"schema": "caseproof-signed-check-v1", "note": _NOTE, **asdict(run)}
 
-    @router.get(base + "/offline-legal-pack")
-    def signed_offline_legal_pack(
-        case_id: str, brief_version_id: str,
-        authorization: Annotated[str | None, Header()] = None,
-    ) -> Response:
+    def pack_for(case_id: str, brief_version_id: str, authorization: str | None) -> tuple[bytes, str, str]:
         """Authorized legal slice with locally preserved corpus, no online fallback."""
         from application.litigation.corpus import CorpusError
         from application.litigation.legal_references import ENGINE_STRICT4
@@ -200,9 +219,49 @@ def create_signed_workbench_router(
         if (wb.checker._scope(wb.checker._verified(bearer), case_id) != access
                 or not wb.store.still_current(access=access, bundle=bundle)):
             raise AccessRejected(AccessFailure.STALE_SNAPSHOT)
+        return data, checkpoint, run.snapshot_hash
+
+    @router.get(base + "/offline-legal-pack")
+    def signed_offline_legal_pack(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        data, checkpoint, _snap = pack_for(case_id, brief_version_id, authorization)
         return Response(data, media_type="application/zip", headers={
             "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
             "Content-Disposition": 'attachment; filename="caseproof-offline-legal-review.zip"',
+            "X-CaseProof-Legal-Review-SHA256": checkpoint,
+        })
+
+    pack_v2 = "/v2/matters/{case_id}/briefs/{brief_version_id}/offline-pack"
+
+    @router.get(pack_v2 + "/manifest")
+    def v2_offline_pack_manifest(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Digest and size of the pack as it would be served now. Download must match it exactly."""
+        from application.litigation.workspace_contract import OfflinePackManifest
+        data, checkpoint, snap = pack_for(case_id, brief_version_id, authorization)
+        view = OfflinePackManifest.model_validate({
+            "schema": "caseproof-offline-pack-manifest-v1", "brief_version_id": brief_version_id,
+            "snapshot_hash": snap, "sha256": hashlib.sha256(data).hexdigest(),
+            "byte_length": len(data), "checkpoint_sha256": checkpoint, "media": "application/zip",
+            "note": _PACK_NOTE})
+        return view.model_dump(by_alias=True)
+
+    @router.get(pack_v2)
+    def v2_offline_pack(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        data, checkpoint, snap = pack_for(case_id, brief_version_id, authorization)
+        return Response(data, media_type="application/zip", headers={
+            "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": 'attachment; filename="caseproof-offline-legal-review.zip"',
+            "X-CaseProof-Snapshot": snap,
+            "X-CaseProof-Pack-SHA256": hashlib.sha256(data).hexdigest(),
+            "X-CaseProof-Pack-Size": str(len(data)),
             "X-CaseProof-Legal-Review-SHA256": checkpoint,
         })
 
@@ -397,6 +456,153 @@ def create_signed_workbench_router(
             for row in raw["suitability"]]
         try:
             view = LegalReferencesView.model_validate(raw)
+        except ValueError:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return view.model_dump(by_alias=True)
+
+    @router.get("/v2/matters/{case_id}/briefs/{brief_version_id}/exhibit-references")
+    def v2_exhibit_references(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Exhibit mentions mapped to the CONFIRMED inventory of the matter.
+
+        Identities, source versions and page mappings are passed through as
+        confirmed by a person; nothing is numbered here. Located means the
+        number exists in the confirmed inventory, never that content matches.
+        """
+        from application.litigation.inventory_mapping import map_exhibit_references
+        from application.litigation.workspace_contract import ExhibitReferencesView
+        if intake_context is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        bearer, wb = bench(authorization)
+        run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        subject = wb.checker._verified(bearer)
+        scope = wb.checker._scope(subject, case_id)
+        try:
+            bundle = wb.store.load_bundle(
+                case_id=case_id, brief_version_id=brief_version_id, access=scope)
+            intake = intake_context(bearer, case_id)
+        except AccessRejected:
+            raise
+        except Exception:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        raw = intake.model_dump(by_alias=True) if hasattr(intake, "model_dump") else dict(intake)
+        mapped = map_exhibit_references(
+            bundle.representation.text, brief_version_id=brief_version_id, intake=raw)
+        try:
+            view = ExhibitReferencesView.model_validate({
+                "schema": "caseproof-exhibit-references-v1",
+                "brief_version_id": brief_version_id,
+                "snapshot_hash": run.snapshot_hash,
+                "note": _EXHIBIT_NOTE,
+                **mapped,
+            })
+        except ValueError:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        return view.model_dump(by_alias=True)
+
+    def cond_store() -> Any:
+        if conditions_store is None:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return conditions_store
+
+    def stored_spec(bearer: str, case_id: str) -> tuple[int, dict[str, Any] | None]:
+        from application.litigation.corpus import CorpusError
+        from application.litigation.signed_conditions import load_stored
+        try:
+            head = cond_store().read(bearer, case_id)
+            if head is None:
+                return 0, None
+            return int(head["revision"]), load_stored(head["spec_text"], head["spec_sha256"])
+        except AccessRejected:
+            raise
+        except PrivateStorageDenied:
+            # A denied caller is told "not found", never an empty conditions list.
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except (CorpusError, KeyError, ValueError, TypeError):
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        except Exception:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+
+    @router.get("/v2/matters/{case_id}/conditions")
+    def v2_conditions_state(
+        case_id: str, authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Lawyer-defined conditions of this matter: the stored revision, re-hashed on read."""
+        from application.litigation.workspace_contract import ConditionsStateView
+        bearer = _token(authorization)
+        revision, spec = stored_spec(bearer, case_id)
+        view = ConditionsStateView.model_validate({
+            "schema": "caseproof-conditions-state-v1", "revision": revision,
+            "spec_sha256": None if spec is None else spec["spec_sha256"],
+            "conditions": [] if spec is None else spec["conditions"], "note": _CONDITIONS_NOTE})
+        return view.model_dump(by_alias=True)
+
+    @router.post("/v2/matters/{case_id}/conditions")
+    def v2_conditions_save(
+        case_id: str, body: Annotated[Any, Body()],
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        from pydantic import ValidationError
+
+        from application.litigation.corpus import CorpusError
+        from application.litigation.signed_conditions import canonical_text, normalise_input
+        from application.litigation.workspace_contract import ConditionsSaveBody, ConditionsStateView
+        bearer = _token(authorization)
+        try:
+            parsed = ConditionsSaveBody.model_validate(body)
+            spec = normalise_input([c.model_dump() for c in parsed.conditions])
+            text, digest = canonical_text(spec)
+        except (ValidationError, CorpusError) as exc:
+            raise HTTPException(422, "conditions refused: " + (str(exc) if isinstance(exc, CorpusError) else "invalid shape")) from None
+        store = cond_store()
+        try:
+            revision = int(store.append(bearer, case_id, parsed.expected_revision, text, digest))
+        except AccessRejected:
+            raise
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
+        except ConflictError:
+            raise HTTPException(409, "conditions changed since you loaded them; reload") from None
+        except Exception:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        # Read back: only report what the store now holds.
+        got, stored = stored_spec(bearer, case_id)
+        if got != revision or stored is None or stored["spec_sha256"] != digest:
+            raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE)
+        return ConditionsStateView.model_validate({
+            "schema": "caseproof-conditions-state-v1", "revision": got, "spec_sha256": digest,
+            "conditions": stored["conditions"], "note": _CONDITIONS_NOTE}).model_dump(by_alias=True)
+
+    @router.get("/v2/matters/{case_id}/briefs/{brief_version_id}/conditions")
+    def v2_condition_matches(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Where the brief hits a lawyer trigger, and the literal passages found in readable sources."""
+        from application.litigation.corpus import CorpusError
+        from application.litigation.signed_conditions import match_conditions
+        from application.litigation.workspace_contract import ConditionMatchesView
+        bearer, wb = bench(authorization)
+        revision, spec = stored_spec(bearer, case_id)
+        sources = SignedBriefSources(wb.checker)
+        bundle = sources._bundle(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        if spec is None or not spec["conditions"]:
+            matched: dict[str, Any] = {"spec_sha256": None, "scope": _CONDITIONS_NOTE, "anchors": [],
+                                       "coverage": {"conditions": 0, "anchors": 0, "sources_read": 0,
+                                                    "sources_not_read": 0,
+                                                    "by_status": {s: 0 for s in ("PASS", "FAIL", "UNVERIFIED", "UNDETERMINED")}}}
+        else:
+            from apps.api.litigation_workspace_sources import _labels
+            try:
+                matched = match_conditions(bundle.representation.text, spec, bundle.previews, _labels(bundle))
+            except CorpusError:
+                raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
+        try:
+            view = ConditionMatchesView.model_validate({
+                "schema": "caseproof-condition-matches-v1", "brief_version_id": brief_version_id,
+                "revision": revision, **matched})
         except ValueError:
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return view.model_dump(by_alias=True)

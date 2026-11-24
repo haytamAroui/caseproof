@@ -1,0 +1,318 @@
+{
+  "$defs": {
+    "ExhibitCoverageView": {
+      "additionalProperties": false,
+      "properties": {
+        "by_status": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Status",
+          "type": "object"
+        },
+        "detected": {
+          "minimum": 0,
+          "title": "Detected",
+          "type": "integer"
+        },
+        "entries_not_detected_in_brief": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 600,
+          "title": "Entries Not Detected In Brief",
+          "type": "array"
+        },
+        "inventory_entries": {
+          "minimum": 0,
+          "title": "Inventory Entries",
+          "type": "integer"
+        },
+        "located": {
+          "minimum": 0,
+          "title": "Located",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "detected",
+        "by_status",
+        "located",
+        "inventory_entries",
+        "entries_not_detected_in_brief"
+      ],
+      "title": "ExhibitCoverageView",
+      "type": "object"
+    },
+    "ExhibitEntryView": {
+      "additionalProperties": false,
+      "description": "The confirmed inventory identity, passed through as recorded.",
+      "properties": {
+        "filename": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filename"
+        },
+        "label": {
+          "enum": [
+            "stuk",
+            "piece"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "number": {
+          "maxLength": 12,
+          "title": "Number",
+          "type": "string"
+        },
+        "page_count": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Count"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/ExhibitPageView"
+          },
+          "maxItems": 128,
+          "title": "Pages",
+          "type": "array"
+        },
+        "readback": {
+          "anyOf": [
+            {
+              "enum": [
+                "verified",
+                "unknown",
+                "integrity_mismatch"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Readback"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        },
+        "source_version_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Version Id"
+        }
+      },
+      "required": [
+        "label",
+        "number",
+        "pages"
+      ],
+      "title": "ExhibitEntryView",
+      "type": "object"
+    },
+    "ExhibitPageView": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 12,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "pdf_page": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Pdf Page",
+          "type": "integer"
+        },
+        "space": {
+          "enum": [
+            "printed",
+            "bundle"
+          ],
+          "title": "Space",
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "label",
+        "pdf_page"
+      ],
+      "title": "ExhibitPageView",
+      "type": "object"
+    },
+    "ExhibitReferenceView": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "minimum": 0,
+          "title": "End",
+          "type": "integer"
+        },
+        "entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExhibitEntryView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "page_cited": {
+          "title": "Page Cited",
+          "type": "boolean"
+        },
+        "raw_text": {
+          "maxLength": 64,
+          "title": "Raw Text",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 120,
+          "title": "Reason",
+          "type": "string"
+        },
+        "reference_id": {
+          "pattern": "^exhibit-ref-\\d{2,5}$",
+          "title": "Reference Id",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "UNVERIFIED",
+            "UNDETERMINED"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference_id",
+        "raw_text",
+        "start",
+        "end",
+        "status",
+        "reason",
+        "page_cited"
+      ],
+      "title": "ExhibitReferenceView",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Exhibit mentions mapped to the confirmed inventory. Located never means content verified.",
+  "properties": {
+    "brief_version_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Brief Version Id",
+      "type": "string"
+    },
+    "confirmation_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confirmation Id"
+    },
+    "coverage": {
+      "$ref": "#/$defs/ExhibitCoverageView"
+    },
+    "inventory_complete": {
+      "title": "Inventory Complete",
+      "type": "boolean"
+    },
+    "inventory_confirmed": {
+      "title": "Inventory Confirmed",
+      "type": "boolean"
+    },
+    "note": {
+      "maxLength": 1000,
+      "title": "Note",
+      "type": "string"
+    },
+    "references": {
+      "items": {
+        "$ref": "#/$defs/ExhibitReferenceView"
+      },
+      "maxItems": 10000,
+      "title": "References",
+      "type": "array"
+    },
+    "schema": {
+      "const": "caseproof-exhibit-references-v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "snapshot_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "brief_version_id",
+    "snapshot_hash",
+    "note",
+    "inventory_confirmed",
+    "inventory_complete",
+    "references",
+    "coverage"
+  ],
+  "title": "ExhibitReferencesView",
+  "type": "object"
+}

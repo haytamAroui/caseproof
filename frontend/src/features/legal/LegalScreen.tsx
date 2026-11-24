@@ -10,6 +10,9 @@ import {
 import { useSession } from '../../shared/session';
 import { useLocale } from '../../shared/i18n';
 import { Button, Notice } from '../../shared/ui';
+import { ConditionsSection } from './ConditionsSection';
+import { ExhibitsSection } from './ExhibitsSection';
+import { PackDownload } from './PackDownload';
 import { ReviewBox } from './ReviewBox';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -263,6 +266,21 @@ export function LegalScreen({ api }: { api: ApiClient }) {
                 ))}
             </ul>
           )}
+          {refs.data.corpus === 'configured' && (
+            <PackDownload
+              api={api}
+              caseId={caseId}
+              briefId={briefId}
+              snapshot={refs.data.snapshot_hash}
+            />
+          )}
+          <ExhibitsSection
+            api={api}
+            caseId={caseId}
+            briefId={briefId}
+            snapshot={refs.data.snapshot_hash}
+          />
+          <ConditionsSection api={api} caseId={caseId} briefId={briefId} />
           <h2>{t('legalRulesHeading')}</h2>
           {refs.data.suitability.length === 0 ? (
             <Notice>{t('legalNoRulesEvaluated')}</Notice>

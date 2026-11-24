@@ -2303,6 +2303,23 @@ ins {
   color: #ffffff;
 }
 
+.legal-pack-box {
+  margin: 14px 0 18px;
+}
+.legal-conditions-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px 14px;
+  padding: 14px;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.legal-conditions-form button {
+  align-self: end;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-instant: 0ms;

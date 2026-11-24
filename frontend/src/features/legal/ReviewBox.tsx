@@ -14,6 +14,7 @@ const CHOICES = [
   ['confirmed_candidate', 'legalChoiceConfirm'],
   ['dismissed', 'legalChoiceDismiss'],
   ['needs_information', 'legalChoiceNeedsInfo'],
+  ['omission', 'legalChoiceOmission'],
 ] as const;
 
 export function ReviewBox({

@@ -97,7 +97,8 @@
           "enum": [
             "confirmed_candidate",
             "dismissed",
-            "needs_information"
+            "needs_information",
+            "omission"
           ],
           "title": "Disposition",
           "type": "string"

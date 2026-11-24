@@ -163,10 +163,36 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     legalChoiceConfirm: 'I confirm this finding exists as shown',
     legalChoiceDismiss: 'I dismiss this finding',
     legalChoiceNeedsInfo: 'More information is needed',
+    legalChoiceOmission: 'A relevant passage or piece was not shown',
     legalLedgerUnavailable:
       'The review ledger is unavailable. Nothing can be recorded.',
     legalLedgerStale:
       'The ledger is bound to a different check. Reload before deciding.',
+    packDownloadBtn: 'Download offline review pack (ZIP)',
+    packPreparing: 'Preparing the pack…',
+    packError:
+      'The pack could not be prepared or its bytes did not match this check (the review may have changed). Nothing was saved. Reload and try again.',
+    exhibitsHeading: 'Exhibit references and the confirmed inventory',
+    exhibitsLoading: 'Loading exhibit references…',
+    exhibitsError:
+      'Exhibit references are unavailable. No cached result is shown.',
+    exhibitsNone: 'No numbered exhibit mention was detected.',
+    exhibitNotInInventory: 'Not in the confirmed inventory',
+    exhibitUndetermined: 'Cannot be decided',
+    conditionsHeading: 'Conditions defined by the lawyer',
+    conditionsLoading: 'Loading conditions…',
+    conditionsUnavailable:
+      'Conditions are unavailable. Nothing can be shown or saved.',
+    conditionsSaveBtn: 'Save condition',
+    conditionsRemoveBtn: 'Remove',
+    conditionsIdLabel: 'Identifier (lowercase, digits, dashes)',
+    conditionsLabelField: 'Label',
+    conditionsQuestionField: 'Question for the lawyer (optional)',
+    conditionsTriggerField:
+      'Words in the brief that trigger it (comma separated)',
+    conditionsEvidenceField: 'Words to find in the pieces (comma separated)',
+    conditionsPiecesField: 'Only these pieces (optional, e.g. Pièce 1)',
+    conditionNoPassage: 'No passage found in the pieces read',
   },
   fr: {
     skip: 'Aller au contenu',
@@ -310,10 +336,38 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     legalChoiceConfirm: 'Je confirme ce constat tel qu’affiché',
     legalChoiceDismiss: 'J’écarte ce constat',
     legalChoiceNeedsInfo: 'Complément d’information nécessaire',
+    legalChoiceOmission:
+      'Un passage ou une pièce pertinente n’a pas été affiché',
     legalLedgerUnavailable:
       'Le registre signé est indisponible. Aucune décision ne peut être enregistrée.',
     legalLedgerStale:
       'Le registre est lié à un autre contrôle. Rechargez avant de décider.',
+    packDownloadBtn: 'Télécharger le pack de revue hors ligne (.zip)',
+    packPreparing: 'Préparation du pack en cours…',
+    packError:
+      'Le pack n’a pas pu être préparé ou son empreinte ne correspond plus à ce contrôle. Rien n’a été enregistré. Rechargez la page.',
+    exhibitsHeading: 'Renvois aux pièces et bordereau confirmé',
+    exhibitsLoading: 'Chargement des renvois de pièces…',
+    exhibitsError:
+      'Les renvois de pièces sont indisponibles. Aucun résultat en cache n’est affiché.',
+    exhibitsNone: 'Aucun renvoi numéroté à une pièce n’a été détecté.',
+    exhibitNotInInventory: 'Absent du bordereau confirmé',
+    exhibitUndetermined: 'Appréciation requise',
+    conditionsHeading: 'Conditions définies par l’avocat',
+    conditionsLoading: 'Chargement des conditions…',
+    conditionsUnavailable:
+      'Les conditions sont indisponibles. Rien ne peut être affiché ou enregistré.',
+    conditionsSaveBtn: 'Enregistrer la condition',
+    conditionsRemoveBtn: 'Supprimer',
+    conditionsIdLabel: 'Identifiant (minuscules, chiffres, tirets)',
+    conditionsLabelField: 'Intitulé de la condition',
+    conditionsQuestionField: 'Question à l’avocat (optionnel)',
+    conditionsTriggerField:
+      'Mots déclencheurs dans les conclusions (séparés par des virgules)',
+    conditionsEvidenceField:
+      'Mots à retrouver dans les pièces (séparés par des virgules)',
+    conditionsPiecesField: 'Limiter à ces pièces (optionnel, ex. Pièce 1)',
+    conditionNoPassage: 'Aucun passage trouvé dans les pièces lues',
   },
   nl: {
     skip: 'Naar inhoud',
@@ -458,10 +512,37 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     legalChoiceConfirm: 'Ik bevestig deze vaststelling zoals weergegeven',
     legalChoiceDismiss: 'Ik wijs deze vaststelling af',
     legalChoiceNeedsInfo: 'Bijkomende informatie vereist',
+    legalChoiceOmission: 'Een relevante passage of stuk werd niet getoond',
     legalLedgerUnavailable:
       'Het ondertekende register is niet beschikbaar. Er kan niets worden vastgelegd.',
     legalLedgerStale:
       'Het register is gekoppeld aan een andere controle. Herlaad vóór uw beslissing.',
+    packDownloadBtn: 'Offline controlepakket downloaden (.zip)',
+    packPreparing: 'Pakket wordt voorbereid…',
+    packError:
+      'Het pakket kon niet worden voorbereid of komt niet overeen met deze controle. Herlaad de pagina.',
+    exhibitsHeading: 'Stukverwijzingen en bevestigde inventaris',
+    exhibitsLoading: 'Stukverwijzingen laden…',
+    exhibitsError:
+      'Stukverwijzingen zijn niet beschikbaar. Er wordt geen cache getoond.',
+    exhibitsNone: 'Geen genummerde stukverwijzing gedetecteerd.',
+    exhibitNotInInventory: 'Niet op bevestigde inventaris',
+    exhibitUndetermined: 'Beoordeling vereist',
+    conditionsHeading: 'Door de advocaat bepaalde voorwaarden',
+    conditionsLoading: 'Voorwaarden laden…',
+    conditionsUnavailable:
+      'Voorwaarden zijn niet beschikbaar. Er kan niets worden getoond of opgeslagen.',
+    conditionsSaveBtn: 'Voorwaarde opslaan',
+    conditionsRemoveBtn: 'Verwijderen',
+    conditionsIdLabel: 'Identificatie (kleine letters, cijfers, streepjes)',
+    conditionsLabelField: 'Titel van de voorwaarde',
+    conditionsQuestionField: 'Vraag voor de advocaat (optioneel)',
+    conditionsTriggerField:
+      'Triggerwoorden in de conclusies (komma-gescheiden)',
+    conditionsEvidenceField:
+      'Te zoeken woorden in de stukken (komma-gescheiden)',
+    conditionsPiecesField: 'Enkel deze stukken (optioneel, bv. Stuk 1)',
+    conditionNoPassage: 'Geen passage gevonden in de gelezen stukken',
   },
 };
 

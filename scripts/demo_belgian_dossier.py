@@ -681,6 +681,7 @@ _REVIEW_LABELS = {
     ReviewDisposition.CONFIRMED: "Écart confirmé",
     ReviewDisposition.DISMISSED: "Écart écarté",
     ReviewDisposition.NEEDS_INFORMATION: "Information requise",
+    ReviewDisposition.OMISSION: "Omission signalée",
 }
 
 

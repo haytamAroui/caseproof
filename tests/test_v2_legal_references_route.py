@@ -130,3 +130,97 @@ def test_review_state_from_the_real_blocker_builder_fits_the_product_contract(tm
                                             "release_authorized": False})
     with pytest.raises(ValueError):
         ClearbriefReviewState.model_validate({**state, "release_authorized": True})
+
+
+def test_offline_pack_manifest_matches_download_and_replays(tmp_path, monkeypatch):
+    from application.litigation.offline_legal_pack import verify_legal_pack
+    from apps.api import litigation_evidence_search as les
+    monkeypatch.setattr(les.AuthorizedEvidenceSearch, "_require_evidence", staticmethod(lambda _a: None))
+    # Fake ports (labelled): bench with the review state and the current-store check the pack route needs.
+    from types import SimpleNamespace as NS
+    path = tmp_path / "p2.docx"
+    path.write_bytes(docx_without_custom_xml([f"Article 8.5 du Code civil : « {ARTICLE} »."]))
+    config = load_corpus_config(corpus(tmp_path))
+    text = parse_docx(path.read_bytes())["text"]
+    obs = check_legal_references(text, config.records, config.act_aliases,
+                                 chosen_versions=config.chosen_versions, strict=True, v3=True)
+    run = NS(snapshot_hash=SNAP, representation_sha256=hashlib.sha256(text.encode()).hexdigest(),
+             corpus_pack_sha256=config.pack_sha256, legal_observations=tuple(obs), suitability_observations=())
+    access = NS(case_id="c")
+    wb = NS(checker=NS(check=lambda **_: run, legal_corpus_for=lambda _c: config, _verified=lambda _b: None,
+                       _scope=lambda _s, _c: access),
+            store=NS(load_bundle=lambda **_: NS(representation=NS(text=text)), still_current=lambda **_: True),
+            workspace=NS(state=lambda **_: {"snapshot_hash": SNAP, "decisions": []}))
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse
+
+    from apps.api.access_control import AccessRejected
+    app = FastAPI()
+
+    @app.exception_handler(AccessRejected)
+    async def denied(request: Request, exc: AccessRejected) -> JSONResponse:
+        return JSONResponse({"error": exc.code.value}, status_code=exc.http_status)
+
+    app.include_router(create_signed_workbench_router(lambda _b: wb))
+    c = TestClient(app)
+    base = "/v2/matters/c/briefs/v/offline-pack"
+    m = c.get(base + "/manifest", headers=H).json()
+    r = c.get(base, headers=H)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/zip")
+    assert hashlib.sha256(r.content).hexdigest() == m["sha256"] == r.headers["X-CaseProof-Pack-SHA256"]
+    assert len(r.content) == m["byte_length"] == int(r.headers["X-CaseProof-Pack-Size"])
+    assert r.headers["X-CaseProof-Snapshot"] == m["snapshot_hash"] == SNAP
+    assert verify_legal_pack(r.content, expected_sha256=m["checkpoint_sha256"])["references"]
+    assert c.get(base).status_code == 401 and c.get(base + "/manifest").status_code == 401
+
+
+# --- exhibits against the confirmed inventory (intake record is FAKE here, labelled) ---
+V1 = "11111111-1111-1111-1111-111111111111"
+
+
+def _intake(**over):
+    base = {"entries": [{"label": "piece", "number": "1", "source_version_id": V1, "pages": []}],
+            "sources": [{"version_id": V1, "filename": "p1.pdf", "sha256": "b" * 64, "readback": "verified", "page_count": 2}],
+            "confirmation_id": "conf-1", "brief_id": "v", "inventory_complete": True}
+    base.update(over)
+    return base
+
+
+def test_v2_exhibit_references_map_only_confirmed_inventory(tmp_path):
+    import apps.api.signed_workbench_routes as swr
+    client, _ = _client(tmp_path, ["Voir Pièce 1 et Pièce 7."])
+    # find the fake workbench factory used by _client by building a second router around it
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse
+
+    from apps.api.access_control import AccessRejected
+    paragraph_text = parse_docx(docx_without_custom_xml(["Voir Pièce 1 et Pièce 7."]))["text"]
+    run = SimpleNamespace(snapshot_hash=SNAP)
+    checker = SimpleNamespace(check=lambda **_: run, _verified=lambda _b: None,
+                              _scope=lambda _s, _c: SimpleNamespace(case_id="c"))
+    wb = SimpleNamespace(checker=checker, store=SimpleNamespace(
+        load_bundle=lambda **_: SimpleNamespace(representation=SimpleNamespace(text=paragraph_text))))
+
+    def app_for(intake):
+        app = FastAPI()
+
+        @app.exception_handler(AccessRejected)
+        async def denied(request: Request, exc: AccessRejected) -> JSONResponse:
+            return JSONResponse({"error": exc.code.value}, status_code=exc.http_status)
+        app.include_router(swr.create_signed_workbench_router(lambda _b: wb, (lambda _b, _c: intake) if intake is not None else None))
+        return TestClient(app)
+
+    url = "/v2/matters/c/briefs/v/exhibit-references"
+    body = app_for(_intake()).get(url, headers=H).json()
+    assert body["schema"] == "caseproof-exhibit-references-v1"
+    got = [(r["raw_text"], r["status"], r["reason"].split("_")[0]) for r in body["references"]]
+    assert got == [("Pièce 1", "UNDETERMINED", "piece"), ("Pièce 7", "UNVERIFIED", "piece")]
+    assert body["references"][0]["entry"]["sha256"] == "b" * 64 and body["references"][1]["entry"] is None
+    assert body["coverage"]["by_status"]["PASS"] == 0
+    # unconfirmed inventory maps nothing
+    unconfirmed = app_for(_intake(confirmation_id=None)).get(url, headers=H).json()
+    assert all(r["entry"] is None and r["status"] == "UNDETERMINED" for r in unconfirmed["references"])
+    assert unconfirmed["inventory_confirmed"] is False
+    # no intake service wired: fail closed, no body
+    assert app_for(None).get(url, headers=H).status_code >= 400
+    assert app_for(_intake()).get(url).status_code == 401

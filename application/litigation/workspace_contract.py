@@ -263,7 +263,7 @@ class ClearbriefDecisionView(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     observation_id: str = Field(min_length=1, max_length=220)
     actor_id: str = Field(min_length=1, max_length=200)
-    disposition: Literal["confirmed_candidate", "dismissed", "needs_information"]
+    disposition: Literal["confirmed_candidate", "dismissed", "needs_information", "omission"]
     rationale: str = Field(min_length=1, max_length=2000)
 
 
@@ -305,3 +305,189 @@ class ClearbriefReviewReceipt(BaseModel):
     revision: int = Field(ge=0, le=100000)
     replayed: bool
     release_authorized: Literal[False]
+
+
+class OfflinePackManifest(BaseModel):
+    """Exact digest and size of the offline review pack for one frozen check."""
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-offline-pack-manifest-v1"] = Field(alias="schema")
+    brief_version_id: str = Field(min_length=1, max_length=200)
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    byte_length: int = Field(ge=1, le=20_000_000)
+    checkpoint_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    media: Literal["application/zip"]
+    note: str = Field(max_length=1000)
+
+
+class ExhibitPageView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    space: Literal["printed", "bundle"]
+    label: str = Field(min_length=1, max_length=12)
+    pdf_page: int = Field(ge=1, le=100000)
+
+
+class ExhibitEntryView(BaseModel):
+    """The confirmed inventory identity, passed through as recorded."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    label: Literal["stuk", "piece"]
+    number: str = Field(max_length=12)
+    source_version_id: str | None = Field(default=None, max_length=64)
+    filename: str | None = Field(default=None, max_length=128)
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    readback: Literal["verified", "unknown", "integrity_mismatch"] | None = None
+    page_count: int | None = Field(default=None, ge=0, le=100000)
+    pages: list[ExhibitPageView] = Field(max_length=128)
+
+
+class ExhibitReferenceView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    reference_id: str = Field(pattern=r"^exhibit-ref-\d{2,5}$")
+    raw_text: str = Field(max_length=64)
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    status: Literal["UNVERIFIED", "UNDETERMINED"]
+    reason: str = Field(max_length=120)
+    page_cited: bool
+    entry: ExhibitEntryView | None = None
+
+
+class ExhibitCoverageView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    detected: int = Field(ge=0)
+    by_status: dict[str, int]
+    located: int = Field(ge=0)
+    inventory_entries: int = Field(ge=0)
+    entries_not_detected_in_brief: list[str] = Field(max_length=600)
+
+
+class ExhibitReferencesView(BaseModel):
+    """Exhibit mentions mapped to the confirmed inventory. Located never means content verified."""
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-exhibit-references-v1"] = Field(alias="schema")
+    brief_version_id: str = Field(min_length=1, max_length=200)
+    snapshot_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    note: str = Field(max_length=1000)
+    inventory_confirmed: bool
+    inventory_complete: bool
+    confirmation_id: str | None = Field(default=None, max_length=128)
+    references: list[ExhibitReferenceView] = Field(max_length=10000)
+    coverage: ExhibitCoverageView
+
+    @model_validator(mode="after")
+    def coherent(self) -> "ExhibitReferencesView":
+        ids = [r.reference_id for r in self.references]
+        if len(ids) != len(set(ids)) or self.coverage.detected != len(ids):
+            raise ValueError("references and coverage disagree")
+        if self.inventory_complete and not self.inventory_confirmed:
+            raise ValueError("complete without confirmation")
+        if not self.inventory_confirmed and any(r.entry for r in self.references):
+            raise ValueError("mapping without confirmed inventory")
+        for status, n in self.coverage.by_status.items():
+            if n != sum(1 for r in self.references if r.status == status):
+                raise ValueError("status counts disagree")
+        if self.coverage.located != sum(1 for r in self.references if r.reason.startswith("piece_located")):
+            raise ValueError("located count disagrees")
+        return self
+
+
+class ConditionInput(BaseModel):
+    """One lawyer condition: literal trigger words in the brief, literal words to find in the pieces."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,40}$")
+    label: str = Field(min_length=1, max_length=120)
+    question: str = Field(max_length=300)
+    trigger: list[str] = Field(max_length=64)  # engine limit (20) enforced by validate_spec; >20 keeps the generated TS an array
+    evidence: list[str] = Field(max_length=64)
+    pieces: list[str] = Field(max_length=32)
+
+
+class ConditionsSaveBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    expected_revision: int = Field(ge=0, le=100000)
+    conditions: list[ConditionInput] = Field(max_length=50)
+
+
+class ConditionsStateView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-conditions-state-v1"] = Field(alias="schema")
+    revision: int = Field(ge=0, le=100000)
+    spec_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    conditions: list[ConditionInput] = Field(max_length=50)
+    note: str = Field(max_length=1000)
+
+    @model_validator(mode="after")
+    def coherent(self) -> "ConditionsStateView":
+        if (self.revision == 0) != (self.spec_sha256 is None) or (self.revision == 0 and self.conditions):
+            raise ValueError("revision, digest and conditions disagree")
+        return self
+
+
+class ConditionFoundView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    piece: str = Field(max_length=200)
+    source_id: str = Field(max_length=128)
+    version_id: str = Field(max_length=128)
+    original_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    pdf_page: int | None = Field(default=None, ge=1, le=100000)
+    term: str = Field(max_length=80)
+    excerpt: str = Field(max_length=400)
+    excerpt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ConditionAnchorView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    anchor_id: str = Field(pattern=r"^condition-anchor-\d{2,5}$")
+    condition_id: str = Field(max_length=41)
+    label: str = Field(max_length=120)
+    question: str = Field(max_length=300)
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    sentence: str = Field(max_length=4000)
+    status: Literal["UNVERIFIED", "UNDETERMINED"]
+    reason: str = Field(max_length=120)
+    found: list[ConditionFoundView] = Field(max_length=600)
+    pieces_read: list[str] = Field(max_length=64)
+    pieces_not_read: list[str] = Field(max_length=64)
+
+
+class ConditionCoverageView(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    conditions: int = Field(ge=0)
+    anchors: int = Field(ge=0)
+    sources_read: int = Field(ge=0)
+    sources_not_read: int = Field(ge=0)
+    by_status: dict[str, int]
+
+
+class ConditionMatchesView(BaseModel):
+    """Condition anchors of ONE brief version. Routing for the lawyer, never a verdict."""
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+    schema_version: Literal["caseproof-condition-matches-v1"] = Field(alias="schema")
+    brief_version_id: str = Field(min_length=1, max_length=200)
+    revision: int = Field(ge=0, le=100000)
+    spec_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    scope: str = Field(max_length=1200)
+    anchors: list[ConditionAnchorView] = Field(max_length=200)
+    coverage: ConditionCoverageView
+
+    @model_validator(mode="after")
+    def coherent(self) -> "ConditionMatchesView":
+        ids = [a.anchor_id for a in self.anchors]
+        if len(ids) != len(set(ids)) or self.coverage.anchors != len(ids):
+            raise ValueError("anchors and coverage disagree")
+        if self.revision == 0 and self.anchors:
+            raise ValueError("anchors without a stored spec")
+        for a in self.anchors:
+            if a.status == "UNVERIFIED" and (a.found or a.pieces_not_read or not a.pieces_read):
+                raise ValueError("no-passage claim needs every targeted piece read")
+            if a.status == "UNDETERMINED" and a.reason != (
+                "condition_passages_found_appraisal_required" if a.found
+                else "condition_no_passage_found_but_a_targeted_piece_was_not_read"
+            ):
+                raise ValueError("reason does not match the recorded passages")
+        for status, n in self.coverage.by_status.items():
+            if n != sum(1 for a in self.anchors if a.status == status):
+                raise ValueError("status counts disagree")
+        return self
+

@@ -24,7 +24,7 @@ class ReviewBody(BaseModel):
     observation_id: str = Field(min_length=1, max_length=160)
     request_id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
     expected_revision: int = Field(ge=0, le=256)
-    disposition: Literal["confirmed_candidate", "dismissed", "needs_information"]
+    disposition: Literal["confirmed_candidate", "dismissed", "needs_information", "omission"]
     rationale: str = Field(min_length=1, max_length=2000)
 
 

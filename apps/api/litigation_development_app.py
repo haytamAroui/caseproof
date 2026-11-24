@@ -152,6 +152,20 @@ class SignedReviewRecord(Protocol):
     def record(self, *, bearer: str, case_id: str, document_role: str) -> dict[str, object]: ...
 
 
+def _conditions_store(publishable_key: str | None, factory: Any) -> Any:
+    """Conditions persistence only when the signed workbench AND a publishable key are configured.
+
+    Targets RPCs that exist only as a DRAFT proposal (db/proposals/SIGNED_matter_conditions.sql); until that
+    is applied to the target project, calls fail closed with 503. Never built without the signed workbench.
+    """
+    if not publishable_key or factory is None:
+        return None
+    from apps.api.signed_conditions_store import SupabaseConditionsStore
+    from apps.api.signed_supabase_rpc import call_rpc
+
+    return SupabaseConditionsStore(call_rpc=call_rpc, publishable_key=publishable_key)
+
+
 def create_litigation_development_app(
     *,
     checker: AuthorizedLitigationChecker | None = None,
@@ -192,8 +206,6 @@ def create_litigation_development_app(
         )
     )
 
-    app.include_router(create_signed_workbench_router(signed_workbench_factory))
-
     if publishable_key is not None and (
         not publishable_key.startswith("sb_publishable_")
         or len(publishable_key) > 512
@@ -210,11 +222,15 @@ def create_litigation_development_app(
         else None
     )
     app.include_router(create_dossier_router(dossier_store))
+    workspace_intake = WorkspaceIntake(dossier_store.client, dossier_store) if dossier_store else None
     app.include_router(
-        create_workspace_intake_router(
-            WorkspaceIntake(dossier_store.client, dossier_store) if dossier_store else None
+        create_signed_workbench_router(
+            signed_workbench_factory,
+            workspace_intake.context if workspace_intake is not None else None,
+            _conditions_store(publishable_key, signed_workbench_factory),
         )
     )
+    app.include_router(create_workspace_intake_router(workspace_intake))
     app.include_router(create_dossier_viewer_router(dossier_store))
     if dossier_store is not None and page_worker_secret is not None:
         from apps.api.signed_page_jobs import SignedPageJobs, create_page_job_router

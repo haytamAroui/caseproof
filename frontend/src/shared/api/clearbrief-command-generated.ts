@@ -1,6 +1,6 @@
 /* Generated from Python ReviewBody. Do not edit. */
 
-export type Disposition = "confirmed_candidate" | "dismissed" | "needs_information";
+export type Disposition = "confirmed_candidate" | "dismissed" | "needs_information" | "omission";
 export type ExpectedRevision = number;
 export type ObservationId = string;
 export type Rationale = string;

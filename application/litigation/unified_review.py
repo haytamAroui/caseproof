@@ -84,6 +84,7 @@ class ReviewDisposition(StrEnum):
     CONFIRMED = "confirmed_candidate"
     DISMISSED = "dismissed"
     NEEDS_INFORMATION = "needs_information"
+    OMISSION = "omission"  # reviewer says a relevant passage or piece was not shown; a statement, never a waiver
 
 
 @dataclass(frozen=True, slots=True)

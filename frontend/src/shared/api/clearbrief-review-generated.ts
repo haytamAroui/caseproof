@@ -16,7 +16,7 @@ export type WaiverPolicy = "not_decided";
 export type BriefVersionId = string;
 export type CaseId = string;
 export type ActorId = string;
-export type Disposition = "confirmed_candidate" | "dismissed" | "needs_information";
+export type Disposition = "confirmed_candidate" | "dismissed" | "needs_information" | "omission";
 export type ObservationId1 = string;
 export type Rationale = string;
 /**
