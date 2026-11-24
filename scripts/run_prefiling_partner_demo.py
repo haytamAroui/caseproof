@@ -692,6 +692,7 @@ def _build_demo_dossier(
             "reference_recall_measured": False,
             "analysed_regions": ["body"],
             "unanalysed_regions": ["footnotes", "headers", "textboxes"],
+            **_demo_coverage_counts(findings),
             "sources": [
                 {
                     "role": "draft",
@@ -713,6 +714,39 @@ def _build_demo_dossier(
                 ],
             ],
         },
+    }
+
+
+def _demo_coverage_counts(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Numeric coverage denominators the official frontend reads (no invented values)."""
+    ledger = [
+        {
+            "version_id": meta["version_id"],
+            "original_sha256": meta["sha256"],
+            "pdf_page": number,
+            "method": "NOT_PROCESSED",
+            "reason": "outside_assessed_reference_scope",
+            "text_layer_present": True,
+            "engine_versions": {},
+        }
+        for meta in DEMO_SOURCE_META.values()
+        for number in range(1, int(meta["page_count"]) + 1)
+    ]
+    checked = sum(1 for f in findings if f.get("identity") == "resolved")
+    return {
+        "detected": len(findings),
+        "checked": checked,
+        "unresolved": len(findings) - checked,
+        "unsupported_references": 0,
+        "unprocessed_regions": 3,
+        "inventory_exceptions_pending": 0,
+        "visual_pages_completed": 0,
+        "visual_findings_not_assessed": len(findings),
+        "source_pages": ledger,
+        "source_pages_known_total": len(ledger),
+        "source_pages_total": len(ledger),
+        "source_pages_ocr_processed": 0,
+        "source_pages_failed_or_skipped": len(ledger),
     }
 
 
