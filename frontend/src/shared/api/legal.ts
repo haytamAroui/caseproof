@@ -106,3 +106,70 @@ export function parseExhibitReferences(
     throw new ContractError();
   return value;
 }
+
+export interface ReservationCuesView {
+  schema: 'caseproof-reservation-cues-v1';
+  rules: string;
+  advisory: true;
+  note: string;
+  snapshot_hash: string;
+  brief_version_id: string;
+  rows: {
+    reference_id: string;
+    corpus_text_sha256: string;
+    cues: {
+      kind: 'reservation' | 'negation_adjacent';
+      cue: string;
+      article_context: string;
+    }[];
+  }[];
+}
+
+/** Advisory literal cues. They never carry a status and never alter one. */
+export function parseReservationCues(
+  value: unknown,
+  expected: { briefId: string },
+): ReservationCuesView {
+  const v = value as Partial<ReservationCuesView> | null;
+  const isStr = (x: unknown): x is string => typeof x === 'string';
+  if (
+    !v ||
+    v.schema !== 'caseproof-reservation-cues-v1' ||
+    v.advisory !== true ||
+    v.brief_version_id !== expected.briefId ||
+    !isStr(v.rules) ||
+    !isStr(v.note) ||
+    !isStr(v.snapshot_hash) ||
+    !Array.isArray(v.rows) ||
+    v.rows.length > 500 ||
+    Object.keys(v).some(
+      (k) =>
+        ![
+          'schema',
+          'rules',
+          'advisory',
+          'note',
+          'snapshot_hash',
+          'brief_version_id',
+          'rows',
+        ].includes(k),
+    ) ||
+    v.rows.some(
+      (r) =>
+        !isStr(r?.reference_id) ||
+        !isStr(r.corpus_text_sha256) ||
+        !Array.isArray(r.cues) ||
+        r.cues.length === 0 ||
+        r.cues.length > 12 ||
+        r.cues.some(
+          (c) =>
+            (c.kind !== 'reservation' && c.kind !== 'negation_adjacent') ||
+            !isStr(c.cue) ||
+            !isStr(c.article_context) ||
+            c.article_context.length > 400,
+        ),
+    )
+  )
+    throw new ContractError();
+  return v as ReservationCuesView;
+}

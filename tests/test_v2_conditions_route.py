@@ -33,6 +33,9 @@ def preview(source_id: str, text: str, *, status="ready", warnings=(), rep="r1",
     return SimpleNamespace(row=row, text=text, spans=tuple(spans))
 
 
+ACTORS = ("11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222")
+
+
 class FakeStore:
     def __init__(self):
         self.rows = []
@@ -41,7 +44,9 @@ class FakeStore:
         if not self.rows:
             return None
         text, sha = self.rows[-1]
-        return {"revision": len(self.rows), "spec_text": text, "spec_sha256": sha}
+        events = [{"revision": n, "spec_sha256": h, "actor_id": ACTORS[n % 2],
+                   "recorded_at": f"2026-11-24T01:0{n}:00.000000Z"} for n, (_t, h) in enumerate(self.rows, start=1)]
+        return {"revision": len(self.rows), "spec_text": text, "spec_sha256": sha, "events": events}
 
     def append(self, bearer, case, expected, text, sha):
         assert hashlib.sha256(text.encode()).hexdigest() == sha

@@ -18,7 +18,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 DRAFT = (ROOT / "db/proposals/SIGNED_matter_conditions.sql").read_text()
 RETENTION = (ROOT / "db/proposals/SIGNED_matter_conditions_retention.sql").read_text()
-URI = os.environ.get("CASEPROOF_LOCAL_PG_URI")
+URI = os.environ.get("CASEPROOF_LOCAL_PG_URI") or (
+    "postgresql://postgres:{pw}@127.0.0.1:5432/caseproof_s2_ci".format(pw=os.environ.get("PGPASSWORD", ""))
+    if os.environ.get("CASEPROOF_DISPOSABLE_DB") == "YES" and os.environ.get("PGHOST") == "127.0.0.1"
+    and os.environ.get("PGDATABASE") == "caseproof_s2_ci" else None)
 
 
 def test_draft_text_is_append_only_and_not_granted_to_anon():
@@ -31,6 +34,16 @@ def test_draft_text_is_append_only_and_not_granted_to_anon():
     assert "to anon" not in low and "to public" not in low
 
 
+def _users_sql(*named: tuple[str, str]) -> str:
+    """auth.users rows. The repo's disposable stub makes instance_id NOT NULL; a minimal stub may lack the column."""
+    has = _psql("select 1 from information_schema.columns where table_schema='auth' and table_name='users' "
+                "and column_name='instance_id'")[1].strip() == "1"
+    zero = "'00000000-0000-0000-0000-000000000000'"
+    if has:
+        return "insert into auth.users(id,instance_id,email) values " + ",".join(f"('{u}',{zero},'{n}@x')" for u, n in named) + ";"
+    return "insert into auth.users(id,email) values " + ",".join(f"('{u}','{n}@x')" for u, n in named) + ";"
+
+
 def _psql(sql: str) -> tuple[int, str]:
     r = subprocess.run(["psql", URI or "", "-v", "ON_ERROR_STOP=1", "-At", "-f", "-"],
                        input=sql, capture_output=True, text=True, timeout=60)
@@ -41,8 +54,9 @@ def _psql(sql: str) -> tuple[int, str]:
 def test_rpc_and_policies_on_local_postgres():
     org, case = str(uuid.uuid4()), str(uuid.uuid4())
     writer, viewer, outsider = (str(uuid.uuid4()) for _ in range(3))
+    users = _users_sql((writer, "w"), (viewer, "v"), (outsider, "o"))
     setup = f"""
-insert into auth.users(id,email) values ('{writer}','w@x'),('{viewer}','v@x'),('{outsider}','o@x');
+{users}
 insert into caseproof.organizations(id,display_name) values ('{org}','t');
 insert into caseproof.organization_members(org_id,user_id,actions) values
  ('{org}','{writer}','{{case:read,finding:write}}'),('{org}','{viewer}','{{case:read}}');
@@ -69,6 +83,9 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
 
     assert '"revision": 1' in read(writer) and "spec_text" in read(viewer)
     assert "not authorized" in read(outsider) and "spec_text" not in read(outsider)
+    h1 = read(writer)
+    assert f'"actor_id": "{writer}"' in h1 and '"history"' in h1 and "recorded_at" in h1 and "Z" in h1
+    assert "history" not in read(outsider)
     assert "permission denied" in read(writer, "anon")
     empty = '{"conditions":[],"format":"caseproof-conditions-v1"}'
     assert '"revision": 2' in call(writer, 1, empty, hashlib.sha256(empty.encode()).hexdigest())[1]  # cleared
@@ -106,7 +123,7 @@ def test_retention_companion_is_a_bounded_generated_function():
 def test_purge_finalize_removes_condition_revisions_and_soft_deleted_matter_refuses_writes():
     org, case, writer = (str(uuid.uuid4()) for _ in range(3))
     assert _psql(f"""
-insert into auth.users(id,email) values ('{writer}','p@x');
+{_users_sql((writer, 'p'))}
 insert into caseproof.organizations(id,display_name) values ('{org}','t');
 insert into caseproof.organization_members(org_id,user_id,actions) values ('{org}','{writer}','{{case:read,finding:write}}');
 insert into caseproof.cases(id,org_id,created_by_user,effective_policy_version) values ('{case}','{org}','{writer}','p1');

@@ -437,4 +437,44 @@ describe('native Word binary upload security and signed session boundary', () =>
     expect(clear).not.toHaveBeenCalled();
     expect(s.getSnapshot().connected).toBe(true);
   });
+  it('signedOriginal returns bytes only when they hash to the signed digest', async () => {
+    const bytes = new TextEncoder().encode('%PDF-1.4 synthetic');
+    const digest = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+      (b) => b.toString(16).padStart(2, '0'),
+    ).join('');
+    const path = '/v2/matters/c/briefs/b/sources/s/versions/v/original';
+    const reply = (sha: string) =>
+      vi.fn<typeof fetch>(
+        async () =>
+          new Response(bytes, {
+            headers: {
+              'content-type': 'application/octet-stream',
+              'X-CaseProof-Original-SHA256': sha,
+            },
+          }),
+      );
+    const ok = await new ApiClient(session(), reply(digest)).signedOriginal(
+      path,
+      digest,
+      new AbortController().signal,
+    );
+    expect(Array.from(ok)).toEqual(Array.from(bytes));
+    const other = '0'.repeat(64);
+    // header and body both disagree with the digest the signed result carries: refused
+    await expect(
+      new ApiClient(session(), reply(other)).signedOriginal(
+        path,
+        other,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      new ApiClient(session(), reply(digest)).signedOriginal(
+        '/v2/report',
+        digest,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
+  });
 });

@@ -9,6 +9,7 @@ import {
 import { useSession } from '../../shared/session';
 import { useLocale } from '../../shared/i18n';
 import { Button, Notice } from '../../shared/ui';
+import { ConditionPagePreview } from './ConditionPagePreview';
 
 const split = (v: string) =>
   v
@@ -224,6 +225,12 @@ export function ConditionsSection(props: {
                         ? `, PDF p.${f.pdf_page}`
                         : ', page not mapped'}{' '}
                       (word “{f.term}”): {f.excerpt}
+                      <ConditionPagePreview
+                        api={api}
+                        caseId={caseId}
+                        briefId={briefId}
+                        found={f}
+                      />
                     </span>
                   ))}
                 </li>

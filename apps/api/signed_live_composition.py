@@ -43,6 +43,9 @@ __all__ = [
 ]
 
 _PUBLISHABLE_ENV = "CASEPROOF_SUPABASE_PUBLISHABLE_KEY"
+# Off by default. "limited-v1" enables the existing resource-limited product parser (pypdf text layer, no OCR) for PDF/DOCX
+# previews, so text-layer PDFs get page-anchored text. Without it, PDF/DOCX stay "partial" (parser_lineage_not_integrated).
+_PARSER_ENV = "CASEPROOF_SIGNED_SOURCE_PARSER"
 _SIGNING_KEY_ENV = "CASEPROOF_REVIEW_RECORD_SIGNING_KEY_HEX"
 
 
@@ -126,8 +129,16 @@ def assemble_request_workbench(environ: Mapping[str, str], bearer: str) -> Reque
         raise ValueError("verified request bearer required")
     storage = SignedOriginalsStorage(publishable_key=publishable)
     library = SignedSourceLibrary(storage=storage)
+    parser_mode = environ.get(_PARSER_ENV, "")
+    if parser_mode not in ("", "limited-v1"):
+        raise ValueError(f"{_PARSER_ENV} must be empty or limited-v1")
+    indexer = None
+    if parser_mode == "limited-v1":
+        from application.litigation.library import EvidenceIndexer
+        from infrastructure.parsers.limited import LimitedDocumentParser
+        indexer = EvidenceIndexer(LimitedDocumentParser())
     store = LiveMatterCheckStore(
-        call_rpc=call_rpc, publishable_key=publishable, bearer=bearer, library=library
+        call_rpc=call_rpc, publishable_key=publishable, bearer=bearer, library=library, indexer=indexer
     )
     ledger = LiveReviewLedger(
         call_rpc=call_rpc, publishable_key=publishable, bearer=bearer

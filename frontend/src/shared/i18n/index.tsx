@@ -219,6 +219,11 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     statusCueFlagDisclaimer:
       'Targeted lexical cue only — does not verify legal meaning. Inspect the source passage and decide.',
     runImmediateUnconfirmedBtn: 'Run immediate audit (unconfirmed inventory)',
+    reservationCueAdvisory:
+      'Advisory, read with the article (status unchanged).',
+    reservationCueOutside: 'Reservation word outside the quoted passage',
+    reservationCueNegation: 'Negation word in the neighbouring sentence',
+    reservationCueAround: 'Stored article text around it:',
   },
   fr: {
     skip: 'Aller au contenu',
@@ -422,6 +427,11 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       'Signal lexical ciblé uniquement — ne vérifie pas le sens juridique. Consultez le passage original pour décider.',
     runImmediateUnconfirmedBtn:
       'Lancer l’audit immédiat (bordereau non confirmé)',
+    reservationCueAdvisory:
+      'Avis informatif, à lire avec l’article complet (statut inchangé).',
+    reservationCueOutside: 'Mot de réserve hors du passage cité',
+    reservationCueNegation: 'Mot de négation dans la phrase voisine',
+    reservationCueAround: 'Texte conservé de l’article autour :',
   },
   nl: {
     skip: 'Naar inhoud',
@@ -626,6 +636,11 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       'Gerichte lexicale signalering — controleert geen juridische betekenis. Inspecteer de oorspronkelijke passage en beslis.',
     runImmediateUnconfirmedBtn:
       'Directe controle starten (inventaris niet bevestigd)',
+    reservationCueAdvisory:
+      'Adviesmelding, te lezen samen met het volledige artikel (status ongewijzigd).',
+    reservationCueOutside: 'Voorbehoudswoord buiten de geciteerde passage',
+    reservationCueNegation: 'Ontkenningswoord in de aangrenzende zin',
+    reservationCueAround: 'Bewaarde artikeltekst rondom:',
   },
 };
 

@@ -12,7 +12,7 @@ import html
 import io
 import json
 from dataclasses import asdict
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from zipfile import ZIP_STORED, BadZipFile, ZipFile
 
 from application.litigation.corpus import (
@@ -44,6 +44,7 @@ from application.litigation.legal_references import (
     engine_mode,
 )
 from application.litigation.legal_review_decisions import body_fingerprints, validate_review
+from application.litigation.signed_conditions_pack import validate_section as validate_signed_section
 from application.litigation.unified_review import LegalObservation
 
 MAX_BYTES = 40 * 1024 * 1024
@@ -232,6 +233,12 @@ def _report(body: dict[str, Any]) -> bytes:
         parts += ["<h2>Décisions antérieures sans effet sur ce constat</h2><p>Revue précédente <code>",
                   esc(body["review"].get("prior_checkpoint")), "</code>. Ces décisions restent visibles mais ne couvrent plus aucun constat identique.</p><pre>",
                   esc(json.dumps(superseded, ensure_ascii=False, indent=2, sort_keys=True)), "</pre>"]
+    if "signed_conditions" in body:
+        parts += _signed_conditions_report(body["signed_conditions"])
+    if "signed_sources" in body:
+        parts += _signed_sources_report(body["signed_sources"], body.get("signed_conditions"))
+    if "reservation_cues" in body:
+        parts += _reservation_cues_report(body["reservation_cues"])
     parts += ["<h2>Décisions de revue enregistrées</h2><pre>", esc(json.dumps(body["review"], ensure_ascii=False, indent=2, sort_keys=True)),
               "</pre><h2>Texte du mémoire vérifié</h2><pre>", esc(body["brief_text"]), "</pre><h2>Articles conservés</h2>"]
     for i, row in enumerate(body["articles"]):
@@ -251,6 +258,72 @@ def _report(body: dict[str, Any]) -> bytes:
         parts += ["</section>"]
     parts += ["</html>"]
     return "".join(parts).encode()
+
+
+def _reservation_cues_report(section: dict[str, Any]) -> list[str]:
+    from html import escape as esc
+    parts = ["<h2>Réserves et négations autour des extraits (détection partielle)</h2>",
+             "<p>Règles ", esc(section["rules"]), ". Listes fixes de mots FR/NL. ", esc(str(section["quotations_checked"])),
+             " extrait(s) retrouvé(s) mot pour mot ont été regardés. Ceci ne lit pas le sens, ne change aucun statut et ne dit pas que l'extrait déforme l'article : "
+             "il signale seulement un mot de réserve dans le texte conservé de l'article hors de l'extrait, ou une négation dans la phrase voisine. "
+             "Lecture de l'avocat requise. Une absence de signal ne prouve rien.</p>"]
+    if not section["flagged"]:
+        parts += ["<p>Aucun signal détecté par ces listes.</p>"]
+    for row in section["flagged"]:
+        parts += ["<p><strong>", esc(row["reference_id"]), " : à lire avec l'article.</strong> ",
+                  esc(" · ".join(("réserve" if c["kind"] == "reservation" else "négation voisine") + " « " + c["cue"] + " »" for c in row["cues"])), "</p>"]
+    return parts
+
+
+def _signed_sources_report(section: dict[str, Any], conditions: dict[str, Any] | None) -> list[str]:
+    from application.litigation.signed_sources_pack import text_replayable
+
+    def esc(v: object) -> str:
+        return html.escape(str(v), quote=True)
+
+    parts = ["<h2>Sources d'origine conservées</h2><p>", esc(section["note"]), "</p><ul>"]
+    for e in section["entries"]:
+        what = (f"conservée, {e['byte_length']} octets" if e["state"] == "retained" else f"omise ({e['reason']})")
+        parts += ["<li>", esc(e["piece"]), " · ", esc(e["media_type"]), " · ", esc(what), " · <code>",
+                  esc(e["original_sha256"]), "</code></li>"]
+    parts += ["</ul>"]
+    if conditions is not None:
+        parts += ["<p>", ("Les extraits de conditions ont été recalculés au rejeu à partir des octets conservés de toutes les sources lues."
+                          if text_replayable(section, conditions) else
+                          "Certaines sources lues n'ont pas d'octets texte conservés : leurs extraits restent contrôlés par empreinte seulement, "
+                          "sans nouvelle recherche dans la source."), "</p>"]
+    parts += ["<p>Les sources conservées se rouvrent hors ligne avec le script de réouverture du dépôt, après rejeu complet du pack.</p>"]
+    return parts
+
+
+def _signed_conditions_report(section: dict[str, Any]) -> list[str]:
+    def esc(v: object) -> str:
+        return html.escape(str(v), quote=True)
+
+    parts = ["<h2>Conditions définies par l'avocat</h2><p>", esc(section["note"]), "</p><p>Révision ", esc(section["revision"]),
+             " · empreinte <code>", esc(section["spec_sha256"]), "</code></p>"]
+    parts += ["<p><strong>Conditions effacées volontairement à cette révision : aucune condition n'est active (ce n'est pas un dossier jamais configuré).</strong></p>"
+              if section["state"] == "cleared" else "<p>Conditions actives.</p>"]
+    ev = section.get("events")
+    if ev is None:
+        parts += ["<p>Auteur et date d'enregistrement des révisions : non disponibles (le service n'a pas fourni ces valeurs).</p>"]
+    else:
+        parts += ["<p>Révisions enregistrées (auteur = identifiant du compte vérifié, date = horloge de la base, UTC) : ",
+                  esc("; ".join(f"révision {e['revision']} par {e['actor_id']} le {e['recorded_at']}" for e in ev)),
+                  ". Ces valeurs sont celles que le service a renvoyées au moment de l'export ; le pack ne permet pas de les revérifier seul.</p>"]
+    parts += ["<p>Inventaire des sources au moment de l'export (", esc(len(section["inventory"])), ") : ",
+              esc("; ".join(f"{r['piece']} {'lue' if r['read'] else 'non lue'}" for r in section["inventory"]) or "aucune"),
+              ". Couverture recalculée au rejeu à partir de cet inventaire. Les empreintes d'extraits ne contrôlent que la cohérence interne du pack : les sources elles-mêmes ne sont pas rejointes ici et n'ont pas été revérifiées de façon indépendante.</p>"]
+    for a in section["anchors"]:
+        parts += ["<article><p><strong>", esc(a["status"]), "</strong> · ", esc(a["label"]), "<br>", esc(a["sentence"]),
+                  "<br><small>", esc(a["reason"]), "</small></p>"]
+        for f in a["found"]:
+            parts += ["<p>", esc(f["piece"]), (f" p. {f['pdf_page']}" if f.get("pdf_page") else ""), " · mot « ", esc(f["term"]),
+                      " » : ", esc(f["excerpt"]), "</p>"]
+        if a["pieces_not_read"]:
+            parts += ["<p>Pièces non lues : ", esc(", ".join(a["pieces_not_read"])), "</p>"]
+        parts += ["</article>"]
+    return parts
 
 
 class LegalRun(Protocol):
@@ -295,7 +368,10 @@ def observe(text: str, config: LegalCorpusConfig, marker: object, exhibits: dict
 def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
                      brief_text: str, review: dict[str, Any], exhibits: dict[str, Any] | None = None,
                      passages: list[dict[str, Any]] | None = None, passages_rules: str | None = PASSAGE_RULES,
-                     conditions: dict[str, Any] | None = None, condition_evidence: list[dict[str, Any]] | None = None) -> tuple[bytes, str]:
+                     conditions: dict[str, Any] | None = None, condition_evidence: list[dict[str, Any]] | None = None,
+                     signed_conditions: dict[str, Any] | None = None,
+                     signed_sources: dict[str, Any] | None = None,
+                     reservation_cues: bool = False) -> tuple[bytes, str]:
     if config.failures or not config.records or run.corpus_pack_sha256 != config.pack_sha256:
         raise CorpusError("complete exact chosen corpus required for export")
     if _hash(brief_text.encode()) != run.representation_sha256 or review.get("snapshot_hash") != run.snapshot_hash:
@@ -336,6 +412,15 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
     if conditions is not None:
         body["conditions"] = conditions
         body["condition_evidence"] = condition_evidence if condition_evidence is not None else []
+    if signed_conditions is not None:
+        if conditions is not None:
+            raise CorpusError("two conditions sections")
+        body["signed_conditions"] = signed_conditions
+    if signed_sources is not None:
+        body["signed_sources"] = signed_sources
+    if reservation_cues:
+        from application.litigation import reservation_cues as _rc
+        body["reservation_cues"] = _rc.build_section(cast(Any, body["references"]), config.records)
     payload = _encode(body)
     checkpoint = _hash(payload)
     report = _report(body)
@@ -387,6 +472,21 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
             spec = validate_spec(body["conditions"])
             validate_evidence(body["brief_text"], spec, body["condition_evidence"])
             cond = (spec, body["condition_evidence"])
+        if "signed_conditions" in body:
+            if "conditions" in body:
+                raise CorpusError("two conditions sections")
+            validate_signed_section(body["brief_text"], body["signed_conditions"])
+        if "signed_sources" in body:
+            from application.litigation import signed_sources_pack as _ssp
+            sc = body.get("signed_conditions")
+            _ssp.validate_section(body["signed_sources"], sc)
+            if sc is not None and _ssp.text_replayable(body["signed_sources"], sc):
+                from application.litigation.signed_conditions import load_stored
+                _ssp.replay_conditions(body["brief_text"], body["signed_sources"], sc,
+                                       load_stored(sc["spec_text"], sc["spec_sha256"]))
+        if "reservation_cues" in body:
+            from application.litigation import reservation_cues as _rc
+            _rc.validate_section(body["reservation_cues"], cast(Any, body["references"]), config.records)
         observed = observe(body["brief_text"], config, marker, body.get("exhibits"), cond)
         if "passages" in body:
             validate_passages(body["brief_text"], [asdict(x) for x in observed], body["passages"], body.get("passages_rules"))

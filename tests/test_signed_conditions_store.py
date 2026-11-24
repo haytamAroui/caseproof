@@ -75,3 +75,18 @@ def test_dev_app_wires_store_only_with_key_and_signed_workbench():
     assert _conditions_store(None, lambda b: None) is None
     assert _conditions_store("sb_publishable_x", None) is None
     assert isinstance(_conditions_store("sb_publishable_x", lambda b: None), SupabaseConditionsStore)
+
+
+def test_read_carries_recorded_history_and_refuses_inconsistent_history():
+    ev = {"revision": 1, "spec_sha256": SHA, "actor_id": "11111111-1111-4111-8111-111111111111",
+          "recorded_at": "2026-11-24T01:00:00.000000Z"}
+    ok = {"revision": 1, "spec_text": TEXT, "spec_sha256": SHA, "history": [ev]}
+    s, _ = store(ok)
+    assert s.read("tok", CASE)["events"] == [ev]
+    s, _ = store({k: v for k, v in ok.items() if k != "history"})
+    assert s.read("tok", CASE)["events"] is None  # older RPC: unavailable, not invented
+    for bad in ([], [{**ev, "spec_sha256": "0" * 64}], [{**ev, "recorded_at": "x"}], [{**ev, "actor_id": "x"}],
+                [ev, ev], [{**ev, "extra": 1}]):
+        s, _ = store({**ok, "history": bad})
+        with pytest.raises(ValueError):
+            s.read("tok", CASE)
