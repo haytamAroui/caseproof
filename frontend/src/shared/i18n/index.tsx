@@ -214,6 +214,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     exhibitsUncitedPrefix:
       'Inventory entries with no mention detected in the assessed text:',
     exhibitsUncitedDisclaimer: 'This is not a finding that they are uncited.',
+    statusCueFlagTitle: 'Lexical appraisal flag',
+    statusCueFlagClaimVsSource: 'Draft wording vs. source wording:',
+    statusCueFlagDisclaimer:
+      'Targeted lexical cue only — does not verify legal meaning. Inspect the source passage and decide.',
   },
   fr: {
     skip: 'Aller au contenu',
@@ -411,6 +415,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       'Entrées du bordereau sans mention détectée dans le texte analysé :',
     exhibitsUncitedDisclaimer:
       'Ceci ne constitue pas un constat d’absence de citation.',
+    statusCueFlagTitle: 'Drapeau lexical · Appréciation requise',
+    statusCueFlagClaimVsSource: 'Terme des conclusions vs. pièce :',
+    statusCueFlagDisclaimer:
+      'Signal lexical ciblé uniquement — ne vérifie pas le sens juridique. Consultez le passage original pour décider.',
   },
   nl: {
     skip: 'Naar inhoud',
@@ -609,6 +617,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       'Inventarisposten zonder gedetecteerde vermelding in de geanalyseerde tekst:',
     exhibitsUncitedDisclaimer:
       'Dit is geen vaststelling dat ze niet geciteerd werden.',
+    statusCueFlagTitle: 'Lexicale vlag · Beoordeling vereist',
+    statusCueFlagClaimVsSource: 'Formulering conclusies vs. stuk:',
+    statusCueFlagDisclaimer:
+      'Gerichte lexicale signalering — controleert geen juridische betekenis. Inspecteer de oorspronkelijke passage en beslis.',
   },
 };
 

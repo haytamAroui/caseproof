@@ -33,6 +33,12 @@ export type Reason = string;
 export type ReferenceId = string;
 export type Start = number;
 export type Status = "UNVERIFIED" | "UNDETERMINED";
+export type ClaimCue = string;
+export type ClaimExcerpt = string;
+export type MatchedValueKey = string;
+export type PassageCue = string;
+export type PdfPage1 = number | null;
+export type SourceExcerpt = string;
 /**
  * @maxItems 10000
  */
@@ -73,6 +79,7 @@ export interface ExhibitReferenceView {
   reference_id: ReferenceId;
   start: Start;
   status: Status;
+  status_cue_flag?: StatusCueFlagView | null;
 }
 /**
  * The confirmed inventory identity, passed through as recorded.
@@ -91,4 +98,15 @@ export interface ExhibitPageView {
   label: Label1;
   pdf_page: PdfPage;
   space: Space;
+}
+/**
+ * Targeted FR/NL lexical flag ('signé' vs 'envoyé pour signature'). Appraisal cue only.
+ */
+export interface StatusCueFlagView {
+  claim_cue: ClaimCue;
+  claim_excerpt: ClaimExcerpt;
+  matched_value_key: MatchedValueKey;
+  passage_cue: PassageCue;
+  pdf_page?: PdfPage1;
+  source_excerpt: SourceExcerpt;
 }

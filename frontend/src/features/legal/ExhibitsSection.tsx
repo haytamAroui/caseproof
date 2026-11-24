@@ -103,6 +103,35 @@ export function ExhibitsSection(props: {
                         . {t('exhibitsContentNotCompared')}
                       </span>
                     )}
+                    {r.status_cue_flag && (
+                      <div className="status-cue-callout" role="note">
+                        <div className="status-cue-head">
+                          <span className="legal-badge" data-tone="warning">
+                            <span aria-hidden="true">!</span>{' '}
+                            <strong>{t('statusCueFlagTitle')}</strong>
+                          </span>
+                          <span className="small">
+                            {t('statusCueFlagClaimVsSource')}{' '}
+                            <code>{r.status_cue_flag.claim_cue}</code> →{' '}
+                            <code>{r.status_cue_flag.passage_cue}</code>
+                            {r.status_cue_flag.pdf_page
+                              ? ` (PDF p.${r.status_cue_flag.pdf_page})`
+                              : ''}
+                          </span>
+                        </div>
+                        <p className="small">
+                          <strong>{t('legalDraft')}:</strong>{' '}
+                          {r.status_cue_flag.claim_excerpt}
+                        </p>
+                        <p className="small">
+                          <strong>{t('sourceEvidenceHeading')}:</strong>{' '}
+                          {r.status_cue_flag.source_excerpt}
+                        </p>
+                        <p className="small muted">
+                          {t('statusCueFlagDisclaimer')}
+                        </p>
+                      </div>
+                    )}
                   </li>
                 );
               })}

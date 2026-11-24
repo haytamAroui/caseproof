@@ -230,6 +230,17 @@
           ],
           "title": "Status",
           "type": "string"
+        },
+        "status_cue_flag": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatusCueFlagView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -242,6 +253,64 @@
         "page_cited"
       ],
       "title": "ExhibitReferenceView",
+      "type": "object"
+    },
+    "StatusCueFlagView": {
+      "additionalProperties": false,
+      "description": "Targeted FR/NL lexical flag ('sign\u00e9' vs 'envoy\u00e9 pour signature'). Appraisal cue only.",
+      "properties": {
+        "claim_cue": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Claim Cue",
+          "type": "string"
+        },
+        "claim_excerpt": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Claim Excerpt",
+          "type": "string"
+        },
+        "matched_value_key": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Matched Value Key",
+          "type": "string"
+        },
+        "passage_cue": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Passage Cue",
+          "type": "string"
+        },
+        "pdf_page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pdf Page"
+        },
+        "source_excerpt": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Source Excerpt",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_cue",
+        "passage_cue",
+        "claim_excerpt",
+        "source_excerpt",
+        "matched_value_key"
+      ],
+      "title": "StatusCueFlagView",
       "type": "object"
     }
   },

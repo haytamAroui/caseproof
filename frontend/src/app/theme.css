@@ -2381,6 +2381,27 @@ ins {
   color: var(--ok);
 }
 
+.status-cue-callout {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--warn-border);
+  border-left: 3px solid var(--warn);
+  background: var(--warn-tint);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.status-cue-callout p {
+  margin: 0;
+}
+.status-cue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-instant: 0ms;

@@ -15,6 +15,13 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from application.litigation.exhibit_coverage import R_PAGE, R_RANGE, find_references
+from application.litigation.exhibit_passages import (
+    MAX_EXCERPT,
+    _claim,
+    _sentences,
+    status_mismatch,
+)
+from application.litigation.factual_values import typed_values
 from application.litigation.rule_results import RuleStatus
 
 M_LOCATED = "piece_located_in_confirmed_inventory_content_not_compared"
@@ -35,15 +42,78 @@ MAPPING_REASONS = frozenset({
 _EXACT = re.compile(r"^\d{1,4}(?:bis|ter)?$")
 
 
+def _readable_preview(preview: Any) -> bool:
+    row = getattr(preview, "row", None)
+    return bool(
+        row is not None
+        and getattr(row, "status", None) == "ready"
+        and not getattr(row, "warnings", None)
+        and getattr(row, "representation_id", None)
+        and isinstance(getattr(preview, "text", None), str)
+        and preview.text.strip()
+    )
+
+
+def _page_at(spans: Sequence[Sequence[Any]], pos: int) -> int | None:
+    for lo, hi, _kind, page0 in spans:
+        if lo <= pos < hi and page0 is not None:
+            return int(page0) + 1
+    return None
+
+
+def _detect_status_cue_flag(
+    text: str,
+    start: int,
+    end: int,
+    preview: Any,
+) -> dict[str, Any] | None:
+    """Targeted FR/NL lexical flag ('signé' vs 'envoyé pour signature').
+
+    Strictly an appraisal cue on readable source text sharing a normalized typed
+    value (date/amount). Never changes status to PASS/FAIL and never claims
+    general semantic verification.
+    """
+    if not _readable_preview(preview):
+        return None
+    sentence, values = _claim(text, start, end)
+    keys = sorted({v["key"] for v in values if v["key"]})
+    if not keys:
+        return None
+    spans = getattr(preview, "spans", ()) or ()
+    for key in keys:
+        for lo, hi in _sentences(preview.text):
+            chunk = preview.text[lo:hi]
+            if key not in {k for *_x, k in typed_values(chunk)}:
+                continue
+            excerpt = " ".join(chunk.split())[:MAX_EXCERPT]
+            mismatch = status_mismatch(sentence, excerpt)
+            if mismatch is not None:
+                return {
+                    "claim_cue": mismatch["claim_cue"],
+                    "passage_cue": mismatch["passage_cue"],
+                    "claim_excerpt": sentence[:MAX_EXCERPT],
+                    "source_excerpt": excerpt,
+                    "matched_value_key": key,
+                    "pdf_page": _page_at(spans, lo),
+                }
+    return None
+
+
 def map_exhibit_references(
     text: str,
     *,
     brief_version_id: str,
     intake: Mapping[str, Any],
+    previews: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
     """`intake` is an IntakeView dump: entries, sources, confirmation_id, brief_id, inventory_complete."""
     entries: Sequence[Mapping[str, Any]] = intake.get("entries") or []
     sources = {s["version_id"]: s for s in intake.get("sources") or []}
+    previews_by_version = {
+        getattr(getattr(p, "row", None), "version_id", None): p
+        for p in (previews or ())
+        if getattr(getattr(p, "row", None), "version_id", None)
+    }
     confirmed = bool(intake.get("confirmation_id"))
     same_draft = intake.get("brief_id") == brief_version_id
     complete = bool(intake.get("inventory_complete")) and confirmed and same_draft
@@ -86,6 +156,19 @@ def map_exhibit_references(
                 else:
                     status, reason = RuleStatus.UNDETERMINED, M_LOCATED
         source = sources.get((entry or {}).get("source_version_id") or "")
+        version_id = (entry or {}).get("source_version_id")
+        cue_flag = (
+            _detect_status_cue_flag(
+                text, ref["start"], ref["end"], previews_by_version.get(version_id)
+            )
+            if (
+                entry is not None
+                and source is not None
+                and source.get("readback") != "integrity_mismatch"
+                and version_id in previews_by_version
+            )
+            else None
+        )
         rows.append({
             "reference_id": f"exhibit-ref-{n:02d}",
             "raw_text": f"{ref['word']} {ref['number']}",
@@ -101,6 +184,7 @@ def map_exhibit_references(
                 "pages": [{"space": p["space"], "label": p["label"], "pdf_page": p["pdf_page"]}
                           for p in entry.get("pages") or []],
             },
+            "status_cue_flag": cue_flag,
         })
     uncited = [f"{e['label']} {e['number']}" for e in entries if (e["label"], e["number"]) not in cited]
     return {
