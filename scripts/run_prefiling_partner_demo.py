@@ -29,11 +29,11 @@ import hmac
 import io
 import json
 import uuid
-import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from docx import Document
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
@@ -64,6 +64,7 @@ from application.litigation.workspace_contract import (
     ReviewLedgerView,
 )
 from domains.disputes.reference_detection import detect_exhibit_references
+from infrastructure.parsers.dossier_docx_export import annotated_docx
 
 DEMO_ORG_ID = "00000000-0000-4000-8000-000000000001"
 DEMO_CASE_ID = "11111111-1111-4111-8111-111111111111"
@@ -197,39 +198,13 @@ def _minimal_pdf_bytes(pages: list[list[str]]) -> bytes:
 
 
 def _minimal_docx_bytes(text: str) -> bytes:
-    """Build a minimal valid synthetic DOCX archive for draft download/editor/export parity."""
-    from xml.sax.saxutils import escape
-
-    paragraphs = "".join(
-        f"<w:p><w:r><w:t>{escape(line)}</w:t></w:r></w:p>" for line in text.splitlines() if line
-    )
-    document_xml = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-        f"<w:body>{paragraphs}</w:body></w:document>"
-    )
+    """Build a valid OpenXML DOCX archive via python-docx so annotated_docx() appends cleanly."""
+    doc = Document()
+    for line in text.splitlines():
+        if line:
+            doc.add_paragraph(line)
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(
-            "[Content_Types].xml",
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-            '<Default Extension="xml" ContentType="application/xml"/>'
-            '<Override PartName="/word/document.xml" '
-            'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
-            "</Types>",
-        )
-        zf.writestr(
-            "_rels/.rels",
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            '<Relationship Id="rId1" '
-            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
-            'Target="word/document.xml"/>'
-            "</Relationships>",
-        )
-        zf.writestr("word/document.xml", document_xml)
+    doc.save(buf)
     return buf.getvalue()
 
 
@@ -1018,16 +993,29 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
         ).model_dump(by_alias=True)
 
     @app.get("/v2/workspace/matters/{case_id}/reports")
-    def demo_reports(case_id: str) -> dict[str, Any]:
+    def demo_reports(
+        case_id: str,
+        after: str | None = Query(default=None),
+    ) -> dict[str, Any]:
         if case_id != DEMO_CASE_ID:
             raise HTTPException(404, "unknown demo matter")
         _current_audit()
+        # `frontend/src/shared/api/reports.ts` enforces strictly ascending
+        # lexicographical order by `snapshot_hash` (unique hashes, cursor > after).
+        unique_by_hash = {
+            row["snapshot_hash"]: row for row in state["reports_catalog"]
+        }
+        ordered = [unique_by_hash[h] for h in sorted(unique_by_hash)]
+        if after is not None:
+            ordered = [row for row in ordered if row["snapshot_hash"] > after]
+        page = ordered[:20]
+        next_cursor = page[-1]["snapshot_hash"] if len(ordered) > 20 else None
         return ReportCatalogView.model_validate(
             {
                 "schema": "caseproof-workspace-reports-v1",
                 "case_id": DEMO_CASE_ID,
-                "reports": list(state["reports_catalog"]),
-                "next_cursor": None,
+                "reports": page,
+                "next_cursor": next_cursor,
             }
         ).model_dump(by_alias=True)
 
@@ -1831,15 +1819,56 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
 
         now_iso = datetime.now(UTC).isoformat()
         reviews = list(state["reviews_by_snapshot"].get(snap, []))
+        release_scope = {
+            **comp,
+            "release_type": body.release_type,
+            "partial_acknowledged": (
+                body.release_type == "partial_review" and body.partial_acknowledged
+            ),
+        }
+        release_ack = {
+            "schema": "caseproof-release-ack-v1",
+            "intent": "AUTHORIZE_REVIEW_RECORD_RELEASE",
+            "release_id": body.release_id,
+            "snapshot_hash": snap,
+            "release_type": body.release_type,
+            "actor_id": DEMO_ACTOR_ID,
+            "actor_label": DEMO_ACTOR_EMAIL,
+            "actor_label_type": "confirmed_email",
+            "acknowledged_at": now_iso,
+            "notice": (
+                "Synthetic demo release: immutable CaseProof review record only; "
+                "not a qualified signature or constat d'huissier."
+            ),
+        }
+        frozen_report = {
+            "case_id": DEMO_CASE_ID,
+            "brief_id": brief_id,
+            "snapshot_hash": snap,
+            "bundle_signature": _bundle_signature_for(brief["sha256"]),
+            "confirmation_id": state["confirmation_id"],
+            "coverage": dossier["coverage"],
+            "verification_contract": {
+                "scope": "synthetic_belgian_partner_demo",
+                "llm_in_verdict_path": False,
+                "legal_certification": False,
+            },
+            "abstentions": [
+                {
+                    "reason": "automated_legal_support_never_assessed",
+                    "note": "Human lawyer inspection is required for semantic support.",
+                }
+            ],
+            "findings": dossier["findings"],
+            "human_decisions": reviews,
+            "review_completeness": release_scope,
+            "release_acknowledgement": release_ack,
+        }
         json_bytes = json.dumps(
             {
                 "schema": "caseproof-demo-export-v1",
                 "release_id": body.release_id,
-                "case_id": DEMO_CASE_ID,
-                "brief_id": brief_id,
-                "snapshot_hash": snap,
-                "findings": dossier["findings"],
-                "reviews": reviews,
+                **frozen_report,
                 "notice": "Synthetic demo export — not a qualified signature or constat d'huissier.",
             },
             sort_keys=True,
@@ -1851,13 +1880,13 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             f"- Brief: `{brief_id}`\n"
             f"- Snapshot: `{snap}`\n"
             f"- Reviewed findings: {comp['reviewed_findings']}/{comp['total_findings']}\n\n"
+            f"## Draft Excerpt\n\n{brief['text']}\n\n"
             f"> Not legal validation, not a qualified signature, not a constat d'huissier.\n"
         ).encode()
-        docx_bytes = _minimal_docx_bytes(
-            f"CaseProof Synthetic Review Record\nSnapshot: {snap}\n"
-            f"Reviewed: {comp['reviewed_findings']}/{comp['total_findings']}\n"
-            "Not legal validation, not a qualified signature, not a constat d'huissier."
-        )
+        # Use the real CaseProof `annotated_docx()` derivative builder so the
+        # exported DOCX preserves the full draft text and appends scoped findings,
+        # human review decisions, coverage, and release provenance annotations.
+        docx_bytes = annotated_docx(brief["docx"], frozen_report)
         artifacts_raw = {"json": json_bytes, "markdown": md_bytes, "docx": docx_bytes}
         state["release_artifacts"][body.release_id] = artifacts_raw
 
@@ -1906,29 +1935,9 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             "snapshot_hash": snap,
             "review_count": comp["reviewed_findings"],
             "finding_count": comp["total_findings"],
-            "release_acknowledgement": {
-                "schema": "caseproof-release-ack-v1",
-                "intent": "AUTHORIZE_REVIEW_RECORD_RELEASE",
-                "release_id": body.release_id,
-                "snapshot_hash": snap,
-                "release_type": body.release_type,
-                "actor_id": DEMO_ACTOR_ID,
-                "actor_label": DEMO_ACTOR_EMAIL,
-                "actor_label_type": "confirmed_email",
-                "acknowledged_at": now_iso,
-                "notice": (
-                    "Synthetic demo release: immutable CaseProof review record only; "
-                    "not a qualified signature or constat d'huissier."
-                ),
-            },
+            "release_acknowledgement": release_ack,
             "reviewer_ids": [DEMO_ACTOR_EMAIL],
-            "review_completeness": {
-                **comp,
-                "release_type": body.release_type,
-                "partial_acknowledged": (
-                    body.release_type == "partial_review" and body.partial_acknowledged
-                ),
-            },
+            "review_completeness": release_scope,
             "coverage": dossier["coverage"],
             "sources": sources,
             "source_links": source_links,

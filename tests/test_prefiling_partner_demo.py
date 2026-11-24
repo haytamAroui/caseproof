@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import re
 import uuid
 from pathlib import Path
 from typing import Any
 
+from docx import Document
 from fastapi.testclient import TestClient
 
 from scripts.run_prefiling_partner_demo import (
@@ -367,6 +369,60 @@ def test_partner_demo_cockpit_v2_routes_validate_against_frontend_schemas() -> N
     )
     assert comp_resp.status_code == 200
     assert comp_resp.json()["schema"] == "caseproof-finding-drift-v1"
+
+    # Reports catalog MUST stay strictly sorted ascending by snapshot_hash after multiple runs.
+    reports_after = client.get(f"/v2/workspace/matters/{DEMO_CASE_ID}/reports")
+    assert reports_after.status_code == 200
+    _assert_matches_frontend_schema("reports.schema.json", reports_after.json())
+    hashes = [r["snapshot_hash"] for r in reports_after.json()["reports"]]
+    assert len(hashes) >= 3
+    assert hashes == sorted(set(hashes))
+    assert recheck_dossier["snapshot_hash"] in hashes
+    after_page = client.get(
+        f"/v2/workspace/matters/{DEMO_CASE_ID}/reports?after={hashes[0]}"
+    )
+    assert after_page.status_code == 200
+    assert [r["snapshot_hash"] for r in after_page.json()["reports"]] == hashes[1:]
+
+    # Save a human review on the RECHECKED draft, release it, and inspect real Annotated DOCX!
+    recheck_snap = recheck_dossier["snapshot_hash"]
+    assert (
+        client.post(
+            f"/v2/matters/{DEMO_CASE_ID}/briefs/{new_brief_id}/dossier/reviews",
+            json={
+                "snapshot_hash": recheck_snap,
+                "reference_id": "ref-piece-1",
+                "decision": "CONFIRMED_SUPPORTED",
+                "rationale": "Corrected page reference verified against physical PDF page 16.",
+                "request_id": str(uuid.uuid4()),
+                "reviewed_region_ids": [],
+            },
+        ).status_code
+        == 200
+    )
+    recheck_release_id = str(uuid.uuid4())
+    recheck_rel = client.post(
+        f"/v2/matters/{DEMO_CASE_ID}/briefs/{new_brief_id}/dossier/releases",
+        json={
+            "release_id": recheck_release_id,
+            "snapshot_hash": recheck_snap,
+            "release_type": "partial_review",
+            "partial_acknowledged": True,
+            "release_acknowledged": True,
+            "acknowledgement_version": "caseproof-release-ack-v1",
+        },
+    )
+    assert recheck_rel.status_code == 200
+    recheck_docx_resp = client.get(
+        f"/v2/matters/{DEMO_CASE_ID}/briefs/{new_brief_id}/dossier/releases/{recheck_release_id}/artifacts/docx"
+    )
+    assert recheck_docx_resp.status_code == 200
+    reopened = Document(io.BytesIO(recheck_docx_resp.content))
+    full_docx_text = "\n".join(p.text for p in reopened.paragraphs)
+    assert "Pièce 1, p. 14 (PDF p. 16)" in full_docx_text
+    assert "CaseProof — scoped review annotations" in full_docx_text
+    assert "ref-piece-1" in full_docx_text
+    assert "Corrected page reference verified against physical PDF page 16." in full_docx_text
 
     # Partial export release + artifact download on confirmed snapshot.
     release_id = str(uuid.uuid4())
