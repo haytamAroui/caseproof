@@ -7,8 +7,13 @@ import { coveragePages, coverageRegions } from './coverageRegions';
  *
  * Groups backend four-dimension findings into the four lawyer-facing triage
  * categories without mutating, recomputing, or upgrading any backend state.
- * A finding reaches `correspondance` only when all four backend dimensions are
- * explicitly resolved/mapped/exact_match/supported.
+ *
+ * Because the backend keeps human decisions in a separate `human_decisions`
+ * list and emits `support = 'not_assessed'` on findings, a finding with
+ * `identity === 'resolved'`, `page_mapping === 'mapped'`, and
+ * `fidelity === 'exact_match'` (and not contradicted/qualified) projects to
+ * `correspondance` while its independent `Human support` dimension remains
+ * explicitly displayed beside it.
  */
 export function triageCategoryOf(finding: FindingView): ResultCategory {
   if (
@@ -33,7 +38,6 @@ export function triageCategoryOf(finding: FindingView): ResultCategory {
   if (
     finding.fidelity === 'translation_review_required' ||
     finding.fidelity === 'multiple_matches' ||
-    finding.support === 'not_assessed' ||
     finding.support === 'qualified'
   ) {
     return 'appreciation';
@@ -79,18 +83,38 @@ export function countByTriageCategory(
   return counts;
 }
 
+export type FilterableFailureBannerKind =
+  'inventory_unconfirmed' | 'pagination_unmapped' | 'ocr_unreliable';
+
 export type ReportFailureBannerKind =
-  | 'inventory_unconfirmed'
-  | 'pagination_unmapped'
-  | 'ocr_unreliable'
-  | 'partial_coverage';
+  FilterableFailureBannerKind | 'failed_source_pages' | 'partial_coverage';
 
 export type ReportFailureBanner = {
   kind: ReportFailureBannerKind;
   count: number;
   tone: 'error' | 'impossible' | 'warning';
-  filterCategory?: ResultCategory;
+  filterable: boolean;
 };
+
+/** Exact finding predicate for every filterable banner so banner count === filtered row count. */
+export function matchesFailureBanner(
+  finding: FindingView,
+  kind: FilterableFailureBannerKind,
+): boolean {
+  if (kind === 'inventory_unconfirmed') {
+    return finding.identity === 'not_assessed';
+  }
+  if (kind === 'pagination_unmapped') {
+    return (
+      finding.page_mapping === 'unmapped' ||
+      finding.page_mapping === 'conflicting'
+    );
+  }
+  return (
+    finding.fidelity === 'ocr_unreliable' ||
+    finding.fidelity === 'representation_conflict'
+  );
+}
 
 /**
  * Surfaces first-class fail-closed operational warnings directly from the
@@ -102,20 +126,20 @@ export function collectReportFailureBanners(
 ): ReportFailureBanner[] {
   const banners: ReportFailureBanner[] = [];
 
-  const unconfirmedInventory = report.findings.filter(
-    (f) => f.identity === 'not_assessed',
+  const unconfirmedInventory = report.findings.filter((f) =>
+    matchesFailureBanner(f, 'inventory_unconfirmed'),
   ).length;
   if (unconfirmedInventory > 0) {
     banners.push({
       kind: 'inventory_unconfirmed',
       count: unconfirmedInventory,
       tone: 'impossible',
-      filterCategory: 'impossible',
+      filterable: true,
     });
   }
 
-  const unmappedPagination = report.findings.filter(
-    (f) => f.page_mapping === 'unmapped' || f.page_mapping === 'conflicting',
+  const unmappedPagination = report.findings.filter((f) =>
+    matchesFailureBanner(f, 'pagination_unmapped'),
   ).length;
   if (unmappedPagination > 0) {
     banners.push({
@@ -124,28 +148,31 @@ export function collectReportFailureBanners(
       tone: report.findings.some((f) => f.page_mapping === 'conflicting')
         ? 'error'
         : 'warning',
-      filterCategory: report.findings.some(
-        (f) => f.page_mapping === 'conflicting',
-      )
-        ? 'ecart'
-        : 'impossible',
+      filterable: true,
     });
   }
 
-  const ocrIssues = report.findings.filter(
-    (f) =>
-      f.fidelity === 'ocr_unreliable' ||
-      f.fidelity === 'representation_conflict',
+  const ocrIssues = report.findings.filter((f) =>
+    matchesFailureBanner(f, 'ocr_unreliable'),
   ).length;
+  if (ocrIssues > 0) {
+    banners.push({
+      kind: 'ocr_unreliable',
+      count: ocrIssues,
+      tone: 'impossible',
+      filterable: true,
+    });
+  }
+
   const failedPages = coveragePages(report.coverage).pages.filter(
     (p) => p.method === 'FAILED' || p.method === 'NOT_PROCESSED',
   ).length;
-  if (ocrIssues > 0 || failedPages > 0) {
+  if (failedPages > 0) {
     banners.push({
-      kind: 'ocr_unreliable',
-      count: Math.max(ocrIssues, failedPages),
+      kind: 'failed_source_pages',
+      count: failedPages,
       tone: 'impossible',
-      filterCategory: 'impossible',
+      filterable: false,
     });
   }
 
@@ -158,6 +185,7 @@ export function collectReportFailureBanners(
       kind: 'partial_coverage',
       count: Math.max(unprocessedRegions, regionInfo.invalid ? 1 : 0),
       tone: 'warning',
+      filterable: false,
     });
   }
 

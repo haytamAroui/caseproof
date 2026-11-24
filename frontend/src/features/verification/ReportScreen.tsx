@@ -13,10 +13,12 @@ import { quoteMatches } from './quoteComparison';
 import {
   collectReportFailureBanners,
   countByTriageCategory,
+  matchesFailureBanner,
   TRIAGE_ICON,
   TRIAGE_PRIORITY,
   TRIAGE_TONE,
   triageCategoryOf,
+  type FilterableFailureBannerKind,
 } from './triageCategory';
 import { CoverageSource } from './CoverageSource';
 import { OriginalDraftDownload } from './OriginalDraftDownload';
@@ -61,9 +63,9 @@ export function ReportScreen({
     'split',
   );
   const focusReference = useRef<string | null>(null);
-  const [filter, setFilter] = useState<'attention' | 'all' | ResultCategory>(
-    'attention',
-  );
+  const [filter, setFilter] = useState<
+    'attention' | 'all' | ResultCategory | FilterableFailureBannerKind
+  >('attention');
   const [search, setSearch] = useState('');
   const query = useQuery({
     queryKey: ['report', session.epoch, caseId, briefId, snapshot],
@@ -95,13 +97,23 @@ export function ReportScreen({
     report.findings.find((f) => f.reference_id === params.get('finding')) ??
     report.findings[0];
   const needsAttention = (f: FindingView) =>
-    triageCategoryOf(f) !== 'correspondance';
+    f.identity !== 'resolved' ||
+    f.page_mapping !== 'mapped' ||
+    f.fidelity !== 'exact_match' ||
+    f.support !== 'supported';
   const triageCounts = countByTriageCategory(report.findings);
   const failureBanners = collectReportFailureBanners(report);
   const filtered = report.findings
     .filter((f) => {
       if (filter === 'all') return true;
       if (filter === 'attention') return needsAttention(f);
+      if (
+        filter === 'inventory_unconfirmed' ||
+        filter === 'pagination_unmapped' ||
+        filter === 'ocr_unreliable'
+      ) {
+        return matchesFailureBanner(f, filter);
+      }
       return triageCategoryOf(f) === filter;
     })
     .filter((f) =>
@@ -173,8 +185,8 @@ export function ReportScreen({
       <header className="page-heading page-heading-review">
         <p className="eyebrow">
           {historical
-            ? 'Historical report · read-only'
-            : 'Current preserved report'}
+            ? t('reportEyebrowHistorical')
+            : t('reportEyebrowCurrent')}
         </p>
         <h1>{t('reviewHeading')}</h1>
         <Link
@@ -250,7 +262,12 @@ export function ReportScreen({
                   ? 'bannerPaginationUnmapped'
                   : banner.kind === 'ocr_unreliable'
                     ? 'bannerOcrUnreliable'
-                    : 'bannerPartialCoverage';
+                    : banner.kind === 'failed_source_pages'
+                      ? 'bannerFailedSourcePages'
+                      : 'bannerPartialCoverage';
+            const bannerFilterKind = banner.filterable
+              ? (banner.kind as FilterableFailureBannerKind)
+              : null;
             return (
               <div
                 key={banner.kind}
@@ -279,12 +296,17 @@ export function ReportScreen({
                       {t('bannerInventoryAction')}
                     </Link>
                   )}
-                  {banner.filterCategory && (
+                  {bannerFilterKind && (
                     <button
                       type="button"
                       className="button"
+                      aria-pressed={filter === bannerFilterKind}
                       onClick={() => {
-                        setFilter(banner.filterCategory ?? 'attention');
+                        setFilter((current) =>
+                          current === bannerFilterKind
+                            ? 'attention'
+                            : bannerFilterKind,
+                        );
                         resetPage();
                       }}
                     >
@@ -411,20 +433,14 @@ export function ReportScreen({
                 resetPage();
               }}
             >
-              Clear reference search
+              {t('clearReferenceSearch')}
             </button>
           )}
           <p className="small">{t('queueShortcutHint')}</p>
           {report.findings.length === 0 ? (
-            <p>
-              No explicit references were detected. Inspect processing coverage
-              before drawing conclusions.
-            </p>
+            <p>{t('noRefsDetected')}</p>
           ) : visible.length === 0 ? (
-            <p>
-              No references in this filter. Choose Show all to inspect the full
-              scope.
-            </p>
+            <p>{t('noRefsInFilter')}</p>
           ) : (
             <ul>
               {visible.map((f) => (

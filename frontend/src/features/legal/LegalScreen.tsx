@@ -39,7 +39,7 @@ const STATUS_ICON: Record<string, string> = {
 export function LegalScreen({ api }: { api: ApiClient }) {
   const { caseId = '', briefId = '' } = useParams();
   const session = useSession();
-  const { t, legalStatusLabel, categoryLabel } = useLocale();
+  const { t, legalStatusLabel } = useLocale();
   const [open, setOpen] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const valid = uuid.test(caseId) && uuid.test(briefId);
@@ -129,25 +129,25 @@ export function LegalScreen({ api }: { api: ApiClient }) {
                 ['ALL', t('legalAll'), refs.data.coverage.detected, 'neutral'],
                 [
                   'FAIL',
-                  categoryLabel('ecart'),
+                  legalStatusLabel('FAIL'),
                   refs.data.coverage.by_status.FAIL,
                   'error',
                 ],
                 [
                   'UNVERIFIED',
-                  categoryLabel('impossible'),
+                  legalStatusLabel('UNVERIFIED'),
                   refs.data.coverage.by_status.UNVERIFIED,
                   'impossible',
                 ],
                 [
                   'UNDETERMINED',
-                  categoryLabel('appreciation'),
+                  legalStatusLabel('UNDETERMINED'),
                   refs.data.coverage.by_status.UNDETERMINED,
                   'warning',
                 ],
                 [
                   'PASS',
-                  categoryLabel('correspondance'),
+                  legalStatusLabel('PASS'),
                   refs.data.coverage.by_status.PASS,
                   'success',
                 ],
@@ -172,15 +172,16 @@ export function LegalScreen({ api }: { api: ApiClient }) {
               {refs.data.coverage.analysed})
             </summary>
             <p className="small">
-              Detected: {refs.data.coverage.detected} (
+              {t('legalDetectedPrefix')} {refs.data.coverage.detected} (
               {(['PASS', 'FAIL', 'UNVERIFIED', 'UNDETERMINED'] as const)
                 .map((s) => `${s} ${refs.data.coverage.by_status[s]}`)
                 .join(', ')}
-              ). Looked at: {refs.data.coverage.analysed}.
+              ). {t('legalLookedAtPrefix')} {refs.data.coverage.analysed}.
             </p>
             <p className="small">
-              Not looked at: {refs.data.coverage.not_analysed.join('; ')}. A
-              citation the check does not detect is not a verified citation.
+              {t('legalNotLookedAtPrefix')}{' '}
+              {refs.data.coverage.not_analysed.join('; ')}.{' '}
+              {t('legalNotDetectedDisclaimer')}
             </p>
           </details>
           {refs.data.references.length === 0 ? (
@@ -276,7 +277,7 @@ export function LegalScreen({ api }: { api: ApiClient }) {
                                   t('legalNoArticleStored')}
                               </p>
                               <p className="small legal-provenance">
-                                Source:{' '}
+                                {t('legalSourcePrefix')}{' '}
                                 {passage.data.corpus_source_uri ?? 'n/a'};
                                 version {passage.data.corpus_version ?? 'n/a'};
                                 text SHA-256{' '}
@@ -354,6 +355,7 @@ export function LegalScreen({ api }: { api: ApiClient }) {
 
 type Mark = { a: number; b: number; kind: 'checked' | 'cite' | 'other' };
 function DraftExcerpt({ p }: { p: LegalPassageView }) {
+  const { t } = useLocale();
   const chars = Array.from(p.brief_excerpt);
   const marks: Mark[] = [
     { a: p.citation_span[0] ?? 0, b: p.citation_span[1] ?? 0, kind: 'cite' },
@@ -391,8 +393,8 @@ function DraftExcerpt({ p }: { p: LegalPassageView }) {
   return (
     <>
       <p className="small">
-        This row checked:{' '}
-        {p.quote ? <q>{p.quote}</q> : 'no quotation (the citation only)'}
+        {t('legalRowCheckedPrefix')}{' '}
+        {p.quote ? <q>{p.quote}</q> : t('legalNoQuotationOnly')}
         {p.quote &&
           !p.quote_span &&
           ' (its exact position could not be located)'}

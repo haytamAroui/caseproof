@@ -65,10 +65,10 @@ To keep the UI immediately legible for Belgian litigators while preserving stric
 
 | Visible Lawyer State (FR / NL / EN) | Visual Signal | Operational Meaning | Underlying Backend Mapping |
 | --- | --- | --- | --- |
-| **Écart constaté** / **Afwijking vastgesteld** / **Mismatch detected** | Crimson `✕` (never color alone) | Deterministic comparison identified a concrete mismatch (wrong page, altered quote, omitted reservation, conflicting value, absent confirmed exhibit). | `FAIL`, `MISMATCH`, `CONFLICTING`, `NOT_IN_INVENTORY` (confirmed scope) |
-| **Contrôle impossible** / **Controle onmogelijk** / **Cannot verify** | Dashed slate `⊘` | Source missing, unreadable scan (`OCR_UNRELIABLE`), unmapped page, unconfirmed inventory, or requested historical statutory version absent from chosen corpus. Exact reason stays visible. | `UNVERIFIED`, `UNDETERMINED`, `SOURCE_MISSING`, `UNMAPPED`, `OCR_UNRELIABLE`, `NOT_ASSESSED` |
-| **Appréciation requise** / **Beoordeling vereist** / **Appraisal required** | Ochre `!` | Source passage is located and readable, but legal scope, paraphrase, translation (`FR ↔ NL`), subtle event distinction (`"signé"` vs `"envoyé pour signature"`), or a lawyer-defined condition requires human decision. | `TRANSLATION_REVIEW_REQUIRED`, subtle-trap/condition review triggers, `semantic_support = NOT_ASSESSED` |
-| **Correspondance constatée** / **Overeenstemming vastgesteld** / **Match observed** | Teal `✓` | Checked item matches the preserved source within the declared scope. **Does not** imply authenticity, filing, or legal adequacy. | `PASS`, `RESOLVED` + `MAPPED` + `EXACT_MATCH` |
+| **Écart constaté** / **Afwijking vastgesteld** / **Mismatch detected** | Crimson `✕` (never color alone) | Deterministic comparison identified a concrete mismatch (wrong page, altered quote, conflicting value, absent confirmed exhibit). *(Note: surrounding statutory reservation/negation cues in `reservation_cues.py` are surfaced as advisory notices without changing status.)* | `FAIL`, `quote_not_found`, `representation_conflict`, `CONFLICTING`, `NOT_IN_INVENTORY` (confirmed scope), `CONTRADICTED` |
+| **Contrôle impossible** / **Controle onmogelijk** / **Cannot verify** | Dashed slate `⊘` | Source missing, unreadable scan (`OCR_UNRELIABLE`), unmapped page, unconfirmed inventory (`NOT_ASSESSED`), absent corpus article (`UNVERIFIED`), or requested historical statutory version absent (`UNDETERMINED / requested_version_absent_from_chosen_corpus`). Exact reason stays visible. | `UNVERIFIED`, `SOURCE_MISSING`, `AMBIGUOUS`, `UNMAPPED`, `OCR_UNRELIABLE`, `NOT_ASSESSED` (identity/fidelity), `UNDETERMINED` (when version/source is absent) |
+| **Appréciation requise** / **Beoordeling vereist** / **Appraisal required** | Ochre `!` | Source passage is located and readable, but legal scope, translation (`FR ↔ NL`), targeted lexical flag (`"signé"` vs `"envoyé pour signature"`), advisory reservation/negation cue, unchecked citation (`UNDETERMINED`), or a lawyer-defined condition requires human decision. | `TRANSLATION_REVIEW_REQUIRED`, `MULTIPLE_MATCHES`, `QUALIFIED`, `UNDETERMINED` (citation present, requires appraisal), `status_cue_flag`, `reservation_cues` (advisory) |
+| **Correspondance constatée** / **Overeenstemming vastgesteld** / **Match observed** | Teal `✓` | Checked item matches the preserved source within the declared scope. **Does not** imply authenticity, filing, or legal adequacy; the independent `Human support` dimension remains visible separately. | `PASS`, `RESOLVED` + `MAPPED` + `EXACT_MATCH` (with `support` not contradicted/qualified) |
 
 In addition, **Coverage** is always rendered separately (DOCX story regions scanned/unprocessed/unsupported, unreadable pages, corpus selection hash), and lawyers can explicitly log an **`omission`** when a passage was missed by automated detection.
 
@@ -84,9 +84,9 @@ In addition, **Coverage** is always rendered separately (DOCX story regions scan
 
 ---
 
-## 5. Verified Competitive & Reference Landscape (28+ Tools)
+## 5. Working Competitive & Reference Landscape (28+ Tools — Benchmark Input)
 
-**Discipline (ADR 0018/0019):** Observations below reflect verified product positioning as of November 2026 and serve as design inputs and benchmark hypotheses—**never** as claims of market exclusivity or untested competitor inability. Direct workflow testing during M5 remains required.
+**Discipline (ADR 0018/0019):** Observations below are a working market synthesis from public documentation (November 2026) used as design and M5 benchmark inputs—**not** independently audited primary proof, market exclusivity claims, or untested claims of competitor inability. Direct workflow testing during M5 remains required.
 
 ### 5.1 Verification & Anti-Hallucination Peers
 | Tool / Concept | Observed Role | Pattern Adopted by CaseProof | Pattern Rejected / Guardrail |
@@ -114,7 +114,7 @@ In addition, **Coverage** is always rendered separately (DOCX story regions scan
 | Platform | Pattern Adopted | CaseProof Translation |
 | --- | --- | --- |
 | **Harvey** *(Vault / Threads)* | Structured Playbooks + exception-first review queues + explicit privileged-workspace cues. | **Lawyer-Defined Conditions** (*conditions définies par l'avocat*) as structured litigation check playbooks. |
-| **Legora** *(incl. Qura)* | Tabular review matrix with instant right-hand PDF source snapping. | Clicking any row in Findings, Exhibits, or Legal Articles snaps `SourceViewer` straight to the target PDF page or statutory text. |
+| **Legora** *(incl. Qura)* | Tabular review matrix with instant right-hand PDF source snapping. | In `ReportScreen`, clicking a finding snaps `SourceViewer` to the target PDF page; in `ConditionsSection`, `ConditionPagePreview` reopens the verified original PDF page (cross-tab snapping from every exhibit/article row remains a target improvement). |
 | **LegalOn & Ironclad** | Side-by-side `<del>`/`<ins>` diff + strict state invalidation across revisions. | Word re-upload highlights exact changes, preserves `carried` decisions, and marks modified items `superseded` (*À recontrôler*). |
 | **Microsoft Copilot** | Zero-friction Word workflow. | Keep native Word editing + instant `.docx` re-upload frictionless without making an Office add-in a launch blocker. |
 

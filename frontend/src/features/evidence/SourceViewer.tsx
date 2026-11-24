@@ -327,7 +327,7 @@ function SourceInspection({
       {error && (
         <>
           <Notice error>{error}</Notice>
-          <Button onClick={onRetry}>Reopen source</Button>
+          <Button onClick={onRetry}>{t('reopenSourceBtn')}</Button>
         </>
       )}
       {!ready && !error && <Notice>Opening the authorized source…</Notice>}
@@ -467,8 +467,8 @@ function SourceInspection({
             <div className="viewer-control-group">
               <Button
                 className="viewer-btn-compact"
-                aria-label="Previous source page"
-                title="Previous source page"
+                aria-label={t('viewerPrevPage')}
+                title={t('viewerPrevPage')}
                 disabled={page <= 1}
                 onClick={() => {
                   clearPage();
@@ -482,8 +482,8 @@ function SourceInspection({
               </span>
               <Button
                 className="viewer-btn-compact"
-                aria-label="Next source page"
-                title="Next source page"
+                aria-label={t('viewerNextPage')}
+                title={t('viewerNextPage')}
                 disabled={page >= pages}
                 onClick={() => {
                   clearPage();
@@ -496,8 +496,8 @@ function SourceInspection({
             <div className="viewer-control-group">
               <Button
                 className="viewer-btn-compact"
-                aria-label="Zoom out"
-                title="Zoom out"
+                aria-label={t('viewerZoomOut')}
+                title={t('viewerZoomOut')}
                 disabled={zoom <= 0.5}
                 onClick={() => {
                   clearPage();
@@ -511,8 +511,8 @@ function SourceInspection({
               </span>
               <Button
                 className="viewer-btn-compact"
-                aria-label="Zoom in"
-                title="Zoom in"
+                aria-label={t('viewerZoomIn')}
+                title={t('viewerZoomIn')}
                 disabled={zoom >= 2}
                 onClick={() => {
                   clearPage();
@@ -523,8 +523,8 @@ function SourceInspection({
               </Button>
               <Button
                 className="viewer-btn-compact"
-                aria-label="Rotate page"
-                title="Rotate page"
+                aria-label={t('viewerRotatePage')}
+                title={t('viewerRotatePage')}
                 onClick={() => {
                   clearPage();
                   setRotation((r) => (r + 90) % 360);

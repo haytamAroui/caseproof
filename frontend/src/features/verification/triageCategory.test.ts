@@ -3,7 +3,9 @@ import type { FindingView } from '../../shared/api';
 import {
   collectReportFailureBanners,
   countByTriageCategory,
+  matchesFailureBanner,
   triageCategoryOf,
+  type FilterableFailureBannerKind,
 } from './triageCategory';
 
 const cleanFinding: FindingView = {
@@ -12,14 +14,14 @@ const cleanFinding: FindingView = {
   identity: 'resolved',
   page_mapping: 'mapped',
   fidelity: 'exact_match',
-  support: 'supported',
+  support: 'not_assessed',
 };
 
 describe('triageCategoryOf', () => {
-  it('returns correspondance only when all four dimensions are confirmed clean', () => {
+  it('projects resolved + mapped + exact_match findings to correspondance even when human support is not_assessed', () => {
     expect(triageCategoryOf(cleanFinding)).toBe('correspondance');
-    expect(triageCategoryOf({ ...cleanFinding, support: 'not_assessed' })).toBe(
-      'appreciation',
+    expect(triageCategoryOf({ ...cleanFinding, support: 'supported' })).toBe(
+      'correspondance',
     );
   });
 
@@ -65,7 +67,7 @@ describe('triageCategoryOf', () => {
     ).toBe('impossible');
   });
 
-  it('routes cross-language translations and qualified/unassessed support to appreciation', () => {
+  it('routes cross-language translations, multiple matches, and qualified support to appreciation', () => {
     expect(
       triageCategoryOf({
         ...cleanFinding,
@@ -123,13 +125,28 @@ describe('collectReportFailureBanners', () => {
     ).toEqual([]);
   });
 
-  it('surfaces inventory, pagination, OCR, and partial DOCX coverage banners', () => {
+  it('guarantees exact 1:1 count parity between every filterable banner and matchesFailureBanner', () => {
+    const findings: FindingView[] = [
+      cleanFinding,
+      { ...cleanFinding, reference_id: 'r2', identity: 'not_assessed' },
+      { ...cleanFinding, reference_id: 'r3', identity: 'source_missing' },
+      { ...cleanFinding, reference_id: 'r4', page_mapping: 'conflicting' },
+      { ...cleanFinding, reference_id: 'r5', page_mapping: 'unmapped' },
+      { ...cleanFinding, reference_id: 'r6', fidelity: 'ocr_unreliable' },
+      {
+        ...cleanFinding,
+        reference_id: 'r7',
+        fidelity: 'representation_conflict',
+      },
+      { ...cleanFinding, reference_id: 'r8', fidelity: 'quote_not_found' },
+      {
+        ...cleanFinding,
+        reference_id: 'r9',
+        fidelity: 'translation_review_required',
+      },
+    ];
     const banners = collectReportFailureBanners({
-      findings: [
-        { ...cleanFinding, reference_id: 'r1', identity: 'not_assessed' },
-        { ...cleanFinding, reference_id: 'r2', page_mapping: 'conflicting' },
-        { ...cleanFinding, reference_id: 'r3', fidelity: 'ocr_unreliable' },
-      ],
+      findings,
       coverage: {
         docx_regions: {
           coverage_unknown: false,
@@ -142,14 +159,30 @@ describe('collectReportFailureBanners', () => {
             },
           ],
         },
-        source_pages: [],
+        source_pages: [
+          {
+            version_id: 'v1',
+            original_sha256: 'a'.repeat(64),
+            pdf_page: 2,
+            method: 'FAILED',
+            reason: 'corrupt',
+          },
+        ],
+        source_pages_total: 1,
       },
     });
-    expect(banners.map((b) => b.kind)).toEqual([
-      'inventory_unconfirmed',
-      'pagination_unmapped',
-      'ocr_unreliable',
-      'partial_coverage',
+    expect(banners.map((b) => [b.kind, b.count, b.filterable])).toEqual([
+      ['inventory_unconfirmed', 1, true],
+      ['pagination_unmapped', 2, true],
+      ['ocr_unreliable', 2, true],
+      ['failed_source_pages', 1, false],
+      ['partial_coverage', 1, false],
     ]);
+    for (const banner of banners.filter((b) => b.filterable)) {
+      const matched = findings.filter((f) =>
+        matchesFailureBanner(f, banner.kind as FilterableFailureBannerKind),
+      );
+      expect(matched.length).toBe(banner.count);
+    }
   });
 });

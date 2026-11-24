@@ -2402,6 +2402,13 @@ ins {
   gap: 8px;
 }
 
+section[aria-labelledby='legal-title'] code,
+.legal-card code,
+.legal-provenance code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-instant: 0ms;
