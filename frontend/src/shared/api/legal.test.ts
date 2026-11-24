@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ContractError } from './contracts';
-import { parseLegalPassage, parseLegalReferences } from './legal';
+import {
+  parseLegalPassage,
+  parseLegalReferences,
+  parseReservationCues,
+} from './legal';
 
 const sha = 'a'.repeat(64);
 const ref = (over: Record<string, unknown> = {}) => ({
@@ -110,5 +114,39 @@ describe('legal contract', () => {
         { snapshot: sha, referenceId: 'r1' },
       ),
     ).toThrow(ContractError);
+  });
+});
+
+describe('reservation cues contract', () => {
+  const ok = {
+    schema: 'caseproof-reservation-cues-v1',
+    rules: 'reservation-cue-v1',
+    advisory: true,
+    note: 'Advisory.',
+    snapshot_hash: 'a'.repeat(64),
+    brief_version_id: 'b',
+    rows: [
+      {
+        reference_id: 'r1',
+        corpus_text_sha256: 'c'.repeat(64),
+        cues: [
+          {
+            kind: 'reservation',
+            cue: 'hormis',
+            article_context: 'Hormis les cas',
+          },
+        ],
+      },
+    ],
+  };
+  it('accepts advisory rows and refuses a verdict field or a wrong brief', () => {
+    expect(parseReservationCues(ok, { briefId: 'b' }).rows).toHaveLength(1);
+    expect(() =>
+      parseReservationCues({ ...ok, status: 'PASS' }, { briefId: 'b' }),
+    ).toThrow();
+    expect(() => parseReservationCues(ok, { briefId: 'other' })).toThrow();
+    expect(() =>
+      parseReservationCues({ ...ok, advisory: false }, { briefId: 'b' }),
+    ).toThrow();
   });
 });

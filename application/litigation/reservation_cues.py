@@ -84,3 +84,25 @@ def validate_section(section: Any, references: Sequence[Mapping[str, Any]], reco
         raise CorpusError("reservation cue section malformed")
     if section != build_section(references, records):
         raise CorpusError("reservation cues do not replay")
+
+
+_CONTEXT = 160
+NOTE = ("Advisory signal, partial detection from fixed FR/NL word lists. It can flag text that does not matter and it misses "
+        "wording that is not on the lists. It reads no meaning, changes no status and does not say the quotation distorts the article. "
+        "A lawyer must read the quotation with its article.")
+
+
+def advisory_rows(references: Sequence[Mapping[str, Any]], records: Sequence[Any]) -> list[dict[str, Any]]:
+    """Per flagged quotation: the cues and, for each one, the exact stored article text around it (bounded)."""
+    by_hash = {r.derived_sha256: r for r in records}
+    rows: list[dict[str, Any]] = []
+    for row in build_section(references, records)["flagged"]:
+        article = _norm(by_hash[row["corpus_text_sha256"]].derived_text)
+        low = article.casefold()
+        cues = []
+        for c in row["cues"]:
+            at = low.find(c["cue"].casefold())
+            snippet = article[max(0, at - _CONTEXT): at + len(c["cue"]) + _CONTEXT] if at >= 0 else ""
+            cues.append({**c, "article_context": snippet})
+        rows.append({"reference_id": row["reference_id"], "corpus_text_sha256": row["corpus_text_sha256"], "cues": cues})
+    return rows

@@ -102,3 +102,20 @@ def test_older_verifier_cannot_certify_a_pack_with_the_cue_section(tmp_path, mon
             "    print('REJECTED', type(e).__name__)\n")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=root)
     assert "REJECTED CorpusError" in out.stdout, out.stdout + out.stderr
+
+
+def test_advisory_rows_carry_exact_article_context_and_the_route_never_changes_statuses(tmp_path, monkeypatch):
+    from application.litigation.reservation_cues import advisory_rows
+    from tests.test_signed_conditions_pack import build
+    refs, recs = _refs()
+    rows = advisory_rows(refs, recs)
+    assert rows[0]["cues"][0]["cue"] == "hormis" and "Hormis les cas où la loi" in rows[0]["cues"][0]["article_context"]
+    c = build(tmp_path, monkeypatch, None, [])
+    h = {"Authorization": "Bearer synthetic"}
+    before = c.get("/v2/matters/c/briefs/v/legal-references", headers=h).json()
+    cue = c.get("/v2/matters/c/briefs/v/reservation-cues", headers=h)
+    assert cue.status_code == 200
+    body = cue.json()
+    assert body["schema"] == "caseproof-reservation-cues-v1" and body["advisory"] is True and "status" not in body
+    assert body["snapshot_hash"] == before["snapshot_hash"]
+    assert c.get("/v2/matters/c/briefs/v/legal-references", headers=h).json()["references"] == before["references"]

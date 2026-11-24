@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import type { ApiClient } from '../../shared/api';
 import {
+  parseReservationCues,
   parseLegalPassage,
   parseLegalReferences,
   type LegalPassageView,
@@ -35,6 +36,20 @@ export function LegalScreen({ api }: { api: ApiClient }) {
       parseLegalReferences(await api.get(base, signal), { briefId }),
   });
   const snapshot = refs.data?.snapshot_hash ?? '';
+  const cues = useQuery({
+    queryKey: ['reservation-cues', session.epoch, caseId, briefId, snapshot],
+    enabled: valid && session.connected && snapshot !== '',
+    queryFn: async ({ signal }) =>
+      parseReservationCues(
+        await api.get(
+          base.replace(/legal-references$/, 'reservation-cues'),
+          signal,
+        ),
+        { briefId },
+      ),
+  });
+  const cueRows =
+    cues.data && cues.data.snapshot_hash === snapshot ? cues.data.rows : [];
   const passage = useQuery({
     queryKey: ['legal-passage', session.epoch, caseId, briefId, snapshot, open],
     enabled: valid && session.connected && open !== null && snapshot !== '',
@@ -117,6 +132,27 @@ export function LegalScreen({ api }: { api: ApiClient }) {
                     Reason: <code>{r.reason}</code>. Claim support: not
                     assessed.
                   </span>
+                  {cueRows
+                    .filter((c) => c.reference_id === r.reference_id)
+                    .map((c) => (
+                      <Notice key={c.reference_id}>
+                        <strong>
+                          Advisory, read with the article (status unchanged).
+                        </strong>{' '}
+                        {cues.data?.note}
+                        <ul>
+                          {c.cues.map((q) => (
+                            <li key={q.kind + q.cue}>
+                              {q.kind === 'reservation'
+                                ? 'Reservation word outside the quoted passage'
+                                : 'Negation word in the neighbouring sentence'}
+                              : “{q.cue}”. Stored article text around it: “…
+                              {q.article_context}…”
+                            </li>
+                          ))}
+                        </ul>
+                      </Notice>
+                    ))}
                   <Button
                     aria-expanded={open === r.reference_id}
                     onClick={() =>

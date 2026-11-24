@@ -486,6 +486,21 @@ def create_signed_workbench_router(
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         return view.model_dump(by_alias=True)
 
+    @router.get("/v2/matters/{case_id}/briefs/{brief_version_id}/reservation-cues")
+    def v2_reservation_cues(
+        case_id: str, brief_version_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Advisory literal cues next to the legal references. Never changes a status; partial detection."""
+        from application.litigation import reservation_cues as rc
+        bearer, wb = bench(authorization)
+        run = wb.checker.check(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
+        config = _corpus_for(wb, case_id)
+        refs = [asdict(o) for o in run.legal_observations] if config is not None else []
+        return {"schema": "caseproof-reservation-cues-v1", "rules": rc.RULES, "snapshot_hash": run.snapshot_hash,
+                "brief_version_id": brief_version_id, "advisory": True,
+                "note": rc.NOTE, "rows": rc.advisory_rows(refs, config.records) if config is not None else []}
+
     @router.get("/v2/matters/{case_id}/briefs/{brief_version_id}/exhibit-references")
     def v2_exhibit_references(
         case_id: str, brief_version_id: str,
