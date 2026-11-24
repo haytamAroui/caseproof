@@ -226,11 +226,20 @@ def create_signed_workbench_router(
                            if spec["conditions"] else {"anchors": []})
                 section = build_section(head["spec_text"], head["spec_sha256"], revision, matched, spec,
                                         bundle.previews, labels, _readable, head.get("events"))
+        from application.litigation.signed_conditions import _readable as _rd
+        from application.litigation.signed_sources_pack import build_section as build_sources
+        from apps.api.litigation_workspace_sources import _labels as _lab
+
+        def _fetch(source_id: str, version_id: str) -> tuple[bytes, str] | None:
+            item = _original(wb, bearer, case_id, brief_version_id, source_id, version_id)
+            return item.data, item.media_type
+
+        sources = build_sources(bundle.previews, _lab(bundle), _fetch, _rd) if getattr(wb, "originals", None) is not None else None
         try:
             data, checkpoint = build_legal_pack(config=config, run=run,
                                                 brief_text=bundle.representation.text,
                                                 review={**review, "check_engine": ENGINE_STRICT4},
-                                                signed_conditions=section)
+                                                signed_conditions=section, signed_sources=sources)
         except CorpusError:
             raise HTTPException(status_code=409, detail="offline_corpus_bytes_unavailable_or_changed") from None
         if (wb.checker._scope(wb.checker._verified(bearer), case_id) != access

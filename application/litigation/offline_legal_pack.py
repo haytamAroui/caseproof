@@ -235,6 +235,8 @@ def _report(body: dict[str, Any]) -> bytes:
                   esc(json.dumps(superseded, ensure_ascii=False, indent=2, sort_keys=True)), "</pre>"]
     if "signed_conditions" in body:
         parts += _signed_conditions_report(body["signed_conditions"])
+    if "signed_sources" in body:
+        parts += _signed_sources_report(body["signed_sources"], body.get("signed_conditions"))
     parts += ["<h2>Décisions de revue enregistrées</h2><pre>", esc(json.dumps(body["review"], ensure_ascii=False, indent=2, sort_keys=True)),
               "</pre><h2>Texte du mémoire vérifié</h2><pre>", esc(body["brief_text"]), "</pre><h2>Articles conservés</h2>"]
     for i, row in enumerate(body["articles"]):
@@ -254,6 +256,27 @@ def _report(body: dict[str, Any]) -> bytes:
         parts += ["</section>"]
     parts += ["</html>"]
     return "".join(parts).encode()
+
+
+def _signed_sources_report(section: dict[str, Any], conditions: dict[str, Any] | None) -> list[str]:
+    from application.litigation.signed_sources_pack import text_replayable
+
+    def esc(v: object) -> str:
+        return html.escape(str(v), quote=True)
+
+    parts = ["<h2>Sources d'origine conservées</h2><p>", esc(section["note"]), "</p><ul>"]
+    for e in section["entries"]:
+        what = (f"conservée, {e['byte_length']} octets" if e["state"] == "retained" else f"omise ({e['reason']})")
+        parts += ["<li>", esc(e["piece"]), " · ", esc(e["media_type"]), " · ", esc(what), " · <code>",
+                  esc(e["original_sha256"]), "</code></li>"]
+    parts += ["</ul>"]
+    if conditions is not None:
+        parts += ["<p>", ("Les extraits de conditions ont été recalculés au rejeu à partir des octets conservés de toutes les sources lues."
+                          if text_replayable(section, conditions) else
+                          "Certaines sources lues n'ont pas d'octets texte conservés : leurs extraits restent contrôlés par empreinte seulement, "
+                          "sans nouvelle recherche dans la source."), "</p>"]
+    parts += ["<p>Les sources conservées se rouvrent hors ligne avec le script de réouverture du dépôt, après rejeu complet du pack.</p>"]
+    return parts
 
 
 def _signed_conditions_report(section: dict[str, Any]) -> list[str]:
@@ -329,7 +352,8 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
                      brief_text: str, review: dict[str, Any], exhibits: dict[str, Any] | None = None,
                      passages: list[dict[str, Any]] | None = None, passages_rules: str | None = PASSAGE_RULES,
                      conditions: dict[str, Any] | None = None, condition_evidence: list[dict[str, Any]] | None = None,
-                     signed_conditions: dict[str, Any] | None = None) -> tuple[bytes, str]:
+                     signed_conditions: dict[str, Any] | None = None,
+                     signed_sources: dict[str, Any] | None = None) -> tuple[bytes, str]:
     if config.failures or not config.records or run.corpus_pack_sha256 != config.pack_sha256:
         raise CorpusError("complete exact chosen corpus required for export")
     if _hash(brief_text.encode()) != run.representation_sha256 or review.get("snapshot_hash") != run.snapshot_hash:
@@ -374,6 +398,8 @@ def build_legal_pack(*, config: LegalCorpusConfig, run: LegalRun,
         if conditions is not None:
             raise CorpusError("two conditions sections")
         body["signed_conditions"] = signed_conditions
+    if signed_sources is not None:
+        body["signed_sources"] = signed_sources
     payload = _encode(body)
     checkpoint = _hash(payload)
     report = _report(body)
@@ -429,6 +455,14 @@ def verify_legal_pack(raw: bytes, *, expected_sha256: str) -> dict[str, Any]:
             if "conditions" in body:
                 raise CorpusError("two conditions sections")
             validate_signed_section(body["brief_text"], body["signed_conditions"])
+        if "signed_sources" in body:
+            from application.litigation import signed_sources_pack as _ssp
+            sc = body.get("signed_conditions")
+            _ssp.validate_section(body["signed_sources"], sc)
+            if sc is not None and _ssp.text_replayable(body["signed_sources"], sc):
+                from application.litigation.signed_conditions import load_stored
+                _ssp.replay_conditions(body["brief_text"], body["signed_sources"], sc,
+                                       load_stored(sc["spec_text"], sc["spec_sha256"]))
         observed = observe(body["brief_text"], config, marker, body.get("exhibits"), cond)
         if "passages" in body:
             validate_passages(body["brief_text"], [asdict(x) for x in observed], body["passages"], body.get("passages_rules"))

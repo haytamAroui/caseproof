@@ -34,7 +34,7 @@ def _row(sid, status="ready", warnings=()):
     return NS(source_id=sid, version_id=V, original_sha256="c" * 64, status=status, warnings=warnings, representation_id="r")
 
 
-def build(tmp_path, monkeypatch, conditions, previews, store=None):
+def build(tmp_path, monkeypatch, conditions, previews, store=None, originals=None):
     from apps.api import litigation_evidence_search as les
     monkeypatch.setattr(les.AuthorizedEvidenceSearch, "_require_evidence", staticmethod(lambda _a: None))
     paragraphs = [f"Article 8.5 du Code civil : « {ARTICLE} ».", "Sur le fond, voir Pièce 1."]
@@ -57,6 +57,8 @@ def build(tmp_path, monkeypatch, conditions, previews, store=None):
                        _scope=lambda _s, _c: access, store=NS(load_bundle=lambda **_: bundle, still_current=lambda **_: True)),
             store=NS(load_bundle=lambda **_: bundle, still_current=lambda **_: True),
             workspace=NS(state=lambda **_: {"snapshot_hash": SNAP, "decisions": []}))
+    if originals is not None:
+        wb.originals = NS(checker=wb.checker, read=lambda **k: originals(k["source_id"], k["version_id"]))
     app = FastAPI()
 
     @app.exception_handler(AccessRejected)

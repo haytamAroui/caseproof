@@ -80,9 +80,27 @@ class FakeCondStore:
         assert _h.sha256(t.encode()).hexdigest()==s
         if e!=len(self.rows): raise ConflictError
         self.rows.append((t,s)); return len(self.rows)
-_row=lambda sid,**k: SimpleNamespace(source_id=sid,version_id=H1,original_sha256="c"*64,status=k.get("status","ready"),warnings=k.get("warnings",()),representation_id="r")
-_prev=[SimpleNamespace(row=_row("s1"),text="Accuse de reception. Le paiement a bien ete recu par la banque le 3 mars. Fin.",spans=((0,90,"para",1),)),
-       SimpleNamespace(row=_row("s2",status="partial",warnings=("scan",)),text="x",spans=())]
+def _mini_pdf(pages):
+    """LABELLED FAKE exhibit: a tiny hand-built PDF whose pages say they are synthetic. Not a real piece."""
+    objs=[b"<</Type/Catalog/Pages 2 0 R>>", b"", b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>"]
+    kids=[]
+    for n,t in enumerate(pages):
+        c=f"BT /F1 16 Tf 60 700 Td ({t}) Tj ET".encode()
+        objs.append(f"<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Resources<</Font<</F1 3 0 R>>>>/Contents {5+2*n} 0 R>>".encode())
+        objs.append(b"<</Length %d>>\nstream\n" % len(c)+c+b"\nendstream")
+        kids.append(f"{4+2*n} 0 R")
+    objs[1]=f"<</Type/Pages/Count {len(pages)}/Kids[{' '.join(kids)}]>>".encode()
+    out=b"%PDF-1.4\n"; offs=[]
+    for k,o in enumerate(objs,1):
+        offs.append(len(out)); out+=f"{k} 0 obj\n".encode()+o+b"\nendobj\n"
+    x=len(out); out+=f"xref\n0 {len(objs)+1}\n0000000000 65535 f \n".encode()+b"".join(f"{o:010d} 00000 n \n".encode() for o in offs)
+    return out+f"trailer\n<</Size {len(objs)+1}/Root 1 0 R>>\nstartxref\n{x}\n%%EOF\n".encode()
+_S1="Accuse de reception. Le paiement a bien ete recu par la banque le 3 mars. Fin."
+_BLOBS={"s1":(_S1.encode(),"text/plain"),"s2":(_mini_pdf(["SYNTHETIC EXHIBIT - page 1 of 2","SYNTHETIC EXHIBIT - page 2 of 2 - scanned, not read"]),"application/pdf")}
+_row=lambda sid,**k: SimpleNamespace(source_id=sid,version_id=H1,original_sha256=hashlib.sha256(_BLOBS[sid][0]).hexdigest(),media_type=_BLOBS[sid][1],status=k.get("status","ready"),warnings=k.get("warnings",()),representation_id="r")
+_prev=[SimpleNamespace(row=_row("s1"),text=_S1,spans=((0,len(_S1),"para",1),)),
+       SimpleNamespace(row=_row("s2",status="partial",warnings=("scan",)),text="",spans=())]
+wb.originals=SimpleNamespace(checker=checker,read=lambda **k: SimpleNamespace(data=_BLOBS[k["source_id"]][0],sha256_hex=hashlib.sha256(_BLOBS[k["source_id"]][0]).hexdigest(),media_type=_BLOBS[k["source_id"]][1]))
 _orig=wb.store.load_bundle
 def _lb(**k):
     b=_orig(**k)
