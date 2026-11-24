@@ -32,8 +32,14 @@ create policy matter_condition_specs_read on caseproof.matter_condition_specs
         and 'case:read' = any (m.actions) and 'case:read' = any (g.permissions)));
 
 create function caseproof._matter_condition_specs_immutable() returns trigger
-language plpgsql set search_path = '' as $$
+language plpgsql security invoker set search_path = pg_catalog, pg_temp as $$
 begin
+  -- Same bounded bypass as the other immutable histories: only the service-only, locked, eligibility-checked
+  -- retention finalize RPC (owner postgres, setting set transaction-locally) may delete. UPDATE is never allowed.
+  if tg_op = 'DELETE' and current_user = 'postgres'
+     and current_setting('caseproof.dev_review_cleanup', true) = 'single_fixture' then
+    return old;
+  end if;
   raise exception 'condition spec revisions are append-only' using errcode = '55000';
 end $$;
 create trigger matter_condition_specs_no_change before update or delete on caseproof.matter_condition_specs
@@ -79,7 +85,8 @@ begin
   select coalesce(max(revision), 0) into v_head from caseproof.matter_condition_specs
    where org_id = v_org and case_id = p_case;
   if v_head <> p_expected then
-    raise exception 'revision conflict' using errcode = '55000';
+    -- Returned as data: PostgREST hides exception text from callers, and a conflict is an expected outcome.
+    return jsonb_build_object('conflict', true, 'revision', v_head);
   end if;
   insert into caseproof.matter_condition_specs (org_id, case_id, revision, spec_text, spec_sha256, actor_id)
     values (v_org, p_case, v_head + 1, p_spec_text, p_sha, v_actor);
@@ -87,3 +94,20 @@ begin
 end $$;
 revoke all on function public.caseproof_append_conditions(uuid, integer, text, text) from public, anon, authenticated, service_role;
 grant execute on function public.caseproof_append_conditions(uuid, integer, text, text) to authenticated;
+
+-- Latest revision for one matter. SECURITY INVOKER: the select policy (member + case:read grant) is what
+-- decides visibility, so a caller with no access gets revision 0 and nothing else.
+create function public.caseproof_read_conditions(p_case uuid) returns jsonb
+language sql stable security invoker set search_path = '' as $$
+  select coalesce((select jsonb_build_object('revision', s.revision, 'spec_text', s.spec_text,
+                                             'spec_sha256', s.spec_sha256)
+                   from caseproof.matter_condition_specs s where s.case_id = p_case
+                   order by s.revision desc limit 1),
+                  jsonb_build_object('revision', 0));
+$$;
+revoke all on function public.caseproof_read_conditions(uuid) from public, anon, authenticated, service_role;
+grant execute on function public.caseproof_read_conditions(uuid) to authenticated;
+
+-- Retention: refuse new revisions for a soft-deleted or missing matter (same guard as the other matter tables).
+create trigger retention_write_guard before insert or update on caseproof.matter_condition_specs
+  for each row execute function caseproof.retention_write_guard();
