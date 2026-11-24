@@ -7,13 +7,14 @@ import {
   parseClearbriefState,
 } from '../../shared/api/clearbriefReview';
 import { useSession } from '../../shared/session';
+import { useLocale } from '../../shared/i18n';
 import { Button, Notice } from '../../shared/ui';
 
 const CHOICES = [
-  ['confirmed_candidate', 'I confirm this finding exists as shown'],
-  ['dismissed', 'I dismiss this finding'],
-  ['needs_information', 'More information is needed'],
-  ['omission', 'A relevant passage or piece was not shown'],
+  ['confirmed_candidate', 'legalChoiceConfirm'],
+  ['dismissed', 'legalChoiceDismiss'],
+  ['needs_information', 'legalChoiceNeedsInfo'],
+  ['omission', 'legalChoiceOmission'],
 ] as const;
 
 export function ReviewBox({
@@ -30,6 +31,7 @@ export function ReviewBox({
   observationId: string;
 }) {
   const session = useSession();
+  const { t } = useLocale();
   const base = `/v2/matters/${encodeURIComponent(caseId)}/briefs/${encodeURIComponent(briefId)}/review`;
   const state = useQuery({
     queryKey: ['clearbrief-review', session.epoch, caseId, briefId],
@@ -92,42 +94,35 @@ export function ReviewBox({
     }
   }
   return (
-    <div className="legal-review" role="group" aria-label="Reviewer statement">
-      <h4>Reviewer statement</h4>
-      <p className="small">
-        A person&apos;s statement about this finding. It does not change the
-        status above and does not approve filing.
-      </p>
-      {state.isError && (
-        <Notice error>
-          The review ledger is unavailable. Nothing can be recorded.
-        </Notice>
-      )}
-      {stale && (
-        <Notice error>
-          The ledger is bound to a different check. Reload before deciding.
-        </Notice>
-      )}
+    <div
+      className="legal-review"
+      role="group"
+      aria-label={t('legalReviewTitle')}
+    >
+      <h4>{t('legalReviewTitle')}</h4>
+      <p className="small">{t('legalReviewLead')}</p>
+      {state.isError && <Notice error>{t('legalLedgerUnavailable')}</Notice>}
+      {stale && <Notice error>{t('legalLedgerStale')}</Notice>}
       {mine?.map((d, i) => (
         <p className="small" key={i}>
           Recorded: <code>{d.disposition}</code>. Reason: {d.rationale}
         </p>
       ))}
       <label>
-        Statement
+        {t('legalStatementLabel')}
         <select
           value={choice}
           onChange={(e) => setChoice(e.target.value as typeof choice)}
         >
-          {CHOICES.map(([v, l]) => (
+          {CHOICES.map(([v, key]) => (
             <option key={v} value={v}>
-              {l}
+              {t(key)}
             </option>
           ))}
         </select>
       </label>
       <label>
-        Reason (required)
+        {t('legalReasonLabel')}
         <textarea
           value={why}
           maxLength={2000}
@@ -140,7 +135,7 @@ export function ReviewBox({
         }}
         disabled={busy || why.trim() === '' || !state.data || stale}
       >
-        Record statement
+        {t('legalRecordBtn')}
       </Button>
       <p role="status">{msg}</p>
     </div>

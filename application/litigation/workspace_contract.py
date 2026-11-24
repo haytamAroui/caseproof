@@ -340,6 +340,17 @@ class ExhibitEntryView(BaseModel):
     pages: list[ExhibitPageView] = Field(max_length=128)
 
 
+class StatusCueFlagView(BaseModel):
+    """Targeted FR/NL lexical flag ('signé' vs 'envoyé pour signature'). Appraisal cue only."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    claim_cue: str = Field(min_length=1, max_length=64)
+    passage_cue: str = Field(min_length=1, max_length=64)
+    claim_excerpt: str = Field(min_length=1, max_length=400)
+    source_excerpt: str = Field(min_length=1, max_length=400)
+    matched_value_key: str = Field(min_length=1, max_length=64)
+    pdf_page: int | None = Field(default=None, ge=1)
+
+
 class ExhibitReferenceView(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     reference_id: str = Field(pattern=r"^exhibit-ref-\d{2,5}$")
@@ -350,6 +361,7 @@ class ExhibitReferenceView(BaseModel):
     reason: str = Field(max_length=120)
     page_cited: bool
     entry: ExhibitEntryView | None = None
+    status_cue_flag: StatusCueFlagView | None = None
 
 
 class ExhibitCoverageView(BaseModel):

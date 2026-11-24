@@ -7,6 +7,7 @@ import {
   parseConditionsState,
 } from '../../shared/api/conditions';
 import { useSession } from '../../shared/session';
+import { useLocale } from '../../shared/i18n';
 import { Button, Notice } from '../../shared/ui';
 import { ConditionPagePreview } from './ConditionPagePreview';
 
@@ -24,6 +25,7 @@ export function ConditionsSection(props: {
 }) {
   const { api, caseId, briefId } = props;
   const session = useSession();
+  const { t, legalStatusLabel } = useLocale();
   const stateUrl = `/v2/matters/${encodeURIComponent(caseId)}/conditions`;
   const state = useQuery({
     queryKey: ['conditions', session.epoch, caseId],
@@ -92,13 +94,11 @@ export function ConditionsSection(props: {
   const current = state.data?.conditions ?? [];
   return (
     <>
-      <h2>Conditions defined by the lawyer</h2>
+      <h2>{t('conditionsHeading')}</h2>
       {state.isPending ? (
-        <Notice>Loading conditions…</Notice>
+        <Notice>{t('conditionsLoading')}</Notice>
       ) : state.isError ? (
-        <Notice error>
-          Conditions are unavailable. Nothing can be shown or saved.
-        </Notice>
+        <Notice error>{t('conditionsUnavailable')}</Notice>
       ) : (
         <>
           <Notice>{state.data.note}</Notice>
@@ -129,13 +129,14 @@ export function ConditionsSection(props: {
                     void save(current.filter((x) => x.id !== c.id));
                   }}
                 >
-                  Remove
+                  {t('conditionsRemoveBtn')}
                 </Button>
               </li>
             ))}
           </ul>
           <form
             aria-label="Add a condition"
+            className="legal-conditions-form"
             onSubmit={(e) => {
               e.preventDefault();
               void save([
@@ -153,15 +154,12 @@ export function ConditionsSection(props: {
           >
             {(
               [
-                ['id', 'Identifier (lowercase, digits, dashes)'],
-                ['label', 'Label'],
-                ['question', 'Question for the lawyer (optional)'],
-                [
-                  'trigger',
-                  'Words in the brief that trigger it (comma separated)',
-                ],
-                ['evidence', 'Words to find in the pieces (comma separated)'],
-                ['pieces', 'Only these pieces (optional, e.g. Pièce 1)'],
+                ['id', t('conditionsIdLabel')],
+                ['label', t('conditionsLabelField')],
+                ['question', t('conditionsQuestionField')],
+                ['trigger', t('conditionsTriggerField')],
+                ['evidence', t('conditionsEvidenceField')],
+                ['pieces', t('conditionsPiecesField')],
               ] as const
             ).map(([k, label]) => (
               <label key={k}>
@@ -175,7 +173,7 @@ export function ConditionsSection(props: {
               </label>
             ))}
             <Button type="submit" disabled={busy}>
-              Save condition
+              {t('conditionsSaveBtn')}
             </Button>
           </form>
           <div aria-live="polite">{msg}</div>
@@ -194,40 +192,50 @@ export function ConditionsSection(props: {
             {matches.data.coverage.sources_not_read}.
           </p>
           <ul className="matter-list legal-list" aria-label="Condition anchors">
-            {matches.data.anchors.map((a) => (
-              <li key={a.anchor_id}>
-                <strong>
-                  {a.status === 'UNVERIFIED'
-                    ? 'No passage found in the pieces read'
-                    : 'Cannot be decided'}
-                </strong>{' '}
-                <code>{a.status}</code>
-                <span className="small">
-                  {a.label}: {a.sentence}
-                </span>
-                <span className="small">
-                  Reason: <code>{a.reason}</code>. Pieces read:{' '}
-                  {a.pieces_read.join(', ') || 'none'}
-                  {a.pieces_not_read.length > 0 &&
-                    `; not read: ${a.pieces_not_read.join(', ')}`}
-                </span>
-                {a.found.map((f) => (
-                  <span className="small" key={f.excerpt_sha256 + f.piece}>
-                    {f.piece}
-                    {f.pdf_page
-                      ? `, PDF p.${f.pdf_page}`
-                      : ', page not mapped'}{' '}
-                    (word “{f.term}”): {f.excerpt}
-                    <ConditionPagePreview
-                      api={api}
-                      caseId={caseId}
-                      briefId={briefId}
-                      found={f}
-                    />
+            {matches.data.anchors.map((a) => {
+              const tone = a.status === 'UNVERIFIED' ? 'impossible' : 'warning';
+              return (
+                <li key={a.anchor_id} className="legal-card" data-tone={tone}>
+                  <div className="legal-card-head">
+                    <span className="legal-badge" data-tone={tone}>
+                      <span aria-hidden="true">
+                        {tone === 'impossible' ? '⊘' : '!'}
+                      </span>{' '}
+                      <strong>
+                        {a.status === 'UNVERIFIED'
+                          ? t('conditionNoPassage')
+                          : legalStatusLabel('UNDETERMINED')}
+                      </strong>{' '}
+                      <code>{a.status}</code>
+                    </span>
+                    <span className="legal-ref-title">
+                      {a.label}: {a.sentence}
+                    </span>
+                  </div>
+                  <span className="small">
+                    {t('legalReasonLabelPrefix')} <code>{a.reason}</code>.
+                    Pieces read: {a.pieces_read.join(', ') || 'none'}
+                    {a.pieces_not_read.length > 0 &&
+                      `; not read: ${a.pieces_not_read.join(', ')}`}
                   </span>
-                ))}
-              </li>
-            ))}
+                  {a.found.map((f) => (
+                    <span className="small" key={f.excerpt_sha256 + f.piece}>
+                      {f.piece}
+                      {f.pdf_page
+                        ? `, PDF p.${f.pdf_page}`
+                        : ', page not mapped'}{' '}
+                      (word “{f.term}”): {f.excerpt}
+                      <ConditionPagePreview
+                        api={api}
+                        caseId={caseId}
+                        briefId={briefId}
+                        found={f}
+                      />
+                    </span>
+                  ))}
+                </li>
+              );
+            })}
           </ul>
         </>
       ) : null}

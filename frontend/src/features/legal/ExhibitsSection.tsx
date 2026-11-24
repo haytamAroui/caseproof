@@ -1,13 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ApiClient } from '../../shared/api';
 import { parseExhibitReferences } from '../../shared/api/legal';
+import { useLocale } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import { Notice } from '../../shared/ui';
-
-const WORDS: Record<string, string> = {
-  UNVERIFIED: 'Not in the confirmed inventory',
-  UNDETERMINED: 'Cannot be decided',
-};
 
 /** Exhibit mentions mapped to the inventory a person confirmed. Located never means content verified. */
 export function ExhibitsSection(props: {
@@ -18,6 +14,7 @@ export function ExhibitsSection(props: {
 }) {
   const { api, caseId, briefId, snapshot } = props;
   const session = useSession();
+  const { t } = useLocale();
   const q = useQuery({
     queryKey: ['exhibit-references', session.epoch, caseId, briefId, snapshot],
     enabled: session.connected,
@@ -33,70 +30,118 @@ export function ExhibitsSection(props: {
   });
   return (
     <>
-      <h2>Exhibit references and the confirmed inventory</h2>
+      <h2>{t('exhibitsHeading')}</h2>
       {q.isPending ? (
-        <Notice>Loading exhibit references…</Notice>
+        <Notice>{t('exhibitsLoading')}</Notice>
       ) : q.isError ? (
-        <Notice error>
-          Exhibit references are unavailable. No cached result is shown.
-        </Notice>
+        <Notice error>{t('exhibitsError')}</Notice>
       ) : (
         <>
           <Notice>{q.data.note}</Notice>
           <p>
             {q.data.inventory_confirmed
-              ? `Inventory confirmed${q.data.inventory_complete ? ' and declared complete' : ', not declared complete'} (confirmation ${q.data.confirmation_id ?? 'n/a'}).`
-              : 'No confirmed inventory for this draft. Nothing is mapped to a file.'}{' '}
-            Detected: {q.data.coverage.detected}; located in the inventory:{' '}
-            {q.data.coverage.located}.
+              ? `${q.data.inventory_complete ? t('exhibitsConfirmedComplete') : t('exhibitsConfirmedIncomplete')} (confirmation ${q.data.confirmation_id ?? 'n/a'}).`
+              : t('exhibitsUnconfirmed')}{' '}
+            {t('exhibitsDetectedLabel')} {q.data.coverage.detected};{' '}
+            {t('exhibitsLocatedLabel')} {q.data.coverage.located}.
           </p>
           {q.data.references.length === 0 ? (
-            <Notice>No numbered exhibit mention was detected.</Notice>
+            <Notice>{t('exhibitsNone')}</Notice>
           ) : (
             <ul
               className="matter-list legal-list"
               aria-label="Exhibit mentions"
             >
-              {q.data.references.map((r) => (
-                <li key={r.reference_id}>
-                  <strong>{WORDS[r.status]}</strong> <code>{r.status}</code>
-                  <span className="small">
-                    {r.raw_text}
-                    {r.page_cited ? ' (a page is cited)' : ''}
-                  </span>
-                  <span className="small">
-                    Reason: <code>{r.reason}</code>
-                  </span>
-                  {r.entry && (
+              {q.data.references.map((r) => {
+                const tone =
+                  r.status === 'UNVERIFIED' ? 'impossible' : 'warning';
+                const word =
+                  r.status === 'UNVERIFIED'
+                    ? t('exhibitNotInInventory')
+                    : t('exhibitUndetermined');
+                return (
+                  <li
+                    key={r.reference_id}
+                    className="legal-card"
+                    data-tone={tone}
+                  >
+                    <div className="legal-card-head">
+                      <span className="legal-badge" data-tone={tone}>
+                        <span aria-hidden="true">
+                          {tone === 'impossible' ? '⊘' : '!'}
+                        </span>{' '}
+                        <strong>{word}</strong> <code>{r.status}</code>
+                      </span>
+                      <span className="legal-ref-title">
+                        {r.raw_text}
+                        {r.page_cited ? ' (a page is cited)' : ''}
+                      </span>
+                    </div>
                     <span className="small">
-                      Inventory entry {r.entry.label} {r.entry.number}:{' '}
-                      {r.entry.filename ?? 'no source file bound'}
-                      {r.entry.sha256 && (
-                        <>
-                          {' '}
-                          SHA-256 <code>{r.entry.sha256}</code>
-                        </>
-                      )}
-                      {r.entry.readback ? `, readback ${r.entry.readback}` : ''}
-                      {r.entry.pages.length > 0 &&
-                        `; confirmed pages: ${r.entry.pages
-                          .map(
-                            (p) =>
-                              `${p.space} ${p.label} = PDF p.${p.pdf_page}`,
-                          )
-                          .join(', ')}`}
-                      . Content not compared to the brief.
+                      {t('legalReasonLabelPrefix')} <code>{r.reason}</code>
                     </span>
-                  )}
-                </li>
-              ))}
+                    {r.entry && (
+                      <span className="small">
+                        Inventory entry {r.entry.label} {r.entry.number}:{' '}
+                        {r.entry.filename ?? 'no source file bound'}
+                        {r.entry.sha256 && (
+                          <>
+                            {' '}
+                            SHA-256 <code>{r.entry.sha256}</code>
+                          </>
+                        )}
+                        {r.entry.readback
+                          ? `, readback ${r.entry.readback}`
+                          : ''}
+                        {r.entry.pages.length > 0 &&
+                          `; confirmed pages: ${r.entry.pages
+                            .map(
+                              (p) =>
+                                `${p.space} ${p.label} = PDF p.${p.pdf_page}`,
+                            )
+                            .join(', ')}`}
+                        . {t('exhibitsContentNotCompared')}
+                      </span>
+                    )}
+                    {r.status_cue_flag && (
+                      <div className="status-cue-callout" role="note">
+                        <div className="status-cue-head">
+                          <span className="legal-badge" data-tone="warning">
+                            <span aria-hidden="true">!</span>{' '}
+                            <strong>{t('statusCueFlagTitle')}</strong>
+                          </span>
+                          <span className="small">
+                            {t('statusCueFlagClaimVsSource')}{' '}
+                            <code>{r.status_cue_flag.claim_cue}</code> →{' '}
+                            <code>{r.status_cue_flag.passage_cue}</code>
+                            {r.status_cue_flag.pdf_page
+                              ? ` (PDF p.${r.status_cue_flag.pdf_page})`
+                              : ''}
+                          </span>
+                        </div>
+                        <p className="small">
+                          <strong>{t('legalDraft')}:</strong>{' '}
+                          {r.status_cue_flag.claim_excerpt}
+                        </p>
+                        <p className="small">
+                          <strong>{t('sourceEvidenceHeading')}:</strong>{' '}
+                          {r.status_cue_flag.source_excerpt}
+                        </p>
+                        <p className="small muted">
+                          {t('statusCueFlagDisclaimer')}
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
           {q.data.coverage.entries_not_detected_in_brief.length > 0 && (
             <p className="small">
-              Inventory entries with no mention detected in the assessed text:{' '}
-              {q.data.coverage.entries_not_detected_in_brief.join(', ')}. This
-              is not a finding that they are uncited.
+              {t('exhibitsUncitedPrefix')}{' '}
+              {q.data.coverage.entries_not_detected_in_brief.join(', ')}.{' '}
+              {t('exhibitsUncitedDisclaimer')}
             </p>
           )}
         </>

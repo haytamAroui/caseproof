@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { useLocale } from '../i18n';
 export function Button(props: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
@@ -26,11 +27,77 @@ export function Notice({
     </p>
   );
 }
+type StatusTone =
+  | 'error'
+  | 'warning'
+  | 'impossible'
+  | 'recheck'
+  | 'success'
+  | 'derived'
+  | 'neutral';
+
+const TONE_ICON: Record<StatusTone, string> = {
+  error: '✕',
+  warning: '!',
+  impossible: '⊘',
+  recheck: '↻',
+  success: '✓',
+  derived: '◈',
+  neutral: '·',
+};
+
+function classifyStatusTone(value: string): StatusTone {
+  const key = value.toLowerCase();
+  if (
+    key === 'quote_not_found' ||
+    key === 'contradicted' ||
+    key === 'conflicting' ||
+    key === 'representation_conflict' ||
+    key === 'not_in_inventory' ||
+    key === 'fail'
+  )
+    return 'error';
+  if (
+    key === 'source_missing' ||
+    key === 'unmapped' ||
+    key === 'ocr_unreliable' ||
+    key === 'not_assessed' ||
+    key === 'unverified'
+  )
+    return 'impossible';
+  if (
+    key === 'ambiguous' ||
+    key === 'multiple_matches' ||
+    key === 'translation_review_required' ||
+    key === 'qualified' ||
+    key === 'undetermined'
+  )
+    return 'warning';
+  if (key === 'stale' || key === 'superseded' || key === 'pending_recheck')
+    return 'recheck';
+  if (
+    key === 'resolved' ||
+    key === 'mapped' ||
+    key === 'exact_match' ||
+    key === 'supported' ||
+    key === 'pass'
+  )
+    return 'success';
+  return 'neutral';
+}
+
 export function StateValue({ label, value }: { label: string; value: string }) {
+  const tone = classifyStatusTone(value);
+  const { dimensionLabel, stateLabel } = useLocale();
   return (
-    <div className="dimension">
-      <dt>{label}</dt>
-      <dd>{value.replaceAll('_', ' ')}</dd>
+    <div className="dimension" data-tone={tone}>
+      <dt>{dimensionLabel(label)}</dt>
+      <dd>
+        <span className="dimension-icon" aria-hidden="true">
+          {TONE_ICON[tone]}
+        </span>{' '}
+        {stateLabel(value)}
+      </dd>
     </div>
   );
 }

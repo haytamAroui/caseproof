@@ -530,7 +530,11 @@ def create_signed_workbench_router(
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         raw = intake.model_dump(by_alias=True) if hasattr(intake, "model_dump") else dict(intake)
         mapped = map_exhibit_references(
-            bundle.representation.text, brief_version_id=brief_version_id, intake=raw)
+            bundle.representation.text,
+            brief_version_id=brief_version_id,
+            intake=raw,
+            previews=getattr(bundle, "previews", None),
+        )
         try:
             view = ExhibitReferencesView.model_validate({
                 "schema": "caseproof-exhibit-references-v1",

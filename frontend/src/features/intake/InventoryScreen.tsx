@@ -15,6 +15,7 @@ import type {
   InventoryReviewException,
 } from '../../shared/api';
 import { useSessionController } from '../../shared/session';
+import { useLocale } from '../../shared/i18n';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 function confirmationFingerprint(
   entries: IdentityConfirmation[],
@@ -96,6 +97,7 @@ export function InventoryScreen({ api }: { api: ApiClient }) {
 function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
   const session = useSessionController(),
     navigate = useNavigate();
+  const { t } = useLocale();
   const [entries, setEntries] = useState<IdentityConfirmation[]>(data.entries);
   const [exceptions, setExceptions] = useState<InventoryReviewException[]>(
     data.exceptions ?? [],
@@ -484,6 +486,51 @@ function InventoryForm({ api, data }: { api: ApiClient; data: IntakeView }) {
         >
           Run explicit check
         </Button>
+        {!saved && (
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              if (lock.current) return;
+              lock.current = true;
+              setBusy(true);
+              const epoch = session.getSnapshot().epoch;
+              try {
+                const raw = await api.post(
+                  base + '/checks',
+                  { require_confirmed_inventory: false },
+                  abort.current.signal,
+                );
+                const report = parseDossier(raw);
+                session.assert(epoch);
+                if (
+                  report.case_id !== data.case_id ||
+                  report.brief_id !== data.brief_id
+                )
+                  throw Error('Wrong check scope');
+                await navigate(
+                  `/matters/${data.case_id}/briefs/${data.brief_id}?snapshot=${report.snapshot_hash}`,
+                );
+              } catch {
+                if (
+                  !abort.current.signal.aborted &&
+                  session.getSnapshot().epoch === epoch
+                )
+                  setMessage(
+                    'Check could not be opened. Refresh preserved reports before starting another check.',
+                  );
+              } finally {
+                lock.current = false;
+                if (
+                  !abort.current.signal.aborted &&
+                  session.getSnapshot().epoch === epoch
+                )
+                  setBusy(false);
+              }
+            }}
+          >
+            {t('runImmediateUnconfirmedBtn')}
+          </Button>
+        )}
       </div>
       {message && <Notice>{message}</Notice>}
     </>

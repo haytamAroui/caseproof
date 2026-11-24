@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ApiClient } from '../../shared/api';
 import { parseOfflinePackManifest } from '../../shared/api/legal';
+import { useLocale } from '../../shared/i18n';
 import { Button, Notice } from '../../shared/ui';
 
 /** Downloads the offline review pack only if its bytes match the manifest just read. */
@@ -15,6 +16,7 @@ export function PackDownload({
   briefId: string;
   snapshot: string;
 }) {
+  const { t } = useLocale();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [bad, setBad] = useState(false);
@@ -23,7 +25,7 @@ export function PackDownload({
     if (busy) return;
     setBusy(true);
     setBad(false);
-    setMsg('Preparing the pack…');
+    setMsg(t('packPreparing'));
     const controller = new AbortController();
     try {
       const manifest = parseOfflinePackManifest(
@@ -55,22 +57,20 @@ export function PackDownload({
       );
     } catch {
       setBad(true);
-      setMsg(
-        'The pack could not be prepared or its bytes did not match this check (the review may have changed). Nothing was saved. Reload and try again.',
-      );
+      setMsg(t('packError'));
     } finally {
       setBusy(false);
     }
   }
   return (
-    <div>
+    <div className="legal-pack-box">
       <Button
         onClick={() => {
           void run();
         }}
         disabled={busy}
       >
-        Download offline review pack (ZIP)
+        {t('packDownloadBtn')}
       </Button>
       {msg && (bad ? <Notice error>{msg}</Notice> : <p role="status">{msg}</p>)}
     </div>

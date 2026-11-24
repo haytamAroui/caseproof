@@ -10,7 +10,6 @@ import csv
 import hashlib
 import io
 import os
-import resource
 import shutil
 import struct
 import subprocess
@@ -20,6 +19,11 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from uuid import uuid4
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - Windows local development
+    resource = None  # type: ignore[assignment]
 
 from pypdf import PdfReader
 
@@ -104,6 +108,8 @@ def parse_tsv(raw: bytes, *, width: int, height: int) -> tuple[OCRWord, ...]:
 
 def _worker_limits() -> None:
     """Bound the child process, never the API process."""
+    if resource is None:  # pragma: no cover - Windows local development
+        raise OCRUnavailable("ocr_rlimit_unavailable_on_platform")
     resource.setrlimit(resource.RLIMIT_AS, (768 * 1024 * 1024, 768 * 1024 * 1024))
     resource.setrlimit(resource.RLIMIT_CPU, (30, 30))
     resource.setrlimit(resource.RLIMIT_FSIZE, (16 * 1024 * 1024, 16 * 1024 * 1024))
