@@ -68,9 +68,11 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
                      f"select public.caseproof_read_conditions('{case}'); commit;")[1]
 
     assert '"revision": 1' in read(writer) and "spec_text" in read(viewer)
-    assert '"revision": 0' in read(outsider) and "spec_text" not in read(outsider)
+    assert "not authorized" in read(outsider) and "spec_text" not in read(outsider)
     assert "permission denied" in read(writer, "anon")
-    assert "not authorized" in call(viewer, 1)[1]
+    empty = '{"conditions":[],"format":"caseproof-conditions-v1"}'
+    assert '"revision": 2' in call(writer, 1, empty, hashlib.sha256(empty.encode()).hexdigest())[1]  # cleared
+    assert "not authorized" in call(viewer, 2)[1]
     assert "not authorized" in call(outsider, 1)[1]
     assert "spec hash mismatch" in call(writer, 1, digest="0" * 64)[1]
     assert "spec hash mismatch" in call(writer, 1, body=text + " ")[1]
@@ -85,7 +87,7 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
         f"delete from caseproof.matter_condition_specs where case_id='{case}'; commit;")[1]
     seen = _psql(f"begin; set local role authenticated; select set_config('request.jwt.claim.sub','{viewer}',true); "
                  "select count(*) from caseproof.matter_condition_specs; commit;")[1]
-    assert "1" in seen.splitlines()
+    assert "2" in seen.splitlines()
     none = _psql(f"begin; set local role authenticated; select set_config('request.jwt.claim.sub','{outsider}',true); "
                  "select count(*) from caseproof.matter_condition_specs; commit;")[1]
     assert "0" in none.splitlines()

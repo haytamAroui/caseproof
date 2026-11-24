@@ -31,6 +31,7 @@ from apps.api.litigation_review_app import ReviewBody
 from apps.api.litigation_review_workspace import ReviewCommand, SignedReviewWorkspace
 from apps.api.litigation_workspace_sources import SignedBriefSources
 from apps.api.signed_supabase_facts import FactRefused
+from apps.api.signed_supabase_originals import PrivateStorageDenied
 from infrastructure.parsers.pdf_ocr import OCRUnavailable
 from infrastructure.parsers.pdf_source_crop import render_pdf_page
 
@@ -516,6 +517,9 @@ def create_signed_workbench_router(
             return int(head["revision"]), load_stored(head["spec_text"], head["spec_sha256"])
         except AccessRejected:
             raise
+        except PrivateStorageDenied:
+            # A denied caller is told "not found", never an empty conditions list.
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         except (CorpusError, KeyError, ValueError, TypeError):
             raise AccessRejected(AccessFailure.SERVICE_UNAVAILABLE) from None
         except Exception:
@@ -557,6 +561,8 @@ def create_signed_workbench_router(
             revision = int(store.append(bearer, case_id, parsed.expected_revision, text, digest))
         except AccessRejected:
             raise
+        except PrivateStorageDenied:
+            raise AccessRejected(AccessFailure.RESOURCE_MASKED) from None
         except ConflictError:
             raise HTTPException(409, "conditions changed since you loaded them; reload") from None
         except Exception:
@@ -582,7 +588,7 @@ def create_signed_workbench_router(
         revision, spec = stored_spec(bearer, case_id)
         sources = SignedBriefSources(wb.checker)
         bundle = sources._bundle(bearer=bearer, case_id=case_id, brief_version_id=brief_version_id)
-        if spec is None:
+        if spec is None or not spec["conditions"]:
             matched: dict[str, Any] = {"spec_sha256": None, "scope": _CONDITIONS_NOTE, "anchors": [],
                                        "coverage": {"conditions": 0, "anchors": 0, "sources_read": 0,
                                                     "sources_not_read": 0,

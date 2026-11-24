@@ -33,8 +33,19 @@ SCOPE = (
     "verified original pages. Sources that were not read are listed.")
 
 
+def _empty_text() -> tuple[str, str]:
+    text = json.dumps({"format": FORMAT, "conditions": []}, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return text, hashlib.sha256(text.encode()).hexdigest()
+
+
 def canonical_text(spec: Mapping[str, Any]) -> tuple[str, str]:
-    """The exact bytes the store hashes: canonical JSON of the body, and its SHA-256 (the spec hash)."""
+    """The exact bytes the store hashes: canonical JSON of the body, and its SHA-256 (the spec hash).
+
+    An empty list is a valid STORED revision here ("the lawyer cleared the conditions"), kept out of
+    lawyer_conditions.validate_spec so the offline conditions.toml rules and legacy exports are untouched.
+    """
+    if not list(spec["conditions"]):
+        return _empty_text()
     signed = validate_spec({"format": FORMAT, "conditions": list(spec["conditions"])}, sign=True)
     body = {"format": FORMAT, "conditions": signed["conditions"]}
     text = json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
@@ -45,7 +56,9 @@ def canonical_text(spec: Mapping[str, Any]) -> tuple[str, str]:
 
 
 def normalise_input(conditions: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Lawyer input to a validated spec. Same validation as the offline conditions.toml."""
+    """Lawyer input to a validated spec. Same validation as the offline conditions.toml (empty = cleared)."""
+    if not conditions:
+        return {"format": FORMAT, "conditions": [], "spec_sha256": _empty_text()[1]}
     rows = [{"id": str(c.get("id", "")), "label": str(c.get("label", "")), "question": str(c.get("question", "")),
              "trigger": [str(t).strip() for t in c.get("trigger", [])],
              "evidence": [str(t).strip() for t in c.get("evidence", [])],
@@ -58,6 +71,8 @@ def load_stored(text: str, sha: str) -> dict[str, Any]:
     if hashlib.sha256(text.encode()).hexdigest() != sha:
         raise CorpusError("stored conditions spec hash mismatch")
     body = json.loads(text)
+    if isinstance(body, dict) and body.get("conditions") == [] and text == _empty_text()[0]:
+        return {"format": FORMAT, "conditions": [], "spec_sha256": sha}
     spec = validate_spec({**body, "spec_sha256": sha})
     if canonical_text(spec)[0] != text:
         raise CorpusError("stored conditions spec is not canonical")

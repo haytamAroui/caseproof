@@ -163,3 +163,32 @@ def test_canonical_text_roundtrip_and_hash():
     assert load_stored(text, digest)["conditions"][0]["id"] == "courrier"
     with pytest.raises(CorpusError):
         load_stored(text + " ", digest)
+
+
+def test_denied_caller_gets_404_never_an_empty_list():
+    from apps.api.signed_supabase_originals import PrivateStorageDenied
+
+    class Denied:
+        def read(self, b, c): raise PrivateStorageDenied("no")
+        def append(self, *a): raise PrivateStorageDenied("no")
+    c = client(Denied(), [], {})
+    assert c.get(URL, headers=H).status_code == 404
+    assert c.post(URL, json=BODY, headers=H).status_code == 404
+    assert c.get(M, headers=H).status_code == 404
+
+
+def test_lawyer_can_clear_conditions_last_one_included():
+    store = FakeStore()
+    c = client(store, [], {})
+    assert c.post(URL, json=BODY, headers=H).json()["revision"] == 1
+    cleared = c.post(URL, json={"expected_revision": 1, "conditions": []}, headers=H)
+    assert cleared.status_code == 200, cleared.text
+    state = cleared.json()
+    assert state["revision"] == 2 and state["conditions"] == []
+    assert c.get(URL, headers=H).json()["conditions"] == []
+    m = c.get(M, headers=H).json()
+    assert m["anchors"] == [] and m["coverage"]["conditions"] == 0
+    text, sha = store.rows[-1]
+    assert load_stored(text, sha)["conditions"] == [] and canonical_text(normalise_input([])) == (text, sha)
+    with pytest.raises(CorpusError):
+        load_stored(text.replace("[]", "[ ]"), hashlib.sha256(text.replace("[]", "[ ]").encode()).hexdigest())

@@ -121,3 +121,19 @@ describe('conditions contracts', () => {
     );
   });
 });
+
+describe('cleared conditions', () => {
+  it('accepts a stored revision with no conditions and an empty save body', () => {
+    const state = parseConditionsState({
+      schema: 'caseproof-conditions-state-v1',
+      revision: 2,
+      spec_sha256: 'a'.repeat(64),
+      conditions: [],
+      note: 'n',
+    });
+    expect(state.conditions).toEqual([]);
+    expect(
+      assertConditionsSave({ expected_revision: 2, conditions: [] }).conditions,
+    ).toEqual([]);
+  });
+});

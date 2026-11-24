@@ -123,7 +123,7 @@ export function ConditionsSection(props: {
                   .
                 </span>
                 <Button
-                  disabled={busy || current.length === 1}
+                  disabled={busy}
                   onClick={() => {
                     void save(current.filter((x) => x.id !== c.id));
                   }}

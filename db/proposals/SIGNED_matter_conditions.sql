@@ -78,7 +78,7 @@ begin
   end;
   if jsonb_typeof(v_spec) <> 'object' or v_spec ->> 'format' is distinct from 'caseproof-conditions-v1'
      or jsonb_typeof(v_spec -> 'conditions') <> 'array'
-     or jsonb_array_length(v_spec -> 'conditions') not between 1 and 50 then
+     or jsonb_array_length(v_spec -> 'conditions') not between 0 and 50 then
     raise exception 'unsupported conditions format' using errcode = '42501';
   end if;
   perform pg_advisory_xact_lock(hashtextextended(p_case::text, 0));
@@ -95,16 +95,25 @@ end $$;
 revoke all on function public.caseproof_append_conditions(uuid, integer, text, text) from public, anon, authenticated, service_role;
 grant execute on function public.caseproof_append_conditions(uuid, integer, text, text) to authenticated;
 
--- Latest revision for one matter. SECURITY INVOKER: the select policy (member + case:read grant) is what
--- decides visibility, so a caller with no access gets revision 0 and nothing else.
+-- Latest revision for one matter. SECURITY DEFINER with the same explicit member + matter-grant check as the
+-- select policy (case:read on both). A caller without access gets an ERROR (42501), never "revision 0", so
+-- "denied" and "no conditions yet" are distinguishable. Direct table reads stay governed by the RLS policy.
 create function public.caseproof_read_conditions(p_case uuid) returns jsonb
-language sql stable security invoker set search_path = '' as $$
-  select coalesce((select jsonb_build_object('revision', s.revision, 'spec_text', s.spec_text,
-                                             'spec_sha256', s.spec_sha256)
-                   from caseproof.matter_condition_specs s where s.case_id = p_case
-                   order by s.revision desc limit 1),
-                  jsonb_build_object('revision', 0));
-$$;
+language plpgsql stable security definer set search_path = '' as $$
+declare v_actor uuid := auth.uid(); v_row caseproof.matter_condition_specs%rowtype;
+begin
+  if v_actor is null or p_case is null or not exists (
+      select 1 from caseproof.cases c
+      join caseproof.organization_members m on m.org_id = c.org_id
+      join caseproof._m1_matter_grants g on g.org_id = m.org_id and g.user_id = m.user_id and g.case_id = c.id and g.active
+      where c.id = p_case and c.deleted_at is null and m.user_id = v_actor and m.active
+        and 'case:read' = any (m.actions) and 'case:read' = any (g.permissions)) then
+    raise exception 'not authorized for this matter' using errcode = '42501';
+  end if;
+  select * into v_row from caseproof.matter_condition_specs where case_id = p_case order by revision desc limit 1;
+  if not found then return jsonb_build_object('revision', 0); end if;
+  return jsonb_build_object('revision', v_row.revision, 'spec_text', v_row.spec_text, 'spec_sha256', v_row.spec_sha256);
+end $$;
 revoke all on function public.caseproof_read_conditions(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.caseproof_read_conditions(uuid) to authenticated;
 
