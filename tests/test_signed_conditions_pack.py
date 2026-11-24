@@ -197,3 +197,35 @@ def test_older_verifier_cannot_certify_a_pack_with_the_section(tmp_path, monkeyp
             "    print('REJECTED', type(e).__name__)\n")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=root)
     assert "REJECTED CorpusError" in out.stdout, out.stdout + out.stderr
+
+
+def test_recorded_actor_and_time_are_carried_and_forgery_is_refused(tmp_path, monkeypatch):
+    from application.litigation.signed_conditions_pack import validate_section
+    c = build(tmp_path, monkeypatch, [COND], [])
+    assert c.post("/v2/matters/c/conditions", json={"expected_revision": 1, "conditions": []}, headers=H).status_code == 200
+    raw, cp = pack(c)
+    body = verify_legal_pack(raw, expected_sha256=cp)
+    sec = body["signed_conditions"]
+    assert [e["revision"] for e in sec["events"]] == [1, 2]
+    assert sec["events"][1]["recorded_at"] == "2026-11-24T01:02:00.000000Z"
+    html_ = ZipFile(io.BytesIO(raw)).read("report.html").decode()
+    assert sec["events"][1]["actor_id"] in html_ and "01:02:00.000000Z" in html_
+    for mutate in (lambda f: f["events"].pop(), lambda f: f["events"][0].update(recorded_at="yesterday"),
+                   lambda f: f["events"][1].update(spec_sha256="0" * 64), lambda f: f["events"][0].update(revision=2),
+                   lambda f: f["events"][0].update(actor_id="not-a-uuid")):
+        forged = json.loads(json.dumps(sec))
+        mutate(forged)
+        with pytest.raises(CorpusError):
+            validate_section(body["brief_text"], forged)
+    validate_section(body["brief_text"], json.loads(json.dumps(sec)))  # untouched control
+
+
+def test_missing_actor_time_is_explicitly_unavailable_not_invented(tmp_path, monkeypatch):
+    c = build(tmp_path, monkeypatch, [COND], [])
+    raw, cp = pack(c)
+    body = verify_legal_pack(raw, expected_sha256=cp)
+    assert body["signed_conditions"]["events"] is not None  # route fake provides them
+    from application.litigation.signed_conditions_pack import validate_section
+    sec = json.loads(json.dumps(body["signed_conditions"]))
+    sec["events"] = None
+    assert validate_section(body["brief_text"], sec)["events"] is None

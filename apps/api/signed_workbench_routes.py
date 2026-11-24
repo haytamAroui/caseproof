@@ -225,7 +225,7 @@ def create_signed_workbench_router(
                 matched = (match_conditions(bundle.representation.text, spec, bundle.previews, labels)
                            if spec["conditions"] else {"anchors": []})
                 section = build_section(head["spec_text"], head["spec_sha256"], revision, matched, spec,
-                                        bundle.previews, labels, _readable)
+                                        bundle.previews, labels, _readable, head.get("events"))
         try:
             data, checkpoint = build_legal_pack(config=config, run=run,
                                                 brief_text=bundle.representation.text,

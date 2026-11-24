@@ -10,6 +10,7 @@ against source bytes, because the pack does not carry the matter's sources.
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -38,8 +39,14 @@ def _targeted(inventory: list[dict[str, Any]], pieces: list[str]) -> tuple[list[
             sorted(w for w in wanted if w not in known))
 
 
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_SHA = re.compile(r"^[0-9a-f]{64}$")
+_STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
+
+
 def build_section(spec_text: str, spec_sha256: str, revision: int, matches: Mapping[str, Any],
-                  spec: Mapping[str, Any], previews: Any, labels: Mapping[str, str], readable: Any) -> dict[str, Any]:
+                  spec: Mapping[str, Any], previews: Any, labels: Mapping[str, str], readable: Any,
+                  events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     inventory = _inventory(previews, labels, readable)
     by_id = {c["id"]: c for c in spec["conditions"]}
     rows = []
@@ -47,18 +54,30 @@ def build_section(spec_text: str, spec_sha256: str, revision: int, matches: Mapp
         read_ids, not_read_ids, missing = _targeted(inventory, by_id[a["condition_id"]]["pieces"])
         rows.append({**a, "sources_read": read_ids, "sources_not_read": not_read_ids, "pieces_missing": missing})
     return {"format": FORMAT, "note": NOTE, "revision": revision, "state": "configured" if spec["conditions"] else "cleared",
-            "spec_text": spec_text, "spec_sha256": spec_sha256, "inventory": inventory, "anchors": rows}
+            "spec_text": spec_text, "spec_sha256": spec_sha256, "events": events,
+            "inventory": inventory, "anchors": rows}
 
 
 def validate_section(brief_text: str, section: Any) -> dict[str, Any]:
     if (not isinstance(section, dict) or section.get("format") != FORMAT or section.get("note") != NOTE
-            or set(section) != {"format", "note", "revision", "state", "spec_text", "spec_sha256", "inventory", "anchors"}
+            or set(section) != {"format", "note", "revision", "state", "spec_text", "spec_sha256", "events", "inventory", "anchors"}
             or type(section["revision"]) is not int or not 1 <= section["revision"] <= 100000):
         raise CorpusError("signed conditions section invalid")
     spec = load_stored(section["spec_text"], section["spec_sha256"])
     expected = anchors(brief_text, spec) if spec["conditions"] else []
     if section["state"] != ("configured" if spec["conditions"] else "cleared"):
         raise CorpusError("signed conditions state does not match the stored revision")
+    ev = section["events"]
+    if ev is not None and (
+            not isinstance(ev, list) or len(ev) != section["revision"]
+            or any(not isinstance(e, dict) or set(e) != {"revision", "spec_sha256", "actor_id", "recorded_at"}
+                   or e["revision"] != n or type(e["revision"]) is not int
+                   or not isinstance(e["spec_sha256"], str) or not _SHA.fullmatch(e["spec_sha256"])
+                   or not isinstance(e["actor_id"], str) or not _UUID.fullmatch(e["actor_id"])
+                   or not isinstance(e["recorded_at"], str) or not _STAMP.fullmatch(e["recorded_at"])
+                   for n, e in enumerate(ev, start=1))
+            or ev[-1]["spec_sha256"] != section["spec_sha256"]):
+        raise CorpusError("signed conditions recorded events invalid")
     inventory = section["inventory"]
     if (not isinstance(inventory, list) or len(inventory) > 64
             or any(set(r) != {"source_id", "version_id", "original_sha256", "piece", "read"} or type(r["read"]) is not bool

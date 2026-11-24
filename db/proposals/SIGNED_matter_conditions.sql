@@ -112,7 +112,13 @@ begin
   end if;
   select * into v_row from caseproof.matter_condition_specs where case_id = p_case order by revision desc limit 1;
   if not found then return jsonb_build_object('revision', 0); end if;
-  return jsonb_build_object('revision', v_row.revision, 'spec_text', v_row.spec_text, 'spec_sha256', v_row.spec_sha256);
+  -- Recorded events (who and when each revision was stored), oldest first. Values come from the append-only
+  -- table: actor_id is the verified subject at append time, recorded_at the database clock (UTC).
+  return jsonb_build_object('revision', v_row.revision, 'spec_text', v_row.spec_text, 'spec_sha256', v_row.spec_sha256,
+    'history', (select jsonb_agg(jsonb_build_object('revision', h.revision, 'spec_sha256', h.spec_sha256,
+        'actor_id', h.actor_id, 'recorded_at', to_char(h.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'))
+        order by h.revision)
+      from caseproof.matter_condition_specs h where h.case_id = p_case));
 end $$;
 revoke all on function public.caseproof_read_conditions(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.caseproof_read_conditions(uuid) to authenticated;

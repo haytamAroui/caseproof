@@ -75,7 +75,7 @@ class FakeCondStore:
     def __init__(self): self.rows=[]
     def read(self,b,c):
         if not self.rows: return None
-        t,s=self.rows[-1]; return {"revision":len(self.rows),"spec_text":t,"spec_sha256":s}
+        t,s=self.rows[-1]; return {"revision":len(self.rows),"spec_text":t,"spec_sha256":s,"events":[{"revision":n,"spec_sha256":h,"actor_id":"11111111-1111-4111-8111-111111111111","recorded_at":f"2026-11-24T01:0{n}:00.000000Z"} for n,(_t,h) in enumerate(self.rows,start=1)]}
     def append(self,b,c,e,t,s):
         assert _h.sha256(t.encode()).hexdigest()==s
         if e!=len(self.rows): raise ConflictError

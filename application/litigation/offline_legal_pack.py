@@ -264,6 +264,13 @@ def _signed_conditions_report(section: dict[str, Any]) -> list[str]:
              " · empreinte <code>", esc(section["spec_sha256"]), "</code></p>"]
     parts += ["<p><strong>Conditions effacées volontairement à cette révision : aucune condition n'est active (ce n'est pas un dossier jamais configuré).</strong></p>"
               if section["state"] == "cleared" else "<p>Conditions actives.</p>"]
+    ev = section.get("events")
+    if ev is None:
+        parts += ["<p>Auteur et date d'enregistrement des révisions : non disponibles (le service n'a pas fourni ces valeurs).</p>"]
+    else:
+        parts += ["<p>Révisions enregistrées (auteur = identifiant du compte vérifié, date = horloge de la base, UTC) : ",
+                  esc("; ".join(f"révision {e['revision']} par {e['actor_id']} le {e['recorded_at']}" for e in ev)),
+                  ". Ces valeurs sont celles que le service a renvoyées au moment de l'export ; le pack ne permet pas de les revérifier seul.</p>"]
     parts += ["<p>Inventaire des sources au moment de l'export (", esc(len(section["inventory"])), ") : ",
               esc("; ".join(f"{r['piece']} {'lue' if r['read'] else 'non lue'}" for r in section["inventory"]) or "aucune"),
               ". Couverture recalculée au rejeu à partir de cet inventaire. Les empreintes d'extraits ne contrôlent que la cohérence interne du pack : les sources elles-mêmes ne sont pas rejointes ici et n'ont pas été revérifiées de façon indépendante.</p>"]

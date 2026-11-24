@@ -69,6 +69,9 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
 
     assert '"revision": 1' in read(writer) and "spec_text" in read(viewer)
     assert "not authorized" in read(outsider) and "spec_text" not in read(outsider)
+    h1 = read(writer)
+    assert f'"actor_id": "{writer}"' in h1 and '"history"' in h1 and "recorded_at" in h1 and "Z" in h1
+    assert "history" not in read(outsider)
     assert "permission denied" in read(writer, "anon")
     empty = '{"conditions":[],"format":"caseproof-conditions-v1"}'
     assert '"revision": 2' in call(writer, 1, empty, hashlib.sha256(empty.encode()).hexdigest())[1]  # cleared
