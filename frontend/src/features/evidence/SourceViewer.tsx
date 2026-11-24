@@ -170,8 +170,8 @@ function SourceInspection({
         if (!controller.signal.aborted)
           setError(
             reason instanceof InspectionTimeout
-              ? 'PDF opening exceeded its time budget.'
-              : 'This source could not be opened. It may be unavailable, unsupported or outside the inspection budget.',
+              ? 'sourceOpenTimeout'
+              : 'sourceOpenFailed',
           );
         void inspection?.close();
       }
@@ -326,7 +326,11 @@ function SourceInspection({
       </div>
       {error && (
         <>
-          <Notice error>{error}</Notice>
+          <Notice error>
+            {error === 'sourceOpenTimeout' || error === 'sourceOpenFailed'
+              ? t(error)
+              : error}
+          </Notice>
           <Button onClick={onRetry}>{t('reopenSourceBtn')}</Button>
         </>
       )}

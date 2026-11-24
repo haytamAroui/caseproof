@@ -395,14 +395,11 @@ function DraftExcerpt({ p }: { p: LegalPassageView }) {
       <p className="small">
         {t('legalRowCheckedPrefix')}{' '}
         {p.quote ? <q>{p.quote}</q> : t('legalNoQuotationOnly')}
-        {p.quote &&
-          !p.quote_span &&
-          ' (its exact position could not be located)'}
-        . Solid highlight = what this row checked. Dashed = another citation or
-        quotation in the same passage, checked separately in its own row
+        {p.quote && !p.quote_span && t('legalQuoteNotLocated')}.{' '}
+        {t('legalHighlightLegend')}
         {p.other_findings.length > 0 &&
           ` (${p.other_findings.map((o) => o.status).join(', ')})`}
-        . {p.status} here does not cover the dashed parts.
+        . {p.status} {t('legalHighlightDisclaimerSuffix')}
       </p>
       <p>{overlap ? p.brief_excerpt : parts}</p>
     </>

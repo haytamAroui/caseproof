@@ -247,6 +247,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     legalSourcePrefix: 'Source:',
     legalRowCheckedPrefix: 'This row checked:',
     legalNoQuotationOnly: 'no quotation (the citation only)',
+    legalQuoteNotLocated: ' (its exact position could not be located)',
+    legalHighlightLegend:
+      'Solid highlight = what this row checked. Dashed = another citation or quotation in the same passage, checked separately in its own row',
+    legalHighlightDisclaimerSuffix: 'here does not cover the dashed parts.',
+    sourceOpenTimeout: 'PDF opening exceeded its time budget.',
+    sourceOpenFailed:
+      'This source could not be opened. It may be unavailable, unsupported or outside the inspection budget.',
   },
   fr: {
     skip: 'Aller au contenu',
@@ -478,6 +485,14 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     legalSourcePrefix: 'Source :',
     legalRowCheckedPrefix: 'Passage contrôlé :',
     legalNoQuotationOnly: 'aucune citation textuelle (renvoi uniquement)',
+    legalQuoteNotLocated: ' (position exacte non localisée)',
+    legalHighlightLegend:
+      'Surlignage plein = passage contrôlé par cette ligne. Pointillé = autre renvoi ou citation dans le même paragraphe, contrôlé séparément sur sa propre ligne',
+    legalHighlightDisclaimerSuffix:
+      'ici ne couvre pas les passages en pointillé.',
+    sourceOpenTimeout: 'L’ouverture du PDF a dépassé le délai autorisé.',
+    sourceOpenFailed:
+      'Impossible d’ouvrir cette pièce source. Elle est peut-être indisponible, non prise en charge ou hors budget d’inspection.',
   },
   nl: {
     skip: 'Naar inhoud',
@@ -655,7 +670,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     conditionNoPassage: 'Geen passage gevonden in de gelezen stukken',
     triageSummaryLabel: 'Filter vaststellingen per controlecategorie',
     bannerInventoryUnconfirmed:
-      'Inventaris nog niet bevestigd: afhankelijke stukidentiteiten blijven « Niet beoordeeld » tot u de koppeling bevestigt.',
+      'Inventaris nog niet bevestigd: afhankelijke stukidentiteiten blijven “Niet beoordeeld” tot u de koppeling bevestigt.',
     bannerInventoryAction: 'Inventaris bevestigen',
     bannerPaginationUnmapped:
       'Niet-gekoppelde of strijdige paginering: PDF-, gedrukte en bundelpagina’s blijven strikt gescheiden.',
@@ -693,7 +708,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     noRefsDetected:
       'Geen expliciete verwijzingen gedetecteerd. Controleer de verwerkingsdekking vóór u conclusies trekt.',
     noRefsInFilter:
-      'Geen vaststellingen in dit filter. Kies « Alles tonen » om het volledige bereik te bekijken.',
+      'Geen vaststellingen in dit filter. Kies “Alles tonen” om het volledige bereik te bekijken.',
     bannerFailedSourcePages:
       'Niet-verwerkte of mislukte PDF-bronpagina’s gedetecteerd. Inspecteer de brondekking vóór u conclusies trekt.',
     reopenSourceBtn: 'Bron opnieuw openen',
@@ -710,6 +725,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     legalSourcePrefix: 'Bron:',
     legalRowCheckedPrefix: 'Gecontroleerde passage:',
     legalNoQuotationOnly: 'geen citaat (enkel de verwijzing)',
+    legalQuoteNotLocated: ' (exacte positie niet gevonden)',
+    legalHighlightLegend:
+      'Volle markering = gecontroleerd door deze rij. Gestippeld = andere verwijzing of citaat in dezelfde passage, afzonderlijk gecontroleerd op een eigen rij',
+    legalHighlightDisclaimerSuffix: 'hier dekt de gestippelde delen niet.',
+    sourceOpenTimeout: 'Het openen van de PDF overschreed het tijdsbudget.',
+    sourceOpenFailed:
+      'Deze bron kon niet worden geopend. Zij is mogelijk niet beschikbaar, niet ondersteund of buiten het inspectiebudget.',
   },
 };
 
