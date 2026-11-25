@@ -28,9 +28,11 @@ from scripts.verify_migration_lineage import LINEAGE, ROOT, SNAPSHOT, verify_lin
 
 PR204 = ROOT / "supabase/migrations/20261106210000_caseproof_release_acknowledgement_fence.sql"
 HARDENING = ROOT / "supabase/migrations/20261113000000_caseproof_platform_hardening.sql"
-PENDING = (PR204, HARDENING)
+CONDITIONS = ROOT / "supabase/migrations/20261124030604_caseproof_signed_matter_conditions.sql"
+OMISSION = ROOT / "supabase/migrations/20261124030659_caseproof_signed_review_omission_disposition.sql"
+PENDING = (PR204, HARDENING, CONDITIONS, OMISSION)
 BASE_COUNT = 74
-HISTORY_COUNT = 76
+HISTORY_COUNT = 78
 APPLY = re.compile(r"Applying migration ([0-9]{14}_[A-Za-z0-9_-]+\.sql)")
 
 
@@ -172,7 +174,7 @@ def probe_historical_upgrade() -> dict[str, object]:
                     "historical_profile_sha256": receipt,
                 }
             return result | {
-                "status": "HISTORICAL_74_TO_76_LOCAL_UPGRADE_PASSED",
+                "status": "HISTORICAL_74_TO_78_LOCAL_UPGRADE_PASSED",
                 "historical_applied_count": BASE_COUNT,
                 "pending_applied_count": len(PENDING),
                 "historical_profile_sha256": receipt,
@@ -191,7 +193,7 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
-    return 0 if report["status"] == "HISTORICAL_74_TO_76_LOCAL_UPGRADE_PASSED" else 2
+    return 0 if report["status"] == "HISTORICAL_74_TO_78_LOCAL_UPGRADE_PASSED" else 2
 
 
 if __name__ == "__main__":
