@@ -1,4 +1,4 @@
--- DRAFT, NOT APPLIED to any shared environment (no supabase/migrations entry).
+-- APPLIED to caseproof-dev (ldwmocpxwskvhoojndrd) via Supabase Dashboard SQL Editor on 2026-11-25 (pg_get_functiondef SHA-256 414f9c955ecfaa042f94c797f72a151896b2720c0a9bf2f6f088846e60bdde6f; no schema_migrations row); NOT applied to production.
 -- Companion to SIGNED_matter_conditions.sql. The installed caseproof_retention('finalize') deletes matter history
 -- table by table and then the case row; without this one extra delete, a matter that has condition revisions could
 -- not be purged (FK to cases). Generated from the function as installed by the repo's disposable replay order,

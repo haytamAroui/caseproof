@@ -5,11 +5,9 @@
 
 ---
 
-## 1. Apply Optional Conditions-Retention SQL to `caseproof-dev`
-- **Why open:** In `ldwmocpxwskvhoojndrd`, `supabase_mcp:apply_migration` was automatically cancelled twice by the IDE client confirmation handler (`"The client cancelled this confirmation 0.1 s after it was sent. Nothing was run."`).
-- **Action (you / operator):**
-  1. Either re-enable confirmation prompts for `supabase_mcp:apply_migration` in your IDE client, **or** apply lines 7–88 of [SIGNED_matter_conditions_retention.sql](../../db/proposals/SIGNED_matter_conditions_retention.sql) via Supabase CLI / Dashboard so `supabase_migrations.schema_migrations` records the new version on `caseproof-dev`.
-  2. Tell the agent once applied so it can read back the exact deployed SQL + SHA-256 and open the sync PR into `supabase/migrations/` (matching merged PR #237).
+## 1. Apply Optional Conditions-Retention SQL to `caseproof-dev` — DONE (VERIFIED 25 Nov 2026)
+- **Status:** **DONE — VERIFIED ON `caseproof-dev` (`ldwmocpxwskvhoojndrd`) via read-only Supabase MCP on 25 Nov 2026.**
+- **Receipt:** Applied directly via Supabase Dashboard SQL Editor (`public.caseproof_retention(text, uuid)` `pg_get_functiondef` SHA-256 `414f9c955ecfaa042f94c797f72a151896b2720c0a9bf2f6f088846e60bdde6f`, `has_conditions_delete=true`, `owner=postgres`, `SECURITY DEFINER`, `search_path=""`, `proacl={postgres=X/postgres,service_role=X/postgres}`, `0 ERROR` / `24 WARN` / `35 INFO` security advisors). Because applied via Dashboard SQL Editor, `supabase_migrations.schema_migrations` remains at `78` rows; recorded in [SIGNED_matter_conditions_retention.sql](../../db/proposals/SIGNED_matter_conditions_retention.sql) (still **NOT applied to production**).
 
 ---
 
