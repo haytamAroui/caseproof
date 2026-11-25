@@ -179,8 +179,18 @@ def test_refinement4_review_budget_defers_without_dropping_or_masking() -> None:
     exhibit_leads = []
     # Two distinct factual discrepancies on the same fixture, capped to max_p0=1.
     for eid, p_cand, b_val, e_val in (
-        ("FAC-2025-042", "Note de crédit / Creditnota relative à FAC-2025-042", "12 500 EUR", "2.500,00 EUR"),
-        ("FAC-2025-099", "Facture FAC-2025-099 : maintenance annuelle séparée", "5 000 EUR", "3.000,00 EUR"),
+        (
+            "FAC-2025-042",
+            "Note de crédit / Creditnota relative à FAC-2025-042 pour un montant de 2.500,00 EUR.",
+            "12 500 EUR",
+            "2.500,00 EUR",
+        ),
+        (
+            "FAC-2025-099",
+            "Facture FAC-2025-099 : maintenance annuelle séparée de 3.000,00 EUR.",
+            "5 000 EUR",
+            "3.000,00 EUR",
+        ),
     ):
         b_doc = index_document_blocks(
             exhibit_id="brief",
@@ -264,11 +274,94 @@ def test_live_cli_fails_closed_without_explicit_opt_in(monkeypatch: pytest.Monke
         spike_cli_main(["--live", "--authorize-billable-calls", "3", "--model", "eu/test", "--max-cost-usd", "0.02"])
 
 
+def test_unanchored_value_rejected_and_equivalent_typed_formats_accepted() -> None:
+    c3 = build_case3_cross_exhibit_credit_note()
+    quote_eur = "Note de crédit / Creditnota relative à FAC-2025-042 pour un montant de 2.500,00 EUR."
+    fake_cand = ModelCandidate(
+        candidate_id="adv-fake-9999",
+        exhibit_id="piece-7",
+        entity_id="FAC-2025-042",
+        slot="credit_note_amount",
+        signal="credit_note",
+        raw_value="9.999,00 EUR",
+        quote=quote_eur,
+        polarity="affirmative",
+        provider="scripted",
+        model="scripted-adv",
+        prompt_version="spike-v1",
+    )
+    lead, err = verify_and_harden_candidate(fake_cand, c3.documents["piece-7"])
+    assert lead is None and err == "value_not_in_quote"
+
+    res = evaluate_case_with_candidates(c3, (c3.clean_candidates[0], fake_cand))
+    assert res["tier2"]["p0_leads"] == ()
+    assert res["tier2"]["deferred_leads"] == ()
+    assert ("adv-fake-9999", "value_not_in_quote") in res["tier2"]["rejected_candidates"]
+
+    # Equivalent typed money formats against "2.500,00 EUR" must still ground cleanly.
+    for equiv_idx, equivalent_raw in enumerate(("2500 EUR", "2 500,00 EUR", "2500,00")):
+        equiv_cand = ModelCandidate(
+            candidate_id=f"equiv-{equiv_idx}",
+            exhibit_id="piece-7",
+            entity_id="FAC-2025-042",
+            slot="credit_note_amount",
+            signal="credit_note",
+            raw_value=equivalent_raw,
+            quote=quote_eur,
+            polarity="affirmative",
+            provider="scripted",
+            model="scripted-adv",
+            prompt_version="spike-v1",
+        )
+        ok_lead, ok_err = verify_and_harden_candidate(equiv_cand, c3.documents["piece-7"])
+        assert ok_err is None and ok_lead is not None
+
+    # Typed date matching: ISO raw_value matches Dutch named date, while wrong date is rejected.
+    c2 = build_case2_fr_nl_multiscalar_trap()
+    nl_quote = "waarvan 2.500,00 EUR reeds betaald op 14 maart 2026"
+    ok_date, err_date = verify_and_harden_candidate(
+        ModelCandidate(
+            candidate_id="date-ok",
+            exhibit_id="piece-2",
+            entity_id="FAC-2025-019",
+            slot="payment_date",
+            signal="date",
+            raw_value="2026-03-14",
+            quote=nl_quote,
+            polarity="affirmative",
+            provider="scripted",
+            model="scripted-adv",
+            prompt_version="spike-v1",
+        ),
+        c2.documents["piece-2"],
+    )
+    assert err_date is None and ok_date is not None
+
+    bad_date, err_bad_date = verify_and_harden_candidate(
+        ModelCandidate(
+            candidate_id="date-bad",
+            exhibit_id="piece-2",
+            entity_id="FAC-2025-019",
+            slot="payment_date",
+            signal="date",
+            raw_value="2026-05-01",
+            quote=nl_quote,
+            polarity="affirmative",
+            provider="scripted",
+            model="scripted-adv",
+            prompt_version="spike-v1",
+        ),
+        c2.documents["piece-2"],
+    )
+    assert bad_date is None and err_bad_date == "value_not_in_quote"
+
+
 def test_benchmark_scorecard_contains_required_metrics() -> None:
     scorecard = run_scripted_adversarial_benchmark()
     assert scorecard["billable_calls"] == 0
-    assert scorecard["tier1_byte_identical_across_all_runs"] is True
-    assert scorecard["summary"]["false_positives"] == 0
-    assert scorecard["summary"]["missed_cases"] == 0
+    assert scorecard["tier1_currently_isolated_byte_identical"] is True
+    assert scorecard["summary"]["scripted_false_positives"] == 0
+    assert scorecard["summary"]["scripted_missed_cases"] == 0
     assert scorecard["summary"]["review_burden_total_leads"] == 3
+    assert scorecard["summary"]["model_quality_measured"] is False
     assert all(scorecard["adversarial_traps"].values())

@@ -89,6 +89,25 @@ _SHORTLIST_KEYWORDS_RE = re.compile(
 
 _SIGN_STATUS_DRAFT = frozenset({"sent_for_signature", "draft", "proposal", "unsigned"})
 _SIGN_STATUS_SIGNED = frozenset({"signed", "executed", "binding"})
+_CONTRACT_SIGNED_RE = re.compile(
+    r"\b(?:sign[ée]s?|ondertekend|signed|executed|conclu|gesloten)\b",
+    re.IGNORECASE,
+)
+_CONTRACT_NON_SIGNED_RE = re.compile(
+    r"\b(?:envoy[ée]\s+pour\s+signature|ter\s+ondertekening(?:\s+verstuurd)?|"
+    r"sent\s+for\s+signature|non\s+sign[ée]|unsigned|niet\s+ondertekend)\b",
+    re.IGNORECASE,
+)
+_CONTRACT_SENT_FOR_SIG_RE = re.compile(
+    r"\b(?:envoy[ée]\s+pour\s+signature|ter\s+ondertekening(?:\s+verstuurd)?|sent\s+for\s+signature)\b",
+    re.IGNORECASE,
+)
+_CONTRACT_DRAFT_RE = re.compile(
+    r"\b(?:projet|ontwerp|draft|proposition|voorstel|non\s+sign[ée]|unsigned|niet\s+ondertekend)\b",
+    re.IGNORECASE,
+)
+_BARE_AMOUNT_RE = re.compile(r"(?<!\d)(?:\d{1,3}(?:[.\s]\d{3})+(?:,\d{1,2})?|\d+[.,]\d{2})(?!\d)")
+_CURRENCY_MARKER_RE = re.compile(r"(?:€|\beur\b|\busd\b|\$|\bgbp\b|\bchf\b)", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +224,56 @@ def _containing_sentence(full_text: str, start: int, end: int) -> str:
     return " ".join(full_text[left:right].split())
 
 
+def _normalized_currency(text: str) -> set[str]:
+    found: set[str] = set()
+    for token in _CURRENCY_MARKER_RE.findall(text):
+        low = token.casefold()
+        found.add("EUR" if low in {"€", "eur"} else "USD" if low in {"$", "usd"} else token.upper())
+    return found
+
+
+def _value_anchored_in_quote(candidate: ModelCandidate) -> bool:
+    """Ensure candidate.raw_value actually matches an anchored value/status inside candidate.quote."""
+    raw = candidate.raw_value.strip()
+    quote = candidate.quote
+    if not raw or not quote.strip():
+        return False
+
+    if candidate.slot == "contract_status":
+        low = raw.casefold()
+        if low in _SIGN_STATUS_SIGNED:
+            return bool(_CONTRACT_SIGNED_RE.search(quote)) and not bool(_CONTRACT_NON_SIGNED_RE.search(quote))
+        if low == "sent_for_signature":
+            return bool(_CONTRACT_SENT_FOR_SIG_RE.search(quote))
+        if low in _SIGN_STATUS_DRAFT:
+            return bool(_CONTRACT_DRAFT_RE.search(quote))
+        return low in quote.casefold()
+
+    target_amount = normalize_belgian_money(raw)
+    if target_amount is not None:
+        raw_currencies = _normalized_currency(raw)
+        quote_currencies = _normalized_currency(quote)
+        if raw_currencies and quote_currencies and not raw_currencies.intersection(quote_currencies):
+            return False
+        tokens = _AMOUNT_TOKEN_RE.findall(quote)
+        if not tokens and not raw_currencies:
+            tokens = _BARE_AMOUNT_RE.findall(quote)
+        for tok in tokens:
+            parsed = normalize_belgian_money(tok)
+            if parsed is not None and parsed == target_amount:
+                return True
+        return False
+
+    target_date = normalize_belgian_date(raw)
+    if target_date is not None:
+        for tok in _DATE_TOKEN_RE.findall(quote):
+            if normalize_belgian_date(tok) == target_date:
+                return True
+        return False
+
+    return raw.casefold() in quote.casefold()
+
+
 def verify_and_harden_candidate(
     candidate: ModelCandidate,
     document: IndexedDocument,
@@ -218,6 +287,8 @@ def verify_and_harden_candidate(
         return None, "quote_not_found"
     if document.full_text.find(quote, first + 1) >= 0:
         return None, "ambiguous_quote"
+    if not _value_anchored_in_quote(candidate):
+        return None, "value_not_in_quote"
     end = first + len(quote)
 
     spanned_blocks = tuple(

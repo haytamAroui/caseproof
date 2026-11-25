@@ -16,6 +16,7 @@ from evals.litigation_qae_spike.fixtures import (
     all_spike_fixtures,
     build_case1_status_shift_reservation,
     build_case2_fr_nl_multiscalar_trap,
+    build_case3_cross_exhibit_credit_note,
 )
 
 
@@ -130,10 +131,37 @@ def _run_adversarial_traps() -> dict[str, bool]:
     )["tier1_digest"]
     trap_tier1_invariance = len({d_off, d_clean, d_hallucinated, d_crash}) == 1
 
+    # Trap D: Unanchored value in valid verbatim quote (e.g., 9.999,00 EUR on a 2.500,00 EUR quote).
+    c3 = build_case3_cross_exhibit_credit_note()
+    unanchored = (
+        c3.clean_candidates[0],
+        ModelCandidate(
+            candidate_id="adv-unanchored-val",
+            exhibit_id="piece-7",
+            entity_id="FAC-2025-042",
+            slot="credit_note_amount",
+            signal="credit_note",
+            raw_value="9.999,00 EUR",
+            quote="Note de crédit / Creditnota relative à FAC-2025-042 pour un montant de 2.500,00 EUR",
+            polarity="affirmative",
+            provider="scripted",
+            model="scripted-adversarial",
+            prompt_version="spike-v1",
+        ),
+    )
+    res_unanchored = evaluate_case_with_candidates(c3, unanchored)
+    t2_unanchored = res_unanchored["tier2"]
+    trap_unanchored_rejected = (
+        t2_unanchored["p0_leads"] == ()
+        and t2_unanchored["deferred_leads"] == ()
+        and ("adv-unanchored-val", "value_not_in_quote") in t2_unanchored["rejected_candidates"]
+    )
+
     return {
         "multiscalar_mislabel_flagged_never_proven": trap_multiscalar,
         "cross_block_truncated_negation_caught": trap_cross_block_neg,
-        "tier1_byte_identical_across_all_runs": trap_tier1_invariance,
+        "tier1_currently_isolated_no_write_path": trap_tier1_invariance,
+        "unanchored_value_rejected": trap_unanchored_rejected,
     }
 
 
@@ -187,24 +215,26 @@ def run_scripted_adversarial_benchmark() -> dict[str, Any]:
         "mode": "scripted_adversarial_boundary_only",
         "billable_calls": 0,
         "reported_cost_usd": str(Decimal("0.00")),
-        "tier1_byte_identical_across_all_runs": (
+        "tier1_currently_isolated_byte_identical": (
             all(r["tier1_invariant"] for r in case_rows)
-            and traps["tier1_byte_identical_across_all_runs"]
+            and traps["tier1_currently_isolated_no_write_path"]
         ),
         "summary": {
             "cases": len(case_rows),
-            "true_positives": total_tp,
-            "false_positives": total_fp,
-            "missed_cases": total_missed,
-            "precision": precision,
-            "recall": recall,
+            "scripted_rule_matches": total_tp,
+            "scripted_false_positives": total_fp,
+            "scripted_missed_cases": total_missed,
+            "scripted_rule_precision": precision,
+            "scripted_rule_recall": recall,
             "review_burden_total_leads": total_burden,
+            "model_quality_measured": False,
         },
         "adversarial_traps": traps,
         "cases": case_rows,
         "caveat": (
-            "Scripted synthetic adversarial evaluation validating mechanical boundaries, data minimization, "
-            "coverage disclosure, and Tier-1 invariance only. Zero live LLM calls; not clinical/legal "
-            "precision proof or customer-readiness acceptance."
+            "Scripted synthetic adversarial evaluation validating mechanical boundaries, typed value anchoring, "
+            "data minimization, coverage disclosure, and current Tier-1 isolation (no Tier-2 write path exists "
+            "today; future integration must re-prove isolation). Zero live LLM calls: scripted rule counts do "
+            "NOT measure live LLM precision or recall."
         ),
     }

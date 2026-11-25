@@ -8,7 +8,8 @@ Live mode (--live) fails closed unless ALL explicit budget/consent gates are sat
   - REQUESTY_API_KEY (or CASEPROOF_REQUESTY_API_KEY)
   - --model <concrete provider/model>
   - --authorize-billable-calls matching exact preflight call count (len(fixtures) == 3)
-  - --max-cost-usd <= 0.10
+  - --max-cost-usd <= 0.10 (currently checked post-call; a pre-call token/price estimator must be
+    added before authorizing real paid runs so overruns are blocked before dispatch)
 Raw brief/exhibit text is NEVER written to stdout/logs; only minimized excerpts are sent.
 """
 from __future__ import annotations
