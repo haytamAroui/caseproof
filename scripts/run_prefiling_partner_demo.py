@@ -34,12 +34,13 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
+from application.extraction.contracts import ExtractionError
 from application.litigation.corpus import article_key
 from application.litigation.factual_values import (
     FactAssertion,
@@ -65,6 +66,10 @@ from application.litigation.workspace_contract import (
 )
 from domains.disputes.reference_detection import detect_exhibit_references
 from infrastructure.parsers.dossier_docx_export import annotated_docx
+from infrastructure.parsers.filing_pdf_parity_adapter import (
+    MAX_FILING_PDF_BYTES,
+    check_filing_pdf_parity,
+)
 
 DEMO_ORG_ID = "00000000-0000-4000-8000-000000000001"
 DEMO_CASE_ID = "11111111-1111-4111-8111-111111111111"
@@ -833,6 +838,9 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
             "Content-Type",
             "If-Match",
             "Idempotency-Key",
+            "X-CaseProof-Snapshot-Hash",
+            "X-CaseProof-Filing-PDF-SHA256",
+            "X-CaseProof-Byte-Length",
         ],
     )
     state: dict[str, Any] = {
@@ -2055,6 +2063,58 @@ def create_partner_demo_app(*, frontend_dist: Path | None = None) -> FastAPI:
                 "X-CaseProof-Export-SHA256": digest,
                 "X-CaseProof-Export-Size": str(len(data)),
                 "Cache-Control": "no-store",
+            },
+        )
+
+    @app.post("/v2/matters/{case_id}/briefs/{brief_id}/dossier/releases/filing-pdf-parity")
+    async def demo_filing_pdf_parity(
+        case_id: str,
+        brief_id: str,
+        request: Request,
+        content_type: str | None = Header(default=None),
+        x_caseproof_snapshot_hash: str | None = Header(default=None),
+        x_caseproof_filing_pdf_sha256: str | None = Header(default=None),
+        x_caseproof_byte_length: str | None = Header(default=None),
+    ) -> JSONResponse:
+        brief = _require_brief(case_id, brief_id)
+        if not content_type or content_type.split(";", 1)[0].strip().lower() != "application/pdf":
+            raise HTTPException(422, "filing PDF must use application/pdf")
+        if (
+            not x_caseproof_snapshot_hash
+            or len(x_caseproof_snapshot_hash) != 64
+            or any(c not in "0123456789abcdef" for c in x_caseproof_snapshot_hash)
+            or not x_caseproof_filing_pdf_sha256
+            or len(x_caseproof_filing_pdf_sha256) != 64
+            or any(c not in "0123456789abcdef" for c in x_caseproof_filing_pdf_sha256)
+        ):
+            raise HTTPException(422, "valid snapshot and filing PDF SHA-256 headers required")
+        try:
+            expected_length = int(x_caseproof_byte_length or "")
+        except ValueError:
+            raise HTTPException(422, "valid byte-length header required") from None
+        if not 0 < expected_length <= MAX_FILING_PDF_BYTES:
+            raise HTTPException(422, "filing PDF exceeds supported size limit")
+        pdf_bytes = await request.body()
+        if len(pdf_bytes) != expected_length or _sha_bytes(pdf_bytes) != x_caseproof_filing_pdf_sha256:
+            raise HTTPException(422, "filing PDF length or SHA-256 mismatch")
+        if state["current_brief_id"] != brief_id:
+            raise HTTPException(409, "superseded draft cannot be verified as current filing PDF")
+        dossier = _dossier_for(brief_id, x_caseproof_snapshot_hash)
+        try:
+            result = check_filing_pdf_parity(
+                original_docx=brief["docx"],
+                filing_pdf=pdf_bytes,
+                case_id=case_id,
+                brief_id=brief_id,
+                snapshot_hash=dossier["snapshot_hash"],
+            )
+        except ExtractionError as exc:
+            raise HTTPException(422, f"invalid_filing_pdf:{exc}") from None
+        return JSONResponse(
+            content=result,
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
             },
         )
 

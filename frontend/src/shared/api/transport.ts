@@ -308,6 +308,111 @@ export class ApiClient {
       release();
     }
   }
+  async filingPdfParityCheck(
+    path: string,
+    binding: {
+      snapshot_hash: string;
+      filing_pdf_sha256: string;
+      byte_length: number;
+    },
+    bytes: Uint8Array,
+    signal: AbortSignal,
+  ): Promise<unknown> {
+    if (
+      !/^\/v2\/matters\/[^/]+\/briefs\/[^/]+\/dossier\/releases\/filing-pdf-parity$/.test(
+        path,
+      ) ||
+      path.includes('://') ||
+      /[\\\r\n?#]/.test(path) ||
+      !/^[0-9a-f]{64}$/.test(binding.snapshot_hash) ||
+      !/^[0-9a-f]{64}$/.test(binding.filing_pdf_sha256) ||
+      !Number.isInteger(binding.byte_length) ||
+      binding.byte_length !== bytes.byteLength ||
+      bytes.byteLength < 1 ||
+      bytes.byteLength > 10_485_760
+    )
+      throw new ApiError(422);
+
+    const ownDigest = Array.from(
+      new Uint8Array(
+        await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)),
+      ),
+      (b) => b.toString(16).padStart(2, '0'),
+    ).join('');
+    if (ownDigest !== binding.filing_pdf_sha256) throw new ApiError(422);
+
+    const epoch = this.session.getSnapshot().epoch;
+    const { controller, release } = this.session.requestController();
+    const combined = AbortSignal.any([
+      signal,
+      controller.signal,
+      AbortSignal.timeout(180000),
+    ]);
+    try {
+      const token = await this.session.bearer(epoch);
+      this.session.assert(epoch);
+      combined.throwIfAborted();
+      const response = await this.send(path, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/pdf',
+          'If-Match': `snapshot_id:${binding.snapshot_hash}`,
+          'X-CaseProof-Snapshot-Hash': binding.snapshot_hash,
+          'X-CaseProof-Filing-PDF-SHA256': binding.filing_pdf_sha256,
+          'X-CaseProof-Byte-Length': String(binding.byte_length),
+        },
+        body: new Uint8Array(bytes),
+        signal: combined,
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'error',
+        referrerPolicy: 'no-referrer',
+      });
+      this.session.assert(epoch);
+      combined.throwIfAborted();
+      if (!response.ok) {
+        if (response.status === 401) this.session.clear();
+        throw new ApiError(response.status);
+      }
+      if (
+        !response.headers.get('content-type')?.includes('application/json') ||
+        !response.body
+      )
+        throw new ApiError(502);
+      const reader = response.body.getReader();
+      let size = 0;
+      const chunks: Uint8Array[] = [];
+      try {
+        while (true) {
+          const next = await reader.read();
+          this.session.assert(epoch);
+          combined.throwIfAborted();
+          if (next.done) break;
+          size += next.value.byteLength;
+          if (size > 200_000) throw new ApiError(502);
+          chunks.push(next.value);
+        }
+      } catch (error) {
+        await reader.cancel();
+        throw error;
+      } finally {
+        reader.releaseLock();
+      }
+      const result = new Uint8Array(size);
+      let cursor = 0;
+      for (const chunk of chunks) {
+        result.set(chunk, cursor);
+        cursor += chunk.length;
+      }
+      this.session.assert(epoch);
+      return JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(result),
+      ) as unknown;
+    } finally {
+      release();
+    }
+  }
   private async read(
     path: string,
     signal?: AbortSignal,

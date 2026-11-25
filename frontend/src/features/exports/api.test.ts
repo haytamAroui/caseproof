@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { SessionController } from '../../shared/session';
 import { ApiClient } from '../../shared/api';
 import {
+  checkFilingPdfParity,
+  parseFilingPdfParity,
   parseRelease,
   parseReleaseList,
   parseReleasePreview,
@@ -390,5 +392,89 @@ describe('F6 authenticated binary downloads', () => {
       ),
     ).rejects.toThrow();
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe('Final filing PDF parity contracts', () => {
+  function connectedSession() {
+    const s = new SessionController();
+    s.connect({ getBearer: async () => 'signed' });
+    return s;
+  }
+  it('validates exact parity payload, mismatch diffs, and rejects digest tampering', async () => {
+    const pdfBytes = new TextEncoder().encode('%PDF-1.4 sample\n%%EOF');
+    const pdfSha = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', pdfBytes)),
+      (b) => b.toString(16).padStart(2, '0'),
+    ).join('');
+    const payload = {
+      schema: 'caseproof-filing-pdf-parity-v1',
+      case_id: scope.caseId,
+      brief_id: scope.briefId,
+      snapshot_hash: scope.snapshot,
+      verified_docx_sha256: 'c'.repeat(64),
+      filing_pdf_sha256: pdfSha,
+      filing_pdf_byte_length: pdfBytes.byteLength,
+      filing_pdf_page_count: 1,
+      status: 'MISMATCH_DETECTED',
+      reason_codes: ['TEXT_MISMATCH_DETECTED'],
+      docx_token_count: 10,
+      pdf_token_count: 10,
+      docx_coverage_complete: true,
+      docx_unscanned_parts: [],
+      pdf_pages_without_text: [],
+      pdf_warnings: [],
+      diff_count: 1,
+      diff_truncated: false,
+      diffs: [
+        {
+          op: 'replace',
+          docx_token_index: 3,
+          pdf_token_index: 3,
+          docx_excerpt: '… envoyé pour signature …',
+          pdf_excerpt: '… contrat signé …',
+          docx_changed: 'envoyé pour signature',
+          pdf_changed: 'contrat signé',
+        },
+      ],
+      limitations: ['Deterministic text-layer comparison only.'],
+    };
+    expect(parseFilingPdfParity(payload, scope, pdfSha).status).toBe(
+      'MISMATCH_DETECTED',
+    );
+    expect(() =>
+      parseFilingPdfParity(
+        { ...payload, filing_pdf_sha256: '0'.repeat(64) },
+        scope,
+        pdfSha,
+      ),
+    ).toThrow();
+    expect(() =>
+      parseFilingPdfParity({ ...payload, status: 'VERIFIED' }, scope, pdfSha),
+    ).toThrow();
+
+    const send = vi.fn<typeof fetch>(
+      async () =>
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    const result = await checkFilingPdfParity(
+      new ApiClient(connectedSession(), send),
+      scope,
+      pdfBytes,
+      new AbortController().signal,
+    );
+    expect(result.diffs).toHaveLength(1);
+    expect(send.mock.calls[0]?.[0]).toBe(
+      `/v2/matters/${scope.caseId}/briefs/${scope.briefId}/dossier/releases/filing-pdf-parity`,
+    );
+    expect(send.mock.calls[0]?.[1]).toMatchObject({
+      method: 'POST',
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'error',
+    });
   });
 });
