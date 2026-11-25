@@ -1,5 +1,35 @@
 # CaseProof — engineering state and dated evidence
 
+## 24–25 November 2026 — Pre-filing truth-audit Waves 1–3 merged (`main` `44824863`); M5 & SEC gates remain OPEN
+
+**Strategy & UI lock:** [Product Strategy (24 Nov 2026)](PRODUCT_STRATEGY_2026-11-24.md) and [ADR 0038](adr/0038-pre-filing-truth-layer-and-competitive-strategy.md) align CaseProof as **Step 3 — Independent Pre-Filing Truth Audit** downstream of drafting/bundling and upstream of court filing, with `frontend/` (React + strict TypeScript + `pdfjs-dist`, FR/NL/EN) locked as the sole official UI and 0% LLM in the Pilot Core verdict path.
+
+**Merged PR chain on `main`:**
+- [PR #231](https://github.com/haytamAroui/caseproof/pull/231) (`24df4e0e`, incorporating [PR #232](https://github.com/haytamAroui/caseproof/pull/232)): Belgian interactive demo, 2026 legal UX design system & FR/NL/EN localization, 4-state epistemic triage strip, fail-closed report banners, progressive unconfirmed inventory support (`BE-01`), targeted FR/NL lexical status-cue flag (`BE-02`), read-side canonical JSON SHA-256 verification restored, and factual verification preserved after correction.
+- [PR #233](https://github.com/haytamAroui/caseproof/pull/233) (`a079976e`): HMAC receipt signing key separation from Supabase admin key + zero-downtime key rotation (`BE-06` / P1-7), structured per-file corrupt/locked intake diagnostics (`BE-05`), Belgian FR/NL `Decimal` currency & `DD/MM/YYYY` date normalization with strict fail-closed abstention (`BE-08` / P5-02), Word round-trip `carried` vs `superseded` parity (`BE-04`), real PostgreSQL 17 integrity check wired into `m1-m2-integrated-disposable-ci.yml` (`CI-01`), unlocated factual claim warnings (`DEMO-01`), and `FE-01`..`FE-07` cockpit UX polish.
+- [PR #234](https://github.com/haytamAroui/caseproof/pull/234) (`44824863`, incorporating [PR #235](https://github.com/haytamAroui/caseproof/pull/235)): Omitted-reservation cue contract (`ReservationCueFlagView`) with negative controls (sentence-outside-quote reservation, clause-boundary splits, repeated-quote abstention), complete loopback FastAPI 5-trap FR/NL partner demo (`scripts/run_prefiling_partner_demo.py`) serving the compiled `frontend/dist` under `/workspace/` with canonical 4-source intake, full cockpit `/v2/` routes, sorted reports catalog, coverage denominators, frozen-report support-chip clarity, and real `annotated_docx()` export, plus the synthetic 5-dossier FR/NL M5 benchmark harness (`scripts/run_m5_fr_nl_benchmark.py`).
+
+**Verified CI on `main` `44824863`:** All automatic post-merge workflows succeeded (**19 workflow runs `success`, 1 expected conditional `skipped`, 0 failures**; 23 jobs passed, 4 conditionally skipped). Real compiled-UI end-to-end verification (Playwright against live `run_prefiling_partner_demo.py` serving `frontend/dist`) completed sign-in → 4-source inventory confirmation → explicit check → 3/3 human decisions → correction preview/commit/recheck → sorted reports reopening → real `annotated_docx()` export containing corrected text and annotations, with 0 unexpected 4xx/5xx responses.
+
+**Live `caseproof-dev` (`ldwmocpxwskvhoojndrd`, Postgres `17.11.0.003`, `eu-central-1`) read-only MCP audit (24 Nov 2026):**
+- 76 applied migrations, including `20261124030604` (`caseproof_signed_matter_conditions`) and `20261124030659` (`caseproof_signed_review_omission_disposition` / `BE-07`). Both dev-applied SQL source records are stored under `docs/security/` outside `supabase/migrations/` to preserve the 74-file historical baseline tested by `S2-002A`.
+- Read-only catalog checks confirmed `'omission'` is live in `caseproof._rights_legacy_live_review` (`owner=postgres`, `SECURITY DEFINER`, `search_path=""`, ACL `{postgres=X/postgres}`) and `caseproof.matter_condition_specs` has forced RLS (`rls_enabled=true`, `rls_forced=true`, 1 policy).
+- `get_advisors` returned **0 `ERROR`** advisories (2 security `WARN`: `authenticated_security_definer_function_executable` and `auth_leaked_password_protection` disabled on dev; 1 security `INFO`: `rls_enabled_no_policy` on default-deny private tables; 3 performance advisories). Privileged MCP catalog checks are **not** genuine signed-user live-RLS acceptance.
+
+**GitHub repository protection observation (25 Nov 2026):** Direct force-push to `main` was empirically rejected by GitHub ruleset `GH013` (force-push blocked, PR required, 2/2 required status checks). Owner review of [issue #5](https://github.com/haytamAroui/caseproof/issues/5) remains tracked.
+
+**Companion evidence snapshots added:**
+- [M5 Synthetic 5-Dossier Benchmark Baseline (25 Nov 2026)](m5/M5_SYNTHETIC_BENCHMARK_BASELINE_2026-11-25.md)
+- [SEC-01..16 Evidence & Field-Level Data-Flow Inventory (25 Nov 2026)](security/SEC_01_16_EVIDENCE_INVENTORY_2026-11-25.md)
+
+**Explicitly NOT closed (release & client-data BLOCKED):**
+- `M5-01` / `M5-02`: 5 disconfirming Belgian partner interviews, 2 workflow observations, and 3–5 representative practitioner FR/NL dossier evaluations remain **OPEN** ([partner scorecard](m5/PARTNER_DEMO_AND_INTERVIEW_SCORECARD.md)).
+- `SEC-01`–`SEC-16`: No real client document upload is authorized until all 16 controls receive independent security, privacy/DPA, and Belgian professional-secrecy sign-off for the chosen target topology.
+- `OPS-01`: EUIPO/BOIP trademark clearance before public branding remains **OPEN**.
+- `BE-09`: Optional Level-2 LLM Scout remains **DEFERRED** until after M5 commercial demand is validated.
+
+---
+
 ## 5 November 2026 — Signed page worker deployment and tracker reconciliation
 
 The signed page-worker SQL was applied to `caseproof-dev` as `20261105104752`. The recorded SQL matches the repository file `supabase/migrations/20261031112127_signed_page_worker.sql`. Catalog checks confirmed RLS on all three worker tables, no direct anonymous or authenticated table grants, and authenticated execution of the scoped RPC. Supabase Advisor flagged the authenticated security-definer function. Independent security review and live signed worker acceptance remain open. See the [Supabase migration history](https://supabase.com/dashboard/project/ldwmocpxwskvhoojndrd/database/migrations) and [master TODO](CASEPROOF_AGENT_MASTER_TODO.md#5-november-2026--engineering-reconciliation).
