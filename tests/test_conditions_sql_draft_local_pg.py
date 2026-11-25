@@ -118,7 +118,9 @@ insert into caseproof._m1_matter_grants(org_id,case_id,user_id,role,permissions)
 
 def test_retention_companion_is_a_bounded_generated_function():
     low = RETENTION.lower()
-    assert "draft, not applied" in low
+    assert "applied to caseproof-dev" in low
+    assert "not applied to production" in low
+    assert "draft, not applied" not in low
     assert low.count("delete from caseproof.matter_condition_specs") == 1
     assert "security definer" in low and "set search_path to ''" in low
     assert "grant execute on function public.caseproof_retention(text,uuid) to service_role" in low
