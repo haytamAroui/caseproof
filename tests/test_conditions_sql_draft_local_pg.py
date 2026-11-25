@@ -1,8 +1,10 @@
-"""Behavioural checks of db/proposals/SIGNED_matter_conditions.sql on a LOCAL, disposable PostgreSQL.
+"""Behavioural checks of 20261124030604_caseproof_signed_matter_conditions.sql and its companion retention draft
+on a LOCAL, disposable PostgreSQL.
 
-Skipped unless CASEPROOF_LOCAL_PG_URI points to a database where the repo's candidate replay order and the draft
-are installed (test-only stub auth/storage). Never point it at a shared environment: it inserts fixture rows.
-Without a database the draft is only checked textually (append-only, no broad grants).
+Skipped unless CASEPROOF_LOCAL_PG_URI (or CASEPROOF_DISPOSABLE_DB=YES on 127.0.0.1/caseproof_s2_ci) points to a
+database where the repo's candidate replay order and the companion retention draft are installed (test-only stub
+auth/storage). Never point it at a shared environment: it inserts fixture rows.
+Without a database the migration and companion draft are checked textually (append-only, no broad grants).
 """
 from __future__ import annotations
 
@@ -16,7 +18,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-DRAFT = (ROOT / "db/proposals/SIGNED_matter_conditions.sql").read_text()
+MIGRATION = (ROOT / "supabase/migrations/20261124030604_caseproof_signed_matter_conditions.sql").read_text()
+PROPOSAL = (ROOT / "db/proposals/SIGNED_matter_conditions.sql").read_text()
 RETENTION = (ROOT / "db/proposals/SIGNED_matter_conditions_retention.sql").read_text()
 URI = os.environ.get("CASEPROOF_LOCAL_PG_URI") or (
     "postgresql://postgres:{pw}@127.0.0.1:5432/caseproof_s2_ci".format(pw=os.environ.get("PGPASSWORD", ""))
@@ -25,13 +28,16 @@ URI = os.environ.get("CASEPROOF_LOCAL_PG_URI") or (
 
 
 def test_draft_text_is_append_only_and_not_granted_to_anon():
-    low = DRAFT.lower()
-    assert "draft, not applied" in low
-    assert "revoke all on caseproof.matter_condition_specs from public, anon, authenticated, service_role" in low
-    assert "grant select on caseproof.matter_condition_specs to authenticated" in low
-    assert "grant insert" not in low and "grant update" not in low and "grant delete" not in low
-    assert "before update or delete" in low and "before truncate" in low
-    assert "to anon" not in low and "to public" not in low
+    proposal_low = PROPOSAL.lower()
+    assert "applied to caseproof-dev as 20261124030604" in proposal_low
+    assert "not applied to production" in proposal_low
+    assert "draft, not applied" not in proposal_low
+    for low in (MIGRATION.lower(), proposal_low):
+        assert "revoke all on caseproof.matter_condition_specs from public, anon, authenticated, service_role" in low
+        assert "grant select on caseproof.matter_condition_specs to authenticated" in low
+        assert "grant insert" not in low and "grant update" not in low and "grant delete" not in low
+        assert "before update or delete" in low and "before truncate" in low
+        assert "to anon" not in low and "to public" not in low
 
 
 def _users_sql(*named: tuple[str, str]) -> str:
