@@ -43,7 +43,10 @@ jobs:
             tests/test_reservation_cues.py \
             tests/test_filing_pdf_parity.py \
             tests/test_sec07_log_sanitization.py \
-            tests/test_sec11_adversarial_file_security.py
+            tests/test_sec11_adversarial_file_security.py \
+            evals/litigation_qae_spike \
+            scripts/run_litigation_qae_spike.py \
+            tests/test_litigation_qae_spike.py
           uv run --locked mypy --explicit-package-bases \
             application/litigation/inventory_mapping.py \
             application/litigation/workspace_contract.py \
@@ -52,7 +55,9 @@ jobs:
             infrastructure/parsers/filing_pdf_parity_adapter.py \
             apps/api/dossier_journey.py \
             apps/api/signed_workbench_routes.py \
-            infrastructure/parsers/pdf_ocr.py
+            infrastructure/parsers/pdf_ocr.py \
+            evals/litigation_qae_spike \
+            scripts/run_litigation_qae_spike.py
       - name: Run Belgian pre-filing audit pytest suite
         run: |
           uv run --locked pytest -q \
@@ -67,7 +72,8 @@ jobs:
             tests/test_exhibit_coverage.py \
             tests/test_filing_pdf_parity.py \
             tests/test_sec07_log_sanitization.py \
-            tests/test_sec11_adversarial_file_security.py
+            tests/test_sec11_adversarial_file_security.py \
+            tests/test_litigation_qae_spike.py
 
   belgian-audit-frontend:
     runs-on: ubuntu-latest
