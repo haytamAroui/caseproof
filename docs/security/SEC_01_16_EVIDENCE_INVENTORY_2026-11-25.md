@@ -2,7 +2,7 @@
 
 **Status:** **OPEN / NOT AUTHORIZED FOR REAL CLIENT DATA.**  
 **Codebase baseline:** `main` commit `44824863e984feecf23b16bd869e76c112a3ed70`  
-**Development database audited (read-only MCP):** `caseproof-dev` (`ldwmocpxwskvhoojndrd`, Postgres `17.11.0.003`, `eu-central-1`, 76 applied migrations)  
+**Development database audited (read-only MCP):** `caseproof-dev` (`ldwmocpxwskvhoojndrd`, Postgres `17.11.0.003`, `eu-central-1`, 78 applied migrations; Nov 24 SQL sync open in [PR #237](https://github.com/haytamAroui/caseproof/pull/237))  
 **Authority:** [PILOT_DATA_SECURITY_GATE.md](PILOT_DATA_SECURITY_GATE.md) · [SEC-01-SEC-16.md](../m5/SEC-01-SEC-16.md) · [PILOT_DATA_FLOW.md](PILOT_DATA_FLOW.md) · [ADR 0025](../adr/0025-deployment-data-retention-and-model-authority.md)
 
 > [!CAUTION]
