@@ -1,4 +1,4 @@
--- DRAFT, NOT APPLIED to any shared environment. Adds the reviewer disposition 'omission' to the legacy live review RPC allow-list.
+-- APPLIED to caseproof-dev as 20261124030659 (recorded in supabase/migrations/20261124030659_caseproof_signed_review_omission_disposition.sql); NOT applied to production. Adds the reviewer disposition 'omission' to the legacy live review RPC allow-list.
 -- Generated from the function as installed by the repo's disposable replay order (pg_get_functiondef), changing ONLY the allow-list literal.
 -- create or replace keeps owner, ACL (none for public/anon/authenticated/service_role) and security definer/search_path settings; verified locally.
 -- 'omission' = the reviewer says a relevant passage or piece was not shown. A statement only: it never waives a machine observation.

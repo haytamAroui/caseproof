@@ -1,4 +1,4 @@
--- DRAFT, NOT APPLIED to any shared environment (no supabase/migrations entry).
+-- APPLIED to caseproof-dev as 20261124030604 (recorded in supabase/migrations/20261124030604_caseproof_signed_matter_conditions.sql); NOT applied to production.
 -- Lawyer-defined conditions for ONE matter (MD "extension cible"): retrieval and routing, never a verdict.
 -- Append-only revisions of a canonical spec text. The server (Python) builds the canonical JSON text and its
 -- SHA-256; this function re-hashes the exact text with the built-in sha256 and refuses a mismatch, so a
