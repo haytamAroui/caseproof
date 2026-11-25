@@ -54,7 +54,8 @@ function classifyStatusTone(value: string): StatusTone {
     key === 'conflicting' ||
     key === 'representation_conflict' ||
     key === 'not_in_inventory' ||
-    key === 'fail'
+    key === 'fail' ||
+    key === 'mismatch_detected'
   )
     return 'error';
   if (
@@ -62,7 +63,8 @@ function classifyStatusTone(value: string): StatusTone {
     key === 'unmapped' ||
     key === 'ocr_unreliable' ||
     key === 'not_assessed' ||
-    key === 'unverified'
+    key === 'unverified' ||
+    key === 'cannot_verify'
   )
     return 'impossible';
   if (
@@ -80,7 +82,8 @@ function classifyStatusTone(value: string): StatusTone {
     key === 'mapped' ||
     key === 'exact_match' ||
     key === 'supported' ||
-    key === 'pass'
+    key === 'pass' ||
+    key === 'match_observed'
   )
     return 'success';
   return 'neutral';

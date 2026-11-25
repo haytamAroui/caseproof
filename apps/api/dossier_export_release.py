@@ -13,10 +13,12 @@ from urllib.parse import quote
 from uuid import UUID
 
 from docx import Document
-from fastapi import APIRouter, Header, HTTPException, Response
+from fastapi import APIRouter, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.capacity_envelope import CAPACITY_POLICY
+from application.extraction.contracts import ExtractionError
 from application.litigation.release_completeness import (
     ReleaseIntegrityError,
     select_release_scope,
@@ -32,6 +34,10 @@ from apps.api.export_rights_manifest import (
     validate_export_rights,
 )
 from infrastructure.parsers.dossier_docx_export import annotated_docx
+from infrastructure.parsers.filing_pdf_parity_adapter import (
+    MAX_FILING_PDF_BYTES,
+    check_filing_pdf_parity,
+)
 
 HEX64 = r"^[0-9a-f]{64}$"
 ACK_VERSION = "caseproof-release-ack-v1"
@@ -560,6 +566,60 @@ def create_release_router(store: Any) -> APIRouter:
                 "X-CaseProof-Export-SHA256": info["sha256"],
                 "X-CaseProof-Export-Size": str(len(raw)),
                 "X-CaseProof-Snapshot": manifest["snapshot_hash"],
+            },
+        )
+
+    @router.post(base + "/filing-pdf-parity")
+    async def filing_pdf_parity(
+        case_id: str,
+        brief_id: str,
+        request: Request,
+        authorization: str | None = Header(default=None),
+        content_type: str | None = Header(default=None),
+        x_caseproof_snapshot_hash: str | None = Header(default=None),
+        x_caseproof_filing_pdf_sha256: str | None = Header(default=None),
+        x_caseproof_byte_length: str | None = Header(default=None),
+    ) -> JSONResponse:
+        bearer = active(authorization)
+        if not content_type or not content_type.split(";", 1)[0].strip().lower() == "application/pdf":
+            raise HTTPException(422, "filing PDF must use application/pdf")
+        if (
+            not x_caseproof_snapshot_hash
+            or re.fullmatch(HEX64, x_caseproof_snapshot_hash) is None
+            or not x_caseproof_filing_pdf_sha256
+            or re.fullmatch(HEX64, x_caseproof_filing_pdf_sha256) is None
+        ):
+            raise HTTPException(422, "valid snapshot and filing PDF SHA-256 headers required")
+        try:
+            expected_length = int(x_caseproof_byte_length or "")
+        except ValueError:
+            raise HTTPException(422, "valid byte-length header required") from None
+        if not 0 < expected_length <= MAX_FILING_PDF_BYTES:
+            raise HTTPException(422, "filing PDF exceeds supported size limit")
+        pdf_bytes = await request.body()
+        if len(pdf_bytes) != expected_length or _hash(pdf_bytes) != x_caseproof_filing_pdf_sha256:
+            raise HTTPException(422, "filing PDF length or SHA-256 mismatch")
+        if store.current_draft_version(bearer, case_id) != brief_id:
+            raise HTTPException(409, "superseded draft cannot be verified as current filing PDF")
+        report, original = read_dossier_report(
+            store, bearer, case_id, brief_id, x_caseproof_snapshot_hash, decisions=True
+        )
+        _validate_frozen_report(report)
+        try:
+            result = check_filing_pdf_parity(
+                original_docx=original,
+                filing_pdf=pdf_bytes,
+                case_id=case_id,
+                brief_id=brief_id,
+                snapshot_hash=x_caseproof_snapshot_hash,
+            )
+        except ExtractionError as exc:
+            raise HTTPException(422, f"invalid_filing_pdf:{exc}") from None
+        return JSONResponse(
+            content=result,
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
             },
         )
 

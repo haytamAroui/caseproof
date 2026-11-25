@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient } from '../../shared/api';
+import { useLocale } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
-import { Button, Notice } from '../../shared/ui';
+import { Button, Notice, StateValue } from '../../shared/ui';
 import {
+  checkFilingPdfParity,
   downloadArtifact,
   exportsPath,
   parseRelease,
@@ -12,7 +14,12 @@ import {
   parseReleasePreview,
   parseReleaseStatus,
 } from './api';
-import type { ExportFormat, ReleaseRecord, ReleaseScope } from './api';
+import type {
+  ExportFormat,
+  FilingPdfParityResult,
+  ReleaseRecord,
+  ReleaseScope,
+} from './api';
 
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -26,6 +33,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
   const snapshot = params.get('snapshot') ?? '';
   const scope: ReleaseScope = { caseId, briefId, snapshot };
   const valid = uuid.test(caseId) && uuid.test(briefId) && sha.test(snapshot);
+  const { t } = useLocale();
   const session = useSession();
   const [selected, setSelected] = useState<ReleaseRecord | null>(null);
   const [format, setFormat] = useState<ExportFormat>('docx');
@@ -33,6 +41,22 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
   const [message, setMessage] = useState('');
   const [unknown, setUnknown] = useState(false);
   const policyScope = `${session.epoch}:${caseId}:${briefId}:${snapshot}`;
+  const [paritySelection, setParitySelection] = useState<{
+    scope: string;
+    file: File | null;
+  }>({ scope: '', file: null });
+  const [parityWorking, setParityWorking] = useState(false);
+  const [parityOutcome, setParityOutcome] = useState<{
+    scope: string;
+    error: string;
+    result: FilingPdfParityResult | null;
+  }>({ scope: '', error: '', result: null });
+  const parityFile =
+    paritySelection.scope === policyScope ? paritySelection.file : null;
+  const parityError =
+    parityOutcome.scope === policyScope ? parityOutcome.error : '';
+  const parityResult =
+    parityOutcome.scope === policyScope ? parityOutcome.result : null;
   const [releaseIntent, setReleaseIntent] = useState('');
   const [partialConsent, setPartialConsent] = useState({
     scope: '',
@@ -210,6 +234,37 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       );
     } finally {
       setWorking(false);
+      abort.current = null;
+    }
+  }
+  async function runFilingPdfParity() {
+    if (!valid || !parityFile || parityWorking || !session.connected) return;
+    const runScope = policyScope;
+    const controller = new AbortController();
+    abort.current = controller;
+    setParityWorking(true);
+    setParityOutcome({ scope: runScope, error: '', result: null });
+    try {
+      const bytes = new Uint8Array(await parityFile.arrayBuffer());
+      if (controller.signal.aborted) return;
+      const result = await checkFilingPdfParity(
+        api,
+        scope,
+        bytes,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      setParityOutcome({ scope: runScope, error: '', result });
+    } catch {
+      if (!controller.signal.aborted) {
+        setParityOutcome({
+          scope: runScope,
+          error: t('filingPdfParityError'),
+          result: null,
+        });
+      }
+    } finally {
+      setParityWorking(false);
       abort.current = null;
     }
   }
@@ -595,6 +650,113 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
           <Button disabled={working} onClick={() => void download()}>
             Verify SHA-256 and download {format.toUpperCase()}
           </Button>
+        </section>
+      )}
+      {valid && (
+        <section
+          className="draft-context"
+          aria-labelledby="filing-pdf-parity-title"
+        >
+          <h2 id="filing-pdf-parity-title">{t('filingPdfParityTitle')}</h2>
+          <p className="small">{t('filingPdfParityLead')}</p>
+          <label>
+            {t('filingPdfParityFileLabel')}
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              disabled={parityWorking}
+              onChange={(event) => {
+                setParitySelection({
+                  scope: policyScope,
+                  file: event.target.files?.[0] ?? null,
+                });
+                setParityOutcome({
+                  scope: policyScope,
+                  error: '',
+                  result: null,
+                });
+              }}
+            />
+          </label>
+          <div className="actions">
+            <Button
+              disabled={!parityFile || parityWorking || !session.connected}
+              onClick={() => void runFilingPdfParity()}
+            >
+              {parityWorking
+                ? t('filingPdfParityChecking')
+                : t('filingPdfParityRunBtn')}
+            </Button>
+          </div>
+          {parityError && <Notice error>{parityError}</Notice>}
+          {parityResult && (
+            <div className="draft-context" aria-live="polite">
+              <StateValue
+                label={t('filingPdfParityTitle')}
+                value={parityResult.status}
+              />
+              <p className="small">
+                {t('filingPdfParityCountsPrefix')}{' '}
+                {parityResult.filing_pdf_page_count} ·{' '}
+                {t('filingPdfParityTokensPrefix')}{' '}
+                {parityResult.docx_token_count} / {parityResult.pdf_token_count}
+              </p>
+              <p className="small">
+                {t('filingPdfParityVerifiedDocxLabel')}{' '}
+                <code>{parityResult.verified_docx_sha256}</code>
+              </p>
+              <p className="small">
+                {t('filingPdfParityPdfLabel')}{' '}
+                <code>{parityResult.filing_pdf_sha256}</code>
+              </p>
+              <p className="small">
+                {t('filingPdfParityReasonsLabel')}{' '}
+                <code>{parityResult.reason_codes.join(', ')}</code>
+              </p>
+              {parityResult.pdf_pages_without_text.length > 0 && (
+                <Notice error>
+                  {t('filingPdfParityMissingTextPages')}{' '}
+                  {parityResult.pdf_pages_without_text
+                    .map((idx) => idx + 1)
+                    .join(', ')}
+                </Notice>
+              )}
+              {parityResult.diffs.length > 0 && (
+                <div aria-label={t('filingPdfParityDiffsHeading')}>
+                  <h3>
+                    {t('filingPdfParityDiffsHeading')} (
+                    {parityResult.diff_count}
+                    {parityResult.diff_truncated ? '+' : ''})
+                  </h3>
+                  <ul>
+                    {parityResult.diffs.map((hunk, index) => (
+                      <li
+                        key={`${hunk.op}-${hunk.docx_token_index}-${hunk.pdf_token_index}-${index}`}
+                      >
+                        <p className="small">
+                          <strong>{hunk.op.toUpperCase()}</strong> @ token{' '}
+                          {hunk.docx_token_index} → {hunk.pdf_token_index}
+                        </p>
+                        <p className="small">
+                          {t('filingPdfParityDocxExcerpt')}{' '}
+                          <code>{hunk.docx_excerpt || '—'}</code>
+                        </p>
+                        <p className="small">
+                          {t('filingPdfParityPdfExcerpt')}{' '}
+                          <code>{hunk.pdf_excerpt || '—'}</code>
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {parityResult.limitations.map((note) => (
+                <p className="small" key={note}>
+                  {note}
+                </p>
+              ))}
+            </div>
+          )}
         </section>
       )}
     </section>

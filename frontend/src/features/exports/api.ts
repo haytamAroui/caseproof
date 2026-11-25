@@ -400,3 +400,122 @@ export async function downloadArtifact(
     signal,
   );
 }
+
+export type FilingPdfParityStatus =
+  'MATCH_OBSERVED' | 'MISMATCH_DETECTED' | 'CANNOT_VERIFY';
+
+export interface FilingPdfParityDiffHunk {
+  op: 'replace' | 'delete' | 'insert';
+  docx_token_index: number;
+  pdf_token_index: number;
+  docx_excerpt: string;
+  pdf_excerpt: string;
+  docx_changed: string;
+  pdf_changed: string;
+}
+
+export interface FilingPdfParityResult {
+  schema: 'caseproof-filing-pdf-parity-v1';
+  case_id: string;
+  brief_id: string;
+  snapshot_hash: string;
+  verified_docx_sha256: string;
+  filing_pdf_sha256: string;
+  filing_pdf_byte_length: number;
+  filing_pdf_page_count: number;
+  status: FilingPdfParityStatus;
+  reason_codes: string[];
+  docx_token_count: number;
+  pdf_token_count: number;
+  docx_coverage_complete: boolean;
+  docx_unscanned_parts: string[];
+  pdf_pages_without_text: number[];
+  pdf_warnings: string[];
+  diff_count: number;
+  diff_truncated: boolean;
+  diffs: FilingPdfParityDiffHunk[];
+  limitations: string[];
+}
+
+export function parseFilingPdfParity(
+  raw: unknown,
+  scope: ReleaseScope,
+  expectedPdfSha256: string,
+): FilingPdfParityResult {
+  if (
+    !plain(raw) ||
+    raw.schema !== 'caseproof-filing-pdf-parity-v1' ||
+    raw.case_id !== scope.caseId ||
+    raw.brief_id !== scope.briefId ||
+    raw.snapshot_hash !== scope.snapshot ||
+    typeof raw.verified_docx_sha256 !== 'string' ||
+    !digest.test(raw.verified_docx_sha256) ||
+    raw.filing_pdf_sha256 !== expectedPdfSha256 ||
+    !number(raw.filing_pdf_byte_length) ||
+    raw.filing_pdf_byte_length < 1 ||
+    !number(raw.filing_pdf_page_count) ||
+    !['MATCH_OBSERVED', 'MISMATCH_DETECTED', 'CANNOT_VERIFY'].includes(
+      String(raw.status),
+    ) ||
+    !Array.isArray(raw.reason_codes) ||
+    !raw.reason_codes.every((v: unknown) => typeof v === 'string') ||
+    !number(raw.docx_token_count) ||
+    !number(raw.pdf_token_count) ||
+    typeof raw.docx_coverage_complete !== 'boolean' ||
+    !Array.isArray(raw.docx_unscanned_parts) ||
+    !raw.docx_unscanned_parts.every((v: unknown) => typeof v === 'string') ||
+    !Array.isArray(raw.pdf_pages_without_text) ||
+    !raw.pdf_pages_without_text.every((v: unknown) => number(v)) ||
+    !Array.isArray(raw.pdf_warnings) ||
+    !raw.pdf_warnings.every((v: unknown) => typeof v === 'string') ||
+    !number(raw.diff_count) ||
+    typeof raw.diff_truncated !== 'boolean' ||
+    !Array.isArray(raw.diffs) ||
+    raw.diffs.length > 20 ||
+    !raw.diffs.every(
+      (item: unknown) =>
+        plain(item) &&
+        ['replace', 'delete', 'insert'].includes(String(item.op)) &&
+        number(item.docx_token_index) &&
+        number(item.pdf_token_index) &&
+        typeof item.docx_excerpt === 'string' &&
+        typeof item.pdf_excerpt === 'string' &&
+        typeof item.docx_changed === 'string' &&
+        typeof item.pdf_changed === 'string',
+    ) ||
+    !Array.isArray(raw.limitations) ||
+    raw.limitations.length < 1 ||
+    !raw.limitations.every((v: unknown) => typeof v === 'string')
+  ) {
+    throw new Error('Unrecognized filing PDF parity response.');
+  }
+  return raw as unknown as FilingPdfParityResult;
+}
+
+export async function checkFilingPdfParity(
+  api: ApiClient,
+  scope: ReleaseScope,
+  bytes: Uint8Array,
+  signal: AbortSignal,
+): Promise<FilingPdfParityResult> {
+  if (bytes.byteLength < 1 || bytes.byteLength > 10_485_760) {
+    throw new Error('Filing PDF size exceeds supported 10 MiB limit.');
+  }
+  const sha = Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)),
+    ),
+    (b) => b.toString(16).padStart(2, '0'),
+  ).join('');
+  const raw = await api.filingPdfParityCheck(
+    `${exportsPath(scope)}/filing-pdf-parity`,
+    {
+      snapshot_hash: scope.snapshot,
+      filing_pdf_sha256: sha,
+      byte_length: bytes.byteLength,
+    },
+    bytes,
+    signal,
+  );
+  return parseFilingPdfParity(raw, scope, sha);
+}

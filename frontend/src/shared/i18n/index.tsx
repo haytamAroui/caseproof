@@ -275,6 +275,25 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     sourceOpenFailed:
       'This source could not be opened. It may be unavailable, unsupported or outside the inspection budget.',
     historicalOriginalPrefix: 'Historical original version · read-only.',
+    filingPdfParityTitle: 'Final filing PDF vs. verified DOCX parity',
+    filingPdfParityLead:
+      'Before uploading to court (e-Deposit / DPA-Deposit), check that the exported PDF text layer matches this verified DOCX snapshot to catch accidental filing of an older draft.',
+    filingPdfParityFileLabel: 'Final filing PDF (.pdf, max 10 MiB)',
+    filingPdfParityRunBtn: 'Verify final PDF against this DOCX snapshot',
+    filingPdfParityChecking:
+      'Checking final PDF text layer against verified DOCX…',
+    filingPdfParityError:
+      'Filing PDF parity check could not run. Ensure a valid, unencrypted PDF (max 10 MiB, max 64 pages) matching the current draft.',
+    filingPdfParityVerifiedDocxLabel: 'Verified DOCX SHA-256:',
+    filingPdfParityPdfLabel: 'Checked filing PDF SHA-256:',
+    filingPdfParityCountsPrefix: 'Pages:',
+    filingPdfParityTokensPrefix: 'Tokens (DOCX / PDF):',
+    filingPdfParityMissingTextPages:
+      'Pages without extractable text layer (OCR unreliable — fail-closed):',
+    filingPdfParityDiffsHeading: 'Detected text-layer differences',
+    filingPdfParityDocxExcerpt: 'Verified DOCX:',
+    filingPdfParityPdfExcerpt: 'Supplied PDF:',
+    filingPdfParityReasonsLabel: 'Reason codes:',
   },
   fr: {
     skip: 'Aller au contenu',
@@ -536,6 +555,25 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     sourceOpenFailed:
       'Impossible d’ouvrir cette pièce source. Elle est peut-être indisponible, non prise en charge ou hors budget d’inspection.',
     historicalOriginalPrefix: 'Version originale historique · lecture seule.',
+    filingPdfParityTitle: 'Parité PDF final de dépôt ↔ DOCX vérifié',
+    filingPdfParityLead:
+      'Avant le dépôt au greffe (e-Deposit / DPA-Deposit), vérifiez que la couche texte du PDF exporté correspond exactement à ce DOCX vérifié afin d’éviter le dépôt accidentel d’un ancien projet.',
+    filingPdfParityFileLabel: 'PDF final à déposer (.pdf, max 10 Mio)',
+    filingPdfParityRunBtn: 'Vérifier le PDF final par rapport à ce DOCX',
+    filingPdfParityChecking:
+      'Contrôle de la couche texte du PDF final par rapport au DOCX vérifié…',
+    filingPdfParityError:
+      'Impossible d’exécuter le contrôle de parité PDF. Vérifiez que le fichier est un PDF non chiffré valide (max 10 Mio, max 64 pages) pour la version courante.',
+    filingPdfParityVerifiedDocxLabel: 'SHA-256 du DOCX vérifié :',
+    filingPdfParityPdfLabel: 'SHA-256 du PDF contrôlé :',
+    filingPdfParityCountsPrefix: 'Pages :',
+    filingPdfParityTokensPrefix: 'Jetons (DOCX / PDF) :',
+    filingPdfParityMissingTextPages:
+      'Pages sans couche texte extractible (OCR non fiable — refus de validation) :',
+    filingPdfParityDiffsHeading: 'Différences détectées dans la couche texte',
+    filingPdfParityDocxExcerpt: 'DOCX vérifié :',
+    filingPdfParityPdfExcerpt: 'PDF fourni :',
+    filingPdfParityReasonsLabel: 'Codes de motif :',
   },
   nl: {
     skip: 'Naar inhoud',
@@ -797,6 +835,26 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     sourceOpenFailed:
       'Deze bron kon niet worden geopend. Zij is mogelijk niet beschikbaar, niet ondersteund of buiten het inspectiebudget.',
     historicalOriginalPrefix: 'Historische originele versie · alleen-lezen.',
+    filingPdfParityTitle:
+      'Pariteit definitieve neerleggings-PDF ↔ geverifieerd DOCX',
+    filingPdfParityLead:
+      'Controleer vóór neerlegging (e-Deposit / DPA-Deposit) of de tekstlaag van de geëxporteerde PDF overeenstemt met deze geverifieerde DOCX-versie om vergissing met een ouder ontwerp te vermijden.',
+    filingPdfParityFileLabel: 'Definitieve neerleggings-PDF (.pdf, max 10 MiB)',
+    filingPdfParityRunBtn: 'Definitieve PDF controleren tegenover dit DOCX',
+    filingPdfParityChecking:
+      'Tekstlaag van definitieve PDF vergelijken met geverifieerd DOCX…',
+    filingPdfParityError:
+      'Pariteitscontrole van PDF mislukt. Gebruik een geldige, niet-versleutelde PDF (max 10 MiB, max 64 pagina’s) voor het huidige ontwerp.',
+    filingPdfParityVerifiedDocxLabel: 'SHA-256 geverifieerd DOCX:',
+    filingPdfParityPdfLabel: 'SHA-256 gecontroleerde PDF:',
+    filingPdfParityCountsPrefix: 'Pagina’s:',
+    filingPdfParityTokensPrefix: 'Tokens (DOCX / PDF):',
+    filingPdfParityMissingTextPages:
+      'Pagina’s zonder extraheerbare tekstlaag (OCR onbetrouwbaar — geblokkeerd):',
+    filingPdfParityDiffsHeading: 'Vastgestelde verschillen in tekstlaag',
+    filingPdfParityDocxExcerpt: 'Geverifieerd DOCX:',
+    filingPdfParityPdfExcerpt: 'Aangeboden PDF:',
+    filingPdfParityReasonsLabel: 'Redencodes:',
   },
 };
 
@@ -820,6 +878,9 @@ const STATE_VALUES: Record<Locale, Record<string, string>> = {
     supported: 'Confirmé',
     qualified: 'Confirmé avec réserve',
     contradicted: 'Contredit',
+    match_observed: 'Correspondance constatée',
+    mismatch_detected: 'Écart constaté',
+    cannot_verify: 'Contrôle impossible',
   },
   nl: {
     resolved: 'Opgelost',
@@ -839,6 +900,9 @@ const STATE_VALUES: Record<Locale, Record<string, string>> = {
     supported: 'Bevestigd',
     qualified: 'Met voorbehoud',
     contradicted: 'Tegengesproken',
+    match_observed: 'Overeenstemming vastgesteld',
+    mismatch_detected: 'Afwijking vastgesteld',
+    cannot_verify: 'Controle onmogelijk',
   },
 };
 
