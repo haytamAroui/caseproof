@@ -46,8 +46,8 @@ def temporary_aliases() -> list[tuple[Path, str]]:
     sources = replay_plan()
     manifest = json.loads(PLAN.read_text(encoding="utf-8"))
     moved = set(manifest["deferred_suffix"])
-    if len(moved) != 23:
-        raise ValueError("Expected 23 reviewed dependency deferrals")
+    if len(moved) != 25:
+        raise ValueError("Expected 25 reviewed dependency deferrals")
     result: list[tuple[Path, str]] = []
     moved_index = 0
     for source in sources:
@@ -63,9 +63,9 @@ def temporary_aliases() -> list[tuple[Path, str]]:
             # 20261027160745 version in schema_migrations. Keep that version.
             alias = source.name
         result.append((source, alias))
-    if moved_index != 23:
+    if moved_index != 25:
         raise ValueError("Not all reviewed dependency deferrals were processed")
-    if len(result) != 74 or len({alias for _, alias in result}) != len(result):
+    if len(result) != 76 or len({alias for _, alias in result}) != len(result):
         raise ValueError("Candidate file set changed; fresh profile needs review")
     if [name for _, name in result] != sorted(name for _, name in result):
         raise ValueError("Ephemeral alias order is nonmonotonic")

@@ -76,7 +76,9 @@
     "20261106133128_caseproof_rights_m05_cleanup_audit.sql",
     "20261106172653_caseproof_signed_export_rights_manifest_fence.sql",
     "20261106210000_caseproof_release_acknowledgement_fence.sql",
-    "20261113000000_caseproof_platform_hardening.sql"
+    "20261113000000_caseproof_platform_hardening.sql",
+    "20261124030604_caseproof_signed_matter_conditions.sql",
+    "20261124030659_caseproof_signed_review_omission_disposition.sql"
   ],
   "deferred_suffix": [
     "20261030114000_m05_ocr_sidecar_cleanup_fk.sql",
@@ -101,6 +103,8 @@
     "20261106132320_caseproof_rights_signed_fixture_grant.sql",
     "20261106172653_caseproof_signed_export_rights_manifest_fence.sql",
     "20261106210000_caseproof_release_acknowledgement_fence.sql",
-    "20261113000000_caseproof_platform_hardening.sql"
+    "20261113000000_caseproof_platform_hardening.sql",
+    "20261124030604_caseproof_signed_matter_conditions.sql",
+    "20261124030659_caseproof_signed_review_omission_disposition.sql"
   ]
 }

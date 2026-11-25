@@ -77,8 +77,11 @@ grant select,insert on storage.objects to authenticated;
     rights_fixture = next(p for p in paths if 'caseproof_rights_signed_fixture_grant' in p.name)
     rights_export_manifest = next(p for p in paths if 'caseproof_signed_export_rights_manifest_fence' in p.name)
     release_ack_fence = next(p for p in paths if 'caseproof_release_acknowledgement_fence' in p.name)
+    platform_hardening = next(p for p in paths if 'caseproof_platform_hardening' in p.name)
+    signed_conditions = next(p for p in paths if 'caseproof_signed_matter_conditions' in p.name)
+    review_omission = next(p for p in paths if 'caseproof_signed_review_omission_disposition' in p.name)
     for path in paths:
-        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives, rights_projection, rights_fixture, rights_export_manifest, release_ack_fence):
+        if path in (delayed, retention, fence, dossier, attestation, revisions, revision_indexes, fixture_ownership, f6_release, f6_action_guard, rights, rights_fence, rights_enforce, rights_bundle, rights_worker, rights_docx, rights_rpc, rights_derivatives, rights_projection, rights_fixture, rights_export_manifest, release_ack_fence, platform_hardening, signed_conditions, review_omission):
             continue
         _run(path.read_text(), env)
         _run(f"insert into supabase_migrations.schema_migrations values('{path.name.split('_')[0]}');", env)
@@ -106,6 +109,9 @@ grant select,insert on storage.objects to authenticated;
     _run(rights_fixture.read_text(), env)
     _run(rights_export_manifest.read_text(), env)
     _run(release_ack_fence.read_text(), env)
+    _run(platform_hardening.read_text(), env)
+    _run(signed_conditions.read_text(), env)
+    _run(review_omission.read_text(), env)
     print('RETENTION_FULL_SCHEMA_INSTALLED', flush=True)
     owner, guest, org, case, other, doc, version = (str(uuid4()) for _ in range(7))
     _run(f"""

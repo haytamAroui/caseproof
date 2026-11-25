@@ -425,6 +425,8 @@ def test_no_automatic_signed_urls_or_live_sql_wiring() -> None:
     } == {
         # Forced RLS, least-privilege reader role, pg_stat_statements revoke.
         "20261113000000_caseproof_platform_hardening.sql",
+        "20261124030604_caseproof_signed_matter_conditions.sql",
+        "20261124030659_caseproof_signed_review_omission_disposition.sql",
         "20261031112127_signed_page_worker.sql",
         "20261031234906_dossier_draft_revisions.sql",
         "20261031235117_dossier_draft_revision_fk_indexes.sql",
