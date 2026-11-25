@@ -32,6 +32,7 @@ from evals.litigation_qae_spike.contracts import (
     PageTextBlock,
     QaeCoverageManifest,
     ReconciledReviewLead,
+    SupportState,
     TransmissionManifest,
     TransmittedExcerpt,
     VisualAnchorStatus,
@@ -618,7 +619,7 @@ def reconcile_litigation_leads(
     p0: list[ReconciledReviewLead] = []
     deferred: list[ReconciledReviewLead] = []
     for idx, lead in enumerate(all_leads):
-        priority = "P0" if idx < max_p0 else "deferred"
+        priority: Literal["P0", "deferred"] = "P0" if idx < max_p0 else "deferred"
         item = ReconciledReviewLead(
             lead_id=lead.lead_id,
             rule_code=lead.rule_code,
@@ -692,6 +693,7 @@ def apply_lawyer_action(
         raise ValueError("authorized actor_id required")
     if expected_source_sha256 != state.bound_source_sha256:
         raise ValueError("stale source snapshot")
+    support: SupportState
     if action == "confirm_discrepancy":
         support = "CONFIRMED_CONTRADICTED"
     elif action == "qualify":
