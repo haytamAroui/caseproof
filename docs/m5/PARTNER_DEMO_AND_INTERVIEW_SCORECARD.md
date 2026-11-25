@@ -25,12 +25,13 @@ Run with **5 Belgian FR/NL litigators** (separating **user** [associate/counsel]
 | 5 | **Confidentiality dealbreakers:** Would you accept EU cloud hosting, firm-controlled deployment, or strictly offline/local execution? What would make your IT/risk lead say no? | *FR:* « Quel déploiement est acceptable (cloud UE, serveur cabinet, 100 % hors ligne) ? Qu'est-ce qui bloquerait ? »<br>*NL:* « Welke hosting is aanvaardbaar (EU-cloud, eigen server, volledig offline)? Wat zou een dealbreaker zijn? » | Hosting topology required before investing in packaging. |
 | 6 | **Buyer & budget:** If a tool cut pre-filing check time and caught 2–3 critical reference traps per major brief, **who owns the budget** and what price model fits (per seat/month vs. per dossier)? | *FR:* « Si l'outil faisait gagner 1 h par dépôt critique, qui valide le budget et à quel ordre de prix ? »<br>*NL:* « Wie beslist over het budget voor zo'n controletool en welk prijsmodel past bij het kantoor? » | Willingness to pay and real purchasing authority. |
 | 7 | **Disconfirming killer question:** Even if this worked cleanly, why might your lawyers still *not* use it on a Friday afternoon before a filing deadline? | *FR:* « Même si l'outil fonctionne bien, qu'est-ce qui ferait que vos avocats ne l'utiliseraient pas la veille d'un dépôt ? »<br>*NL:* « Zelfs als dit goed werkt, waarom zouden uw advocaten het de dag vóór een conclusietermijn toch niet gebruiken? » | Friction, workflow switching cost, or "good enough manually". |
+| 8 | **DOCX → PDF filing handoff (*Farhat v. Cutera* trap):** Once your team finishes checking a Word `.docx`, has anyone ever converted an older or unreviewed version to PDF for e-Deposit/DPA? Would a final PDF-vs-verified-DOCX check right before court upload catch a real failure for you? | *FR:* « Après avoir relu un document Word, est-il déjà arrivé qu'une ancienne version soit convertie en PDF par erreur pour DPA/e-Deposit ? Un contrôle final PDF ↔ DOCX vérifié vous serait-il utile ? »<br>*NL:* « Is er na nazicht van een Word-document ooit per vergissing een oudere versie omgezet naar PDF voor e-Deposit/DPA? Zou een finale PDF ↔ geverifieerd DOCX-controle helpen? » | Validates real practitioner value of `filing-pdf-parity` right before court filing. |
 
 ---
 
 ## Part 2 — 15-Minute Live Synthetic Demo Script
 
-**Setup:** Run the official React cockpit (`frontend/`) on a **synthetic FR/NL dossier** (no client files). Keep the 3-pane split screen visible throughout.
+**Setup:** Run `python -m scripts.run_prefiling_partner_demo` and open the official React cockpit (`frontend/dist`) on the **synthetic FR/NL dossier** (no client files). Keep the 3-pane split screen visible throughout.
 
 | Time | Demo Moment | Exact Action on Screen | What to Say Honestly (Trust Calibration) |
 | --- | --- | --- | --- |

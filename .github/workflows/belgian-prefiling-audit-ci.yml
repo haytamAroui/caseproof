@@ -32,16 +32,24 @@ jobs:
             application/litigation/inventory_mapping.py \
             application/litigation/workspace_contract.py \
             application/litigation/reservation_cues.py \
+            application/litigation/filing_pdf_parity.py \
+            infrastructure/parsers/filing_pdf_parity_adapter.py \
             apps/api/dossier_journey.py \
+            apps/api/dossier_export_release.py \
             apps/api/signed_workbench_routes.py \
             infrastructure/parsers/pdf_ocr.py \
             tests/test_progressive_inventory_confirmation.py \
             tests/test_exhibit_status_cue_fastapi.py \
-            tests/test_reservation_cues.py
+            tests/test_reservation_cues.py \
+            tests/test_filing_pdf_parity.py \
+            tests/test_sec07_log_sanitization.py \
+            tests/test_sec11_adversarial_file_security.py
           uv run --locked mypy --explicit-package-bases \
             application/litigation/inventory_mapping.py \
             application/litigation/workspace_contract.py \
             application/litigation/reservation_cues.py \
+            application/litigation/filing_pdf_parity.py \
+            infrastructure/parsers/filing_pdf_parity_adapter.py \
             apps/api/dossier_journey.py \
             apps/api/signed_workbench_routes.py \
             infrastructure/parsers/pdf_ocr.py
@@ -56,7 +64,10 @@ jobs:
             tests/test_signed_conditions_pack.py \
             tests/test_signed_sources_pack.py \
             tests/test_v2_conditions_route.py \
-            tests/test_exhibit_coverage.py
+            tests/test_exhibit_coverage.py \
+            tests/test_filing_pdf_parity.py \
+            tests/test_sec07_log_sanitization.py \
+            tests/test_sec11_adversarial_file_security.py
 
   belgian-audit-frontend:
     runs-on: ubuntu-latest
