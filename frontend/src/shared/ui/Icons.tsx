@@ -133,6 +133,54 @@ export function IconRotateCw(props: IconProps) {
   );
 }
 
+export function IconMoreHorizontal(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    </BaseIcon>
+  );
+}
+
+export function IconFlag(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <path d="M4 22v-7" />
+    </BaseIcon>
+  );
+}
+
+export function IconFilePdf(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 15h8M8 11h3" />
+    </BaseIcon>
+  );
+}
+
+export function IconFileDocx(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 12h8M8 16h6" />
+    </BaseIcon>
+  );
+}
+
+export function IconInbox(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1Z" />
+    </BaseIcon>
+  );
+}
+
 export function IconTone({
   tone,
   size = 13,

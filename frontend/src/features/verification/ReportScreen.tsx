@@ -6,7 +6,16 @@ import type { ApiClient, FindingView } from '../../shared/api';
 import { SplitHandle } from '../../shared/ui/SplitHandle';
 import { useSession } from '../../shared/session';
 import { useLocale, type ResultCategory } from '../../shared/i18n';
-import { Notice, StateValue } from '../../shared/ui';
+import {
+  IconFileDocx,
+  IconFilePdf,
+  IconFlag,
+  IconMoreHorizontal,
+  IconScale,
+  IconTone,
+  Notice,
+  StateValue,
+} from '../../shared/ui';
 import { readReport } from './api';
 import { coveragePages, coverageRegions } from './coverageRegions';
 import { detectLexicalCue } from './lexicalCue';
@@ -15,7 +24,6 @@ import {
   collectReportFailureBanners,
   countByTriageCategory,
   matchesFailureBanner,
-  TRIAGE_ICON,
   TRIAGE_PRIORITY,
   TRIAGE_TONE,
   triageCategoryOf,
@@ -186,40 +194,21 @@ export function ReportScreen({
   return (
     <>
       <header className="page-heading page-heading-review">
-        <p className="eyebrow">
-          {historical
-            ? t('reportEyebrowHistorical')
-            : t('reportEyebrowCurrent')}
-        </p>
-        <h1>{t('reviewHeading')}</h1>
+        <div className="page-heading-title-group">
+          <h1>{t('reviewHeading')}</h1>
+          <p className="eyebrow">
+            {historical
+              ? t('reportEyebrowHistorical')
+              : t('reportEyebrowCurrent')}
+          </p>
+        </div>
         <div className="cockpit-review-links">
-          <Link
-            className="cockpit-action-link"
-            to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}
-          >
-            {t('linkExports')}
-          </Link>
-          {!historical && (
-            <Link
-              className="cockpit-action-link"
-              to={`/matters/${caseId}/briefs/${briefId}/edit?snapshot=${snapshot}`}
-            >
-              {t('linkEditDocx')}
-            </Link>
-          )}
-          {!historical && (
-            <Link
-              className="cockpit-action-link"
-              to={`/matters/${caseId}/inventory`}
-            >
-              {t('linkReconfirmInv')}
-            </Link>
-          )}
           <Link
             className="cockpit-action-link"
             to={`/matters/${caseId}/briefs/${briefId}/legal`}
           >
-            {t('linkConditionsLegal')}
+            <IconScale size={13} />
+            <span>{t('linkConditionsLegal')}</span>
           </Link>
           {!historical && (
             <button
@@ -228,9 +217,38 @@ export function ReportScreen({
               aria-expanded={showOmissionShortcut}
               onClick={() => setShowOmissionShortcut((open) => !open)}
             >
-              {t('omissionQuickBtn')}
+              <IconFlag size={13} />
+              <span>{t('omissionQuickBtn')}</span>
             </button>
           )}
+          <details className="header-actions-menu">
+            <summary
+              className="header-actions-trigger"
+              aria-label={t('moreActionsLabel')}
+              title={t('moreActionsLabel')}
+            >
+              <IconMoreHorizontal size={15} />
+            </summary>
+            <div className="header-actions-popover">
+              <Link
+                to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}
+              >
+                {t('linkExports')}
+              </Link>
+              {!historical && (
+                <Link
+                  to={`/matters/${caseId}/briefs/${briefId}/edit?snapshot=${snapshot}`}
+                >
+                  {t('linkEditDocx')}
+                </Link>
+              )}
+              {!historical && (
+                <Link to={`/matters/${caseId}/inventory`}>
+                  {t('linkReconfirmInv')}
+                </Link>
+              )}
+            </div>
+          </details>
         </div>
         <p>{t('reviewSubtitle')}</p>
       </header>
@@ -281,7 +299,7 @@ export function ReportScreen({
               }}
             >
               <span className="legal-kpi-count">
-                <span aria-hidden="true">{TRIAGE_ICON[category]}</span> {count}
+                <IconTone tone={TRIAGE_TONE[category]} size={14} /> {count}
               </span>
               <span className="legal-kpi-label">{categoryLabel(category)}</span>
             </button>
@@ -314,20 +332,30 @@ export function ReportScreen({
                 className="report-failure-banner"
                 data-tone={banner.tone}
               >
-                <span>
-                  <strong>
-                    <span aria-hidden="true">
-                      {banner.tone === 'error'
-                        ? '✕'
-                        : banner.tone === 'impossible'
-                          ? '⊘'
-                          : '!'}
-                    </span>{' '}
-                    ({banner.count})
+                <span className="report-failure-text">
+                  <strong className="report-failure-count">
+                    <IconTone tone={banner.tone} size={14} /> ({banner.count})
                   </strong>{' '}
                   {t(textKey)}
                 </span>
                 <span className="report-failure-actions">
+                  {bannerFilterKind && (
+                    <button
+                      type="button"
+                      className="button button-ghost button-compact"
+                      aria-pressed={filter === bannerFilterKind}
+                      onClick={() => {
+                        setFilter((current) =>
+                          current === bannerFilterKind
+                            ? 'attention'
+                            : bannerFilterKind,
+                        );
+                        resetPage();
+                      }}
+                    >
+                      {t('bannerFilterAction')}
+                    </button>
+                  )}
                   {banner.kind === 'inventory_unconfirmed' && !historical && (
                     <>
                       <button
@@ -345,23 +373,6 @@ export function ReportScreen({
                         {t('bannerInventoryAction')}
                       </Link>
                     </>
-                  )}
-                  {bannerFilterKind && (
-                    <button
-                      type="button"
-                      className="button button-secondary button-compact"
-                      aria-pressed={filter === bannerFilterKind}
-                      onClick={() => {
-                        setFilter((current) =>
-                          current === bannerFilterKind
-                            ? 'attention'
-                            : bannerFilterKind,
-                        );
-                        resetPage();
-                      }}
-                    >
-                      {t('bannerFilterAction')}
-                    </button>
                   )}
                 </span>
               </div>
@@ -557,9 +568,10 @@ export function ReportScreen({
                         className="finding-category-pill"
                         data-tone={TRIAGE_TONE[triageCategoryOf(f)]}
                       >
-                        <span aria-hidden="true">
-                          {TRIAGE_ICON[triageCategoryOf(f)]}
-                        </span>{' '}
+                        <IconTone
+                          tone={TRIAGE_TONE[triageCategoryOf(f)]}
+                          size={12}
+                        />{' '}
                         {categoryLabel(triageCategoryOf(f))}
                       </span>{' '}
                       · {stateLabel(f.identity)}
@@ -1029,8 +1041,12 @@ function FindingInspection({
               value={finding.support}
             />
           </dl>
-          <header className="cockpit-pane-heading">
-            <h3>{t('draftHeading')}</h3>
+          <header className="cockpit-pane-heading cockpit-doc-tabbar">
+            <h3 className="pane-tab-title">
+              <IconFileDocx size={14} />
+              <span>{t('draftHeading')}</span>
+              <span className="doc-type-chip doc-type-docx">DOCX</span>
+            </h3>
             <span>{t('draftPaneSubtitle')}</span>
           </header>
           {renderDraft?.(finding, historical)}
@@ -1052,8 +1068,12 @@ function FindingInspection({
           />
         )}
         <div className="cockpit-evidence">
-          <header className="cockpit-pane-heading">
-            <h3>{t('sourceEvidenceHeading')}</h3>
+          <header className="cockpit-pane-heading cockpit-doc-tabbar">
+            <h3 className="pane-tab-title">
+              <IconFilePdf size={14} />
+              <span>{t('sourceEvidenceHeading')}</span>
+              <span className="doc-type-chip doc-type-pdf">PDF</span>
+            </h3>
             <span>
               {finding.literal} · {t('originalPdfTag')}
             </span>

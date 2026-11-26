@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import type { ApiClient } from '../../shared/api';
 import { useLocale } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
-import { Button, Notice, StateValue } from '../../shared/ui';
+import { Button, IconInbox, Notice, StateValue } from '../../shared/ui';
 import {
   checkFilingPdfParity,
   downloadArtifact,
@@ -271,15 +271,12 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
   return (
     <section className="export-workspace" aria-labelledby="exports-title">
       <Link to={uuid.test(caseId) ? `/matters/${caseId}` : '/'}>
-        Back to permitted reports
+        {t('exportsBackLink')}
       </Link>
       <header className="page-heading">
-        <p className="eyebrow">F6 · M4 reviewed delivery</p>
-        <h1 id="exports-title">Reviewed exports and history</h1>
-        <p>
-          Releases preserve scope and uncertainty. They do not certify legal
-          support, accuracy or court filing.
-        </p>
+        <p className="eyebrow">{t('exportsEyebrow')}</p>
+        <h1 id="exports-title">{t('exportsTitle')}</h1>
+        <p>{t('exportsLead')}</p>
       </header>
       {!valid && (
         <Notice error>
@@ -290,7 +287,10 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
       {valid && (
         <>
           <p className="small">
-            Snapshot <code>{snapshot}</code>
+            Snapshot{' '}
+            <code className="hash-chip" tabIndex={0} title={snapshot}>
+              {snapshot}
+            </code>
           </p>
           {preview.isPending ? (
             <Notice>
@@ -304,7 +304,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
             </Notice>
           ) : (
             <section className="draft-context" aria-label="Release readiness">
-              <h2>Preview release scope</h2>
+              <h2>{t('exportsPreviewHeading')}</h2>
               <p>
                 {preview.data.review_completeness.reviewed_findings} of{' '}
                 {preview.data.review_completeness.required_reviews} detected
@@ -313,14 +313,14 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
               </p>
               <p className="small">
                 {preview.data.review_completeness.review_complete
-                  ? 'Review complete for detected findings only; this is not complete dossier coverage.'
-                  : 'Review incomplete. A complete-reviewed release is blocked.'}
+                  ? t('exportsReviewComplete')
+                  : t('exportsReviewIncomplete')}
               </p>
               {preview.data.review_completeness.unreviewed_reference_ids
                 .length > 0 && (
                 <div aria-label="Unreviewed findings">
-                  <p>Inspect and review pending findings:</p>
-                  <ul>
+                  <p>{t('exportsPendingInspectLabel')}</p>
+                  <ul className="exports-pending-list">
                     {preview.data.review_completeness.unreviewed_reference_ids
                       .slice(0, 12)
                       .map((reference) => (
@@ -358,7 +358,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                 </Notice>
               )}
               {preview.data.coverage.reference_recall_measured !== true && (
-                <Notice>Reference detection recall was not measured.</Notice>
+                <Notice>{t('exportsRecallNotMeasured')}</Notice>
               )}
               {preview.data.limitations.map((text) => (
                 <p className="small" key={text}>
@@ -366,10 +366,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                 </p>
               ))}
               {!preview.data.can_release && (
-                <Notice error>
-                  No reviewed release is eligible. Save a human decision for a
-                  detected finding before exporting.
-                </Notice>
+                <Notice error>{t('exportsNoEligibleError')}</Notice>
               )}
               {preview.data.review_completeness.can_release_partial && (
                 <div>
@@ -406,7 +403,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                     ))
                 }
               >
-                Review release details
+                {t('exportsReviewDetailsBtn')}
               </Button>
               {releaseIntent === intentionScope && (
                 <dialog
@@ -486,7 +483,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
         id="release-history"
         aria-label="Export history"
       >
-        <h2>Frozen release history</h2>
+        <h2>{t('exportsHistoryHeading')}</h2>
         {history.isPending ? (
           <Notice>Loading authorized release history…</Notice>
         ) : history.isError ? (
@@ -494,7 +491,10 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
             Release history is unavailable or access was revoked.
           </Notice>
         ) : history.data.length === 0 ? (
-          <Notice>No reviewed releases exist for this brief.</Notice>
+          <div className="empty-state-card" role="status">
+            <IconInbox size={20} />
+            <p>{t('exportsHistoryEmpty')}</p>
+          </div>
         ) : (
           <ul>
             {history.data.map((release) => (

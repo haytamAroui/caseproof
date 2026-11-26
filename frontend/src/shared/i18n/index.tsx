@@ -294,6 +294,34 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     filingPdfParityDocxExcerpt: 'Verified DOCX:',
     filingPdfParityPdfExcerpt: 'Supplied PDF:',
     filingPdfParityReasonsLabel: 'Reason codes:',
+    moreActionsLabel: 'More dossier actions',
+    signInEmailLabel: 'Email address',
+    signInPasswordLabel: 'Password',
+    signInShowPassword: 'Show password',
+    signInHidePassword: 'Hide password',
+    signInSubmit: 'Sign in',
+    signInSubmitting: 'Signing in…',
+    signInHint:
+      'Sign in with an existing workspace account. Reloading requires a fresh sign-in. Session material is kept in memory only.',
+    exportsBackLink: 'Back to permitted reports',
+    exportsEyebrow: 'F6 · M4 reviewed delivery',
+    exportsTitle: 'Reviewed exports and history',
+    exportsLead:
+      'Releases preserve scope and uncertainty. They do not certify legal support, accuracy or court filing.',
+    exportsPreviewHeading: 'Preview release scope',
+    exportsHistoryHeading: 'Frozen release history',
+    exportsHistoryEmpty: 'No reviewed releases exist for this brief.',
+    exportsReviewDetailsBtn: 'Review release details',
+    exportsNoEligibleError:
+      'No reviewed release is eligible. Save a human decision for a detected finding before exporting.',
+    exportsRecallNotMeasured: 'Reference detection recall was not measured.',
+    exportsPendingInspectLabel: 'Inspect and review pending findings:',
+    exportsReviewIncomplete:
+      'Review incomplete. A complete-reviewed release is blocked.',
+    exportsReviewComplete:
+      'Review complete for detected findings only; this is not complete dossier coverage.',
+    draftRegionPrefix: 'Story region',
+    draftShaPrefix: 'original SHA-256',
   },
   fr: {
     skip: 'Aller au contenu',
@@ -574,6 +602,37 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     filingPdfParityDocxExcerpt: 'DOCX vérifié :',
     filingPdfParityPdfExcerpt: 'PDF fourni :',
     filingPdfParityReasonsLabel: 'Codes de motif :',
+    moreActionsLabel: 'Autres actions du dossier',
+    signInEmailLabel: 'Adresse e-mail',
+    signInPasswordLabel: 'Mot de passe',
+    signInShowPassword: 'Afficher le mot de passe',
+    signInHidePassword: 'Masquer le mot de passe',
+    signInSubmit: 'Se connecter',
+    signInSubmitting: 'Connexion…',
+    signInHint:
+      'Connectez-vous avec un compte autorisé. Un rechargement impose une nouvelle connexion ; la session reste uniquement en mémoire.',
+    exportsBackLink: 'Retour aux rapports autorisés',
+    exportsEyebrow: 'Clôture et export revu',
+    exportsTitle: 'Exports revus et historique',
+    exportsLead:
+      'Les exports conservent le périmètre et l’incertitude. Ils ne certifient ni le fond juridique, ni l’exactitude, ni le dépôt au greffe.',
+    exportsPreviewHeading: 'Aperçu du périmètre d’export',
+    exportsHistoryHeading: 'Historique des exports figés',
+    exportsHistoryEmpty:
+      'Aucun export revu n’existe encore pour ces conclusions.',
+    exportsReviewDetailsBtn: 'Examiner les détails de l’export',
+    exportsNoEligibleError:
+      'Aucun export revu n’est éligible. Enregistrez une décision humaine sur un constat détecté avant d’exporter.',
+    exportsRecallNotMeasured:
+      'Le taux de rappel de détection des renvois n’a pas été mesuré.',
+    exportsPendingInspectLabel:
+      'Examiner et décider sur les constats en attente :',
+    exportsReviewIncomplete:
+      'Revue incomplète. Un export « revue complète » reste bloqué.',
+    exportsReviewComplete:
+      'Revue achevée pour les constats détectés uniquement ; ceci ne constitue pas une couverture exhaustive du dossier.',
+    draftRegionPrefix: 'Zone du document',
+    draftShaPrefix: 'SHA-256 original',
   },
   nl: {
     skip: 'Naar inhoud',
@@ -855,6 +914,37 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     filingPdfParityDocxExcerpt: 'Geverifieerd DOCX:',
     filingPdfParityPdfExcerpt: 'Aangeboden PDF:',
     filingPdfParityReasonsLabel: 'Redencodes:',
+    moreActionsLabel: 'Meer dossieracties',
+    signInEmailLabel: 'E-mailadres',
+    signInPasswordLabel: 'Wachtwoord',
+    signInShowPassword: 'Wachtwoord tonen',
+    signInHidePassword: 'Wachtwoord verbergen',
+    signInSubmit: 'Aanmelden',
+    signInSubmitting: 'Aanmelden…',
+    signInHint:
+      'Meld u aan met een bestaand werkruimteaccount. Herladen vereist opnieuw aanmelden; de sessie blijft uitsluitend in het geheugen.',
+    exportsBackLink: 'Terug naar toegestane rapporten',
+    exportsEyebrow: 'Afsluiting en beoordeelde export',
+    exportsTitle: 'Beoordeelde exports en historiek',
+    exportsLead:
+      'Exports bewaren het bereik en de onzekerheid. Zij certificeren geen juridische steun, juistheid of neerlegging ter griffie.',
+    exportsPreviewHeading: 'Voorbeeld van exportbereik',
+    exportsHistoryHeading: 'Historiek van bevroren exports',
+    exportsHistoryEmpty:
+      'Er bestaan nog geen beoordeelde exports voor deze conclusies.',
+    exportsReviewDetailsBtn: 'Exportdetails bekijken',
+    exportsNoEligibleError:
+      'Geen beoordeelde export mogelijk. Sla eerst een menselijke beslissing op voor een vaststelling.',
+    exportsRecallNotMeasured:
+      'De detectiegraad van verwijzingen werd niet gemeten.',
+    exportsPendingInspectLabel:
+      'Inspecteer en beoordeel openstaande vaststellingen:',
+    exportsReviewIncomplete:
+      'Beoordeling onvolledig. Een volledige export blijft geblokkeerd.',
+    exportsReviewComplete:
+      'Beoordeling voltooid voor gedetecteerde vaststellingen; dit betekent geen volledige dossierdekking.',
+    draftRegionPrefix: 'Documentzone',
+    draftShaPrefix: 'originele SHA-256',
   },
 };
 
