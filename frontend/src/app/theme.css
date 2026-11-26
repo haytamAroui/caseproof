@@ -3460,26 +3460,26 @@ footer {
 
 .cockpit-reference-dimensions .dimension {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 5px 9px;
   border-radius: 9px;
   border-color: var(--cp-hairline);
   box-shadow: var(--cp-shadow-flat);
 }
 
 .cockpit-reference-dimensions dt {
-  font-size: 10.5px;
-  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.25;
 }
 
 .cockpit-reference-dimensions dd {
-  font-size: 11px;
+  font-size: 11.5px;
   margin: 0;
   font-weight: 600;
-  white-space: nowrap;
-  overflow-wrap: normal;
+  line-height: 1.25;
+  overflow-wrap: break-word;
 }
 
 .dimension-icon {
