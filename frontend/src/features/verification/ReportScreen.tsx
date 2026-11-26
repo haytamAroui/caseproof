@@ -1087,15 +1087,16 @@ function FindingInspection({
           {findings.length > 1 && (
             <div
               className="exhibit-tab-bar"
-              role="group"
+              role="tablist"
               aria-label={t('exhibitTabsLabel')}
             >
               {findings.slice(0, 8).map((item) => (
                 <button
                   key={item.reference_id}
                   type="button"
+                  role="tab"
                   className="exhibit-tab"
-                  aria-pressed={item.reference_id === finding.reference_id}
+                  aria-selected={item.reference_id === finding.reference_id}
                   onClick={() => onSelectReference(item.reference_id)}
                 >
                   <IconFilePdf size={12} />

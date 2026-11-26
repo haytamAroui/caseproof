@@ -4124,7 +4124,7 @@ dialog {
   background: rgba(255, 255, 255, 0.7);
 }
 
-.exhibit-tab[aria-pressed='true'] {
+.exhibit-tab[aria-selected='true'] {
   background: var(--cp-floating);
   color: var(--ink);
   border-color: var(--cp-hairline-strong);
