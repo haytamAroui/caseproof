@@ -306,10 +306,12 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
             <section className="draft-context" aria-label="Release readiness">
               <h2>{t('exportsPreviewHeading')}</h2>
               <p>
-                {preview.data.review_completeness.reviewed_findings} of{' '}
-                {preview.data.review_completeness.required_reviews} detected
-                findings reviewed;{' '}
-                {preview.data.review_completeness.unreviewed_findings} pending.
+                {preview.data.review_completeness.reviewed_findings}{' '}
+                {t('exportsReviewedOf')}{' '}
+                {preview.data.review_completeness.required_reviews}{' '}
+                {t('exportsDetectedReviewed')}{' '}
+                {preview.data.review_completeness.unreviewed_findings}{' '}
+                {t('exportsPendingSuffix')}
               </p>
               <p className="small">
                 {preview.data.review_completeness.review_complete
@@ -337,7 +339,7 @@ export function ExportsScreen({ api }: { api: ApiClient }) {
                               encodeURIComponent(reference)
                             }
                           >
-                            Review {reference}
+                            {t('exportsReviewLinkPrefix')} {reference}
                           </Link>
                         </li>
                       ))}

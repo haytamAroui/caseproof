@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ApiClient, parseReports } from '../../shared/api';
+import { useLocale } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
-import { Button, Notice } from '../../shared/ui';
+import { Button, IconFileCheck, IconInbox, Notice } from '../../shared/ui';
 export function ReportsScreen({ api }: { api: ApiClient }) {
+  const { t } = useLocale();
   const { caseId = '' } = useParams();
   const [params, setParams] = useSearchParams();
   const after = params.get('after');
@@ -27,10 +29,23 @@ export function ReportsScreen({ api }: { api: ApiClient }) {
       ),
   });
   return (
-    <section>
-      <Link to="/">Back to permitted matters</Link>
-      <h1>Preserved reports</h1>
-      <Link to={`/matters/${caseId}/sources`}>Sources and intake</Link>
+    <section className="matter-catalog">
+      <Link className="legal-back-link" to="/">
+        {t('reportsBackLink')}
+      </Link>
+      <header className="page-heading page-heading-review">
+        <div className="page-heading-title-group">
+          <h1>{t('reportsHeading')}</h1>
+        </div>
+        <div className="cockpit-review-links">
+          <Link
+            className="cockpit-action-link"
+            to={`/matters/${caseId}/sources`}
+          >
+            {t('reportsSourcesLink')}
+          </Link>
+        </div>
+      </header>
       <Notice>
         Reports are ordered by snapshot identifier, not by date. Each is a
         historical check; opening it rechecks current access and source
@@ -47,6 +62,7 @@ export function ReportsScreen({ api }: { api: ApiClient }) {
             shown.
           </Notice>
           <Button
+            className="button-secondary button-compact"
             onClick={() => {
               void query.refetch();
             }}
@@ -56,21 +72,38 @@ export function ReportsScreen({ api }: { api: ApiClient }) {
           </Button>
         </>
       ) : query.data.reports.length === 0 ? (
-        <Notice>
-          No preserved reports were returned for this matter. Intake and running
-          a new check are not available in this screen yet.
-        </Notice>
+        <div className="empty-state-card" role="status">
+          <IconInbox size={22} />
+          <p>
+            No preserved reports were returned for this matter. Intake and
+            running a new check are not available in this screen yet.
+          </p>
+        </div>
       ) : (
         <>
-          <ul className="matter-list">
+          <div
+            className="matter-table-head reports-table-head"
+            aria-hidden="true"
+          >
+            <span>{t('reportsColReport')}</span>
+            <span>{t('reportsColDate')}</span>
+            <span>{t('reportsColActions')}</span>
+          </div>
+          <ul className="matter-list matter-table-list">
             {query.data.reports.map((report) => (
-              <li key={report.snapshot_hash}>
+              <li key={report.snapshot_hash} className="report-table-item">
                 <Link
+                  className="matter-table-row report-table-row"
                   to={`/matters/${caseId}/briefs/${report.brief_id}?snapshot=${report.snapshot_hash}`}
                 >
-                  <span>Open preserved report</span>
-                  <span className="small">
-                    Snapshot <code>{report.snapshot_hash}</code>
+                  <span className="matter-cell-primary">
+                    <IconFileCheck size={15} />
+                    <span>
+                      <strong>{t('reportsOpenLabel')}</strong>{' '}
+                      <code className="hash-chip" title={report.snapshot_hash}>
+                        {report.snapshot_hash}
+                      </code>
+                    </span>
                   </span>
                   <span className="small">
                     Created:{' '}
@@ -83,18 +116,24 @@ export function ReportsScreen({ api }: { api: ApiClient }) {
                   </span>
                 </Link>
                 <Link
+                  className="cockpit-action-link report-row-export"
                   to={`/matters/${caseId}/exports?brief=${report.brief_id}&snapshot=${report.snapshot_hash}`}
                 >
-                  Reviewed exports
+                  {t('reportsReviewedExportsLink')}
                 </Link>
               </li>
             ))}
           </ul>
           <nav className="catalog-actions" aria-label="Report pages">
-            <Button disabled={after === null} onClick={() => setParams({})}>
+            <Button
+              className="button-secondary button-compact"
+              disabled={after === null}
+              onClick={() => setParams({})}
+            >
               First reports
             </Button>
             <Button
+              className="button-secondary button-compact"
               disabled={!query.data.next_cursor}
               onClick={() => {
                 if (query.data.next_cursor)

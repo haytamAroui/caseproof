@@ -338,15 +338,8 @@ function Workspace({ api }: { api: ApiClient }) {
                 <h1>{t('signInTitle')}</h1>
                 <p>{t('signInLead')}</p>
                 <details>
-                  <summary>Processing and access limits</summary>
-                  <p>
-                    Development workspace for synthetic acceptance. A local
-                    interface does not establish where documents are processed.
-                    Processing location, retention, backups and confidential use
-                    require a separately approved deployment policy. Ending a
-                    session clears this workspace; downloaded files cannot be
-                    recalled.
-                  </p>
+                  <summary>{t('signInLimitsSummary')}</summary>
+                  <p>{t('signInLimitsBody')}</p>
                 </details>
                 {returnTo && (
                   <Notice>
@@ -369,6 +362,7 @@ function Workspace({ api }: { api: ApiClient }) {
 }
 function Connect() {
   const controller = useSessionController();
+  const { t } = useLocale();
   const [message, setMessage] = useState('');
   return (
     <div className="signin-connect-row">
@@ -384,7 +378,7 @@ function Connect() {
           controller.connect(window.caseproofSession);
         }}
       >
-        Connect session
+        {t('connectSessionBtn')}
       </Button>
       {message && <Notice>{message}</Notice>}
     </div>

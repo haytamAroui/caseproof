@@ -629,6 +629,8 @@ export function ReportScreen({
               <FindingInspection
                 key={`${session.epoch}:${caseId}:${briefId}:${snapshot}:${selected.reference_id}:${historical}`}
                 finding={selected}
+                findings={report.findings}
+                onSelectReference={selectReference}
                 historical={historical}
                 sourceWidth={sourceWidth}
                 onSourceWidthChange={setSourceWidth}
@@ -909,6 +911,8 @@ function QuoteContext({ finding }: { finding: FindingView }) {
 
 function FindingInspection({
   finding,
+  findings,
+  onSelectReference,
   historical,
   sourceWidth,
   onSourceWidthChange,
@@ -920,6 +924,8 @@ function FindingInspection({
   onNext,
 }: {
   finding: FindingView;
+  findings: readonly FindingView[];
+  onSelectReference: (referenceId: string) => void;
   historical: boolean;
   sourceWidth: number;
   onSourceWidthChange: (width: number) => void;
@@ -1078,6 +1084,26 @@ function FindingInspection({
               {finding.literal} · {t('originalPdfTag')}
             </span>
           </header>
+          {findings.length > 1 && (
+            <div
+              className="exhibit-tab-bar"
+              role="group"
+              aria-label={t('exhibitTabsLabel')}
+            >
+              {findings.slice(0, 8).map((item) => (
+                <button
+                  key={item.reference_id}
+                  type="button"
+                  className="exhibit-tab"
+                  aria-pressed={item.reference_id === finding.reference_id}
+                  onClick={() => onSelectReference(item.reference_id)}
+                >
+                  <IconFilePdf size={12} />
+                  <span>{item.literal}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {renderSource ? (
             renderSource(finding, historical, () => setInspected(true))
           ) : (

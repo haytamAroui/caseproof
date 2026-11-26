@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import type { ApiClient, DossierView, FindingView } from '../../shared/api';
 import { ApiError, parseDossier } from '../../shared/api';
 import validateLocator from '../../shared/api/docx-locator-v1-generated-validator';
+import { useLocale } from '../../shared/i18n';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 import { useSession } from '../../shared/session';
 import { CorrectionRecovery } from './CorrectionRecovery';
@@ -164,6 +165,7 @@ export function CorrectionPanel({
   finding: FindingView;
   originalSha: string;
 }) {
+  const { t } = useLocale();
   const navigate = useNavigate();
   const session = useSession();
   const before = finding.literal;
@@ -442,12 +444,12 @@ export function CorrectionPanel({
   const redline = preview ? boundedRedline(before, after) : null;
   return (
     <section
-      className="draft-context"
+      className="draft-context correction-card"
       aria-label="Correction preview and recheck"
       aria-busy={busy}
     >
       <UnsavedChanges dirty={Boolean(preview && !command)} />
-      <h3>Propose a bounded DOCX correction</h3>
+      <h3>{t('correctionTitle')}</h3>
       {stale && <p role="alert">Stale draft. Reopen the current report.</p>}
       <CorrectionRecovery
         api={api}
@@ -456,41 +458,35 @@ export function CorrectionPanel({
         onResume={setResumeId}
         onReady={setRecoveryReady}
       />
-      <Notice>
-        Only the exact reference in a supported DOCX paragraph can be replaced.
-        Replacement text inherits the formatting of the first affected run;
-        surrounding text keeps its formatting. Tabs and line breaks are not
-        supported in a replacement. Commit requires your own saved human
-        decision in the current snapshot.
-      </Notice>
-      {!reviewReady && (
-        <Notice error>
-          Persisted signed human review for this reference and snapshot is
-          required. Save your decision in Human review first.
-        </Notice>
-      )}
+      <Notice>{t('correctionNotice')}</Notice>
+      {!reviewReady && <Notice error>{t('correctionReviewRequired')}</Notice>}
       <Button
+        className="button-secondary button-compact"
         disabled={busy || review.isFetching}
         onClick={() => void review.refetch()}
       >
-        Refresh saved human review receipt
+        {t('correctionRefreshReceiptBtn')}
       </Button>
       {anchor.isPending && (
-        <p>Locating the reference in the preserved draft…</p>
+        <p className="small">Locating the reference in the preserved draft…</p>
       )}
       {anchor.isError && (
         <Notice error>
           The reference cannot be safely located for correction.
         </Notice>
       )}
-      <fieldset disabled={busy || Boolean(command)}>
+      <fieldset
+        className="correction-slab-fields"
+        disabled={busy || Boolean(command)}
+      >
         <label>
-          Exact original text
-          <textarea value={before} readOnly />
+          {t('correctionExactOriginalLabel')}
+          <textarea value={before} readOnly rows={2} />
         </label>
         <label>
-          Replacement text
+          {t('correctionReplacementLabel')}
           <textarea
+            rows={2}
             maxLength={4000}
             value={after}
             onChange={(e) => {
@@ -501,24 +497,34 @@ export function CorrectionPanel({
         </label>
       </fieldset>
       <Button
+        className="button-compact"
         disabled={!valid || busy || Boolean(command)}
         onClick={() => void requestPreview()}
       >
-        Validate exact preview
+        {t('correctionValidatePreviewBtn')}
       </Button>
       {preview && (
-        <div aria-label="Before and after correction">
-          <p>Proposed change (not committed)</p>
-          <p>
+        <div
+          className="correction-text-slab"
+          aria-label="Before and after correction"
+        >
+          <p className="small">{t('correctionProposedChange')}</p>
+          <p className="legal-prose">
             {redline?.prefix}
             <del>{redline?.removed}</del>
             <ins>{redline?.added}</ins>
             {redline?.suffix}
           </p>
-          <p className="small">Original SHA-256: {preview.original_sha256}</p>
           <p className="small">
-            Derivative SHA-256: {preview.derivative_sha256} ·{' '}
-            {preview.derivative_byte_length} bytes
+            Original SHA-256:{' '}
+            <code className="hash-chip" title={preview.original_sha256}>
+              {preview.original_sha256}
+            </code>{' '}
+            · Derivative SHA-256:{' '}
+            <code className="hash-chip" title={preview.derivative_sha256}>
+              {preview.derivative_sha256}
+            </code>{' '}
+            · {preview.derivative_byte_length} bytes
           </p>
           <Notice>
             Verified bounded text diff and derivative digest only. The full DOCX
@@ -528,7 +534,7 @@ export function CorrectionPanel({
             disabled={busy || Boolean(command) || !reviewReady}
             onClick={() => void commit()}
           >
-            Explicitly commit and activate new draft
+            {t('correctionCommitBtn')}
           </Button>
         </div>
       )}

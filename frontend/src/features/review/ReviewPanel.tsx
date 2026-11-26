@@ -8,15 +8,16 @@ import {
 } from '../../shared/api/review';
 import type { VisualDecisionBody } from '../../shared/api/review';
 import { ApiError } from '../../shared/api';
+import { useLocale } from '../../shared/i18n';
 import { useSession, useSessionController } from '../../shared/session';
 import { Button, Notice, UnsavedChanges } from '../../shared/ui';
 
 type Scope = { caseId: string; briefId: string; snapshot: string };
 type ReviewDecision = VisualDecisionBody['decision'];
-const dispositions: { id: ReviewDecision; label: string }[] = [
-  { id: 'CONFIRMED_SUPPORTED', label: 'Confirm supported after inspection' },
-  { id: 'CONFIRMED_QUALIFIED', label: 'Qualify the support' },
-  { id: 'CONFIRMED_CONTRADICTED', label: 'Confirm contradiction' },
+const dispositions: { id: ReviewDecision; key: string }[] = [
+  { id: 'CONFIRMED_SUPPORTED', key: 'reviewDispSupported' },
+  { id: 'CONFIRMED_QUALIFIED', key: 'reviewDispQualified' },
+  { id: 'CONFIRMED_CONTRADICTED', key: 'reviewDispContradicted' },
 ];
 
 function requiredRegions(finding: FindingView): string[] | null {
@@ -49,6 +50,7 @@ export function ReviewPanel({
   inspected: boolean;
   onNext?: (() => void) | undefined;
 }) {
+  const { t } = useLocale();
   const session = useSession();
   const controller = useSessionController();
   const base = `/v2/matters/${encodeURIComponent(scope.caseId)}/briefs/${encodeURIComponent(scope.briefId)}/dossier`;
@@ -191,21 +193,16 @@ export function ReviewPanel({
   return (
     <section className="review-panel" aria-label="Human review">
       <UnsavedChanges dirty={dirty} />
-      <h3>Human decision and durable receipt</h3>
-      <Notice>
-        Machine findings remain unchanged. This is a separately attributable
-        human decision, not a legal certification.
-      </Notice>
+      <h3>{t('reviewDecisionTitle')}</h3>
+      <Notice>{t('reviewDecisionNotice')}</Notice>
       {ledger.isPending ? (
-        <Notice>Reading current human review ledger…</Notice>
+        <Notice>{t('reviewLedgerLoading')}</Notice>
       ) : ledger.isError ? (
-        <Notice error>
-          Review ledger unavailable. A decision cannot be safely saved.
-        </Notice>
+        <Notice error>{t('reviewLedgerError')}</Notice>
       ) : (
         <div>
           {rows.length === 0 ? (
-            <p>No recorded human decision for this reference.</p>
+            <p className="small">{t('reviewNoDecisionYet')}</p>
           ) : (
             <ul aria-label="Saved review history">
               {rows.map((row) => (
@@ -252,21 +249,15 @@ export function ReviewPanel({
           ))}
         </fieldset>
       )}
-      {!inspected && (
-        <Notice>
-          Open and inspect the preserved original reference page before
-          recording a decision.
-        </Notice>
-      )}
+      {!inspected && <Notice>{t('reviewInspectFirst')}</Notice>}
       <fieldset disabled={busy || Boolean(submitted)}>
-        <legend>Disposition — none selected by default</legend>
+        <legend>{t('reviewDispositionLegend')}</legend>
         {decision === null && (
-          <p role="status">
-            Not assessed. Select a disposition only after examining the
-            preserved source and relevant context.
+          <p role="status" className="small">
+            {t('reviewNotAssessedPrompt')}
           </p>
         )}
-        {dispositions.map(({ id, label }) => (
+        {dispositions.map(({ id, key }) => (
           <label key={id}>
             <input
               type="radio"
@@ -275,12 +266,12 @@ export function ReviewPanel({
               checked={decision === id}
               onChange={() => setDecision(id)}
             />
-            {label}
+            {t(key)}
           </label>
         ))}
       </fieldset>
       <label>
-        Rationale (required, visible to authorized reviewers)
+        {t('reviewRationaleLabel')}
         <textarea
           rows={3}
           maxLength={2000}
@@ -329,7 +320,7 @@ export function ReviewPanel({
             }
           }}
         >
-          Save human decision
+          {t('reviewSaveBtn')}
         </Button>
         {submitted && outcome !== 'saved' && (
           <>
@@ -351,8 +342,8 @@ export function ReviewPanel({
       </div>
       {(outcome === 'saved' || saved) && (
         <div role="status">
-          <p>Saved. Your decision is confirmed from the durable ledger.</p>
-          {onNext && <Button onClick={onNext}>Save &amp; Next finding</Button>}
+          <p>{t('reviewSavedConfirm')}</p>
+          {onNext && <Button onClick={onNext}>{t('reviewSaveNextBtn')}</Button>}
         </div>
       )}
     </section>
