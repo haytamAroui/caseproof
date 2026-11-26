@@ -123,7 +123,11 @@ export function SignIn({
           aria-describedby={error ? 'signin-error' : undefined}
         />
       </label>
-      <Button aria-pressed={visible} onClick={() => setVisible((v) => !v)}>
+      <Button
+        className="button-secondary button-compact signin-toggle-password"
+        aria-pressed={visible}
+        onClick={() => setVisible((v) => !v)}
+      >
         {visible ? 'Hide password' : 'Show password'}
       </Button>
       {error && (

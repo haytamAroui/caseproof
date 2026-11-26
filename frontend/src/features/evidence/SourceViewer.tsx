@@ -7,7 +7,15 @@ import {
 import { pageSpaceLabel } from './pageSpaces';
 import { ApiClient, parseViewer } from '../../shared/api';
 import { useLocale } from '../../shared/i18n';
-import { Button, Notice } from '../../shared/ui';
+import {
+  Button,
+  IconChevronLeft,
+  IconChevronRight,
+  IconMinus,
+  IconPlus,
+  IconRotateCw,
+  Notice,
+} from '../../shared/ui';
 import type { DocumentInspection } from '../../shared/pdf/geometry';
 import type { PdfPageResult, RasterRegion } from '../../shared/pdf/geometry';
 import {
@@ -470,7 +478,7 @@ function SourceInspection({
           >
             <div className="viewer-control-group">
               <Button
-                className="viewer-btn-compact"
+                className="button-ghost viewer-btn-compact"
                 aria-label={t('viewerPrevPage')}
                 title={t('viewerPrevPage')}
                 disabled={page <= 1}
@@ -479,13 +487,13 @@ function SourceInspection({
                   setPage((p) => p - 1);
                 }}
               >
-                ‹
+                <IconChevronLeft size={14} />
               </Button>
               <span className="viewer-readout">
                 {t('pdfPageLabel')} {page} {t('ofWord')} {pages}
               </span>
               <Button
-                className="viewer-btn-compact"
+                className="button-ghost viewer-btn-compact"
                 aria-label={t('viewerNextPage')}
                 title={t('viewerNextPage')}
                 disabled={page >= pages}
@@ -494,12 +502,12 @@ function SourceInspection({
                   setPage((p) => p + 1);
                 }}
               >
-                ›
+                <IconChevronRight size={14} />
               </Button>
             </div>
             <div className="viewer-control-group">
               <Button
-                className="viewer-btn-compact"
+                className="button-ghost viewer-btn-compact"
                 aria-label={t('viewerZoomOut')}
                 title={t('viewerZoomOut')}
                 disabled={zoom <= 0.5}
@@ -508,13 +516,13 @@ function SourceInspection({
                   setZoom((z) => z - 0.25);
                 }}
               >
-                −
+                <IconMinus size={14} />
               </Button>
               <span className="viewer-readout">
                 {t('zoomWord')} {Math.round(zoom * 100)}%
               </span>
               <Button
-                className="viewer-btn-compact"
+                className="button-ghost viewer-btn-compact"
                 aria-label={t('viewerZoomIn')}
                 title={t('viewerZoomIn')}
                 disabled={zoom >= 2}
@@ -523,10 +531,10 @@ function SourceInspection({
                   setZoom((z) => z + 0.25);
                 }}
               >
-                +
+                <IconPlus size={14} />
               </Button>
               <Button
-                className="viewer-btn-compact"
+                className="button-ghost viewer-btn-compact"
                 aria-label={t('viewerRotatePage')}
                 title={t('viewerRotatePage')}
                 onClick={() => {
@@ -534,7 +542,7 @@ function SourceInspection({
                   setRotation((r) => (r + 90) % 360);
                 }}
               >
-                ↻
+                <IconRotateCw size={14} />
               </Button>
             </div>
           </div>
@@ -552,14 +560,14 @@ function SourceInspection({
             </label>
             {search && (
               <Button
-                className="viewer-btn-compact"
+                className="button-ghost viewer-btn-compact"
                 onClick={() => setSearch('')}
               >
                 {t('clearPageSearch')}
               </Button>
             )}
             <Button
-              className="viewer-btn-compact"
+              className="button-secondary viewer-btn-compact"
               aria-pressed={showBoxes}
               onClick={() => setShowBoxes((v) => !v)}
             >
@@ -567,7 +575,7 @@ function SourceInspection({
             </Button>
             {mappedPage !== null && (
               <Button
-                className="viewer-btn-compact"
+                className="button-ghost viewer-btn-compact"
                 disabled={page === mappedPage}
                 onClick={() => {
                   clearPage();

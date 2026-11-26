@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { useLocale } from '../i18n';
+import { IconTone } from './Icons';
+
+export * from './Icons';
 export function Button(props: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
@@ -35,16 +38,6 @@ type StatusTone =
   | 'success'
   | 'derived'
   | 'neutral';
-
-const TONE_ICON: Record<StatusTone, string> = {
-  error: '✕',
-  warning: '!',
-  impossible: '⊘',
-  recheck: '↻',
-  success: '✓',
-  derived: '◈',
-  neutral: '·',
-};
 
 function classifyStatusTone(value: string): StatusTone {
   const key = value.toLowerCase();
@@ -97,7 +90,7 @@ export function StateValue({ label, value }: { label: string; value: string }) {
       <dt>{dimensionLabel(label)}</dt>
       <dd>
         <span className="dimension-icon" aria-hidden="true">
-          {TONE_ICON[tone]}
+          <IconTone tone={tone} size={13} />
         </span>{' '}
         {stateLabel(value)}
       </dd>

@@ -192,36 +192,46 @@ export function ReportScreen({
             : t('reportEyebrowCurrent')}
         </p>
         <h1>{t('reviewHeading')}</h1>
-        <Link
-          to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}
-        >
-          {t('linkExports')}
-        </Link>
-        {!historical && (
+        <div className="cockpit-review-links">
           <Link
-            to={`/matters/${caseId}/briefs/${briefId}/edit?snapshot=${snapshot}`}
+            className="cockpit-action-link"
+            to={`/matters/${caseId}/exports?brief=${briefId}&snapshot=${snapshot}`}
           >
-            {t('linkEditDocx')}
+            {t('linkExports')}
           </Link>
-        )}
-        {!historical && (
-          <Link to={`/matters/${caseId}/inventory`}>
-            {t('linkReconfirmInv')}
-          </Link>
-        )}
-        <Link to={`/matters/${caseId}/briefs/${briefId}/legal`}>
-          {t('linkConditionsLegal')}
-        </Link>
-        {!historical && (
-          <button
-            type="button"
-            className="button"
-            aria-expanded={showOmissionShortcut}
-            onClick={() => setShowOmissionShortcut((open) => !open)}
+          {!historical && (
+            <Link
+              className="cockpit-action-link"
+              to={`/matters/${caseId}/briefs/${briefId}/edit?snapshot=${snapshot}`}
+            >
+              {t('linkEditDocx')}
+            </Link>
+          )}
+          {!historical && (
+            <Link
+              className="cockpit-action-link"
+              to={`/matters/${caseId}/inventory`}
+            >
+              {t('linkReconfirmInv')}
+            </Link>
+          )}
+          <Link
+            className="cockpit-action-link"
+            to={`/matters/${caseId}/briefs/${briefId}/legal`}
           >
-            {t('omissionQuickBtn')}
-          </button>
-        )}
+            {t('linkConditionsLegal')}
+          </Link>
+          {!historical && (
+            <button
+              type="button"
+              className="button button-secondary button-compact"
+              aria-expanded={showOmissionShortcut}
+              onClick={() => setShowOmissionShortcut((open) => !open)}
+            >
+              {t('omissionQuickBtn')}
+            </button>
+          )}
+        </div>
         <p>{t('reviewSubtitle')}</p>
       </header>
       {showOmissionShortcut && !historical && (
@@ -322,14 +332,14 @@ export function ReportScreen({
                     <>
                       <button
                         type="button"
-                        className="button"
+                        className="button button-secondary button-compact"
                         aria-expanded={showInlineInventory}
                         onClick={() => setShowInlineInventory((open) => !open)}
                       >
                         {t('bannerInventoryInlineBtn')}
                       </button>
                       <Link
-                        className="button"
+                        className="button button-compact"
                         to={`/matters/${caseId}/inventory`}
                       >
                         {t('bannerInventoryAction')}
@@ -339,7 +349,7 @@ export function ReportScreen({
                   {bannerFilterKind && (
                     <button
                       type="button"
-                      className="button"
+                      className="button button-secondary button-compact"
                       aria-pressed={filter === bannerFilterKind}
                       onClick={() => {
                         setFilter((current) =>
@@ -460,9 +470,9 @@ export function ReportScreen({
               ? ' The selected reference is outside this queue; it remains open for inspection.'
               : ''}
           </p>
-          <div className="catalog-actions">
+          <div className="catalog-actions queue-filter-group">
             <button
-              className="button"
+              className="button button-secondary button-compact"
               aria-pressed={filter === 'attention'}
               onClick={() => {
                 setFilter('attention');
@@ -472,7 +482,7 @@ export function ReportScreen({
               {t('filterAttention')}
             </button>
             <button
-              className="button"
+              className="button button-secondary button-compact"
               aria-pressed={filter === 'all'}
               onClick={() => {
                 setFilter('all');
@@ -482,7 +492,7 @@ export function ReportScreen({
               {t('filterAll')}
             </button>
           </div>
-          <label>
+          <label className="queue-search-field">
             {t('searchLabel')}
             <input
               value={search}
@@ -496,7 +506,7 @@ export function ReportScreen({
           </label>
           {search && (
             <button
-              className="button"
+              className="button button-secondary button-compact"
               onClick={() => {
                 setSearch('');
                 resetPage();
@@ -807,7 +817,7 @@ function QuoteContext({ finding }: { finding: FindingView }) {
       {lexicalCue && (
         <div
           className="report-failure-banner"
-          data-tone="warn"
+          data-tone="warning"
           role="note"
           aria-label={
             lexicalCue.kind === 'status_mismatch'
@@ -840,7 +850,7 @@ function QuoteContext({ finding }: { finding: FindingView }) {
           {comparison && (
             <button
               type="button"
-              className="button"
+              className="button button-secondary button-compact"
               aria-pressed={showMatches}
               onClick={() => setShowMatches((value) => !value)}
             >
@@ -929,35 +939,64 @@ function FindingInspection({
   const { t } = useLocale();
   return (
     <div className="cockpit-reader">
-      <div
-        className="cockpit-view-switch"
-        role="group"
-        aria-label={t('ariaReadingLayout')}
-      >
-        <button
-          type="button"
-          className="button"
-          aria-pressed={readingMode === 'split'}
-          onClick={() => onReadingModeChange('split')}
+      <div className="cockpit-toolbar">
+        <div
+          className="cockpit-view-switch"
+          role="group"
+          aria-label={t('ariaReadingLayout')}
         >
-          {t('splitView')}
-        </button>
-        <button
-          type="button"
-          className="button"
-          aria-pressed={readingMode === 'draft'}
-          onClick={() => onReadingModeChange('draft')}
+          <button
+            type="button"
+            className="button button-secondary button-compact"
+            aria-pressed={readingMode === 'split'}
+            onClick={() => onReadingModeChange('split')}
+          >
+            {t('splitView')}
+          </button>
+          <button
+            type="button"
+            className="button button-secondary button-compact"
+            aria-pressed={readingMode === 'draft'}
+            onClick={() => onReadingModeChange('draft')}
+          >
+            {t('draftFocus')}
+          </button>
+          <button
+            type="button"
+            className="button button-secondary button-compact"
+            aria-pressed={readingMode === 'source'}
+            onClick={() => onReadingModeChange('source')}
+          >
+            {t('sourceFocus')}
+          </button>
+        </div>
+        <div
+          className="cockpit-resize-controls"
+          hidden={readingMode !== 'split'}
         >
-          {t('draftFocus')}
-        </button>
-        <button
-          type="button"
-          className="button"
-          aria-pressed={readingMode === 'source'}
-          onClick={() => onReadingModeChange('source')}
-        >
-          {t('sourceFocus')}
-        </button>
+          <label htmlFor={widthControlId}>
+            {t('sourceWidthLabel')} {sourceWidth}px
+          </label>
+          <input
+            id={widthControlId}
+            type="range"
+            min={320}
+            max={560}
+            step={10}
+            value={sourceWidth}
+            onChange={(event) =>
+              onSourceWidthChange(Number(event.target.value))
+            }
+            aria-label="Source evidence panel width"
+          />
+          <button
+            type="button"
+            className="button button-ghost button-compact"
+            onClick={() => onSourceWidthChange(400)}
+          >
+            {t('restoreSourceWidth')}
+          </button>
+        </div>
       </div>
       <motion.p
         key={readingMode}
@@ -973,28 +1012,6 @@ function FindingInspection({
             ? t('readingDraftNote')
             : t('readingSourceNote')}
       </motion.p>
-      <div className="cockpit-resize-controls" hidden={readingMode !== 'split'}>
-        <label htmlFor={widthControlId}>
-          {t('sourceWidthLabel')} {sourceWidth}px
-        </label>
-        <input
-          id={widthControlId}
-          type="range"
-          min={320}
-          max={560}
-          step={10}
-          value={sourceWidth}
-          onChange={(event) => onSourceWidthChange(Number(event.target.value))}
-          aria-label="Source evidence panel width"
-        />
-        <button
-          type="button"
-          className="button"
-          onClick={() => onSourceWidthChange(400)}
-        >
-          {t('restoreSourceWidth')}
-        </button>
-      </div>
       <div
         ref={readerRef}
         className={`cockpit-inspection cockpit-mode-${readingMode}`}

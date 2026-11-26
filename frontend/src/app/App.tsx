@@ -33,7 +33,7 @@ import {
 } from '../shared/session';
 import type { SessionHost } from '../shared/session';
 import { LanguageSwitcher, LocaleProvider, useLocale } from '../shared/i18n';
-import { Button, Notice } from '../shared/ui';
+import { Button, IconBrandMark, Notice } from '../shared/ui';
 import { createQueryClient } from './query';
 import { MatterJourney } from './MatterJourney';
 import { PrimaryNavigation } from './PrimaryNavigation';
@@ -193,6 +193,11 @@ function Workspace({ api }: { api: ApiClient }) {
   const [logoutMessage, setLogoutMessage] = useState('');
   const location = useLocation();
   const [returnTo, setReturnTo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!location.hash && typeof window.scrollTo === 'function') {
+      window.scrollTo(0, 0);
+    }
+  }, [location.pathname, location.hash]);
   useEffect(
     () =>
       controller.onClear(() => {
@@ -215,124 +220,150 @@ function Workspace({ api }: { api: ApiClient }) {
       <a className="skip" href="#main">
         {t('skip')}
       </a>
-      <header className="app-header">
-        <Link to="/" className="brand">
-          CaseProof <span>{t('brandSubtitle')}</span>
-        </Link>
-        {session.connected && (
-          <PrimaryNavigation
-            pathname={location.pathname}
-            search={location.search}
-          />
-        )}
-        <div className="header-actions">
-          <LanguageSwitcher />
-          {session.connected && (
-            <Button onClick={() => controller.clear()}>
-              {t('endSession')}
-            </Button>
-          )}
-        </div>
-      </header>
-      <main id="main" tabIndex={-1}>
-        {session.connected && (
-          <MatterJourney
-            pathname={location.pathname}
-            search={location.search}
-            hash={location.hash}
-          />
-        )}
-        {session.connected && returnTo && (
-          <section aria-label="Session recovery">
-            <Notice>
-              Your previous session ended. Private views were cleared. You can
-              reopen the previous location with a fresh access check.
-            </Notice>
-            <Button
-              onClick={() => {
-                const target = returnTo;
-                setReturnTo(null);
-                void navigate(target);
-              }}
-            >
-              Reopen previous location
-            </Button>
-            <Button onClick={() => setReturnTo(null)}>Dismiss recovery</Button>
-          </section>
-        )}
-        {session.connected ? (
-          <Routes>
-            <Route path="/" element={<MattersScreen api={api} />} />
-            <Route path="/matters/new" element={<CreateMatter api={api} />} />
-            <Route
-              path="/matters/:caseId/sources"
-              element={<IntakeScreen api={api} />}
-            />
-            <Route
-              path="/matters/:caseId/inventory"
-              element={<InventoryScreen api={api} />}
-            />
-            <Route path="/reports/open" element={<ScopedOpenReport />} />
-            <Route
-              path="/matters/:caseId"
-              element={<ReportsScreen api={api} />}
-            />
-            <Route
-              path="/matters/:caseId/exports"
-              element={<ExportsScreen api={api} />}
-            />
-            <Route
-              path="/matters/:caseId/briefs/:briefId/edit"
-              element={<ScopedDocxEditor api={api} />}
-            />
-            <Route
-              path="/matters/:caseId/briefs/:briefId/legal"
-              element={<LegalScreen api={api} />}
-            />
-            <Route
-              path="/matters/:caseId/briefs/:briefId"
-              element={<ReviewWorkspace api={api} />}
-            />
-            <Route
-              path="*"
-              element={
-                <>
-                  <h1>Page not found</h1>
-                  <Link to="/">Open a report</Link>
-                </>
-              }
-            />
-          </Routes>
-        ) : (
-          <section className="open-report">
-            <p className="eyebrow">{t('signInEyebrow')}</p>
-            <h1>{t('signInTitle')}</h1>
-            <p>{t('signInLead')}</p>
-            <details>
-              <summary>Processing and access limits</summary>
-              <p>
-                Development workspace for synthetic acceptance. A local
-                interface does not establish where documents are processed.
-                Processing location, retention, backups and confidential use
-                require a separately approved deployment policy. Ending a
-                session clears this workspace; downloaded files cannot be
-                recalled.
-              </p>
-            </details>
-            {returnTo && (
-              <Notice>
-                Session ended. Sign in again to choose whether to reopen your
-                previous location. No form values or document bytes are
-                restored.
-              </Notice>
+      <div
+        className={
+          session.connected ? 'app-shell' : 'app-shell app-shell-unauth'
+        }
+      >
+        <header
+          className={
+            session.connected ? 'app-header app-sidebar' : 'app-header'
+          }
+        >
+          <div className="sidebar-top">
+            <Link to="/" className="brand">
+              <span className="brand-lockup">
+                <IconBrandMark size={22} />
+                <strong>CaseProof</strong>
+              </span>
+              <span className="brand-subtitle">{t('brandSubtitle')}</span>
+            </Link>
+            {session.connected && (
+              <PrimaryNavigation
+                pathname={location.pathname}
+                search={location.search}
+              />
             )}
-            {logoutMessage && <Notice>{logoutMessage}</Notice>}
-            <SignIn onLogoutFailure={setLogoutMessage} />
-            <Connect />
-          </section>
-        )}
-      </main>
-      <footer>{t('footer')}</footer>
+            {session.connected && (
+              <MatterJourney
+                pathname={location.pathname}
+                search={location.search}
+                hash={location.hash}
+              />
+            )}
+          </div>
+          <div className="header-actions">
+            <LanguageSwitcher />
+            {session.connected && (
+              <Button
+                className="button-secondary button-compact"
+                onClick={() => controller.clear()}
+              >
+                {t('endSession')}
+              </Button>
+            )}
+          </div>
+        </header>
+        <div className="app-content-column">
+          <main id="main" tabIndex={-1}>
+            {session.connected && returnTo && (
+              <section aria-label="Session recovery">
+                <Notice>
+                  Your previous session ended. Private views were cleared. You
+                  can reopen the previous location with a fresh access check.
+                </Notice>
+                <Button
+                  onClick={() => {
+                    const target = returnTo;
+                    setReturnTo(null);
+                    void navigate(target);
+                  }}
+                >
+                  Reopen previous location
+                </Button>
+                <Button onClick={() => setReturnTo(null)}>
+                  Dismiss recovery
+                </Button>
+              </section>
+            )}
+            {session.connected ? (
+              <Routes>
+                <Route path="/" element={<MattersScreen api={api} />} />
+                <Route
+                  path="/matters/new"
+                  element={<CreateMatter api={api} />}
+                />
+                <Route
+                  path="/matters/:caseId/sources"
+                  element={<IntakeScreen api={api} />}
+                />
+                <Route
+                  path="/matters/:caseId/inventory"
+                  element={<InventoryScreen api={api} />}
+                />
+                <Route path="/reports/open" element={<ScopedOpenReport />} />
+                <Route
+                  path="/matters/:caseId"
+                  element={<ReportsScreen api={api} />}
+                />
+                <Route
+                  path="/matters/:caseId/exports"
+                  element={<ExportsScreen api={api} />}
+                />
+                <Route
+                  path="/matters/:caseId/briefs/:briefId/edit"
+                  element={<ScopedDocxEditor api={api} />}
+                />
+                <Route
+                  path="/matters/:caseId/briefs/:briefId/legal"
+                  element={<LegalScreen api={api} />}
+                />
+                <Route
+                  path="/matters/:caseId/briefs/:briefId"
+                  element={<ReviewWorkspace api={api} />}
+                />
+                <Route
+                  path="*"
+                  element={
+                    <>
+                      <h1>Page not found</h1>
+                      <Link to="/">Open a report</Link>
+                    </>
+                  }
+                />
+              </Routes>
+            ) : (
+              <section className="open-report">
+                <p className="eyebrow">{t('signInEyebrow')}</p>
+                <h1>{t('signInTitle')}</h1>
+                <p>{t('signInLead')}</p>
+                <details>
+                  <summary>Processing and access limits</summary>
+                  <p>
+                    Development workspace for synthetic acceptance. A local
+                    interface does not establish where documents are processed.
+                    Processing location, retention, backups and confidential use
+                    require a separately approved deployment policy. Ending a
+                    session clears this workspace; downloaded files cannot be
+                    recalled.
+                  </p>
+                </details>
+                {returnTo && (
+                  <Notice>
+                    Session ended. Sign in again to choose whether to reopen
+                    your previous location. No form values or document bytes are
+                    restored.
+                  </Notice>
+                )}
+                {logoutMessage && <Notice>{logoutMessage}</Notice>}
+                <SignIn onLogoutFailure={setLogoutMessage} />
+                <Connect />
+              </section>
+            )}
+          </main>
+          <footer>{t('footer')}</footer>
+        </div>
+      </div>
     </>
   );
 }
@@ -340,8 +371,9 @@ function Connect() {
   const controller = useSessionController();
   const [message, setMessage] = useState('');
   return (
-    <>
+    <div className="signin-connect-row">
       <Button
+        className="button-ghost button-compact"
         onClick={() => {
           if (!window.caseproofSession) {
             setMessage(
@@ -355,7 +387,7 @@ function Connect() {
         Connect session
       </Button>
       {message && <Notice>{message}</Notice>}
-    </>
+    </div>
   );
 }
 export function App() {

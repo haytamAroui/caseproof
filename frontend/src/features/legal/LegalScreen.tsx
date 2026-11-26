@@ -78,8 +78,10 @@ export function LegalScreen({ api }: { api: ApiClient }) {
       ),
   });
   return (
-    <section aria-labelledby="legal-title">
-      <Link to={`/matters/${caseId}`}>{t('legalBack')}</Link>
+    <section className="legal-workspace" aria-labelledby="legal-title">
+      <Link className="legal-back-link" to={`/matters/${caseId}`}>
+        {t('legalBack')}
+      </Link>
       <h1 id="legal-title">{t('legalTitle')}</h1>
       {!valid ? (
         <Notice error>This link is invalid.</Notice>
@@ -107,8 +109,10 @@ export function LegalScreen({ api }: { api: ApiClient }) {
               <>
                 {t('legalCorpusPrefix')} {refs.data.corpus_articles}{' '}
                 {t('legalCorpusArticles')}{' '}
-                <code>{refs.data.corpus_pack_sha256}</code>.{' '}
-                {t('legalCorpusDisclaimer')}
+                <code className="hash-chip">
+                  {refs.data.corpus_pack_sha256}
+                </code>
+                . {t('legalCorpusDisclaimer')}
               </>
             ) : (
               t('legalNoCorpus')
@@ -246,6 +250,7 @@ export function LegalScreen({ api }: { api: ApiClient }) {
                         </Notice>
                       ))}
                     <Button
+                      className="button-secondary button-compact"
                       aria-expanded={open === r.reference_id}
                       onClick={() =>
                         setOpen(open === r.reference_id ? null : r.reference_id)
