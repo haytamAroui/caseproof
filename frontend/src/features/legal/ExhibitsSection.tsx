@@ -87,7 +87,8 @@ export function ExhibitsSection(props: {
                         {r.entry.sha256 && (
                           <>
                             {' '}
-                            SHA-256 <code>{r.entry.sha256}</code>
+                            SHA-256{' '}
+                            <code className="hash-chip">{r.entry.sha256}</code>
                           </>
                         )}
                         {r.entry.readback

@@ -52,7 +52,10 @@ export const TRIAGE_PRIORITY: Record<ResultCategory, number> = {
   correspondance: 3,
 };
 
-export const TRIAGE_TONE: Record<ResultCategory, string> = {
+export const TRIAGE_TONE: Record<
+  ResultCategory,
+  'error' | 'impossible' | 'warning' | 'success'
+> = {
   ecart: 'error',
   impossible: 'impossible',
   appreciation: 'warning',

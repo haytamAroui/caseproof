@@ -1,5 +1,11 @@
 import { Link } from 'react-router';
 import { useLocale } from '../shared/i18n';
+import {
+  IconDownload,
+  IconFileCheck,
+  IconFolder,
+  IconScale,
+} from '../shared/ui';
 
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -47,7 +53,8 @@ export function PrimaryNavigation({
   return (
     <nav className="app-primary-nav" aria-label="Primary workspace">
       <Link to="/" aria-current={current === 'matter' ? 'page' : undefined}>
-        {t('navMatter')}
+        <IconFolder size={15} />
+        <span>{t('navMatter')}</span>
       </Link>
       <span className="app-primary-divider" aria-hidden="true">
         ·
@@ -57,11 +64,13 @@ export function PrimaryNavigation({
           to={reportUrl}
           aria-current={current === 'verification' ? 'page' : undefined}
         >
-          {t('navVerification')}
+          <IconFileCheck size={15} />
+          <span>{t('navVerification')}</span>
         </Link>
       ) : (
         <span className="app-primary-unavailable" aria-disabled="true">
-          {t('navVerification')}
+          <IconFileCheck size={15} />
+          <span>{t('navVerification')}</span>
         </span>
       )}
       <span className="app-primary-divider" aria-hidden="true">
@@ -72,11 +81,13 @@ export function PrimaryNavigation({
           to={legalUrl}
           aria-current={current === 'legal' ? 'page' : undefined}
         >
-          {t('navLegal')}
+          <IconScale size={15} />
+          <span>{t('navLegal')}</span>
         </Link>
       ) : (
         <span className="app-primary-unavailable" aria-disabled="true">
-          {t('navLegal')}
+          <IconScale size={15} />
+          <span>{t('navLegal')}</span>
         </span>
       )}
       <span className="app-primary-divider" aria-hidden="true">
@@ -87,11 +98,13 @@ export function PrimaryNavigation({
           to={exportUrl}
           aria-current={current === 'export' ? 'page' : undefined}
         >
-          {t('navExport')}
+          <IconDownload size={15} />
+          <span>{t('navExport')}</span>
         </Link>
       ) : (
         <span className="app-primary-unavailable" aria-disabled="true">
-          {t('navExport')}
+          <IconDownload size={15} />
+          <span>{t('navExport')}</span>
         </span>
       )}
     </nav>

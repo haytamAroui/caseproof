@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AuthTransport, parseSession } from '../../shared/api';
+import { useLocale } from '../../shared/i18n';
 import { useSessionController } from '../../shared/session';
 import { Button, Notice } from '../../shared/ui';
 
@@ -8,6 +9,7 @@ export function SignIn({
 }: {
   onLogoutFailure: (message: string) => void;
 }) {
+  const { t } = useLocale();
   const session = useSessionController();
   const request = useRef<AbortController | null>(null);
   const submitting = useRef(false);
@@ -102,7 +104,7 @@ export function SignIn({
       }}
     >
       <label>
-        Email address
+        {t('signInEmailLabel')}
         <input
           name="email"
           type="email"
@@ -113,7 +115,7 @@ export function SignIn({
         />
       </label>
       <label>
-        Password
+        {t('signInPasswordLabel')}
         <input
           name="password"
           type={visible ? 'text' : 'password'}
@@ -123,8 +125,12 @@ export function SignIn({
           aria-describedby={error ? 'signin-error' : undefined}
         />
       </label>
-      <Button aria-pressed={visible} onClick={() => setVisible((v) => !v)}>
-        {visible ? 'Hide password' : 'Show password'}
+      <Button
+        className="button-secondary button-compact signin-toggle-password"
+        aria-pressed={visible}
+        onClick={() => setVisible((v) => !v)}
+      >
+        {visible ? t('signInHidePassword') : t('signInShowPassword')}
       </Button>
       {error && (
         <div id="signin-error">
@@ -132,12 +138,9 @@ export function SignIn({
         </div>
       )}
       <Button type="submit" disabled={busy} aria-busy={busy}>
-        {busy ? 'Signing in…' : 'Sign in'}
+        {busy ? t('signInSubmitting') : t('signInSubmit')}
       </Button>
-      <p className="small">
-        Sign in with an existing workspace account. Reloading requires a fresh
-        sign-in. Session material is kept in memory only.
-      </p>
+      <p className="small">{t('signInHint')}</p>
     </form>
   );
 }

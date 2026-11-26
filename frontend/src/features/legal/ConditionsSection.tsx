@@ -106,7 +106,8 @@ export function ConditionsSection(props: {
             Revision {state.data.revision}
             {state.data.spec_sha256 && (
               <>
-                , spec <code>{state.data.spec_sha256}</code>
+                , spec{' '}
+                <code className="hash-chip">{state.data.spec_sha256}</code>
               </>
             )}
             .
@@ -124,6 +125,7 @@ export function ConditionsSection(props: {
                   .
                 </span>
                 <Button
+                  className="button-danger-subtle button-compact"
                   disabled={busy}
                   onClick={() => {
                     void save(current.filter((x) => x.id !== c.id));

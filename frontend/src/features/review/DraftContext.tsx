@@ -55,15 +55,26 @@ export function DraftContext({
           <Notice>{t('draftAnchorUnsupported')}</Notice>
         ) : (
           <>
-            <p className="small">
-              Story region {excerpt.data.region}; original SHA-256{' '}
-              {excerpt.data.original_sha256}
+            <p className="small draft-meta-bar">
+              <span>
+                {t('draftRegionPrefix')} <strong>{excerpt.data.region}</strong>
+              </span>
+              <span>
+                {t('draftShaPrefix')}{' '}
+                <code
+                  className="hash-chip"
+                  tabIndex={0}
+                  title={excerpt.data.original_sha256}
+                >
+                  {excerpt.data.original_sha256}
+                </code>
+              </span>
             </p>
             <p className="draft-quote">
               {Array.from(excerpt.data.excerpt)
                 .slice(0, excerpt.data.selection_start)
                 .join('')}
-              <mark>
+              <mark className="citation-pill">
                 {Array.from(excerpt.data.excerpt)
                   .slice(
                     excerpt.data.selection_start,
